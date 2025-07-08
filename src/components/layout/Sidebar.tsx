@@ -493,42 +493,42 @@ const navigationSections: NavSection[] = [
           {
             id: "month-view",
             title: "Vista Mensual",
-            href: "/calendar/month",
+            href: "/calendar/MonthView", // ✅ Actualizado a MonthView
             icon: Calendar,
             color: "text-[#4e9c75]",
           },
           {
             id: "event-detail",
             title: "Detalle de Evento",
-            href: "/calendar/event-detail",
+            href: "/calendar/EventDetail", // ✅ Actualizado a EventDetail
             icon: Eye,
             color: "text-[#4e9c75]",
           },
           {
             id: "create-event",
             title: "Crear Evento",
-            href: "/calendar/create-event",
+            href: "/calendar/CreateEvent", // ✅ Actualizado a CreateEvent
             icon: Plus,
             color: "text-[#4e9c75]",
           },
           {
             id: "edit-event",
             title: "Editar Evento",
-            href: "/calendar/edit-event",
+            href: "/calendar/EditEvent", // ✅ Actualizado a EditEvent
             icon: Edit,
             color: "text-[#4e9c75]",
           },
           {
             id: "event-reminders",
             title: "Recordatorios",
-            href: "/calendar/reminders",
+            href: "/calendar/EventReminders", // ✅ Actualizado a EventReminders
             icon: Bell,
             color: "text-[#4e9c75]",
           },
           {
             id: "vaccination-schedule",
             title: "Programa de Vacunación",
-            href: "/calendar/vaccination-schedule",
+            href: "/calendar/VaccinationSchedule", // ✅ Actualizado a VaccinationSchedule
             icon: Syringe,
             color: "text-[#4e9c75]",
           },
@@ -909,7 +909,6 @@ const Sidebar: React.FC<SidebarProps> = ({
                     : "perspective(100px) rotateX(5deg)",
                 }}
               />
-
               {/* Efecto de brillo 3D para iconos activos */}
               {isActive && (
                 <div
@@ -922,7 +921,6 @@ const Sidebar: React.FC<SidebarProps> = ({
                   }}
                 />
               )}
-
               {/* Resplandor adicional para iconos activos */}
               {isActive && (
                 <div
