@@ -1,21 +1,23 @@
 import React from "react";
+
 import {
   BrowserRouter as Router,
   Routes,
   Route,
   Navigate,
 } from "react-router-dom";
+
 import { motion } from "framer-motion";
 import { Plus, Beef, Syringe, Calendar, Bell } from "lucide-react";
 
 // Importar el Layout completo
 import { Layout } from "./components/layout";
 
-// AGREGADO: Importar la página de autenticación
 import AuthPage from "./pages/auth/AuthPage";
 
-// AGREGADO: Importar el módulo bovinos completo
 import BovinesPage from "./pages/bovines/BovinesPage";
+
+import { CalendarPage } from "./pages/calendar";
 
 // Agregar las fuentes elegantes al head
 const addGoogleFonts = () => {
@@ -68,6 +70,7 @@ const DashboardPage: React.FC = () => {
           Nuevo Registro
         </motion.button>
       </div>
+
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {/* Widgets de estadísticas con diseño exacto a la imagen */}
         {[
@@ -147,6 +150,7 @@ const DashboardPage: React.FC = () => {
           >
             {/* Efecto de brillo sutil al hover */}
             <div className="absolute inset-0 bg-gradient-to-r from-white/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+
             <div className="relative">
               {/* Header con título e ícono */}
               <div className="flex items-start justify-between mb-4">
@@ -169,6 +173,7 @@ const DashboardPage: React.FC = () => {
                   <stat.icon size={32} style={{ color: stat.iconColor }} />
                 </div>
               </div>
+
               {/* Valor principal y cambio */}
               <div className="mb-3">
                 <div className="flex items-baseline gap-3">
@@ -190,10 +195,12 @@ const DashboardPage: React.FC = () => {
                   )}
                 </div>
               </div>
+
               {/* Descripción */}
               <p className="text-xs text-black font-medium mb-4">
                 {stat.description}
               </p>
+
               {/* Barra de progreso */}
               <div className="w-full bg-gray-200 rounded-full h-1.5">
                 <motion.div
@@ -208,6 +215,7 @@ const DashboardPage: React.FC = () => {
           </motion.div>
         ))}
       </div>
+
       {/* Sección adicional simplificada */}
       <motion.div
         initial={{ opacity: 0, y: 40 }}
@@ -228,11 +236,13 @@ const DashboardPage: React.FC = () => {
                 </p>
               </div>
             </div>
+
             <p className="text-black leading-relaxed mb-6 font-medium">
               Sistema integral para el manejo, seguimiento y control de ganado
               bovino con tecnología de geolocalización avanzada desarrollado en
               la UJAT.
             </p>
+
             <div className="grid grid-cols-2 gap-4">
               <div className="text-center p-4 bg-white/70 backdrop-blur-sm rounded-xl border border-gray-200">
                 <div className="text-2xl font-bold text-[#3d8b40]">1,247</div>
@@ -249,6 +259,7 @@ const DashboardPage: React.FC = () => {
             </div>
           </div>
         </div>
+
         <div className="space-y-6">
           <div className="bg-[#f5f5dc]/90 backdrop-blur-sm rounded-2xl p-6 border border-gray-200/30">
             <h4 className="font-semibold text-black mb-4">Enlaces Útiles</h4>
@@ -271,6 +282,7 @@ const DashboardPage: React.FC = () => {
               ))}
             </ul>
           </div>
+
           <div className="bg-[#f5f5dc]/90 backdrop-blur-sm rounded-2xl p-6 border border-gray-200/30">
             <h4 className="font-semibold text-black mb-4">Funcionalidades</h4>
             <ul className="space-y-3">
@@ -315,6 +327,7 @@ const ModulePage: React.FC<{
         {title}
       </h1>
       <p className="text-xl text-black/90 mb-12 drop-shadow">{description}</p>
+
       <motion.div
         initial={{ scale: 0.8, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
@@ -323,6 +336,7 @@ const ModulePage: React.FC<{
       >
         <div className="w-32 h-32 mx-auto mb-8 text-8xl">{icon}</div>
       </motion.div>
+
       <motion.p
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
@@ -335,7 +349,7 @@ const ModulePage: React.FC<{
   </div>
 );
 
-// Páginas específicas de módulos (mantenemos las existentes)
+// Páginas específicas de módulos (mantenemos las existentes excepto Calendar)
 const HealthPage: React.FC = () => (
   <ModulePage
     title="Gestión de Salud"
@@ -365,14 +379,6 @@ const MapsPage: React.FC = () => (
     title="Gestión de Mapas"
     description="Geolocalización y seguimiento GPS del ganado"
     icon="🗺️"
-  />
-);
-
-const CalendarPage: React.FC = () => (
-  <ModulePage
-    title="Gestión de Calendario"
-    description="Programación y eventos del rancho"
-    icon="📅"
   />
 );
 
@@ -445,12 +451,14 @@ const App: React.FC = () => {
             {/* AGREGADO: Rutas del módulo bovinos completo */}
             <Route path="bovines/*" element={<BovinesPage />} />
 
+            {/* ACTUALIZADO: Módulo calendar completo funcional */}
+            <Route path="calendar/*" element={<CalendarPage />} />
+
             {/* Resto de módulos (mantenemos los existentes) */}
             <Route path="health/*" element={<HealthPage />} />
             <Route path="reproduction/*" element={<ReproductionPage />} />
             <Route path="production/*" element={<ProductionPage />} />
             <Route path="maps/*" element={<MapsPage />} />
-            <Route path="calendar/*" element={<CalendarPage />} />
             <Route path="events/*" element={<EventsPage />} />
             <Route path="inventory/*" element={<InventoryPage />} />
             <Route path="finances/*" element={<FinancesPage />} />
@@ -475,6 +483,7 @@ const App: React.FC = () => {
                     <p className="text-xl text-black/90 mb-12 drop-shadow">
                       La página que buscas no existe
                     </p>
+
                     <motion.div
                       initial={{ scale: 0.8, opacity: 0 }}
                       animate={{ scale: 1, opacity: 1 }}
@@ -483,6 +492,7 @@ const App: React.FC = () => {
                     >
                       <div className="w-32 h-32 mx-auto mb-8 text-8xl">😕</div>
                     </motion.div>
+
                     <motion.button
                       initial={{ opacity: 0 }}
                       animate={{ opacity: 1 }}

@@ -158,49 +158,49 @@ const navigationSections: NavSection[] = [
           {
             id: "bovines-list",
             title: "Lista de Ganado",
-            href: "/bovines/list",
+            href: "/bovines", // Ruta index que apunta a BovineList
             icon: ClipboardList,
-            color: "text-[#4e9c75]",
-          },
-          {
-            id: "bovine-detail",
-            title: "Perfil Individual",
-            href: "/bovines/detail",
-            icon: Eye,
             color: "text-[#4e9c75]",
           },
           {
             id: "add-bovine",
             title: "Agregar Bovino",
-            href: "/bovines/add",
+            href: "/bovines/add", // Ruta directa a BovineAdd
             icon: Plus,
+            color: "text-[#4e9c75]",
+          },
+          {
+            id: "bovine-detail",
+            title: "Perfil Individual",
+            href: "/bovines/detail/1", // Ruta con ID de ejemplo que apunta a BovineDetail
+            icon: Eye,
             color: "text-[#4e9c75]",
           },
           {
             id: "edit-bovine",
             title: "Editar Bovino",
-            href: "/bovines/edit",
+            href: "/bovines/edit/1", // Ruta con ID de ejemplo que apunta a BovineEdit
             icon: Edit,
             color: "text-[#4e9c75]",
           },
           {
             id: "bovine-documents",
             title: "Documentos",
-            href: "/bovines/documents",
+            href: "/bovines/documents/1", // Ruta con ID de ejemplo que apunta a BovineDocuments
             icon: FolderOpen,
             color: "text-[#4e9c75]",
           },
           {
             id: "bovine-location",
             title: "Ubicación y Movimientos",
-            href: "/bovines/location",
+            href: "/bovines/location/1", // Ruta con ID de ejemplo que apunta a BovineLocation
             icon: MapPin,
             color: "text-[#4e9c75]",
           },
           {
             id: "bovine-notes",
             title: "Notas y Observaciones",
-            href: "/bovines/notes",
+            href: "/bovines/notes/1", // Ruta con ID de ejemplo que apunta a BovineNotes
             icon: NotebookPen,
             color: "text-[#4e9c75]",
           },
@@ -909,6 +909,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                     : "perspective(100px) rotateX(5deg)",
                 }}
               />
+
               {/* Efecto de brillo 3D para iconos activos */}
               {isActive && (
                 <div
@@ -921,6 +922,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                   }}
                 />
               )}
+
               {/* Resplandor adicional para iconos activos */}
               {isActive && (
                 <div

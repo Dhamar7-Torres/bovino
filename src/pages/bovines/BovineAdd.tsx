@@ -10,6 +10,8 @@ import {
   Calendar as CalendarIcon,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+// Importar el componente Calendar desde el índice centralizado de componentes UI
+import { Calendar } from "../../components/ui";
 
 // Tipos e interfaces para el formulario de bovinos
 interface BovineFormData {
@@ -54,8 +56,8 @@ const LocationPicker: React.FC<LocationPickerProps> = ({
   const handleLocationInput = () => {
     const lat = coordinates.latitude;
     const lng = coordinates.longitude;
-
     const address = `Lat: ${lat.toFixed(6)}, Lng: ${lng.toFixed(6)}`;
+
     onLocationSelect({
       latitude: lat,
       longitude: lng,
@@ -123,7 +125,6 @@ const LocationPicker: React.FC<LocationPickerProps> = ({
           />
         </div>
       </div>
-
       <div className="flex gap-2">
         <button
           type="button"
@@ -140,7 +141,6 @@ const LocationPicker: React.FC<LocationPickerProps> = ({
           Confirmar Ubicación
         </button>
       </div>
-
       <div className="text-xs text-gray-500 text-center">
         📍 Tabasco, México (coordenadas por defecto)
       </div>
@@ -219,6 +219,15 @@ const BovineAdd: React.FC = () => {
     }));
   };
 
+  // Manejar selección de fecha en el calendario
+  const handleDateSelect = (date: Date) => {
+    setFormData((prev) => ({
+      ...prev,
+      birthDate: date,
+    }));
+    setShowCalendar(false);
+  };
+
   // Manejar selección de ubicación
   const handleLocationSelect = (location: {
     latitude: number;
@@ -240,7 +249,6 @@ const BovineAdd: React.FC = () => {
     try {
       // Simular envío al backend
       await new Promise((resolve) => setTimeout(resolve, 2000));
-
       setShowSuccess(true);
       setTimeout(() => {
         navigate("/bovines");
@@ -431,7 +439,7 @@ const BovineAdd: React.FC = () => {
                   Información Adicional
                 </h3>
 
-                {/* Fecha de nacimiento */}
+                {/* Fecha de nacimiento con Calendar de shadcn/ui */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Fecha de Nacimiento
@@ -439,35 +447,53 @@ const BovineAdd: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => setShowCalendar(!showCalendar)}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#3d8b40] focus:border-transparent transition-all text-left flex items-center justify-between"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#3d8b40] focus:border-transparent transition-all text-left flex items-center justify-between bg-white hover:bg-gray-50"
                   >
-                    <span>
+                    <span
+                      className={
+                        formData.birthDate ? "text-gray-900" : "text-gray-500"
+                      }
+                    >
                       {formData.birthDate
-                        ? formData.birthDate.toLocaleDateString("es-MX")
-                        : "Seleccionar fecha"}
+                        ? formData.birthDate.toLocaleDateString("es-MX", {
+                            year: "numeric",
+                            month: "long",
+                            day: "numeric",
+                          })
+                        : "Seleccionar fecha de nacimiento"}
                     </span>
                     <CalendarIcon className="w-5 h-5 text-gray-400" />
                   </button>
 
-                  {/* Calendario simplificado */}
+                  {/* Calendario de shadcn/ui */}
                   <AnimatePresence>
                     {showCalendar && (
                       <motion.div
-                        initial={{ opacity: 0, y: -10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -10 }}
-                        className="mt-2 p-4 bg-white border border-gray-300 rounded-lg shadow-lg"
+                        initial={{ opacity: 0, y: -10, scale: 0.95 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        exit={{ opacity: 0, y: -10, scale: 0.95 }}
+                        transition={{ duration: 0.2 }}
+                        className="absolute z-50 mt-2 p-4 bg-white border border-gray-300 rounded-lg shadow-xl"
                       >
-                        <input
-                          type="date"
-                          onChange={(e) => {
-                            const date = e.target.value
-                              ? new Date(e.target.value)
-                              : null;
-                            handleInputChange("birthDate", date);
-                            setShowCalendar(false);
-                          }}
-                          className="w-full p-2 border border-gray-300 rounded"
+                        <div className="flex items-center justify-between mb-4">
+                          <h4 className="text-sm font-medium text-gray-700">
+                            Seleccionar Fecha de Nacimiento
+                          </h4>
+                          <button
+                            type="button"
+                            onClick={() => setShowCalendar(false)}
+                            className="text-gray-400 hover:text-gray-600 p-1 rounded-full hover:bg-gray-100"
+                          >
+                            ×
+                          </button>
+                        </div>
+                        <Calendar
+                          mode="single"
+                          selectedDate={formData.birthDate || undefined}
+                          onDateSelect={handleDateSelect}
+                          locale="es"
+                          maxDate={new Date()} // No permitir fechas futuras
+                          className="rounded-lg border border-gray-200"
                         />
                       </motion.div>
                     )}
@@ -562,7 +588,6 @@ const BovineAdd: React.FC = () => {
               <h3 className="text-xl font-semibold text-gray-800 border-b border-gray-200 pb-2 mb-4">
                 Ubicación
               </h3>
-
               <div className="space-y-4">
                 <button
                   type="button"
