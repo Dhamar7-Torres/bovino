@@ -493,42 +493,42 @@ const navigationSections: NavSection[] = [
           {
             id: "month-view",
             title: "Vista Mensual",
-            href: "/calendar/MonthView", // ✅ Actualizado a MonthView
+            href: "/calendar/month", // ✅ Ruta correcta del proyecto
             icon: Calendar,
             color: "text-[#4e9c75]",
           },
           {
             id: "event-detail",
             title: "Detalle de Evento",
-            href: "/calendar/EventDetail", // ✅ Actualizado a EventDetail
+            href: "/calendar/events", // ✅ Ruta correcta del proyecto
             icon: Eye,
             color: "text-[#4e9c75]",
           },
           {
             id: "create-event",
             title: "Crear Evento",
-            href: "/calendar/CreateEvent", // ✅ Actualizado a CreateEvent
+            href: "/calendar/create", // ✅ Ruta correcta del proyecto
             icon: Plus,
             color: "text-[#4e9c75]",
           },
           {
             id: "edit-event",
             title: "Editar Evento",
-            href: "/calendar/EditEvent", // ✅ Actualizado a EditEvent
+            href: "/calendar/edit", // ✅ Ruta correcta del proyecto
             icon: Edit,
             color: "text-[#4e9c75]",
           },
           {
             id: "event-reminders",
             title: "Recordatorios",
-            href: "/calendar/EventReminders", // ✅ Actualizado a EventReminders
+            href: "/calendar/reminders", // ✅ Ruta correcta del proyecto
             icon: Bell,
             color: "text-[#4e9c75]",
           },
           {
             id: "vaccination-schedule",
             title: "Programa de Vacunación",
-            href: "/calendar/VaccinationSchedule", // ✅ Actualizado a VaccinationSchedule
+            href: "/calendar/vaccination", // ✅ Ruta correcta del proyecto
             icon: Syringe,
             color: "text-[#4e9c75]",
           },

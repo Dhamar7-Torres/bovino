@@ -1,6 +1,6 @@
 import React, { useState } from "react";
+import { Routes, Route, useLocation, Navigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { Outlet, useLocation, Link } from "react-router-dom";
 import {
   Calendar,
   Plus,
@@ -22,6 +22,15 @@ import {
   Users,
   Zap,
 } from "lucide-react";
+import { Link } from "react-router-dom";
+
+// Importar los componentes del calendario
+import MonthView from "./MonthView";
+import CreateEvent from "./CreateEvent";
+import EditEvent from "./EditEvent";
+import EventDetail from "./EventDetail";
+import EventReminders from "./EventReminders";
+import VaccinationSchedule from "./VaccinationSchedule";
 
 // Interfaces para TypeScript
 interface CalendarPageProps {
@@ -214,14 +223,24 @@ const CalendarPage: React.FC<CalendarPageProps> = ({ className = "" }) => {
     }
   };
 
-  // Renderizar contenido según la ruta
+  // Si no estamos en la página principal, mostrar solo las rutas anidadas
   if (!isCalendarHome) {
-    // Si no estamos en la página principal, mostrar solo el Outlet
     return (
       <div
         className={`min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 ${className}`}
       >
-        <Outlet />
+        <Routes>
+          <Route path="month" element={<MonthView />} />
+          <Route path="create" element={<CreateEvent />} />
+          <Route path="edit" element={<EditEvent />} />
+          <Route path="edit/:id" element={<EditEvent />} />
+          <Route path="events" element={<EventDetail />} />
+          <Route path="events/:id" element={<EventDetail />} />
+          <Route path="reminders" element={<EventReminders />} />
+          <Route path="vaccination" element={<VaccinationSchedule />} />
+          {/* Ruta por defecto para rutas no encontradas */}
+          <Route path="*" element={<Navigate to="/calendar" replace />} />
+        </Routes>
       </div>
     );
   }
@@ -256,7 +275,6 @@ const CalendarPage: React.FC<CalendarPageProps> = ({ className = "" }) => {
                 Gestión completa de eventos, vacunaciones y actividades del
                 ganado
               </p>
-
               {/* Breadcrumb */}
               <nav className="flex items-center space-x-2 text-sm text-gray-500">
                 <Link
@@ -269,7 +287,6 @@ const CalendarPage: React.FC<CalendarPageProps> = ({ className = "" }) => {
                 <span className="text-gray-900 font-medium">Calendario</span>
               </nav>
             </div>
-
             <div className="flex items-center gap-3">
               <motion.button
                 whileHover={{ scale: 1.02 }}
@@ -284,7 +301,6 @@ const CalendarPage: React.FC<CalendarPageProps> = ({ className = "" }) => {
                 )}
                 {showQuickStats ? "Ocultar Stats" : "Mostrar Stats"}
               </motion.button>
-
               <motion.button
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
@@ -293,7 +309,6 @@ const CalendarPage: React.FC<CalendarPageProps> = ({ className = "" }) => {
                 <Settings className="w-4 h-4" />
                 Configuración
               </motion.button>
-
               <Link
                 to="/calendar/create"
                 className="px-6 py-3 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-lg hover:from-blue-600 hover:to-purple-700 transition-all flex items-center gap-2 shadow-lg font-medium"
@@ -467,7 +482,6 @@ const CalendarPage: React.FC<CalendarPageProps> = ({ className = "" }) => {
             <Zap className="w-6 h-6 text-blue-500" />
             Acciones Rápidas
           </h2>
-
           <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
             {quickActions.map((action) => (
               <motion.div
@@ -513,7 +527,6 @@ const CalendarPage: React.FC<CalendarPageProps> = ({ className = "" }) => {
             <BookOpen className="w-6 h-6 text-blue-500" />
             Módulos del Calendario
           </h2>
-
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
             <motion.div whileHover={{ scale: 1.02 }}>
               <Link
@@ -603,7 +616,6 @@ const CalendarPage: React.FC<CalendarPageProps> = ({ className = "" }) => {
                 <Activity className="w-5 h-5 text-blue-500" />
                 Eventos Recientes
               </h2>
-
               <div className="flex items-center gap-3">
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
@@ -615,7 +627,6 @@ const CalendarPage: React.FC<CalendarPageProps> = ({ className = "" }) => {
                     className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
                   />
                 </div>
-
                 <select
                   value={activeFilter}
                   onChange={(e) => setActiveFilter(e.target.value)}
@@ -626,7 +637,6 @@ const CalendarPage: React.FC<CalendarPageProps> = ({ className = "" }) => {
                   <option value="scheduled">Programados</option>
                   <option value="overdue">Vencidos</option>
                 </select>
-
                 <Link
                   to="/calendar/month"
                   className="px-4 py-2 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 transition-colors text-sm font-medium"
@@ -645,14 +655,11 @@ const CalendarPage: React.FC<CalendarPageProps> = ({ className = "" }) => {
                     whileHover={{ scale: 1.01 }}
                     className="flex items-center gap-4 p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
                   >
-                    <div
-                      className={`w-10 h-10 bg-white rounded-lg flex items-center justify-center shadow-sm`}
-                    >
+                    <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center shadow-sm">
                       <EventIcon
                         className={`w-5 h-5 ${getEventTypeColor(event.type)}`}
                       />
                     </div>
-
                     <div className="flex-1">
                       <div className="flex items-center gap-3 mb-1">
                         <h3 className="font-medium text-gray-900">
@@ -666,7 +673,6 @@ const CalendarPage: React.FC<CalendarPageProps> = ({ className = "" }) => {
                           {getStatusText(event.status)}
                         </div>
                       </div>
-
                       <div className="flex items-center gap-4 text-sm text-gray-600">
                         <div className="flex items-center gap-1">
                           <Calendar className="w-4 h-4" />
@@ -674,19 +680,16 @@ const CalendarPage: React.FC<CalendarPageProps> = ({ className = "" }) => {
                             {new Date(event.date).toLocaleDateString()}
                           </span>
                         </div>
-
                         <div className="flex items-center gap-1">
                           <Clock className="w-4 h-4" />
                           <span>{event.time}</span>
                         </div>
-
                         <div className="flex items-center gap-1">
                           <Users className="w-4 h-4" />
                           <span>{event.bovines.join(", ")}</span>
                         </div>
                       </div>
                     </div>
-
                     <div className="flex items-center gap-2">
                       <Link
                         to={`/calendar/events/${event.id}`}
@@ -694,7 +697,6 @@ const CalendarPage: React.FC<CalendarPageProps> = ({ className = "" }) => {
                       >
                         <Eye className="w-4 h-4" />
                       </Link>
-
                       <Link
                         to={`/calendar/edit/${event.id}`}
                         className="p-2 text-gray-400 hover:text-green-600 transition-colors"
