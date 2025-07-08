@@ -14,6 +14,9 @@ import { Layout } from "./components/layout";
 // AGREGADO: Importar la página de autenticación
 import AuthPage from "./pages/auth/AuthPage";
 
+// AGREGADO: Importar el módulo bovinos completo
+import BovinesPage from "./pages/bovines/BovinesPage";
+
 // Agregar las fuentes elegantes al head
 const addGoogleFonts = () => {
   const link = document.createElement("link");
@@ -332,15 +335,7 @@ const ModulePage: React.FC<{
   </div>
 );
 
-// Páginas específicas
-const BovinesPage: React.FC = () => (
-  <ModulePage
-    title="Gestión de Ganado"
-    description="Lista y gestión del ganado bovino"
-    icon="🐄"
-  />
-);
-
+// Páginas específicas de módulos (mantenemos las existentes)
 const HealthPage: React.FC = () => (
   <ModulePage
     title="Gestión de Salud"
@@ -446,7 +441,11 @@ const App: React.FC = () => {
           <Route path="/*" element={<Layout />}>
             {/* Rutas principales de cada módulo */}
             <Route path="dashboard/*" element={<DashboardPage />} />
+
+            {/* AGREGADO: Rutas del módulo bovinos completo */}
             <Route path="bovines/*" element={<BovinesPage />} />
+
+            {/* Resto de módulos (mantenemos los existentes) */}
             <Route path="health/*" element={<HealthPage />} />
             <Route path="reproduction/*" element={<ReproductionPage />} />
             <Route path="production/*" element={<ProductionPage />} />
@@ -458,6 +457,7 @@ const App: React.FC = () => {
             <Route path="reports/*" element={<ReportsPage />} />
             <Route path="ranch/*" element={<RanchPage />} />
             <Route path="settings/*" element={<SettingsPage />} />
+
             {/* Ruta 404 actualizada con nueva paleta */}
             <Route
               path="*"
