@@ -179,7 +179,7 @@ const EventPurchase: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-green-50 via-blue-50 to-purple-50 p-6">
+    <div className="min-h-screen bg-gradient-to-br from-[#519a7c] via-[#f2e9d8] to-[#f4ac3a] p-6">
       <motion.div
         className="max-w-6xl mx-auto"
         variants={containerVariants}
@@ -282,7 +282,7 @@ const EventPurchase: React.FC = () => {
                       <span className="text-red-500">*</span>
                     </label>
                     <select
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
                       value={purchaseEvent.condition}
                       onChange={(e) =>
                         handleInputChange("condition", e.target.value)
@@ -379,7 +379,7 @@ const EventPurchase: React.FC = () => {
                         Método de Pago
                       </label>
                       <select
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
                         value={purchaseEvent.paymentMethod}
                         onChange={(e) =>
                           handleInputChange("paymentMethod", e.target.value)
@@ -397,7 +397,7 @@ const EventPurchase: React.FC = () => {
                         Estado del Pago
                       </label>
                       <select
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
                         value={purchaseEvent.paymentStatus}
                         onChange={(e) =>
                           handleInputChange("paymentStatus", e.target.value)
@@ -433,7 +433,7 @@ const EventPurchase: React.FC = () => {
               </CardHeader>
               <CardContent>
                 <textarea
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 min-h-[100px] resize-vertical"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 min-h-[100px] resize-vertical bg-white"
                   placeholder="Observaciones, condiciones especiales, etc."
                   value={purchaseEvent.notes}
                   onChange={(e) => handleInputChange("notes", e.target.value)}
@@ -526,7 +526,7 @@ const EventPurchase: React.FC = () => {
                       Método de Transporte
                     </label>
                     <select
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
                       value={purchaseEvent.transportMethod}
                       onChange={(e) =>
                         handleInputChange("transportMethod", e.target.value)

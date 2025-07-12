@@ -1,3 +1,4 @@
+// ✅ Card.tsx
 import React from "react";
 
 // Utility function para combinar clases CSS
@@ -14,24 +15,17 @@ export interface CardProps extends React.HTMLAttributes<HTMLDivElement> {
   children: React.ReactNode;
   variant?: CardVariant;
   size?: CardSize;
-  // Hacer la card clickeable
   clickable?: boolean;
-  // Callback cuando se hace click
   onClick?: () => void;
-  // Mostrar estado de carga
   loading?: boolean;
-  // Añadir hover effect
   hoverable?: boolean;
-  // Card de ancho completo
   fullWidth?: boolean;
 }
 
 // Props para CardHeader
 export interface CardHeaderProps extends React.HTMLAttributes<HTMLDivElement> {
   children: React.ReactNode;
-  // Icono para el header
   icon?: React.ReactNode;
-  // Acciones en el header (botones, badges, etc.)
   actions?: React.ReactNode;
 }
 
@@ -39,7 +33,6 @@ export interface CardHeaderProps extends React.HTMLAttributes<HTMLDivElement> {
 export interface CardTitleProps
   extends React.HTMLAttributes<HTMLHeadingElement> {
   children: React.ReactNode;
-  // Nivel de heading (h1, h2, h3, etc.)
   level?: 1 | 2 | 3 | 4 | 5 | 6;
 }
 
@@ -52,31 +45,28 @@ export interface CardDescriptionProps
 // Props para CardContent
 export interface CardContentProps extends React.HTMLAttributes<HTMLDivElement> {
   children: React.ReactNode;
-  // Padding personalizado
   padding?: "none" | "sm" | "default" | "lg";
 }
 
 // Props para CardFooter
 export interface CardFooterProps extends React.HTMLAttributes<HTMLDivElement> {
   children: React.ReactNode;
-  // Justificación del contenido
   justify?: "start" | "center" | "end" | "between" | "around";
 }
 
-// Función para obtener las clases según la variante
+// ✅ Aquí se actualiza el fondo degradado
 const getVariantClasses = (variant: CardVariant): string => {
   const variants = {
     default: "bg-white border border-gray-200",
     outlined: "bg-white border-2 border-gray-300",
     elevated: "bg-white shadow-lg border border-gray-100",
     gradient:
-      "bg-gradient-to-br from-blue-50 to-indigo-100 border border-blue-200",
+      "bg-gradient-to-br from-[#3d8b40] via-[#f2e9d8] to-[#f4ac3a] text-gray-800 border border-[#3d8b40]/30",
     glass: "bg-white/80 backdrop-blur-sm border border-white/20 shadow-xl",
   };
   return variants[variant];
 };
 
-// Función para obtener las clases según el tamaño
 const getSizeClasses = (size: CardSize): string => {
   const sizes = {
     sm: "p-3 rounded-md",
@@ -87,7 +77,6 @@ const getSizeClasses = (size: CardSize): string => {
   return sizes[size];
 };
 
-// Componente principal Card
 const Card = React.forwardRef<HTMLDivElement, CardProps>(
   (
     {
@@ -104,10 +93,8 @@ const Card = React.forwardRef<HTMLDivElement, CardProps>(
     },
     ref
   ) => {
-    // Clases base
     const baseClasses = "relative transition-all duration-200";
 
-    // Clases adicionales según props
     const clickableClasses = clickable
       ? "cursor-pointer hover:shadow-md transform hover:-translate-y-1"
       : "";
@@ -115,7 +102,6 @@ const Card = React.forwardRef<HTMLDivElement, CardProps>(
     const fullWidthClasses = fullWidth ? "w-full" : "";
     const loadingClasses = loading ? "opacity-60 pointer-events-none" : "";
 
-    // Combinamos todas las clases
     const cardClasses = cn(
       baseClasses,
       getVariantClasses(variant),
@@ -127,7 +113,6 @@ const Card = React.forwardRef<HTMLDivElement, CardProps>(
       className
     );
 
-    // Spinner de carga
     const LoadingSpinner = () => (
       <div className="absolute inset-0 flex items-center justify-center bg-white/50 rounded-lg">
         <svg
@@ -179,7 +164,6 @@ const Card = React.forwardRef<HTMLDivElement, CardProps>(
   }
 );
 
-// Componente CardHeader
 const CardHeader = React.forwardRef<HTMLDivElement, CardHeaderProps>(
   ({ className, children, icon, actions, ...props }, ref) => {
     return (
@@ -205,7 +189,6 @@ const CardHeader = React.forwardRef<HTMLDivElement, CardHeaderProps>(
   }
 );
 
-// Componente CardTitle
 const CardTitle = React.forwardRef<HTMLHeadingElement, CardTitleProps>(
   ({ className, children, level = 3, ...props }, ref) => {
     const sizeClasses = {
@@ -223,7 +206,6 @@ const CardTitle = React.forwardRef<HTMLHeadingElement, CardTitleProps>(
       className
     );
 
-    // Crear el elemento apropiado según el nivel
     switch (level) {
       case 1:
         return (
@@ -271,7 +253,6 @@ const CardTitle = React.forwardRef<HTMLHeadingElement, CardTitleProps>(
   }
 );
 
-// Componente CardDescription
 const CardDescription = React.forwardRef<
   HTMLParagraphElement,
   CardDescriptionProps
@@ -287,7 +268,6 @@ const CardDescription = React.forwardRef<
   );
 });
 
-// Componente CardContent
 const CardContent = React.forwardRef<HTMLDivElement, CardContentProps>(
   ({ className, children, padding = "default", ...props }, ref) => {
     const paddingClasses = {
@@ -309,7 +289,6 @@ const CardContent = React.forwardRef<HTMLDivElement, CardContentProps>(
   }
 );
 
-// Componente CardFooter
 const CardFooter = React.forwardRef<HTMLDivElement, CardFooterProps>(
   ({ className, children, justify = "start", ...props }, ref) => {
     const justifyClasses = {
@@ -336,7 +315,7 @@ const CardFooter = React.forwardRef<HTMLDivElement, CardFooterProps>(
   }
 );
 
-// Asignar displayName a todos los componentes
+// Exportación
 Card.displayName = "Card";
 CardHeader.displayName = "CardHeader";
 CardTitle.displayName = "CardTitle";

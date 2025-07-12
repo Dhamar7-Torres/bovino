@@ -430,7 +430,6 @@ const EventBreeding: React.FC = () => {
   };
 
   // Animaciones
-
   const itemVariants = {
     hidden: { y: 20, opacity: 0 },
     visible: {
@@ -441,7 +440,7 @@ const EventBreeding: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-green-50 flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-br from-[#3d8b40] via-[#f2e9d8] to-[#f4ac3a] flex items-center justify-center">
         <motion.div
           initial={{ opacity: 0, scale: 0.8 }}
           animate={{ opacity: 1, scale: 1 }}
@@ -457,7 +456,7 @@ const EventBreeding: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-green-50">
+    <div className="min-h-screen bg-gradient-to-br from-[#3d8b40] via-[#f2e9d8] to-[#f4ac3a]">
       {/* Header */}
       <motion.div
         initial={{ opacity: 0, y: -20 }}

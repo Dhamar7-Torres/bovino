@@ -1,3 +1,4 @@
+// ✅ Input.tsx
 import React, { useState, forwardRef } from "react";
 
 // Utility function para combinar clases CSS
@@ -6,49 +7,38 @@ const cn = (...classes: (string | undefined | null | false)[]): string => {
 };
 
 // Tipos para las variantes del input
-type InputVariant = "default" | "outline" | "filled" | "ghost" | "underline";
+type InputVariant =
+  | "default"
+  | "outline"
+  | "filled"
+  | "ghost"
+  | "underline"
+  | "gradient";
 type InputSize = "sm" | "default" | "lg";
 
 // Props del componente Input
 export interface InputProps
   extends Omit<React.InputHTMLAttributes<HTMLInputElement>, "size"> {
-  // Variante visual
   variant?: InputVariant;
-  // Tamaño del input
   size?: InputSize;
-  // Label del input
   label?: string;
-  // Descripción/ayuda
   description?: string;
-  // Texto de error
   error?: string;
-  // Icono a la izquierda
   leftIcon?: React.ReactNode;
-  // Icono a la derecha
   rightIcon?: React.ReactNode;
-  // Elemento a la izquierda (como prefijo)
   leftElement?: React.ReactNode;
-  // Elemento a la derecha (como sufijo)
   rightElement?: React.ReactNode;
-  // Ancho completo
   fullWidth?: boolean;
-  // Estado de carga
   loading?: boolean;
-  // Clearable (botón para limpiar)
   clearable?: boolean;
-  // Callback cuando se limpia
   onClear?: () => void;
-  // Requerido
   required?: boolean;
-  // Contador de caracteres
   showCharCount?: boolean;
-  // Máximo de caracteres
   maxLength?: number;
-  // Tooltip
   tooltip?: string;
 }
 
-// Función para obtener las clases según la variante
+// ✅ Agregamos la variante gradient
 const getVariantClasses = (
   variant: InputVariant,
   error?: string,
@@ -73,12 +63,13 @@ const getVariantClasses = (
       "border-transparent bg-transparent hover:bg-gray-50 focus:bg-white focus:border-gray-300 focus:ring-gray-300",
     underline:
       "border-0 border-b-2 border-gray-300 bg-transparent rounded-none focus:border-blue-500 focus:ring-0 px-0",
+    gradient:
+      "bg-gradient-to-br from-[#3d8b40] via-[#f2e9d8] to-[#f4ac3a] text-white placeholder-white border-none focus:ring-2 focus:ring-white",
   };
 
   return variants[variant];
 };
 
-// Función para obtener las clases según el tamaño
 const getSizeClasses = (size: InputSize, variant: InputVariant): string => {
   if (variant === "underline") {
     const sizes = {
@@ -97,7 +88,6 @@ const getSizeClasses = (size: InputSize, variant: InputVariant): string => {
   return sizes[size];
 };
 
-// Componente principal Input
 const Input = forwardRef<HTMLInputElement, InputProps>(
   (
     {
@@ -127,27 +117,19 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
     },
     ref
   ) => {
-    // Estado para mostrar/ocultar contraseña
     const [showPassword, setShowPassword] = useState(false);
 
-    // Estado para focus
-    const [] = useState(false);
-
-    // Determinar si mostrar el botón de limpiar
     const showClearButton = clearable && value && !disabled && !loading;
 
-    // Clases base del input
     const baseClasses =
       "w-full rounded-md border transition-colors focus:outline-none focus:ring-2 focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50";
 
-    // Clases del contenedor
     const containerClasses = cn(
       "relative",
       fullWidth ? "w-full" : "w-auto",
       className
     );
 
-    // Clases del input
     const leftPadding = leftIcon || leftElement ? "pl-10" : undefined;
     const rightPadding =
       rightIcon ||
@@ -166,15 +148,11 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
       rightPadding
     );
 
-    // Manejar cambio de valor
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-      if (maxLength && e.target.value.length > maxLength) {
-        return;
-      }
+      if (maxLength && e.target.value.length > maxLength) return;
       onChange?.(e);
     };
 
-    // Manejar limpiar input
     const handleClear = () => {
       if (onClear) {
         onClear();
@@ -187,7 +165,6 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
       }
     };
 
-    // Componente de icono o elemento
     const IconOrElement = ({
       icon,
       element,
@@ -249,14 +226,12 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
 
         {/* Input container */}
         <div className="relative">
-          {/* Left icon/element */}
           <IconOrElement
             icon={leftIcon}
             element={leftElement}
             position="left"
           />
 
-          {/* Input field */}
           <input
             ref={ref}
             type={
@@ -272,7 +247,6 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
 
           {/* Right side controls */}
           <div className="absolute inset-y-0 right-0 flex items-center pr-3 space-x-1">
-            {/* Loading spinner */}
             {loading && (
               <svg
                 className="w-4 h-4 text-gray-400 animate-spin"
@@ -296,7 +270,6 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
               </svg>
             )}
 
-            {/* Clear button */}
             {showClearButton && (
               <button
                 type="button"
@@ -320,7 +293,6 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
               </button>
             )}
 
-            {/* Password toggle */}
             {type === "password" && (
               <button
                 type="button"
@@ -366,7 +338,6 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
               </button>
             )}
 
-            {/* Right icon/element */}
             {!loading && !showClearButton && (
               <IconOrElement
                 icon={rightIcon}
@@ -423,5 +394,4 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
 );
 
 Input.displayName = "Input";
-
 export { Input };

@@ -202,7 +202,7 @@ const EventSales: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-green-50 via-blue-50 to-purple-50 p-6">
+    <div className="min-h-screen bg-gradient-to-br from-[#519a7c] via-[#f2e9d8] to-[#f4ac3a] p-6">
       <motion.div
         className="max-w-6xl mx-auto"
         variants={containerVariants}
@@ -314,7 +314,7 @@ const EventSales: React.FC = () => {
                       Grado de Calidad <span className="text-red-500">*</span>
                     </label>
                     <select
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
                       value={salesEvent.qualityGrade}
                       onChange={(e) =>
                         handleInputChange("qualityGrade", e.target.value)
@@ -382,7 +382,7 @@ const EventSales: React.FC = () => {
                         Tipo de Contrato
                       </label>
                       <select
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
                         value={salesEvent.contractType}
                         onChange={(e) =>
                           handleInputChange("contractType", e.target.value)
@@ -448,7 +448,7 @@ const EventSales: React.FC = () => {
                         Método de Pago
                       </label>
                       <select
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
                         value={salesEvent.paymentMethod}
                         onChange={(e) =>
                           handleInputChange("paymentMethod", e.target.value)
@@ -490,7 +490,7 @@ const EventSales: React.FC = () => {
                         Estado del Pago
                       </label>
                       <select
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
                         value={salesEvent.paymentStatus}
                         onChange={(e) =>
                           handleInputChange("paymentStatus", e.target.value)
@@ -559,7 +559,7 @@ const EventSales: React.FC = () => {
               </CardHeader>
               <CardContent>
                 <textarea
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 min-h-[100px] resize-vertical"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 min-h-[100px] resize-vertical bg-white"
                   placeholder="Condiciones especiales, términos del contrato, observaciones, etc."
                   value={salesEvent.notes}
                   onChange={(e) => handleInputChange("notes", e.target.value)}
@@ -652,7 +652,7 @@ const EventSales: React.FC = () => {
                       Método de Entrega
                     </label>
                     <select
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
                       value={salesEvent.deliveryMethod}
                       onChange={(e) =>
                         handleInputChange("deliveryMethod", e.target.value)

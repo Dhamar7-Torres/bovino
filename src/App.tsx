@@ -13,6 +13,8 @@ import { Layout } from "./components/layout";
 import AuthPage from "./pages/auth/AuthPage";
 import BovinesPage from "./pages/bovines/BovinesPage";
 import { CalendarPage } from "./pages/calendar";
+import EventPage from "./pages/events/EventsPage";
+import FeedingPage from "./pages/feeding/FeedingPage"; // ← NUEVA IMPORTACIÓN
 
 // Agregar las fuentes elegantes al head
 const addGoogleFonts = () => {
@@ -65,7 +67,6 @@ const DashboardPage: React.FC = () => {
           Nuevo Registro
         </motion.button>
       </div>
-
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {/* Widgets de estadísticas con diseño exacto a la imagen */}
         {[
@@ -145,7 +146,6 @@ const DashboardPage: React.FC = () => {
           >
             {/* Efecto de brillo sutil al hover */}
             <div className="absolute inset-0 bg-gradient-to-r from-white/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-
             <div className="relative">
               {/* Header con título e ícono */}
               <div className="flex items-start justify-between mb-4">
@@ -168,7 +168,6 @@ const DashboardPage: React.FC = () => {
                   <stat.icon size={32} style={{ color: stat.iconColor }} />
                 </div>
               </div>
-
               {/* Valor principal y cambio */}
               <div className="mb-3">
                 <div className="flex items-baseline gap-3">
@@ -190,12 +189,10 @@ const DashboardPage: React.FC = () => {
                   )}
                 </div>
               </div>
-
               {/* Descripción */}
               <p className="text-xs text-black font-medium mb-4">
                 {stat.description}
               </p>
-
               {/* Barra de progreso */}
               <div className="w-full bg-gray-200 rounded-full h-1.5">
                 <motion.div
@@ -210,7 +207,6 @@ const DashboardPage: React.FC = () => {
           </motion.div>
         ))}
       </div>
-
       {/* Sección adicional simplificada */}
       <motion.div
         initial={{ opacity: 0, y: 40 }}
@@ -371,14 +367,6 @@ const MapsPage: React.FC = () => (
   />
 );
 
-const EventsPage: React.FC = () => (
-  <ModulePage
-    title="Gestión de Eventos"
-    description="Registro y seguimiento de eventos del ganado"
-    icon="📋"
-  />
-);
-
 const InventoryPage: React.FC = () => (
   <ModulePage
     title="Gestión de Inventario"
@@ -427,29 +415,27 @@ const App: React.FC = () => {
         <Routes>
           {/* Ruta raíz - redirige al dashboard */}
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
-
           {/* Rutas de autenticación - FUERA del Layout */}
           <Route path="/auth" element={<AuthPage />} />
           <Route path="/auth/*" element={<AuthPage />} />
-
           {/* Layout principal con rutas anidadas */}
           <Route path="/*" element={<Layout />}>
             <Route path="dashboard/*" element={<DashboardPage />} />
             <Route path="bovines/*" element={<BovinesPage />} />
             <Route path="calendar/*" element={<CalendarPage />} />
-
+            <Route path="feeding/*" element={<FeedingPage />} />{" "}
+            {/* ← NUEVA RUTA */}
             {/* Resto de módulos (mantenemos los existentes) */}
             <Route path="health/*" element={<HealthPage />} />
             <Route path="reproduction/*" element={<ReproductionPage />} />
             <Route path="production/*" element={<ProductionPage />} />
             <Route path="maps/*" element={<MapsPage />} />
-            <Route path="events/*" element={<EventsPage />} />
+            <Route path="events/*" element={<EventPage />} />
             <Route path="inventory/*" element={<InventoryPage />} />
             <Route path="finances/*" element={<FinancesPage />} />
             <Route path="reports/*" element={<ReportsPage />} />
             <Route path="ranch/*" element={<RanchPage />} />
             <Route path="settings/*" element={<SettingsPage />} />
-
             {/* Ruta 404 actualizada con nueva paleta */}
             <Route
               path="*"

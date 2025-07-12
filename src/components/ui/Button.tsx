@@ -1,3 +1,4 @@
+// ✅ Button.tsx
 import React from "react";
 
 // Utility function para combinar clases CSS
@@ -5,7 +6,7 @@ const cn = (...classes: (string | undefined | null | false)[]): string => {
   return classes.filter(Boolean).join(" ");
 };
 
-// Tipos para las variantes del botón
+// Tipos de variantes y tamaños
 type ButtonVariant =
   | "default"
   | "destructive"
@@ -16,11 +17,12 @@ type ButtonVariant =
   | "primary"
   | "success"
   | "warning"
-  | "info";
+  | "info"
+  | "gradient";
 
 type ButtonSize = "sm" | "default" | "lg" | "xl" | "icon";
 
-// Función para obtener las clases según la variante
+// Clases por variante
 const getVariantClasses = (variant: ButtonVariant): string => {
   const variants = {
     default: "bg-slate-900 text-slate-50 hover:bg-slate-900/90",
@@ -30,19 +32,19 @@ const getVariantClasses = (variant: ButtonVariant): string => {
     secondary: "bg-slate-100 text-slate-900 hover:bg-slate-100/80",
     ghost: "hover:bg-slate-100 hover:text-slate-900",
     link: "text-slate-900 underline-offset-4 hover:underline",
-
-    // Variantes específicas para la aplicación ganadera
     primary: "bg-blue-600 text-white hover:bg-blue-700 focus:ring-blue-500",
     success: "bg-green-600 text-white hover:bg-green-700 focus:ring-green-500",
     warning:
       "bg-yellow-500 text-yellow-900 hover:bg-yellow-600 focus:ring-yellow-500",
     info: "bg-cyan-600 text-white hover:bg-cyan-700 focus:ring-cyan-500",
+    gradient:
+      "bg-gradient-to-br from-[#3d8b40] via-[#f2e9d8] to-[#f4ac3a] text-white hover:brightness-110",
   };
 
   return variants[variant];
 };
 
-// Función para obtener las clases según el tamaño
+// Clases por tamaño
 const getSizeClasses = (size: ButtonSize): string => {
   const sizes = {
     sm: "h-9 rounded-md px-3 text-xs",
@@ -55,29 +57,21 @@ const getSizeClasses = (size: ButtonSize): string => {
   return sizes[size];
 };
 
-// Interface para las props del componente Button
+// Props
 export interface ButtonProps
   extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   children: React.ReactNode;
-  // Variante del botón
   variant?: ButtonVariant;
-  // Tamaño del botón
   size?: ButtonSize;
-  // Estado de carga
   loading?: boolean;
-  // Icono a la izquierda del texto
   leftIcon?: React.ReactNode;
-  // Icono a la derecha del texto
   rightIcon?: React.ReactNode;
-  // Hacer el botón de ancho completo
   fullWidth?: boolean;
-  // Solo icono (sin texto)
   iconOnly?: boolean;
-  // Referencia al elemento DOM
   asChild?: boolean;
 }
 
-// Componente Button principal
+// Componente Button
 const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
   (
     {
@@ -96,15 +90,12 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
     },
     ref
   ) => {
-    // Clases base que siempre se aplican
     const baseClasses =
       "inline-flex items-center justify-center whitespace-nowrap rounded-md font-medium ring-offset-white transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-950 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50";
 
-    // Clases adicionales según props
     const fullWidthClasses = fullWidth ? "w-full" : "";
     const loadingClasses = loading ? "cursor-wait opacity-70" : "";
 
-    // Combinamos todas las clases
     const buttonClasses = cn(
       baseClasses,
       getVariantClasses(variant),
@@ -114,7 +105,6 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
       className
     );
 
-    // Spinner de carga
     const LoadingSpinner = () => (
       <svg
         className="animate-spin h-4 w-4 mr-2"
@@ -146,21 +136,12 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
         type={type}
         {...props}
       >
-        {/* Mostrar spinner si está cargando */}
         {loading && !iconOnly && <LoadingSpinner />}
-
-        {/* Icono izquierdo */}
         {leftIcon && !loading && (
           <span className={iconOnly ? "" : "mr-2"}>{leftIcon}</span>
         )}
-
-        {/* Contenido del botón */}
         {!iconOnly && <span className={loading ? "ml-2" : ""}>{children}</span>}
-
-        {/* Solo icono (para botones de icono) */}
         {iconOnly && !loading && children}
-
-        {/* Icono derecho */}
         {rightIcon && !loading && !iconOnly && (
           <span className="ml-2">{rightIcon}</span>
         )}
@@ -170,5 +151,4 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
 );
 
 Button.displayName = "Button";
-
 export { Button };
