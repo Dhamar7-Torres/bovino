@@ -13,7 +13,6 @@ import { Layout } from "./components/layout";
 import AuthPage from "./pages/auth/AuthPage";
 import BovinesPage from "./pages/bovines/BovinesPage";
 import { CalendarPage } from "./pages/calendar";
-import { DashboardPage as DashboardModule } from "./pages/dashboard"; // Dashboard avanzado
 
 // Agregar las fuentes elegantes al head
 const addGoogleFonts = () => {
@@ -339,7 +338,7 @@ const ModulePage: React.FC<{
   </div>
 );
 
-// Páginas específicas de módulos (mantenemos las existentes excepto Calendar)
+// Páginas específicas de módulos
 const HealthPage: React.FC = () => (
   <ModulePage
     title="Gestión de Salud"
@@ -429,7 +428,7 @@ const App: React.FC = () => {
           {/* Ruta raíz - redirige al dashboard */}
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
 
-          {/* AGREGADO: Rutas de autenticación - FUERA del Layout */}
+          {/* Rutas de autenticación - FUERA del Layout */}
           <Route path="/auth" element={<AuthPage />} />
           <Route path="/auth/*" element={<AuthPage />} />
 
@@ -438,9 +437,6 @@ const App: React.FC = () => {
             <Route path="dashboard/*" element={<DashboardPage />} />
             <Route path="bovines/*" element={<BovinesPage />} />
             <Route path="calendar/*" element={<CalendarPage />} />
-
-            {/* ✅ NUEVA RUTA: Dashboard avanzado con sub-rutas */}
-            <Route path="dashboard-advanced/*" element={<DashboardModule />} />
 
             {/* Resto de módulos (mantenemos los existentes) */}
             <Route path="health/*" element={<HealthPage />} />

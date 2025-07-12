@@ -24,7 +24,6 @@ import {
   Truck,
   Clipboard,
   Clock,
-  AlertTriangle,
   BarChart3,
   Pill,
   ShoppingCart,
@@ -82,70 +81,6 @@ interface NavSection {
 
 // Datos de navegación organizados por secciones - ESTRUCTURA COMPLETA CON RUTAS ACTUALIZADAS
 const navigationSections: NavSection[] = [
-  {
-    id: "main",
-    title: "Principal",
-    items: [
-      {
-        id: "dashboard",
-        title: "Dashboard",
-        href: "/dashboard",
-        icon: Home,
-        color: "text-[#4e9c75]",
-        children: [
-          {
-            id: "overview",
-            title: "Estadísticas Generales",
-            href: "/dashboard-advanced/overview", // ✅ Ruta actualizada para OverviewStats
-            icon: BarChart3,
-            color: "text-[#4e9c75]",
-          },
-          {
-            id: "alerts",
-            title: "Panel de Alertas",
-            href: "/dashboard-advanced/alerts", // ✅ Ruta actualizada para AlertsPanel
-            icon: AlertTriangle,
-            color: "text-[#4e9c75]",
-          },
-          {
-            id: "production-summary",
-            title: "Resumen de Producción",
-            href: "/dashboard-advanced/production-summary", // ✅ Ruta actualizada para ProductionSummary
-            icon: TrendingUp,
-            color: "text-[#4e9c75]",
-          },
-          {
-            id: "health-summary",
-            title: "Resumen de Salud",
-            href: "/dashboard-advanced/health-summary", // ✅ Ruta actualizada para HealthSummary
-            icon: Heart,
-            color: "text-[#4e9c75]",
-          },
-          {
-            id: "upcoming-events",
-            title: "Próximos Eventos",
-            href: "/dashboard-advanced/upcoming-events", // ✅ Ruta actualizada para UpcomingEvents
-            icon: Calendar,
-            color: "text-[#4e9c75]",
-          },
-          {
-            id: "livestock-overview",
-            title: "Vista General del Ganado",
-            href: "/dashboard-advanced/livestock-overview", // ✅ Ruta actualizada para LivestockOverview
-            icon: Beef,
-            color: "text-[#4e9c75]",
-          },
-          {
-            id: "feed-inventory",
-            title: "Inventario de Alimento",
-            href: "/dashboard-advanced/feed-inventory", // ✅ Ruta actualizada para FeedInventory
-            icon: Package,
-            color: "text-[#4e9c75]",
-          },
-        ],
-      },
-    ],
-  },
   {
     id: "livestock",
     title: "Gestión de Ganado",
