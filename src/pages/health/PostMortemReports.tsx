@@ -1,0 +1,1488 @@
+import React, { useState, useEffect } from "react";
+import { motion } from "framer-motion";
+import {
+  Skull,
+  FileText,
+  MapPin,
+  Search,
+  Filter,
+  Plus,
+  TrendingUp,
+  TrendingDown,
+  AlertTriangle,
+  Microscope,
+  Camera,
+  Eye,
+  Edit,
+  Download,
+  BarChart3,
+  Activity,
+  Shield,
+  Target,
+  Settings,
+  Archive,
+  BookOpen,
+  Zap,
+} from "lucide-react";
+
+// Interfaces para tipos de datos
+interface PostMortemReport {
+  id: string;
+  animalId: string;
+  animalName: string;
+  animalTag: string;
+  breed: string;
+  age: number;
+  gender: "male" | "female";
+  weight: number;
+  deathDate: Date;
+  discoveryDate: Date;
+  location: {
+    lat: number;
+    lng: number;
+    address: string;
+    sector: string;
+    environment: string;
+  };
+  deathCircumstances: {
+    witnessed: boolean;
+    timeOfDeath?: Date;
+    positionFound: string;
+    weatherConditions: string;
+    circumstances: string;
+  };
+  preliminaryCause: string;
+  finalCause: string;
+  causeCategory:
+    | "disease"
+    | "trauma"
+    | "poisoning"
+    | "metabolic"
+    | "reproductive"
+    | "congenital"
+    | "unknown"
+    | "predation";
+  necropsyPerformed: boolean;
+  necropsyDate?: Date;
+  pathologist: string;
+  veterinarian: string;
+  grossFindings: {
+    externalExamination: string;
+    cardiovascularSystem: string;
+    respiratorySystem: string;
+    digestiveSystem: string;
+    nervousSystem: string;
+    reproductiveSystem: string;
+    musculoskeletalSystem: string;
+    lymphaticSystem: string;
+    other: string;
+  };
+  histopathology?: {
+    performed: boolean;
+    results: string;
+    laboratory: string;
+    reportDate?: Date;
+  };
+  toxicology?: {
+    performed: boolean;
+    substances: string[];
+    results: string;
+    laboratory: string;
+  };
+  microbiology?: {
+    performed: boolean;
+    organisms: string[];
+    antibiogramResults?: string;
+    laboratory: string;
+  };
+  photos: Array<{
+    id: string;
+    description: string;
+    category: "external" | "internal" | "microscopic" | "site";
+    timestamp: Date;
+  }>;
+  samples: Array<{
+    id: string;
+    type: string;
+    organ: string;
+    preservationMethod: string;
+    laboratory: string;
+    status: "collected" | "sent" | "processing" | "completed";
+  }>;
+  preventiveRecommendations: string[];
+  economicImpact: number;
+  reportStatus: "preliminary" | "pending_lab" | "completed" | "reviewed";
+  createdBy: string;
+  createdAt: Date;
+  lastUpdated: Date;
+  isContagious: boolean;
+  requiresQuarantine: boolean;
+  notifiableDisease: boolean;
+  reportedToAuthorities: boolean;
+}
+
+interface MortalityStats {
+  totalDeaths: number;
+  monthlyDeaths: number;
+  mortalityRate: number;
+  mostCommonCause: string;
+  averageAge: number;
+  costImpact: number;
+  necropsyRate: number;
+  contagiousCases: number;
+  seasonalTrend: "increasing" | "decreasing" | "stable";
+  preventableCases: number;
+}
+
+interface MortalityAlert {
+  id: string;
+  type:
+    | "outbreak"
+    | "unusual_pattern"
+    | "high_mortality"
+    | "contagious_disease";
+  title: string;
+  description: string;
+  affectedAnimals: number;
+  riskLevel: "low" | "medium" | "high" | "critical";
+  recommendations: string[];
+  isActive: boolean;
+  createdAt: Date;
+}
+
+// Componentes reutilizables
+const Card: React.FC<{ children: React.ReactNode; className?: string }> = ({
+  children,
+  className = "",
+}) => (
+  <div
+    className={`bg-white rounded-lg shadow-md border border-gray-200 ${className}`}
+  >
+    {children}
+  </div>
+);
+
+const CardHeader: React.FC<{ children: React.ReactNode }> = ({ children }) => (
+  <div className="px-6 py-4 border-b border-gray-200">{children}</div>
+);
+
+const CardTitle: React.FC<{
+  children: React.ReactNode;
+  className?: string;
+}> = ({ children, className = "" }) => (
+  <h3 className={`text-lg font-semibold text-gray-900 ${className}`}>
+    {children}
+  </h3>
+);
+
+const CardDescription: React.FC<{ children: React.ReactNode }> = ({
+  children,
+}) => <p className="text-sm text-gray-600 mt-1">{children}</p>;
+
+const CardContent: React.FC<{
+  children: React.ReactNode;
+  className?: string;
+}> = ({ children, className = "" }) => (
+  <div className={`px-6 py-4 ${className}`}>{children}</div>
+);
+
+const Button: React.FC<{
+  children: React.ReactNode;
+  onClick?: () => void;
+  variant?: "default" | "outline" | "success" | "danger" | "warning";
+  size?: "sm" | "default";
+  className?: string;
+}> = ({
+  children,
+  onClick,
+  variant = "default",
+  size = "default",
+  className = "",
+}) => {
+  const baseClasses =
+    "inline-flex items-center justify-center font-medium rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2";
+  const variantClasses = {
+    default: "bg-blue-600 text-white hover:bg-blue-700 focus:ring-blue-500",
+    outline:
+      "border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 focus:ring-blue-500",
+    success: "bg-green-600 text-white hover:bg-green-700 focus:ring-green-500",
+    danger: "bg-red-600 text-white hover:bg-red-700 focus:ring-red-500",
+    warning:
+      "bg-yellow-600 text-white hover:bg-yellow-700 focus:ring-yellow-500",
+  };
+  const sizeClasses = {
+    sm: "px-3 py-2 text-sm",
+    default: "px-4 py-2 text-sm",
+  };
+
+  return (
+    <button
+      className={`${baseClasses} ${variantClasses[variant]} ${sizeClasses[size]} ${className}`}
+      onClick={onClick}
+    >
+      {children}
+    </button>
+  );
+};
+
+const Badge: React.FC<{
+  children: React.ReactNode;
+  variant: string;
+  className?: string;
+}> = ({ children, variant, className = "" }) => {
+  const getVariantClasses = (variant: string) => {
+    switch (variant) {
+      case "critical":
+        return "bg-red-100 text-red-800 border-red-200";
+      case "high":
+        return "bg-orange-100 text-orange-800 border-orange-200";
+      case "medium":
+        return "bg-yellow-100 text-yellow-800 border-yellow-200";
+      case "low":
+        return "bg-green-100 text-green-800 border-green-200";
+      case "disease":
+        return "bg-red-100 text-red-800 border-red-200";
+      case "trauma":
+        return "bg-orange-100 text-orange-800 border-orange-200";
+      case "poisoning":
+        return "bg-purple-100 text-purple-800 border-purple-200";
+      case "metabolic":
+        return "bg-blue-100 text-blue-800 border-blue-200";
+      case "reproductive":
+        return "bg-pink-100 text-pink-800 border-pink-200";
+      case "congenital":
+        return "bg-indigo-100 text-indigo-800 border-indigo-200";
+      case "predation":
+        return "bg-gray-100 text-gray-800 border-gray-200";
+      case "unknown":
+        return "bg-gray-100 text-gray-800 border-gray-200";
+      case "preliminary":
+        return "bg-yellow-100 text-yellow-800 border-yellow-200";
+      case "pending_lab":
+        return "bg-blue-100 text-blue-800 border-blue-200";
+      case "completed":
+        return "bg-green-100 text-green-800 border-green-200";
+      case "reviewed":
+        return "bg-purple-100 text-purple-800 border-purple-200";
+      case "outbreak":
+        return "bg-red-100 text-red-800 border-red-200";
+      case "unusual_pattern":
+        return "bg-orange-100 text-orange-800 border-orange-200";
+      case "high_mortality":
+        return "bg-red-100 text-red-800 border-red-200";
+      case "contagious_disease":
+        return "bg-purple-100 text-purple-800 border-purple-200";
+      default:
+        return "bg-gray-100 text-gray-800 border-gray-200";
+    }
+  };
+
+  return (
+    <span
+      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${getVariantClasses(
+        variant
+      )} ${className}`}
+    >
+      {children}
+    </span>
+  );
+};
+
+// Componente de Mapa de Mortalidad
+const MortalityMap: React.FC = () => {
+  return (
+    <div className="h-96 bg-gray-100 rounded-lg flex items-center justify-center relative overflow-hidden">
+      {/* Fondo del mapa simulado */}
+      <div className="absolute inset-0 bg-gradient-to-br from-red-50 to-gray-100"></div>
+
+      {/* Título de ubicación */}
+      <div className="absolute top-4 left-4 bg-white rounded-lg px-3 py-2 shadow-md">
+        <div className="flex items-center gap-2">
+          <MapPin className="w-4 h-4 text-red-600" />
+          <span className="text-sm font-medium">
+            Mapa de Mortalidad - Villahermosa, Tabasco
+          </span>
+        </div>
+      </div>
+
+      {/* Leyenda */}
+      <div className="absolute top-4 right-4 bg-white rounded-lg p-3 shadow-md text-xs">
+        <div className="space-y-1">
+          <div className="flex items-center gap-2">
+            <div className="w-3 h-3 bg-red-600 rounded-full"></div>
+            <span>Enfermedad</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-3 h-3 bg-orange-500 rounded-full"></div>
+            <span>Trauma</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-3 h-3 bg-purple-500 rounded-full"></div>
+            <span>Envenenamiento</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-3 h-3 bg-gray-500 rounded-full"></div>
+            <span>Desconocido</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Marcadores simulados de casos de mortalidad */}
+      <div className="relative w-full h-full">
+        {/* Caso por enfermedad */}
+        <div className="absolute top-1/4 left-1/3 transform -translate-x-1/2 -translate-y-1/2">
+          <motion.div
+            initial={{ scale: 0 }}
+            animate={{ scale: 1 }}
+            className="bg-red-600 rounded-full w-8 h-8 flex items-center justify-center shadow-lg cursor-pointer"
+            whileHover={{ scale: 1.2 }}
+          >
+            <Skull className="w-4 h-4 text-white" />
+          </motion.div>
+          <div className="absolute top-10 left-1/2 transform -translate-x-1/2 bg-white rounded-lg p-2 shadow-lg min-w-36 text-xs">
+            <p className="font-medium text-red-700">Neumonía Severa</p>
+            <p className="text-gray-600">Vaca Holstein - 4 años</p>
+            <p className="text-gray-600">Sector A - Establo Principal</p>
+          </div>
+        </div>
+
+        {/* Caso por trauma */}
+        <div className="absolute top-2/3 right-1/4 transform translate-x-1/2 -translate-y-1/2">
+          <motion.div
+            initial={{ scale: 0 }}
+            animate={{ scale: 1 }}
+            transition={{ delay: 0.2 }}
+            className="bg-orange-500 rounded-full w-6 h-6 flex items-center justify-center shadow-lg cursor-pointer"
+            whileHover={{ scale: 1.2 }}
+          >
+            <AlertTriangle className="w-3 h-3 text-white" />
+          </motion.div>
+          <div className="absolute top-8 left-1/2 transform -translate-x-1/2 bg-white rounded-lg p-2 shadow-lg min-w-32 text-xs">
+            <p className="font-medium text-orange-700">Trauma Múltiple</p>
+            <p className="text-gray-600">Toro Angus - 6 años</p>
+            <p className="text-gray-600">Sector B - Pastizal</p>
+          </div>
+        </div>
+
+        {/* Caso por envenenamiento */}
+        <div className="absolute bottom-1/4 left-2/3 transform -translate-x-1/2 translate-y-1/2">
+          <motion.div
+            initial={{ scale: 0 }}
+            animate={{ scale: 1 }}
+            transition={{ delay: 0.4 }}
+            className="bg-purple-500 rounded-full w-7 h-7 flex items-center justify-center shadow-lg cursor-pointer"
+            whileHover={{ scale: 1.2 }}
+          >
+            <Zap className="w-3 h-3 text-white" />
+          </motion.div>
+          <div className="absolute bottom-8 left-1/2 transform -translate-x-1/2 bg-white rounded-lg p-2 shadow-lg min-w-32 text-xs">
+            <p className="font-medium text-purple-700">Intoxicación</p>
+            <p className="text-gray-600">Novilla Jersey - 2 años</p>
+            <p className="text-gray-600">Sector C - Potrero Sur</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Componente de Alerta de Mortalidad
+const MortalityAlertCard: React.FC<{ alert: MortalityAlert }> = ({ alert }) => {
+  const getAlertIcon = (type: string) => {
+    switch (type) {
+      case "outbreak":
+        return AlertTriangle;
+      case "unusual_pattern":
+        return BarChart3;
+      case "high_mortality":
+        return TrendingUp;
+      case "contagious_disease":
+        return Shield;
+      default:
+        return AlertTriangle;
+    }
+  };
+
+  const Icon = getAlertIcon(alert.type);
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, scale: 0.95 }}
+      animate={{ opacity: 1, scale: 1 }}
+      className={`p-4 rounded-lg border-l-4 ${
+        alert.riskLevel === "critical"
+          ? "border-red-500 bg-red-50"
+          : alert.riskLevel === "high"
+          ? "border-orange-500 bg-orange-50"
+          : alert.riskLevel === "medium"
+          ? "border-yellow-500 bg-yellow-50"
+          : "border-blue-500 bg-blue-50"
+      }`}
+    >
+      <div className="flex items-start gap-3">
+        <Icon
+          className={`w-5 h-5 ${
+            alert.riskLevel === "critical"
+              ? "text-red-600"
+              : alert.riskLevel === "high"
+              ? "text-orange-600"
+              : alert.riskLevel === "medium"
+              ? "text-yellow-600"
+              : "text-blue-600"
+          } flex-shrink-0 mt-0.5`}
+        />
+        <div className="flex-1">
+          <h4 className="font-medium text-gray-900">{alert.title}</h4>
+          <p className="text-sm text-gray-600 mt-1">{alert.description}</p>
+          <p className="text-sm text-gray-600 mt-1">
+            <strong>Animales afectados:</strong> {alert.affectedAnimals}
+          </p>
+          <div className="mt-2">
+            <p className="text-sm font-medium text-gray-900">
+              Recomendaciones:
+            </p>
+            <ul className="list-disc list-inside mt-1 text-sm text-gray-600">
+              {alert.recommendations.map((rec, index) => (
+                <li key={index}>{rec}</li>
+              ))}
+            </ul>
+          </div>
+        </div>
+        <Badge variant={alert.riskLevel}>
+          {alert.riskLevel === "critical"
+            ? "Crítico"
+            : alert.riskLevel === "high"
+            ? "Alto"
+            : alert.riskLevel === "medium"
+            ? "Medio"
+            : "Bajo"}
+        </Badge>
+      </div>
+    </motion.div>
+  );
+};
+
+const PostMortemReports: React.FC = () => {
+  // Estados del componente
+  const [reports, setReports] = useState<PostMortemReport[]>([]);
+  const [stats, setStats] = useState<MortalityStats>({
+    totalDeaths: 0,
+    monthlyDeaths: 0,
+    mortalityRate: 0,
+    mostCommonCause: "",
+    averageAge: 0,
+    costImpact: 0,
+    necropsyRate: 0,
+    contagiousCases: 0,
+    seasonalTrend: "stable",
+    preventableCases: 0,
+  });
+  const [mortalityAlerts, setMortalityAlerts] = useState<MortalityAlert[]>([]);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [selectedCause, setSelectedCause] = useState<string>("all");
+  const [selectedStatus, setSelectedStatus] = useState<string>("all");
+  const [selectedPeriod, setSelectedPeriod] = useState<string>("30");
+
+  // Simulación de datos
+  useEffect(() => {
+    const loadData = async () => {
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+
+      // Datos de ejemplo para reportes post-mortem
+      const mockReports: PostMortemReport[] = [
+        {
+          id: "1",
+          animalId: "COW004",
+          animalName: "Margarita",
+          animalTag: "TAG-004",
+          breed: "Holstein",
+          age: 4,
+          gender: "female",
+          weight: 520,
+          deathDate: new Date("2025-07-08"),
+          discoveryDate: new Date("2025-07-08"),
+          location: {
+            lat: 17.9869,
+            lng: -92.9303,
+            address: "Establo Principal, Sector A",
+            sector: "A",
+            environment: "Confinamiento",
+          },
+          deathCircumstances: {
+            witnessed: false,
+            positionFound: "Decúbito lateral izquierdo",
+            weatherConditions: "Caluroso, 32°C",
+            circumstances:
+              "Encontrada muerta en la mañana, sin signos previos aparentes",
+          },
+          preliminaryCause: "Neumonía severa",
+          finalCause: "Neumonía bacteriana por Mannheimia haemolytica",
+          causeCategory: "disease",
+          necropsyPerformed: true,
+          necropsyDate: new Date("2025-07-08"),
+          pathologist: "Dr. Hernández",
+          veterinarian: "Dr. García",
+          grossFindings: {
+            externalExamination:
+              "Animal en buen estado nutricional, sin lesiones externas evidentes",
+            cardiovascularSystem:
+              "Corazón aumentado de tamaño, congestión venosa",
+            respiratorySystem:
+              "Pulmones consolidados bilateralmente, exudado purulento en bronquios",
+            digestiveSystem: "Sin hallazgos significativos",
+            nervousSystem: "Sin alteraciones macroscópicas",
+            reproductiveSystem: "Útero gestante de 6 meses",
+            musculoskeletalSystem: "Sin lesiones",
+            lymphaticSystem: "Nódulos linfáticos mediastínicos aumentados",
+            other: "Hígado con congestión pasiva",
+          },
+          histopathology: {
+            performed: true,
+            results:
+              "Bronconeumonía supurativa severa con colonias bacterianas",
+            laboratory: "Laboratorio Veterinario Central",
+            reportDate: new Date("2025-07-12"),
+          },
+          microbiology: {
+            performed: true,
+            organisms: ["Mannheimia haemolytica"],
+            antibiogramResults:
+              "Sensible a penicilina, resistente a tetraciclina",
+            laboratory: "Laboratorio Veterinario Central",
+          },
+          photos: [
+            {
+              id: "PH001",
+              description: "Lesiones pulmonares consolidadas",
+              category: "internal",
+              timestamp: new Date("2025-07-08"),
+            },
+            {
+              id: "PH002",
+              description: "Exudado purulento bronquial",
+              category: "internal",
+              timestamp: new Date("2025-07-08"),
+            },
+          ],
+          samples: [
+            {
+              id: "S001",
+              type: "Tejido pulmonar",
+              organ: "Pulmón",
+              preservationMethod: "Formalina 10%",
+              laboratory: "Laboratorio Veterinario Central",
+              status: "completed",
+            },
+          ],
+          preventiveRecommendations: [
+            "Mejorar ventilación en establos",
+            "Implementar programa de vacunación respiratoria",
+            "Monitoreo de estrés térmico",
+            "Separar animales gestantes",
+          ],
+          economicImpact: 15000,
+          reportStatus: "completed",
+          createdBy: "Dr. García",
+          createdAt: new Date("2025-07-08"),
+          lastUpdated: new Date("2025-07-12"),
+          isContagious: true,
+          requiresQuarantine: false,
+          notifiableDisease: false,
+          reportedToAuthorities: false,
+        },
+        {
+          id: "2",
+          animalId: "BULL001",
+          animalName: "Campeón",
+          animalTag: "TAG-B001",
+          breed: "Angus",
+          age: 6,
+          gender: "male",
+          weight: 850,
+          deathDate: new Date("2025-07-05"),
+          discoveryDate: new Date("2025-07-05"),
+          location: {
+            lat: 17.9719,
+            lng: -92.9456,
+            address: "Pastizal Norte, Sector B",
+            sector: "B",
+            environment: "Pastoreo",
+          },
+          deathCircumstances: {
+            witnessed: true,
+            timeOfDeath: new Date("2025-07-05T14:30:00"),
+            positionFound: "Decúbito lateral derecho",
+            weatherConditions: "Lluvia ligera, 28°C",
+            circumstances: "Observado cayendo súbitamente durante pastoreo",
+          },
+          preliminaryCause: "Trauma múltiple",
+          finalCause: "Traumatismo craneoencefálico severo",
+          causeCategory: "trauma",
+          necropsyPerformed: true,
+          necropsyDate: new Date("2025-07-05"),
+          pathologist: "Dr. Hernández",
+          veterinarian: "Dr. Martínez",
+          grossFindings: {
+            externalExamination:
+              "Herida contusa en región frontal, hematoma subcutáneo extenso",
+            cardiovascularSystem: "Sin alteraciones",
+            respiratorySystem: "Congestión pulmonar leve",
+            digestiveSystem: "Sin hallazgos",
+            nervousSystem:
+              "Fractura de hueso frontal, hemorragia subdural severa",
+            reproductiveSystem: "Sin alteraciones",
+            musculoskeletalSystem: "Fractura en miembro anterior izquierdo",
+            lymphaticSystem: "Sin alteraciones",
+            other: "Hematomas múltiples en flanco izquierdo",
+          },
+          photos: [
+            {
+              id: "PH003",
+              description: "Trauma craneal externo",
+              category: "external",
+              timestamp: new Date("2025-07-05"),
+            },
+            {
+              id: "PH004",
+              description: "Hemorragia subdural",
+              category: "internal",
+              timestamp: new Date("2025-07-05"),
+            },
+          ],
+          samples: [],
+          preventiveRecommendations: [
+            "Inspección de infraestructura en pastizales",
+            "Remoción de objetos peligrosos",
+            "Mejora de cercas y protecciones",
+            "Supervisión durante pastoreo",
+          ],
+          economicImpact: 25000,
+          reportStatus: "completed",
+          createdBy: "Dr. Martínez",
+          createdAt: new Date("2025-07-05"),
+          lastUpdated: new Date("2025-07-06"),
+          isContagious: false,
+          requiresQuarantine: false,
+          notifiableDisease: false,
+          reportedToAuthorities: false,
+        },
+        {
+          id: "3",
+          animalId: "COW005",
+          animalName: "Esperanza",
+          animalTag: "TAG-005",
+          breed: "Jersey",
+          age: 2,
+          gender: "female",
+          weight: 380,
+          deathDate: new Date("2025-07-10"),
+          discoveryDate: new Date("2025-07-10"),
+          location: {
+            lat: 17.9589,
+            lng: -92.9289,
+            address: "Potrero Sur, Sector C",
+            sector: "C",
+            environment: "Pastoreo",
+          },
+          deathCircumstances: {
+            witnessed: false,
+            positionFound: "Decúbito esternal",
+            weatherConditions: "Soleado, 30°C",
+            circumstances: "Encontrada muerta cerca del bebedero",
+          },
+          preliminaryCause: "Intoxicación",
+          finalCause: "Pendiente resultados toxicológicos",
+          causeCategory: "poisoning",
+          necropsyPerformed: true,
+          necropsyDate: new Date("2025-07-10"),
+          pathologist: "Dr. López",
+          veterinarian: "Dr. García",
+          grossFindings: {
+            externalExamination: "Animal deshidratado, mucosas cianóticas",
+            cardiovascularSystem: "Sangre oscura, coagulación alterada",
+            respiratorySystem: "Edema pulmonar moderado",
+            digestiveSystem: "Contenido ruminal verdoso, olor característico",
+            nervousSystem: "Sin alteraciones macroscópicas",
+            reproductiveSystem: "Sin alteraciones",
+            musculoskeletalSystem: "Sin lesiones",
+            lymphaticSystem: "Sin alteraciones",
+            other: "Hígado con degeneración grasa",
+          },
+          toxicology: {
+            performed: true,
+            substances: ["Investigación en curso"],
+            results: "Pendiente",
+            laboratory: "Laboratorio Toxicológico Nacional",
+          },
+          photos: [
+            {
+              id: "PH005",
+              description: "Mucosas cianóticas",
+              category: "external",
+              timestamp: new Date("2025-07-10"),
+            },
+          ],
+          samples: [
+            {
+              id: "S002",
+              type: "Contenido ruminal",
+              organ: "Rumen",
+              preservationMethod: "Congelación",
+              laboratory: "Laboratorio Toxicológico Nacional",
+              status: "processing",
+            },
+            {
+              id: "S003",
+              type: "Sangre",
+              organ: "Sistema circulatorio",
+              preservationMethod: "EDTA",
+              laboratory: "Laboratorio Toxicológico Nacional",
+              status: "processing",
+            },
+          ],
+          preventiveRecommendations: [
+            "Inspección de plantas tóxicas en pastizales",
+            "Control de acceso a químicos agrícolas",
+            "Análisis de calidad del agua",
+            "Capacitación sobre plantas venenosas",
+          ],
+          economicImpact: 8000,
+          reportStatus: "pending_lab",
+          createdBy: "Dr. García",
+          createdAt: new Date("2025-07-10"),
+          lastUpdated: new Date("2025-07-11"),
+          isContagious: false,
+          requiresQuarantine: true,
+          notifiableDisease: false,
+          reportedToAuthorities: true,
+        },
+      ];
+
+      // Estadísticas de ejemplo
+      const mockStats: MortalityStats = {
+        totalDeaths: 18,
+        monthlyDeaths: 3,
+        mortalityRate: 2.8,
+        mostCommonCause: "Enfermedades respiratorias",
+        averageAge: 4.2,
+        costImpact: 180000,
+        necropsyRate: 85.5,
+        contagiousCases: 2,
+        seasonalTrend: "increasing",
+        preventableCases: 12,
+      };
+
+      // Alertas de mortalidad
+      const mockAlerts: MortalityAlert[] = [
+        {
+          id: "1",
+          type: "unusual_pattern",
+          title: "Patrón Inusual de Mortalidad",
+          description: "Incremento de casos respiratorios en animales jóvenes",
+          affectedAnimals: 4,
+          riskLevel: "medium",
+          recommendations: [
+            "Intensificar vigilancia epidemiológica",
+            "Revisar condiciones de ventilación",
+            "Implementar medidas de bioseguridad",
+          ],
+          isActive: true,
+          createdAt: new Date("2025-07-08"),
+        },
+        {
+          id: "2",
+          type: "contagious_disease",
+          title: "Riesgo de Enfermedad Contagiosa",
+          description: "Caso confirmado de neumonía bacteriana contagiosa",
+          affectedAnimals: 1,
+          riskLevel: "high",
+          recommendations: [
+            "Aislar animales sospechosos",
+            "Implementar protocolo de desinfección",
+            "Monitoreo diario de síntomas respiratorios",
+          ],
+          isActive: true,
+          createdAt: new Date("2025-07-08"),
+        },
+      ];
+
+      setReports(mockReports);
+      setStats(mockStats);
+      setMortalityAlerts(mockAlerts);
+    };
+
+    loadData();
+  }, []);
+
+  // Filtrar reportes
+  const filteredReports = reports.filter((report) => {
+    const matchesSearch =
+      report.animalName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      report.animalTag.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      report.finalCause.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesCause =
+      selectedCause === "all" || report.causeCategory === selectedCause;
+    const matchesStatus =
+      selectedStatus === "all" || report.reportStatus === selectedStatus;
+
+    return matchesSearch && matchesCause && matchesStatus;
+  });
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-emerald-50 via-teal-50 to-cyan-50">
+      {/* Header */}
+      <motion.div
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="bg-white/80 backdrop-blur-md border-b border-green-200 sticky top-0 z-40"
+      >
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900">
+                Reportes Post-Mortem
+              </h1>
+              <p className="text-gray-600 mt-1">
+                Análisis patológico y causa de mortalidad
+              </p>
+            </div>
+            <div className="flex items-center gap-3">
+              <Button variant="outline" size="sm">
+                <Archive className="w-4 h-4 mr-2" />
+                Histórico
+              </Button>
+              <Button variant="outline" size="sm">
+                <Download className="w-4 h-4 mr-2" />
+                Exportar
+              </Button>
+              <Button size="sm">
+                <Plus className="w-4 h-4 mr-2" />
+                Nuevo Reporte
+              </Button>
+            </div>
+          </div>
+        </div>
+      </motion.div>
+
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Alertas de Mortalidad */}
+        {mortalityAlerts.filter((alert) => alert.isActive).length > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mb-6"
+          >
+            <Card className="bg-white/80 backdrop-blur-md border-red-200">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <AlertTriangle className="w-5 h-5 text-red-600" />
+                  Alertas de Mortalidad
+                </CardTitle>
+                <CardDescription>
+                  Patrones anormales y riesgos detectados en mortalidad
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  {mortalityAlerts
+                    .filter((alert) => alert.isActive)
+                    .map((alert) => (
+                      <MortalityAlertCard key={alert.id} alert={alert} />
+                    ))}
+                </div>
+              </CardContent>
+            </Card>
+          </motion.div>
+        )}
+
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          {/* Estadísticas de Mortalidad */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="lg:col-span-12"
+          >
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
+              <Card className="bg-white/80 backdrop-blur-md border-gray-200">
+                <CardContent className="p-6">
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center">
+                      <Skull className="w-6 h-6 text-gray-600" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-gray-600">
+                        Total Muertes
+                      </p>
+                      <p className="text-2xl font-bold text-gray-900">
+                        {stats.totalDeaths}
+                      </p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="bg-white/80 backdrop-blur-md border-red-200">
+                <CardContent className="p-6">
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 bg-red-100 rounded-lg flex items-center justify-center">
+                      <TrendingUp className="w-6 h-6 text-red-600" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-gray-600">
+                        Tasa Mortalidad
+                      </p>
+                      <p className="text-2xl font-bold text-gray-900">
+                        {stats.mortalityRate}%
+                      </p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="bg-white/80 backdrop-blur-md border-blue-200">
+                <CardContent className="p-6">
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
+                      <Microscope className="w-6 h-6 text-blue-600" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-gray-600">
+                        Tasa Necropsia
+                      </p>
+                      <p className="text-2xl font-bold text-gray-900">
+                        {stats.necropsyRate}%
+                      </p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="bg-white/80 backdrop-blur-md border-green-200">
+                <CardContent className="p-6">
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
+                      <Shield className="w-6 h-6 text-green-600" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-gray-600">
+                        Casos Prevenibles
+                      </p>
+                      <p className="text-2xl font-bold text-gray-900">
+                        {stats.preventableCases}
+                      </p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="bg-white/80 backdrop-blur-md border-yellow-200">
+                <CardContent className="p-6">
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 bg-yellow-100 rounded-lg flex items-center justify-center">
+                      <Target className="w-6 h-6 text-yellow-600" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-gray-600">
+                        Impacto Económico
+                      </p>
+                      <p className="text-2xl font-bold text-gray-900">
+                        ${(stats.costImpact / 1000).toFixed(0)}K
+                      </p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          </motion.div>
+
+          {/* Mapa de Mortalidad */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.1 }}
+            className="lg:col-span-8"
+          >
+            <Card className="bg-white/80 backdrop-blur-md border-gray-200">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <MapPin className="w-5 h-5 text-red-600" />
+                  Mapa de Casos de Mortalidad
+                </CardTitle>
+                <CardDescription>
+                  Distribución geográfica de casos por causa de muerte
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <MortalityMap />
+              </CardContent>
+            </Card>
+          </motion.div>
+
+          {/* Panel de Control */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.2 }}
+            className="lg:col-span-4 space-y-6"
+          >
+            {/* Filtros */}
+            <Card className="bg-white/80 backdrop-blur-md border-gray-200">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Filter className="w-5 h-5 text-blue-600" />
+                  Filtros
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {/* Búsqueda */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Buscar
+                  </label>
+                  <div className="relative">
+                    <Search className="w-4 h-4 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                    <input
+                      type="text"
+                      placeholder="Animal, causa, etiqueta..."
+                      className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                    />
+                  </div>
+                </div>
+
+                {/* Causa de muerte */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Causa
+                  </label>
+                  <select
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    value={selectedCause}
+                    onChange={(e) => setSelectedCause(e.target.value)}
+                  >
+                    <option value="all">Todas las causas</option>
+                    <option value="disease">Enfermedades</option>
+                    <option value="trauma">Traumas</option>
+                    <option value="poisoning">Envenenamientos</option>
+                    <option value="metabolic">Metabólicas</option>
+                    <option value="reproductive">Reproductivas</option>
+                    <option value="congenital">Congénitas</option>
+                    <option value="predation">Depredación</option>
+                    <option value="unknown">Desconocidas</option>
+                  </select>
+                </div>
+
+                {/* Estado del reporte */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Estado
+                  </label>
+                  <select
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    value={selectedStatus}
+                    onChange={(e) => setSelectedStatus(e.target.value)}
+                  >
+                    <option value="all">Todos los estados</option>
+                    <option value="preliminary">Preliminar</option>
+                    <option value="pending_lab">Pendiente lab</option>
+                    <option value="completed">Completado</option>
+                    <option value="reviewed">Revisado</option>
+                  </select>
+                </div>
+
+                {/* Período */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Período
+                  </label>
+                  <select
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    value={selectedPeriod}
+                    onChange={(e) => setSelectedPeriod(e.target.value)}
+                  >
+                    <option value="7">Últimos 7 días</option>
+                    <option value="30">Últimos 30 días</option>
+                    <option value="90">Últimos 3 meses</option>
+                    <option value="365">Último año</option>
+                  </select>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Causa Más Común */}
+            <Card className="bg-white/80 backdrop-blur-md border-gray-200">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <BarChart3 className="w-5 h-5 text-purple-600" />
+                  Causa Predominante
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="text-center">
+                  <h3 className="text-lg font-bold text-gray-900">
+                    {stats.mostCommonCause}
+                  </h3>
+                  <p className="text-gray-600">Causa más frecuente</p>
+                </div>
+
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Tendencia estacional:</span>
+                    <div className="flex items-center gap-1">
+                      {stats.seasonalTrend === "increasing" ? (
+                        <TrendingUp className="w-4 h-4 text-red-500" />
+                      ) : stats.seasonalTrend === "decreasing" ? (
+                        <TrendingDown className="w-4 h-4 text-green-500" />
+                      ) : (
+                        <Activity className="w-4 h-4 text-blue-500" />
+                      )}
+                      <span
+                        className={`font-medium ${
+                          stats.seasonalTrend === "increasing"
+                            ? "text-red-600"
+                            : stats.seasonalTrend === "decreasing"
+                            ? "text-green-600"
+                            : "text-blue-600"
+                        }`}
+                      >
+                        {stats.seasonalTrend === "increasing"
+                          ? "Aumentando"
+                          : stats.seasonalTrend === "decreasing"
+                          ? "Disminuyendo"
+                          : "Estable"}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Edad promedio:</span>
+                    <span className="font-medium">{stats.averageAge} años</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Muertes este mes:</span>
+                    <span className="font-medium">{stats.monthlyDeaths}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Casos contagiosos:</span>
+                    <span className="font-medium text-red-600">
+                      {stats.contagiousCases}
+                    </span>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Acciones Rápidas */}
+            <Card className="bg-white/80 backdrop-blur-md border-gray-200">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Settings className="w-5 h-5 text-green-600" />
+                  Acciones Rápidas
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <Button variant="outline" className="w-full justify-start">
+                  <BookOpen className="w-4 h-4 mr-2" />
+                  Guía de Necropsia
+                </Button>
+                <Button variant="outline" className="w-full justify-start">
+                  <Camera className="w-4 h-4 mr-2" />
+                  Protocolo Fotográfico
+                </Button>
+                <Button variant="outline" className="w-full justify-start">
+                  <FileText className="w-4 h-4 mr-2" />
+                  Reporte Epidemiológico
+                </Button>
+                <Button variant="outline" className="w-full justify-start">
+                  <Archive className="w-4 h-4 mr-2" />
+                  Base de Datos Histórica
+                </Button>
+              </CardContent>
+            </Card>
+          </motion.div>
+
+          {/* Lista de Reportes Post-Mortem */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.3 }}
+            className="lg:col-span-12"
+          >
+            <Card className="bg-white/80 backdrop-blur-md border-gray-200">
+              <CardHeader>
+                <CardTitle>
+                  Reportes Post-Mortem ({filteredReports.length})
+                </CardTitle>
+                <CardDescription>
+                  Análisis patológicos y determinación de causa de muerte
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  {filteredReports.map((report) => (
+                    <motion.div
+                      key={report.id}
+                      whileHover={{ scale: 1.01 }}
+                      className="border border-gray-200 rounded-lg p-6 hover:shadow-md transition-all duration-200"
+                    >
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-3 mb-3">
+                            <h4 className="text-xl font-semibold text-gray-900">
+                              {report.animalName} ({report.animalTag})
+                            </h4>
+                            <Badge variant={report.causeCategory}>
+                              {report.causeCategory === "disease"
+                                ? "Enfermedad"
+                                : report.causeCategory === "trauma"
+                                ? "Trauma"
+                                : report.causeCategory === "poisoning"
+                                ? "Envenenamiento"
+                                : report.causeCategory === "metabolic"
+                                ? "Metabólica"
+                                : report.causeCategory === "reproductive"
+                                ? "Reproductiva"
+                                : report.causeCategory === "congenital"
+                                ? "Congénita"
+                                : report.causeCategory === "predation"
+                                ? "Depredación"
+                                : "Desconocida"}
+                            </Badge>
+                            <Badge variant={report.reportStatus}>
+                              {report.reportStatus === "preliminary"
+                                ? "Preliminar"
+                                : report.reportStatus === "pending_lab"
+                                ? "Pendiente Lab"
+                                : report.reportStatus === "completed"
+                                ? "Completado"
+                                : "Revisado"}
+                            </Badge>
+                            {report.isContagious && (
+                              <Badge variant="critical">Contagioso</Badge>
+                            )}
+                            {report.requiresQuarantine && (
+                              <Badge variant="warning">Cuarentena</Badge>
+                            )}
+                          </div>
+
+                          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-sm mb-4">
+                            <div>
+                              <p className="text-gray-600">Raza:</p>
+                              <p className="font-medium">{report.breed}</p>
+                            </div>
+                            <div>
+                              <p className="text-gray-600">Edad:</p>
+                              <p className="font-medium">{report.age} años</p>
+                            </div>
+                            <div>
+                              <p className="text-gray-600">Peso:</p>
+                              <p className="font-medium">{report.weight} kg</p>
+                            </div>
+                            <div>
+                              <p className="text-gray-600">Fecha muerte:</p>
+                              <p className="font-medium">
+                                {report.deathDate.toLocaleDateString()}
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="mb-4">
+                            <h5 className="font-semibold text-gray-900 mb-2">
+                              Causa Final de Muerte
+                            </h5>
+                            <p className="text-gray-800 bg-gray-50 p-3 rounded-lg">
+                              {report.finalCause}
+                            </p>
+                          </div>
+
+                          <div className="mb-4">
+                            <h5 className="font-semibold text-gray-900 mb-2">
+                              Circunstancias del Hallazgo
+                            </h5>
+                            <div className="bg-blue-50 p-3 rounded-lg text-sm">
+                              <p>
+                                <strong>Posición:</strong>{" "}
+                                {report.deathCircumstances.positionFound}
+                              </p>
+                              <p>
+                                <strong>Condiciones:</strong>{" "}
+                                {report.deathCircumstances.weatherConditions}
+                              </p>
+                              <p>
+                                <strong>Circunstancias:</strong>{" "}
+                                {report.deathCircumstances.circumstances}
+                              </p>
+                              {report.deathCircumstances.witnessed && (
+                                <p>
+                                  <strong>Muerte presenciada:</strong> Sí
+                                </p>
+                              )}
+                            </div>
+                          </div>
+
+                          {report.necropsyPerformed && (
+                            <div className="mb-4">
+                              <h5 className="font-semibold text-gray-900 mb-2">
+                                Hallazgos de Necropsia
+                              </h5>
+                              <div className="bg-green-50 p-3 rounded-lg text-sm space-y-2">
+                                <p>
+                                  <strong>Patólogo:</strong>{" "}
+                                  {report.pathologist}
+                                </p>
+                                <p>
+                                  <strong>Fecha:</strong>{" "}
+                                  {report.necropsyDate?.toLocaleDateString()}
+                                </p>
+
+                                {report.grossFindings.respiratorySystem && (
+                                  <div>
+                                    <strong>Sistema respiratorio:</strong>
+                                    <p className="ml-4">
+                                      {report.grossFindings.respiratorySystem}
+                                    </p>
+                                  </div>
+                                )}
+
+                                {report.grossFindings.cardiovascularSystem && (
+                                  <div>
+                                    <strong>Sistema cardiovascular:</strong>
+                                    <p className="ml-4">
+                                      {
+                                        report.grossFindings
+                                          .cardiovascularSystem
+                                      }
+                                    </p>
+                                  </div>
+                                )}
+
+                                {report.grossFindings.nervousSystem && (
+                                  <div>
+                                    <strong>Sistema nervioso:</strong>
+                                    <p className="ml-4">
+                                      {report.grossFindings.nervousSystem}
+                                    </p>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          )}
+
+                          {report.histopathology?.performed && (
+                            <div className="mb-4">
+                              <h5 className="font-semibold text-gray-900 mb-2">
+                                Histopatología
+                              </h5>
+                              <div className="bg-purple-50 p-3 rounded-lg text-sm">
+                                <p>
+                                  <strong>Laboratorio:</strong>{" "}
+                                  {report.histopathology.laboratory}
+                                </p>
+                                <p>
+                                  <strong>Resultados:</strong>{" "}
+                                  {report.histopathology.results}
+                                </p>
+                              </div>
+                            </div>
+                          )}
+
+                          {report.microbiology?.performed && (
+                            <div className="mb-4">
+                              <h5 className="font-semibold text-gray-900 mb-2">
+                                Microbiología
+                              </h5>
+                              <div className="bg-indigo-50 p-3 rounded-lg text-sm">
+                                <p>
+                                  <strong>Organismos:</strong>{" "}
+                                  {report.microbiology.organisms.join(", ")}
+                                </p>
+                                {report.microbiology.antibiogramResults && (
+                                  <p>
+                                    <strong>Antibiograma:</strong>{" "}
+                                    {report.microbiology.antibiogramResults}
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                          )}
+
+                          {report.toxicology?.performed && (
+                            <div className="mb-4">
+                              <h5 className="font-semibold text-gray-900 mb-2">
+                                Toxicología
+                              </h5>
+                              <div className="bg-red-50 p-3 rounded-lg text-sm">
+                                <p>
+                                  <strong>Estado:</strong>{" "}
+                                  {report.toxicology.results}
+                                </p>
+                                <p>
+                                  <strong>Laboratorio:</strong>{" "}
+                                  {report.toxicology.laboratory}
+                                </p>
+                              </div>
+                            </div>
+                          )}
+
+                          <div className="mb-4">
+                            <h5 className="font-semibold text-gray-900 mb-2">
+                              Recomendaciones Preventivas
+                            </h5>
+                            <div className="space-y-1">
+                              {report.preventiveRecommendations.map(
+                                (rec, idx) => (
+                                  <div
+                                    key={idx}
+                                    className="flex items-start gap-2"
+                                  >
+                                    <div className="w-2 h-2 bg-blue-500 rounded-full mt-2 flex-shrink-0"></div>
+                                    <span className="text-sm text-gray-700">
+                                      {rec}
+                                    </span>
+                                  </div>
+                                )
+                              )}
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-gray-600">
+                            <div>
+                              <strong>Veterinario:</strong>{" "}
+                              {report.veterinarian}
+                            </div>
+                            <div>
+                              <strong>Ubicación:</strong>{" "}
+                              {report.location.address}
+                            </div>
+                            <div>
+                              <strong>Impacto económico:</strong> $
+                              {report.economicImpact.toLocaleString()}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2 ml-4">
+                          <Button variant="outline" size="sm">
+                            <Eye className="w-4 h-4" />
+                          </Button>
+                          <Button variant="outline" size="sm">
+                            <Edit className="w-4 h-4" />
+                          </Button>
+                          <Button variant="outline" size="sm">
+                            <Camera className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    </motion.div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          </motion.div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default PostMortemReports;

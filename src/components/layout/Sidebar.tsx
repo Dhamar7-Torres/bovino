@@ -44,12 +44,13 @@ import {
   Boxes,
   AlertCircle,
   ClipboardList,
-  BarChart,
   FolderOpen,
   BarChart4,
   Users,
   Sprout, // Icono para plantas
   Wheat, // Icono adicional para alimentación
+  TrendingDown, // Icono para gastos/egresos
+  PieChart, // Icono para P&L
 } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 
@@ -79,7 +80,7 @@ interface NavSection {
   items: NavItem[];
 }
 
-// Datos de navegación organizados por secciones - ESTRUCTURA COMPLETA CON RUTAS ACTUALIZADAS
+// Datos de navegación organizados por secciones - ESTRUCTURA COMPLETA CON RUTAS CORREGIDAS
 const navigationSections: NavSection[] = [
   {
     id: "livestock",
@@ -610,31 +611,31 @@ const navigationSections: NavSection[] = [
         color: "text-[#4e9c75]",
         children: [
           {
-            id: "financial-dashboard",
+            id: "dashboard",
             title: "Dashboard Financiero",
-            href: "/finances/dashboard",
+            href: "/finances/dashboard", // ✅ CORREGIDO: Apunta a FinancesDashboard
             icon: BarChart3,
             color: "text-[#4e9c75]",
           },
           {
             id: "income-tracker",
             title: "Seguimiento de Ingresos",
-            href: "/finances/income-tracker",
+            href: "/finances/income-tracker", // ✅ CORREGIDO: Apunta a IncomeTracker
             icon: TrendingUp,
             color: "text-[#4e9c75]",
           },
           {
             id: "expense-tracker",
-            title: "Seguimiento de Gastos",
-            href: "/finances/expense-tracker",
-            icon: TrendingUp,
+            title: "Seguimiento de Egresos",
+            href: "/finances/expense-tracker", // ✅ CORREGIDO: Apunta a ExpenseTracker
+            icon: TrendingDown,
             color: "text-[#4e9c75]",
           },
           {
             id: "profit-loss",
             title: "Estado de Ganancias y Pérdidas",
-            href: "/finances/profit-loss",
-            icon: BarChart,
+            href: "/finances/profit-loss", // ✅ CORREGIDO: Apunta a ProfitLoss
+            icon: PieChart,
             color: "text-[#4e9c75]",
           },
         ],
