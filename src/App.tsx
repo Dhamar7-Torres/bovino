@@ -1,23 +1,19 @@
 import React from "react";
-
 import {
   BrowserRouter as Router,
   Routes,
   Route,
   Navigate,
 } from "react-router-dom";
-
 import { motion } from "framer-motion";
 import { Plus, Beef, Syringe, Calendar, Bell } from "lucide-react";
 
 // Importar el Layout completo
 import { Layout } from "./components/layout";
-
 import AuthPage from "./pages/auth/AuthPage";
-
 import BovinesPage from "./pages/bovines/BovinesPage";
-
 import { CalendarPage } from "./pages/calendar";
+import { DashboardPage as DashboardModule } from "./pages/dashboard"; // Dashboard avanzado
 
 // Agregar las fuentes elegantes al head
 const addGoogleFonts = () => {
@@ -236,13 +232,11 @@ const DashboardPage: React.FC = () => {
                 </p>
               </div>
             </div>
-
             <p className="text-black leading-relaxed mb-6 font-medium">
               Sistema integral para el manejo, seguimiento y control de ganado
               bovino con tecnología de geolocalización avanzada desarrollado en
               la UJAT.
             </p>
-
             <div className="grid grid-cols-2 gap-4">
               <div className="text-center p-4 bg-white/70 backdrop-blur-sm rounded-xl border border-gray-200">
                 <div className="text-2xl font-bold text-[#3d8b40]">1,247</div>
@@ -259,7 +253,6 @@ const DashboardPage: React.FC = () => {
             </div>
           </div>
         </div>
-
         <div className="space-y-6">
           <div className="bg-[#f5f5dc]/90 backdrop-blur-sm rounded-2xl p-6 border border-gray-200/30">
             <h4 className="font-semibold text-black mb-4">Enlaces Útiles</h4>
@@ -282,7 +275,6 @@ const DashboardPage: React.FC = () => {
               ))}
             </ul>
           </div>
-
           <div className="bg-[#f5f5dc]/90 backdrop-blur-sm rounded-2xl p-6 border border-gray-200/30">
             <h4 className="font-semibold text-black mb-4">Funcionalidades</h4>
             <ul className="space-y-3">
@@ -327,7 +319,6 @@ const ModulePage: React.FC<{
         {title}
       </h1>
       <p className="text-xl text-black/90 mb-12 drop-shadow">{description}</p>
-
       <motion.div
         initial={{ scale: 0.8, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
@@ -336,7 +327,6 @@ const ModulePage: React.FC<{
       >
         <div className="w-32 h-32 mx-auto mb-8 text-8xl">{icon}</div>
       </motion.div>
-
       <motion.p
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
@@ -445,14 +435,12 @@ const App: React.FC = () => {
 
           {/* Layout principal con rutas anidadas */}
           <Route path="/*" element={<Layout />}>
-            {/* Rutas principales de cada módulo */}
             <Route path="dashboard/*" element={<DashboardPage />} />
-
-            {/* AGREGADO: Rutas del módulo bovinos completo */}
             <Route path="bovines/*" element={<BovinesPage />} />
-
-            {/* ACTUALIZADO: Módulo calendar completo funcional */}
             <Route path="calendar/*" element={<CalendarPage />} />
+
+            {/* ✅ NUEVA RUTA: Dashboard avanzado con sub-rutas */}
+            <Route path="dashboard-advanced/*" element={<DashboardModule />} />
 
             {/* Resto de módulos (mantenemos los existentes) */}
             <Route path="health/*" element={<HealthPage />} />
@@ -483,7 +471,6 @@ const App: React.FC = () => {
                     <p className="text-xl text-black/90 mb-12 drop-shadow">
                       La página que buscas no existe
                     </p>
-
                     <motion.div
                       initial={{ scale: 0.8, opacity: 0 }}
                       animate={{ scale: 1, opacity: 1 }}
@@ -492,7 +479,6 @@ const App: React.FC = () => {
                     >
                       <div className="w-32 h-32 mx-auto mb-8 text-8xl">😕</div>
                     </motion.div>
-
                     <motion.button
                       initial={{ opacity: 0 }}
                       animate={{ opacity: 1 }}
