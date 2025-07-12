@@ -1,12 +1,10 @@
 import React from "react";
-
 import {
   BrowserRouter as Router,
   Routes,
   Route,
   Navigate,
 } from "react-router-dom";
-
 import { motion } from "framer-motion";
 import { Plus, Beef, Syringe, Calendar, Bell } from "lucide-react";
 
@@ -20,6 +18,9 @@ import FeedingPage from "./pages/feeding/FeedingPage"; // ← NUEVA IMPORTACIÓN
 
 // Importar el módulo de finanzas completo
 import { FinancesPage } from "./pages/finances"; // ← IMPORTACIÓN ACTUALIZADA
+
+// ✅ IMPORTAR EL MÓDULO DE SALUD REAL
+import HealthPage from "./pages/health/HealthPage"; // ← IMPORTACIÓN DEL MÓDULO HEALTH REAL
 
 // Agregar las fuentes elegantes al head
 const addGoogleFonts = () => {
@@ -151,7 +152,6 @@ const DashboardPage: React.FC = () => {
           >
             {/* Efecto de brillo sutil al hover */}
             <div className="absolute inset-0 bg-gradient-to-r from-white/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-
             <div className="relative">
               {/* Header con título e ícono */}
               <div className="flex items-start justify-between mb-4">
@@ -174,7 +174,6 @@ const DashboardPage: React.FC = () => {
                   <stat.icon size={32} style={{ color: stat.iconColor }} />
                 </div>
               </div>
-
               {/* Valor principal y cambio */}
               <div className="mb-3">
                 <div className="flex items-baseline gap-3">
@@ -196,12 +195,10 @@ const DashboardPage: React.FC = () => {
                   )}
                 </div>
               </div>
-
               {/* Descripción */}
               <p className="text-xs text-black font-medium mb-4">
                 {stat.description}
               </p>
-
               {/* Barra de progreso */}
               <div className="w-full bg-gray-200 rounded-full h-1.5">
                 <motion.div
@@ -216,7 +213,6 @@ const DashboardPage: React.FC = () => {
           </motion.div>
         ))}
       </div>
-
       {/* Sección adicional simplificada */}
       <motion.div
         initial={{ opacity: 0, y: 40 }}
@@ -345,13 +341,15 @@ const ModulePage: React.FC<{
 );
 
 // Páginas específicas de módulos
-const HealthPage: React.FC = () => (
-  <ModulePage
-    title="Gestión de Salud"
-    description="Control veterinario y salud del ganado"
-    icon="💉"
-  />
-);
+
+// ✅ COMENTAMOS EL PLACEHOLDER DE HEALTH PORQUE YA TENEMOS EL REAL
+// const HealthPage: React.FC = () => (
+//   <ModulePage
+//     title="Gestión de Salud"
+//     description="Control veterinario y salud del ganado"
+//     icon="💉"
+//   />
+// );
 
 const ReproductionPage: React.FC = () => (
   <ModulePage
@@ -426,11 +424,9 @@ const App: React.FC = () => {
         <Routes>
           {/* Ruta raíz - redirige al dashboard */}
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
-
           {/* Rutas de autenticación - FUERA del Layout */}
           <Route path="/auth" element={<AuthPage />} />
           <Route path="/auth/*" element={<AuthPage />} />
-
           {/* Layout principal con rutas anidadas */}
           <Route path="/*" element={<Layout />}>
             <Route path="dashboard/*" element={<DashboardPage />} />
@@ -439,7 +435,8 @@ const App: React.FC = () => {
             <Route path="feeding/*" element={<FeedingPage />} />{" "}
             {/* ← NUEVA RUTA */}
             {/* Resto de módulos (mantenemos los existentes) */}
-            <Route path="health/*" element={<HealthPage />} />
+            <Route path="health/*" element={<HealthPage />} />{" "}
+            {/* ← RUTA ACTUALIZADA CON MÓDULO REAL */}
             <Route path="reproduction/*" element={<ReproductionPage />} />
             <Route path="production/*" element={<ProductionPage />} />
             <Route path="maps/*" element={<MapsPage />} />
