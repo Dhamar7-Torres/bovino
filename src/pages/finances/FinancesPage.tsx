@@ -7,15 +7,9 @@ import {
   TrendingDown,
   PieChart,
   DollarSign,
-  CreditCard,
   Calculator,
   ArrowLeft,
-  Settings,
   HelpCircle,
-  Download,
-  Bell,
-  Filter,
-  RefreshCw,
 } from "lucide-react";
 
 // Importar los componentes hijos del módulo de finanzas
@@ -77,39 +71,39 @@ const FinancesPage: React.FC = () => {
     navigate(`/finances/${tabId}`);
   };
 
-  // Definición de navegación del módulo - RUTAS CORREGIDAS PARA COINCIDIR CON SIDEBAR
+  // Definición de navegación del módulo con colores verdes
   const navigationItems: NavigationItem[] = [
     {
       id: "dashboard",
       label: "Dashboard",
       icon: <BarChart3 className="w-5 h-5" />,
       description: "Vista general del estado financiero",
-      color: "from-blue-400 to-blue-600",
+      color: "from-green-400 to-green-600",
     },
     {
       id: "income-tracker",
       label: "Ingresos",
       icon: <TrendingUp className="w-5 h-5" />,
       description: "Seguimiento detallado de ingresos",
-      color: "from-green-400 to-green-600",
+      color: "from-emerald-400 to-emerald-600",
     },
     {
       id: "expense-tracker",
       label: "Gastos",
       icon: <TrendingDown className="w-5 h-5" />,
       description: "Control de gastos operativos",
-      color: "from-red-400 to-red-600",
+      color: "from-teal-400 to-teal-600",
     },
     {
       id: "profit-loss",
       label: "P&L",
       icon: <PieChart className="w-5 h-5" />,
       description: "Estado de ganancias y pérdidas",
-      color: "from-purple-400 to-purple-600",
+      color: "from-lime-400 to-lime-600",
     },
   ];
 
-  // Estadísticas rápidas para mostrar en el header
+  // Estadísticas rápidas para mostrar en el header con colores verdes
   const quickStats: QuickStat[] = [
     {
       title: "Ingresos del Mes",
@@ -117,15 +111,15 @@ const FinancesPage: React.FC = () => {
       change: "+12.5%",
       changeType: "positive",
       icon: <DollarSign className="w-4 h-4" />,
-      color: "text-green-400",
+      color: "text-green-600",
     },
     {
       title: "Gastos del Mes",
       value: "$157,000",
       change: "+8.2%",
       changeType: "negative",
-      icon: <CreditCard className="w-4 h-4" />,
-      color: "text-red-400",
+      icon: <TrendingDown className="w-4 h-4" />,
+      color: "text-red-500",
     },
     {
       title: "Ganancia Neta",
@@ -133,7 +127,7 @@ const FinancesPage: React.FC = () => {
       change: "+23.6%",
       changeType: "positive",
       icon: <Calculator className="w-4 h-4" />,
-      color: "text-blue-400",
+      color: "text-emerald-600",
     },
   ];
 
@@ -199,22 +193,13 @@ const FinancesPage: React.FC = () => {
     });
   };
 
-  // Función para manejar actualización manual
-  const handleRefresh = () => {
-    setIsLoading(true);
-    setLastUpdated(new Date());
-    setTimeout(() => {
-      setIsLoading(false);
-    }, 1000);
-  };
-
-  // Componente de Loading
+  // Componente de Loading con degradado verde oscuro
   const LoadingSpinner: React.FC = () => (
-    <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-white via-gray-50 to-gray-100">
+    <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-green-600 via-green-700 to-green-800">
       <motion.div
         animate={{ rotate: 360 }}
         transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-        className="w-16 h-16 border-4 border-purple-500 border-t-transparent rounded-full"
+        className="w-16 h-16 border-4 border-white border-t-transparent rounded-full"
       />
     </div>
   );
@@ -224,17 +209,17 @@ const FinancesPage: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-white via-gray-50 to-gray-100">
+    <div className="min-h-screen bg-green-600">
       <motion.div
         variants={containerVariants}
         initial="hidden"
         animate="visible"
         className="flex flex-col h-screen"
       >
-        {/* Header principal del módulo */}
+        {/* Header principal del módulo con fondo verde */}
         <motion.div
           variants={itemVariants}
-          className="bg-white/90 backdrop-blur-md border-b border-gray-200 shadow-xl"
+          className="bg-green-500/90 backdrop-blur-md border-b border-green-400 shadow-xl"
         >
           <div className="max-w-7xl mx-auto px-6 py-4">
             <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center space-y-4 lg:space-y-0">
@@ -243,16 +228,16 @@ const FinancesPage: React.FC = () => {
                 <motion.button
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
-                  className="p-2 bg-gray-200 hover:bg-gray-300 rounded-lg transition-colors duration-200"
+                  className="p-2 bg-white/20 hover:bg-white/30 rounded-lg transition-colors duration-200"
                   onClick={() => window.history.back()}
                 >
-                  <ArrowLeft className="w-5 h-5 text-gray-700" />
+                  <ArrowLeft className="w-5 h-5 text-white" />
                 </motion.button>
                 <div>
-                  <h1 className="text-2xl lg:text-3xl font-bold text-gray-800">
+                  <h1 className="text-2xl lg:text-3xl font-bold text-white">
                     Módulo de Finanzas
                   </h1>
-                  <p className="text-gray-600 text-sm lg:text-base">
+                  <p className="text-white/80 text-sm lg:text-base">
                     Gestión integral de finanzas ganaderas
                   </p>
                 </div>
@@ -265,7 +250,7 @@ const FinancesPage: React.FC = () => {
                     <motion.div
                       key={stat.title}
                       variants={itemVariants}
-                      className="bg-white/80 backdrop-blur-sm rounded-lg p-3 min-w-[140px] border border-gray-200"
+                      className="bg-white/95 backdrop-blur-sm rounded-lg p-3 min-w-[140px] border border-white/20 shadow-lg"
                     >
                       <div className="flex items-center justify-between">
                         <div className={stat.color}>{stat.icon}</div>
@@ -289,38 +274,9 @@ const FinancesPage: React.FC = () => {
                   ))}
                 </div>
               )}
-
-              {/* Controles del header */}
-              <div className="flex items-center space-x-2">
-                <motion.button
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                  onClick={handleRefresh}
-                  className="p-2 bg-gray-200 hover:bg-gray-300 rounded-lg transition-colors duration-200"
-                  disabled={isLoading}
-                >
-                  <RefreshCw
-                    className={`w-4 h-4 text-gray-700 ${
-                      isLoading ? "animate-spin" : ""
-                    }`}
-                  />
-                </motion.button>
-                <button className="p-2 bg-gray-200 hover:bg-gray-300 rounded-lg transition-colors duration-200">
-                  <Bell className="w-4 h-4 text-gray-700" />
-                </button>
-                <button className="p-2 bg-gray-200 hover:bg-gray-300 rounded-lg transition-colors duration-200">
-                  <Filter className="w-4 h-4 text-gray-700" />
-                </button>
-                <button className="p-2 bg-gray-200 hover:bg-gray-300 rounded-lg transition-colors duration-200">
-                  <Download className="w-4 h-4 text-gray-700" />
-                </button>
-                <button className="p-2 bg-gray-200 hover:bg-gray-300 rounded-lg transition-colors duration-200">
-                  <Settings className="w-4 h-4 text-gray-700" />
-                </button>
-              </div>
             </div>
 
-            {/* Navegación de pestañas */}
+            {/* Navegación de pestañas con colores verdes */}
             <div className="mt-6 flex flex-wrap gap-2">
               {navigationItems.map((item) => (
                 <motion.button
@@ -331,13 +287,13 @@ const FinancesPage: React.FC = () => {
                   onClick={() => handleTabChange(item.id)}
                   className={`flex items-center space-x-2 px-4 py-3 rounded-lg font-medium transition-all duration-300 ${
                     activeTab === item.id
-                      ? "bg-blue-600 text-white shadow-lg border border-blue-700"
-                      : "bg-gray-100 text-gray-700 hover:bg-gray-200 hover:text-gray-800"
+                      ? "bg-white text-green-700 shadow-lg border border-white"
+                      : "bg-white/20 text-white hover:bg-white/30 hover:text-white"
                   }`}
                 >
                   <div
                     className={`p-1 rounded ${
-                      activeTab === item.id ? `bg-white/20` : "bg-gray-300"
+                      activeTab === item.id ? `bg-green-100` : "bg-white/20"
                     }`}
                   >
                     {item.icon}
@@ -350,17 +306,17 @@ const FinancesPage: React.FC = () => {
               ))}
             </div>
 
-            {/* Información de actualización */}
-            <div className="mt-4 flex justify-between items-center text-xs text-gray-400">
+            {/* Información de actualización simplificada */}
+            <div className="mt-4 flex justify-between items-center text-xs text-white/70">
               <div>Última actualización: {formatLastUpdated(lastUpdated)}</div>
               <div className="flex items-center space-x-4">
                 <button
                   onClick={() => setShowQuickStats(!showQuickStats)}
-                  className="hover:text-gray-200 transition-colors duration-200"
+                  className="hover:text-white transition-colors duration-200"
                 >
                   {showQuickStats ? "Ocultar" : "Mostrar"} estadísticas
                 </button>
-                <button className="hover:text-gray-200 transition-colors duration-200">
+                <button className="hover:text-white transition-colors duration-200">
                   <HelpCircle className="w-4 h-4" />
                 </button>
               </div>
@@ -385,14 +341,14 @@ const FinancesPage: React.FC = () => {
           </Routes>
         </div>
 
-        {/* Footer del módulo */}
+        {/* Footer del módulo actualizado a 2025 */}
         <motion.div
           variants={itemVariants}
-          className="bg-white/5 backdrop-blur-sm border-t border-white/10 px-6 py-3"
+          className="bg-green-700/90 backdrop-blur-sm border-t border-green-400 px-6 py-3"
         >
-          <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center text-sm text-gray-400">
+          <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center text-sm text-white/80">
             <div className="flex items-center space-x-4">
-              <span>© 2024 Sistema de Gestión Ganadera</span>
+              <span>© 2025 Sistema de Gestión Ganadera</span>
               <span>•</span>
               <span>Módulo de Finanzas v2.1.0</span>
             </div>
@@ -400,7 +356,7 @@ const FinancesPage: React.FC = () => {
               <span>Estado: Operativo</span>
               <span>•</span>
               <span className="flex items-center">
-                <div className="w-2 h-2 bg-green-400 rounded-full mr-2 animate-pulse"></div>
+                <div className="w-2 h-2 bg-white rounded-full mr-2 animate-pulse"></div>
                 Conectado
               </span>
             </div>

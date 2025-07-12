@@ -2,7 +2,6 @@ import React, { useState, useEffect } from "react";
 import { motion, Variants } from "framer-motion";
 import {
   TrendingDown,
-  CreditCard,
   PieChart,
   ArrowUpRight,
   AlertTriangle,
@@ -231,14 +230,14 @@ const ExpenseTracker: React.FC = () => {
     },
   ];
 
-  // Categorías de gastos
+  // Categorías de gastos con colores verdes
   const expenseCategories: ExpenseCategory[] = [
     {
       name: "Alimentación",
       total: 307000,
       count: 48,
       percentage: 42.1,
-      color: "from-orange-400 to-orange-600",
+      color: "from-green-400 to-green-600",
       icon: <Utensils className="w-5 h-5" />,
     },
     {
@@ -246,7 +245,7 @@ const ExpenseTracker: React.FC = () => {
       total: 125000,
       count: 15,
       percentage: 17.1,
-      color: "from-red-400 to-red-600",
+      color: "from-emerald-400 to-emerald-600",
       icon: <Home className="w-5 h-5" />,
     },
     {
@@ -254,7 +253,7 @@ const ExpenseTracker: React.FC = () => {
       total: 116000,
       count: 32,
       percentage: 15.9,
-      color: "from-blue-400 to-blue-600",
+      color: "from-teal-400 to-teal-600",
       icon: <Syringe className="w-5 h-5" />,
     },
     {
@@ -262,7 +261,7 @@ const ExpenseTracker: React.FC = () => {
       total: 84000,
       count: 24,
       percentage: 11.5,
-      color: "from-purple-400 to-purple-600",
+      color: "from-lime-400 to-lime-600",
       icon: <AlertTriangle className="w-5 h-5" />,
     },
     {
@@ -270,7 +269,7 @@ const ExpenseTracker: React.FC = () => {
       total: 47500,
       count: 18,
       percentage: 6.5,
-      color: "from-green-400 to-green-600",
+      color: "from-green-500 to-green-700",
       icon: <Truck className="w-5 h-5" />,
     },
     {
@@ -279,17 +278,17 @@ const ExpenseTracker: React.FC = () => {
       count: 12,
       percentage: 4.7,
       color: "from-gray-400 to-gray-600",
-      icon: <CreditCard className="w-5 h-5" />,
+      icon: <Search className="w-5 h-5" />,
     },
   ];
 
-  // Datos para gráfico de torta
+  // Datos para gráfico de torta con colores verdes
   const pieData: ExpensePieData[] = [
-    { name: "Alimentación", value: 42.1, color: "#F97316" },
-    { name: "Instalaciones", value: 17.1, color: "#EF4444" },
-    { name: "Vacunación", value: 15.9, color: "#3B82F6" },
-    { name: "Tratamientos", value: 11.5, color: "#8B5CF6" },
-    { name: "Transporte", value: 6.5, color: "#10B981" },
+    { name: "Alimentación", value: 42.1, color: "#10B981" },
+    { name: "Instalaciones", value: 17.1, color: "#059669" },
+    { name: "Vacunación", value: 15.9, color: "#0D9488" },
+    { name: "Tratamientos", value: 11.5, color: "#65A30D" },
+    { name: "Transporte", value: 6.5, color: "#16A34A" },
     { name: "Otros", value: 4.7, color: "#6B7280" },
   ];
 
@@ -413,13 +412,13 @@ const ExpenseTracker: React.FC = () => {
     )
     .reduce((sum, record) => sum + record.amount, 0);
 
-  // Componente de Loading
+  // Componente de Loading con fondo degradado del layout principal
   const LoadingSpinner: React.FC = () => (
-    <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
+    <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-green-400 via-green-500 to-yellow-400">
       <motion.div
         animate={{ rotate: 360 }}
         transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-        className="w-16 h-16 border-4 border-red-500 border-t-transparent rounded-full"
+        className="w-16 h-16 border-4 border-white border-t-transparent rounded-full"
       />
     </div>
   );
@@ -429,41 +428,29 @@ const ExpenseTracker: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 p-6">
+    <div className="min-h-screen bg-gradient-to-br from-green-400 via-green-500 to-yellow-400 p-6">
       <motion.div
         variants={containerVariants}
         initial="hidden"
         animate="visible"
         className="max-w-7xl mx-auto space-y-6"
       >
-        {/* Header del Seguimiento de Gastos */}
+        {/* Botones de acción principales */}
         <motion.div
           variants={itemVariants}
-          className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8"
+          className="flex justify-end space-x-3 mb-6"
         >
-          <div>
-            <h1 className="text-4xl font-bold text-white mb-2">
-              Seguimiento de Gastos
-            </h1>
-            <p className="text-gray-300 text-lg">
-              Control detallado de todos los gastos operativos del rancho
-            </p>
-          </div>
-
-          {/* Botones de acción */}
-          <div className="flex space-x-3 mt-4 md:mt-0">
-            <button
-              onClick={() => setShowAddModal(true)}
-              className="flex items-center px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium transition-all duration-300 shadow-lg"
-            >
-              <Plus className="w-5 h-5 mr-2" />
-              Nuevo Gasto
-            </button>
-            <button className="flex items-center px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-medium transition-all duration-300 shadow-lg">
-              <Download className="w-5 h-5 mr-2" />
-              Exportar
-            </button>
-          </div>
+          <button
+            onClick={() => setShowAddModal(true)}
+            className="flex items-center px-6 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium transition-all duration-300 shadow-lg"
+          >
+            <Plus className="w-5 h-5 mr-2" />
+            Nuevo Gasto
+          </button>
+          <button className="flex items-center px-6 py-3 bg-teal-600 hover:bg-teal-700 text-white rounded-lg font-medium transition-all duration-300 shadow-lg">
+            <Download className="w-5 h-5 mr-2" />
+            Exportar
+          </button>
         </motion.div>
 
         {/* Tarjetas de resumen */}
@@ -474,30 +461,30 @@ const ExpenseTracker: React.FC = () => {
           {expenseCategories.slice(0, 6).map((category) => (
             <motion.div
               key={category.name}
-              whileHover={{ scale: 1.05, y: -5 }}
-              whileTap={{ scale: 0.95 }}
-              className="bg-white/10 backdrop-blur-md rounded-xl p-6 border border-white/20 shadow-xl"
+              whileHover={{ scale: 1.02, y: -2 }}
+              whileTap={{ scale: 0.98 }}
+              className="bg-white/95 backdrop-blur-md rounded-xl p-6 border border-white/20 shadow-xl hover:shadow-2xl transition-shadow duration-300"
             >
               <div className="flex items-center justify-between mb-4">
                 <div
-                  className={`p-3 rounded-lg bg-gradient-to-r ${category.color}`}
+                  className={`p-3 rounded-lg bg-gradient-to-r ${category.color} text-white`}
                 >
                   {category.icon}
                 </div>
                 <div className="text-right">
-                  <p className="text-gray-300 text-sm">
+                  <p className="text-gray-600 text-sm">
                     {category.count} registros
                   </p>
-                  <p className="text-gray-400 text-xs">
+                  <p className="text-gray-500 text-xs">
                     {category.percentage}% del total
                   </p>
                 </div>
               </div>
 
-              <h3 className="text-gray-300 text-sm font-medium mb-1">
+              <h3 className="text-gray-700 text-sm font-medium mb-1">
                 {category.name}
               </h3>
-              <p className="text-white text-2xl font-bold">
+              <p className="text-gray-900 text-2xl font-bold">
                 {formatCurrency(category.total)}
               </p>
             </motion.div>
@@ -507,7 +494,7 @@ const ExpenseTracker: React.FC = () => {
         {/* Filtros y búsqueda */}
         <motion.div
           variants={itemVariants}
-          className="bg-white/10 backdrop-blur-md rounded-xl p-6 border border-white/20 shadow-xl"
+          className="bg-white/90 backdrop-blur-md rounded-xl p-6 border border-white/20 shadow-xl"
         >
           <div className="flex flex-col lg:flex-row gap-4">
             {/* Búsqueda */}
@@ -519,7 +506,7 @@ const ExpenseTracker: React.FC = () => {
                   placeholder="Buscar por descripción o proveedor..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                  className="w-full pl-10 pr-4 py-2 bg-gray-50 border border-gray-300 rounded-lg text-gray-900 placeholder-gray-500 focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors duration-200"
                 />
               </div>
             </div>
@@ -529,7 +516,7 @@ const ExpenseTracker: React.FC = () => {
               <select
                 value={selectedCategory}
                 onChange={(e) => setSelectedCategory(e.target.value)}
-                className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                className="w-full px-4 py-2 bg-gray-50 border border-gray-300 rounded-lg text-gray-900 focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors duration-200"
               >
                 <option value="all">Todas las categorías</option>
                 <option value="vacunacion">Vacunación</option>
@@ -546,7 +533,7 @@ const ExpenseTracker: React.FC = () => {
               <select
                 value={selectedStatus}
                 onChange={(e) => setSelectedStatus(e.target.value)}
-                className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                className="w-full px-4 py-2 bg-gray-50 border border-gray-300 rounded-lg text-gray-900 focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors duration-200"
               >
                 <option value="all">Todos los estados</option>
                 <option value="paid">Pagado</option>
@@ -563,8 +550,8 @@ const ExpenseTracker: React.FC = () => {
                   onClick={() => setSelectedPeriod(period)}
                   className={`px-4 py-2 rounded-lg font-medium transition-all duration-300 ${
                     selectedPeriod === period
-                      ? "bg-red-600 text-white shadow-lg"
-                      : "bg-gray-700 text-gray-300 hover:bg-gray-600"
+                      ? "bg-green-600 text-white shadow-lg"
+                      : "bg-gray-100 text-gray-700 hover:bg-gray-200"
                   }`}
                 >
                   {period === "weekly"
@@ -583,47 +570,48 @@ const ExpenseTracker: React.FC = () => {
           {/* Gráfico de líneas - Tendencia de gastos */}
           <motion.div
             variants={itemVariants}
-            className="bg-white/10 backdrop-blur-md rounded-xl p-6 border border-white/20 shadow-xl"
+            className="bg-white/90 backdrop-blur-md rounded-xl p-6 border border-white/20 shadow-xl"
           >
             <div className="flex items-center justify-between mb-6">
-              <h3 className="text-xl font-semibold text-white">
+              <h3 className="text-xl font-semibold text-gray-800">
                 Tendencia de Gastos Mensuales
               </h3>
-              <TrendingDown className="w-6 h-6 text-red-400" />
+              <TrendingDown className="w-6 h-6 text-green-500" />
             </div>
 
             <ResponsiveContainer width="100%" height={300}>
               <LineChart data={monthlyExpenseData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                <XAxis dataKey="month" stroke="#9CA3AF" />
-                <YAxis stroke="#9CA3AF" />
+                <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
+                <XAxis dataKey="month" stroke="#6B7280" />
+                <YAxis stroke="#6B7280" />
                 <Tooltip
                   contentStyle={{
-                    backgroundColor: "#1F2937",
-                    border: "1px solid #374151",
+                    backgroundColor: "#FFFFFF",
+                    border: "1px solid #E5E7EB",
                     borderRadius: "8px",
-                    color: "#F9FAFB",
+                    color: "#111827",
+                    boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.1)",
                   }}
                 />
                 <Legend />
                 <Line
                   type="monotone"
                   dataKey="total"
-                  stroke="#EF4444"
+                  stroke="#059669"
                   strokeWidth={3}
                   name="Total Gastos"
                 />
                 <Line
                   type="monotone"
                   dataKey="alimentacion"
-                  stroke="#F97316"
+                  stroke="#10B981"
                   strokeWidth={2}
                   name="Alimentación"
                 />
                 <Line
                   type="monotone"
                   dataKey="vacunacion"
-                  stroke="#3B82F6"
+                  stroke="#0D9488"
                   strokeWidth={2}
                   name="Vacunación"
                 />
@@ -634,13 +622,13 @@ const ExpenseTracker: React.FC = () => {
           {/* Gráfico de torta - Distribución de gastos */}
           <motion.div
             variants={itemVariants}
-            className="bg-white/10 backdrop-blur-md rounded-xl p-6 border border-white/20 shadow-xl"
+            className="bg-white/90 backdrop-blur-md rounded-xl p-6 border border-white/20 shadow-xl"
           >
             <div className="flex items-center justify-between mb-6">
-              <h3 className="text-xl font-semibold text-white">
+              <h3 className="text-xl font-semibold text-gray-800">
                 Distribución de Gastos
               </h3>
-              <PieChart className="w-6 h-6 text-red-400" />
+              <PieChart className="w-6 h-6 text-green-500" />
             </div>
 
             <ResponsiveContainer width="100%" height={300}>
@@ -660,10 +648,11 @@ const ExpenseTracker: React.FC = () => {
                 </Pie>
                 <Tooltip
                   contentStyle={{
-                    backgroundColor: "#1F2937",
-                    border: "1px solid #374151",
+                    backgroundColor: "#FFFFFF",
+                    border: "1px solid #E5E7EB",
                     borderRadius: "8px",
-                    color: "#F9FAFB",
+                    color: "#111827",
+                    boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.1)",
                   }}
                   formatter={(value: number) => [`${value}%`, "Porcentaje"]}
                 />
@@ -676,56 +665,56 @@ const ExpenseTracker: React.FC = () => {
         {/* Gráfico de barras - Gastos por categoría mensual */}
         <motion.div
           variants={itemVariants}
-          className="bg-white/10 backdrop-blur-md rounded-xl p-6 border border-white/20 shadow-xl"
+          className="bg-white/90 backdrop-blur-md rounded-xl p-6 border border-white/20 shadow-xl"
         >
           <div className="flex items-center justify-between mb-6">
-            <h3 className="text-xl font-semibold text-white">
+            <h3 className="text-xl font-semibold text-gray-800">
               Gastos por Categoría - Evolución Mensual
             </h3>
-            <BarChart className="w-6 h-6 text-red-400" />
           </div>
 
           <ResponsiveContainer width="100%" height={400}>
             <BarChart data={monthlyExpenseData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-              <XAxis dataKey="month" stroke="#9CA3AF" />
-              <YAxis stroke="#9CA3AF" />
+              <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
+              <XAxis dataKey="month" stroke="#6B7280" />
+              <YAxis stroke="#6B7280" />
               <Tooltip
                 contentStyle={{
-                  backgroundColor: "#1F2937",
-                  border: "1px solid #374151",
+                  backgroundColor: "#FFFFFF",
+                  border: "1px solid #E5E7EB",
                   borderRadius: "8px",
-                  color: "#F9FAFB",
+                  color: "#111827",
+                  boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.1)",
                 }}
               />
               <Legend />
               <Bar
                 dataKey="alimentacion"
-                fill="#F97316"
+                fill="#10B981"
                 name="Alimentación"
                 radius={[2, 2, 0, 0]}
               />
               <Bar
                 dataKey="instalaciones"
-                fill="#EF4444"
+                fill="#059669"
                 name="Instalaciones"
                 radius={[2, 2, 0, 0]}
               />
               <Bar
                 dataKey="vacunacion"
-                fill="#3B82F6"
+                fill="#0D9488"
                 name="Vacunación"
                 radius={[2, 2, 0, 0]}
               />
               <Bar
                 dataKey="tratamientos"
-                fill="#8B5CF6"
+                fill="#65A30D"
                 name="Tratamientos"
                 radius={[2, 2, 0, 0]}
               />
               <Bar
                 dataKey="transporte"
-                fill="#10B981"
+                fill="#16A34A"
                 name="Transporte"
                 radius={[2, 2, 0, 0]}
               />
@@ -742,13 +731,13 @@ const ExpenseTracker: React.FC = () => {
         {/* Tabla de registros de gastos */}
         <motion.div
           variants={itemVariants}
-          className="bg-white/10 backdrop-blur-md rounded-xl p-6 border border-white/20 shadow-xl"
+          className="bg-white/90 backdrop-blur-md rounded-xl p-6 border border-white/20 shadow-xl"
         >
           <div className="flex items-center justify-between mb-6">
-            <h3 className="text-xl font-semibold text-white">
+            <h3 className="text-xl font-semibold text-gray-800">
               Registros de Gastos Recientes
             </h3>
-            <div className="text-sm text-gray-300">
+            <div className="text-sm text-gray-600">
               {filteredRecords.length} de {expenseRecords.length} registros
             </div>
           </div>
@@ -756,29 +745,29 @@ const ExpenseTracker: React.FC = () => {
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
-                <tr className="border-b border-gray-600">
-                  <th className="text-left py-3 px-4 text-gray-300 font-medium">
+                <tr className="border-b border-gray-200">
+                  <th className="text-left py-3 px-4 text-gray-700 font-medium">
                     Fecha
                   </th>
-                  <th className="text-left py-3 px-4 text-gray-300 font-medium">
+                  <th className="text-left py-3 px-4 text-gray-700 font-medium">
                     Descripción
                   </th>
-                  <th className="text-left py-3 px-4 text-gray-300 font-medium">
+                  <th className="text-left py-3 px-4 text-gray-700 font-medium">
                     Categoría
                   </th>
-                  <th className="text-left py-3 px-4 text-gray-300 font-medium">
+                  <th className="text-left py-3 px-4 text-gray-700 font-medium">
                     Proveedor
                   </th>
-                  <th className="text-right py-3 px-4 text-gray-300 font-medium">
+                  <th className="text-right py-3 px-4 text-gray-700 font-medium">
                     Monto
                   </th>
-                  <th className="text-center py-3 px-4 text-gray-300 font-medium">
+                  <th className="text-center py-3 px-4 text-gray-700 font-medium">
                     Pago
                   </th>
-                  <th className="text-center py-3 px-4 text-gray-300 font-medium">
+                  <th className="text-center py-3 px-4 text-gray-700 font-medium">
                     Estado
                   </th>
-                  <th className="text-center py-3 px-4 text-gray-300 font-medium">
+                  <th className="text-center py-3 px-4 text-gray-700 font-medium">
                     Acciones
                   </th>
                 </tr>
@@ -788,26 +777,26 @@ const ExpenseTracker: React.FC = () => {
                   <motion.tr
                     key={record.id}
                     whileHover={{
-                      backgroundColor: "rgba(255, 255, 255, 0.05)",
+                      backgroundColor: "#F9FAFB",
                     }}
-                    className="border-b border-gray-700 transition-colors duration-200"
+                    className="border-b border-gray-100 transition-colors duration-200"
                   >
-                    <td className="py-4 px-4 text-gray-300">
+                    <td className="py-4 px-4 text-gray-600">
                       {formatDate(record.date)}
                     </td>
-                    <td className="py-4 px-4 text-white">
+                    <td className="py-4 px-4 text-gray-900 font-medium">
                       {record.description}
                     </td>
-                    <td className="py-4 px-4 text-gray-300">
+                    <td className="py-4 px-4 text-gray-600">
                       {getCategoryName(record.category)}
                     </td>
-                    <td className="py-4 px-4 text-gray-300">
+                    <td className="py-4 px-4 text-gray-600">
                       {record.supplier}
                     </td>
-                    <td className="py-4 px-4 text-right text-white font-semibold">
+                    <td className="py-4 px-4 text-right text-gray-900 font-semibold">
                       {formatCurrency(record.amount)}
                     </td>
-                    <td className="py-4 px-4 text-center text-gray-300 text-sm">
+                    <td className="py-4 px-4 text-center text-gray-600 text-sm">
                       {getPaymentMethodText(record.paymentMethod)}
                     </td>
                     <td className="py-4 px-4 text-center">
@@ -817,20 +806,20 @@ const ExpenseTracker: React.FC = () => {
                             record.status
                           )}`}
                         ></span>
-                        <span className="text-gray-300 text-sm">
+                        <span className="text-gray-600 text-sm">
                           {getStatusText(record.status)}
                         </span>
                       </div>
                     </td>
                     <td className="py-4 px-4 text-center">
                       <div className="flex justify-center space-x-2">
-                        <button className="p-2 text-blue-400 hover:bg-blue-400/20 rounded-lg transition-colors duration-200">
+                        <button className="p-2 text-blue-500 hover:bg-blue-50 rounded-lg transition-colors duration-200">
                           <Eye className="w-4 h-4" />
                         </button>
-                        <button className="p-2 text-yellow-400 hover:bg-yellow-400/20 rounded-lg transition-colors duration-200">
+                        <button className="p-2 text-yellow-500 hover:bg-yellow-50 rounded-lg transition-colors duration-200">
                           <Edit className="w-4 h-4" />
                         </button>
-                        <button className="p-2 text-red-400 hover:bg-red-400/20 rounded-lg transition-colors duration-200">
+                        <button className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors duration-200">
                           <Trash2 className="w-4 h-4" />
                         </button>
                       </div>
@@ -842,41 +831,41 @@ const ExpenseTracker: React.FC = () => {
           </div>
         </motion.div>
 
-        {/* Resumen financiero */}
+        {/* Resumen financiero - simplificado sin pie de página */}
         <motion.div
           variants={itemVariants}
-          className="bg-white/10 backdrop-blur-md rounded-xl p-6 border border-white/20 shadow-xl"
+          className="bg-white/90 backdrop-blur-md rounded-xl p-6 border border-white/20 shadow-xl"
         >
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-center">
             <div>
-              <h4 className="text-lg font-semibold text-white mb-2">
+              <h4 className="text-lg font-semibold text-gray-800 mb-2">
                 Gastos Este Mes
               </h4>
-              <p className="text-3xl font-bold text-red-400">
+              <p className="text-3xl font-bold text-green-600">
                 {formatCurrency(157000)}
               </p>
-              <div className="flex items-center justify-center mt-2 text-red-400">
+              <div className="flex items-center justify-center mt-2 text-green-600">
                 <ArrowUpRight className="w-4 h-4 mr-1" />
                 <span className="text-sm">+12.1% vs mes anterior</span>
               </div>
             </div>
             <div>
-              <h4 className="text-lg font-semibold text-white mb-2">
+              <h4 className="text-lg font-semibold text-gray-800 mb-2">
                 Promedio Mensual
               </h4>
-              <p className="text-3xl font-bold text-orange-400">
+              <p className="text-3xl font-bold text-teal-600">
                 {formatCurrency(monthlyAverage)}
               </p>
-              <p className="text-gray-300 text-sm mt-2">últimos 6 meses</p>
+              <p className="text-gray-600 text-sm mt-2">últimos 6 meses</p>
             </div>
             <div>
-              <h4 className="text-lg font-semibold text-white mb-2">
+              <h4 className="text-lg font-semibold text-gray-800 mb-2">
                 Pagos Pendientes
               </h4>
-              <p className="text-3xl font-bold text-yellow-400">
+              <p className="text-3xl font-bold text-yellow-600">
                 {formatCurrency(pendingPayments)}
               </p>
-              <p className="text-gray-300 text-sm mt-2">requieren atención</p>
+              <p className="text-gray-600 text-sm mt-2">requieren atención</p>
             </div>
           </div>
         </motion.div>

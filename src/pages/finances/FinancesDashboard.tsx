@@ -60,7 +60,7 @@ const FinancesDashboard: React.FC = () => {
   >("monthly");
   const [isLoading, setIsLoading] = useState(true);
 
-  // Datos de ejemplo para métricas financieras
+  // Datos de ejemplo para métricas financieras con colores verdes
   const financialMetrics: FinancialMetric[] = [
     {
       id: "total-revenue",
@@ -80,7 +80,7 @@ const FinancesDashboard: React.FC = () => {
       change: -8.2,
       changeType: "decrease",
       icon: <Syringe className="w-6 h-6" />,
-      color: "from-blue-400 to-blue-600",
+      color: "from-emerald-400 to-emerald-600",
     },
     {
       id: "treatment-expenses",
@@ -90,7 +90,7 @@ const FinancesDashboard: React.FC = () => {
       change: 15.3,
       changeType: "increase",
       icon: <AlertTriangle className="w-6 h-6" />,
-      color: "from-orange-400 to-orange-600",
+      color: "from-teal-400 to-teal-600",
     },
     {
       id: "net-profit",
@@ -100,7 +100,7 @@ const FinancesDashboard: React.FC = () => {
       change: 9.7,
       changeType: "increase",
       icon: <TrendingUp className="w-6 h-6" />,
-      color: "from-purple-400 to-purple-600",
+      color: "from-lime-400 to-lime-600",
     },
   ];
 
@@ -150,13 +150,13 @@ const FinancesDashboard: React.FC = () => {
     },
   ];
 
-  // Datos para gráfico de torta - distribución de gastos
+  // Datos para gráfico de torta - distribución de gastos con colores verdes
   const expenseCategories: ExpenseCategory[] = [
-    { name: "Vacunación", value: 35, color: "#3B82F6" },
-    { name: "Tratamientos", value: 25, color: "#F59E0B" },
-    { name: "Alimentación", value: 20, color: "#10B981" },
-    { name: "Instalaciones", value: 15, color: "#8B5CF6" },
-    { name: "Otros", value: 5, color: "#EF4444" },
+    { name: "Vacunación", value: 35, color: "#10B981" },
+    { name: "Tratamientos", value: 25, color: "#059669" },
+    { name: "Alimentación", value: 20, color: "#0D9488" },
+    { name: "Instalaciones", value: 15, color: "#65A30D" },
+    { name: "Otros", value: 5, color: "#6B7280" },
   ];
 
   // Efecto para simular carga de datos
@@ -202,13 +202,13 @@ const FinancesDashboard: React.FC = () => {
     }).format(value);
   };
 
-  // Componente de Loading
+  // Componente de Loading con fondo degradado del layout principal
   const LoadingSpinner: React.FC = () => (
-    <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
+    <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-green-400 via-green-500 to-yellow-400">
       <motion.div
         animate={{ rotate: 360 }}
         transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-        className="w-16 h-16 border-4 border-purple-500 border-t-transparent rounded-full"
+        className="w-16 h-16 border-4 border-white border-t-transparent rounded-full"
       />
     </div>
   );
@@ -218,7 +218,7 @@ const FinancesDashboard: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 p-6">
+    <div className="min-h-screen bg-gradient-to-br from-green-400 via-green-500 to-yellow-400 p-6">
       <motion.div
         variants={containerVariants}
         initial="hidden"
@@ -234,7 +234,7 @@ const FinancesDashboard: React.FC = () => {
             <h1 className="text-4xl font-bold text-white mb-2">
               Dashboard Financiero
             </h1>
-            <p className="text-gray-300 text-lg">
+            <p className="text-white/80 text-lg">
               Control y seguimiento de finanzas ganaderas
             </p>
           </div>
@@ -248,8 +248,8 @@ const FinancesDashboard: React.FC = () => {
                   onClick={() => setSelectedPeriod(period)}
                   className={`px-4 py-2 rounded-lg font-medium transition-all duration-300 ${
                     selectedPeriod === period
-                      ? "bg-purple-600 text-white shadow-lg"
-                      : "bg-gray-700 text-gray-300 hover:bg-gray-600"
+                      ? "bg-white/30 text-white shadow-lg"
+                      : "bg-white/10 text-white/80 hover:bg-white/20"
                   }`}
                 >
                   {period === "monthly"
@@ -271,22 +271,22 @@ const FinancesDashboard: React.FC = () => {
           {financialMetrics.map((metric: FinancialMetric) => (
             <motion.div
               key={metric.id}
-              whileHover={{ scale: 1.05, y: -5 }}
-              whileTap={{ scale: 0.95 }}
+              whileHover={{ scale: 1.02, y: -2 }}
+              whileTap={{ scale: 0.98 }}
               variants={itemVariants}
-              className="bg-white/10 backdrop-blur-md rounded-xl p-6 border border-white/20 shadow-xl"
+              className="bg-white/95 backdrop-blur-md rounded-xl p-6 border border-white/20 shadow-xl"
             >
               <div className="flex items-center justify-between mb-4">
                 <div
-                  className={`p-3 rounded-lg bg-gradient-to-r ${metric.color}`}
+                  className={`p-3 rounded-lg bg-gradient-to-r ${metric.color} text-white`}
                 >
                   {metric.icon}
                 </div>
                 <div
                   className={`flex items-center text-sm font-medium ${
                     metric.changeType === "increase"
-                      ? "text-green-400"
-                      : "text-red-400"
+                      ? "text-green-600"
+                      : "text-red-500"
                   }`}
                 >
                   {metric.changeType === "increase" ? (
@@ -298,10 +298,10 @@ const FinancesDashboard: React.FC = () => {
                 </div>
               </div>
 
-              <h3 className="text-gray-300 text-sm font-medium mb-1">
+              <h3 className="text-gray-700 text-sm font-medium mb-1">
                 {metric.title}
               </h3>
-              <p className="text-white text-2xl font-bold">
+              <p className="text-gray-900 text-2xl font-bold">
                 {formatCurrency(metric.value, metric.currency)}
               </p>
             </motion.div>
@@ -313,26 +313,27 @@ const FinancesDashboard: React.FC = () => {
           {/* Gráfico de líneas - Flujo de caja */}
           <motion.div
             variants={itemVariants}
-            className="bg-white/10 backdrop-blur-md rounded-xl p-6 border border-white/20 shadow-xl"
+            className="bg-white/90 backdrop-blur-md rounded-xl p-6 border border-white/20 shadow-xl"
           >
             <div className="flex items-center justify-between mb-6">
-              <h3 className="text-xl font-semibold text-white">
+              <h3 className="text-xl font-semibold text-gray-800">
                 Flujo de Caja Mensual
               </h3>
-              <BarChart3 className="w-6 h-6 text-purple-400" />
+              <BarChart3 className="w-6 h-6 text-green-600" />
             </div>
 
             <ResponsiveContainer width="100%" height={300}>
               <LineChart data={monthlyData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                <XAxis dataKey="month" stroke="#9CA3AF" />
-                <YAxis stroke="#9CA3AF" />
+                <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
+                <XAxis dataKey="month" stroke="#6B7280" />
+                <YAxis stroke="#6B7280" />
                 <Tooltip
                   contentStyle={{
-                    backgroundColor: "#1F2937",
-                    border: "1px solid #374151",
+                    backgroundColor: "#FFFFFF",
+                    border: "1px solid #E5E7EB",
                     borderRadius: "8px",
-                    color: "#F9FAFB",
+                    color: "#111827",
+                    boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.1)",
                   }}
                 />
                 <Legend />
@@ -357,13 +358,13 @@ const FinancesDashboard: React.FC = () => {
           {/* Gráfico de torta - Distribución de gastos */}
           <motion.div
             variants={itemVariants}
-            className="bg-white/10 backdrop-blur-md rounded-xl p-6 border border-white/20 shadow-xl"
+            className="bg-white/90 backdrop-blur-md rounded-xl p-6 border border-white/20 shadow-xl"
           >
             <div className="flex items-center justify-between mb-6">
-              <h3 className="text-xl font-semibold text-white">
+              <h3 className="text-xl font-semibold text-gray-800">
                 Distribución de Gastos
               </h3>
-              <PieChart className="w-6 h-6 text-purple-400" />
+              <PieChart className="w-6 h-6 text-green-600" />
             </div>
 
             <ResponsiveContainer width="100%" height={300}>
@@ -385,10 +386,11 @@ const FinancesDashboard: React.FC = () => {
                 </Pie>
                 <Tooltip
                   contentStyle={{
-                    backgroundColor: "#1F2937",
-                    border: "1px solid #374151",
+                    backgroundColor: "#FFFFFF",
+                    border: "1px solid #E5E7EB",
                     borderRadius: "8px",
-                    color: "#F9FAFB",
+                    color: "#111827",
+                    boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.1)",
                   }}
                 />
                 <Legend />
@@ -400,38 +402,39 @@ const FinancesDashboard: React.FC = () => {
         {/* Gráfico de barras - Costos por categoría */}
         <motion.div
           variants={itemVariants}
-          className="bg-white/10 backdrop-blur-md rounded-xl p-6 border border-white/20 shadow-xl"
+          className="bg-white/90 backdrop-blur-md rounded-xl p-6 border border-white/20 shadow-xl"
         >
           <div className="flex items-center justify-between mb-6">
-            <h3 className="text-xl font-semibold text-white">
+            <h3 className="text-xl font-semibold text-gray-800">
               Análisis de Costos Veterinarios
             </h3>
-            <Users className="w-6 h-6 text-purple-400" />
+            <Users className="w-6 h-6 text-green-600" />
           </div>
 
           <ResponsiveContainer width="100%" height={400}>
             <BarChart data={monthlyData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-              <XAxis dataKey="month" stroke="#9CA3AF" />
-              <YAxis stroke="#9CA3AF" />
+              <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
+              <XAxis dataKey="month" stroke="#6B7280" />
+              <YAxis stroke="#6B7280" />
               <Tooltip
                 contentStyle={{
-                  backgroundColor: "#1F2937",
-                  border: "1px solid #374151",
+                  backgroundColor: "#FFFFFF",
+                  border: "1px solid #E5E7EB",
                   borderRadius: "8px",
-                  color: "#F9FAFB",
+                  color: "#111827",
+                  boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.1)",
                 }}
               />
               <Legend />
               <Bar
                 dataKey="vaccinations"
-                fill="#3B82F6"
+                fill="#10B981"
                 name="Vacunaciones"
                 radius={[4, 4, 0, 0]}
               />
               <Bar
                 dataKey="treatments"
-                fill="#F59E0B"
+                fill="#059669"
                 name="Tratamientos"
                 radius={[4, 4, 0, 0]}
               />
@@ -442,31 +445,31 @@ const FinancesDashboard: React.FC = () => {
         {/* Footer con resumen */}
         <motion.div
           variants={itemVariants}
-          className="bg-white/10 backdrop-blur-md rounded-xl p-6 border border-white/20 shadow-xl"
+          className="bg-white/90 backdrop-blur-md rounded-xl p-6 border border-white/20 shadow-xl"
         >
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-center">
             <div>
-              <h4 className="text-lg font-semibold text-white mb-2">
+              <h4 className="text-lg font-semibold text-gray-800 mb-2">
                 Total de Animales
               </h4>
-              <p className="text-3xl font-bold text-purple-400">1,247</p>
-              <p className="text-gray-300 text-sm">cabezas de ganado</p>
+              <p className="text-3xl font-bold text-green-600">1,247</p>
+              <p className="text-gray-600 text-sm">cabezas de ganado</p>
             </div>
             <div>
-              <h4 className="text-lg font-semibold text-white mb-2">
+              <h4 className="text-lg font-semibold text-gray-800 mb-2">
                 Vacunaciones Este Mes
               </h4>
-              <p className="text-3xl font-bold text-blue-400">156</p>
-              <p className="text-gray-300 text-sm">
+              <p className="text-3xl font-bold text-emerald-600">156</p>
+              <p className="text-gray-600 text-sm">
                 procedimientos completados
               </p>
             </div>
             <div>
-              <h4 className="text-lg font-semibold text-white mb-2">
+              <h4 className="text-lg font-semibold text-gray-800 mb-2">
                 ROI Proyectado
               </h4>
-              <p className="text-3xl font-bold text-green-400">24.5%</p>
-              <p className="text-gray-300 text-sm">
+              <p className="text-3xl font-bold text-teal-600">24.5%</p>
+              <p className="text-gray-600 text-sm">
                 retorno de inversión anual
               </p>
             </div>
