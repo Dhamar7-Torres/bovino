@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Routes, Route, useLocation } from "react-router-dom";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import { Sprout, Scale, TrendingUp, Utensils, FileText } from "lucide-react";
 
 // Importar componentes del módulo feeding
@@ -146,28 +145,10 @@ const HeaderStats: React.FC = () => {
 
 // Componente principal FeedingPage
 const FeedingPage: React.FC = () => {
-  const location = useLocation();
-
-  // Animaciones para transiciones de página
-  const pageTransition = {
-    initial: {
-      opacity: 0,
-      y: 20,
-    },
-    animate: {
-      opacity: 1,
-      y: 0,
-    },
-    exit: {
-      opacity: 0,
-      y: -20,
-    },
-  };
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#519a7c] via-[#f2e9d8] to-[#f4ac3a]">
-      {/* Header del módulo */}
-      <div className="relative">
+      {/* Header del módulo con fondo verde sólido */}
+      <div className="bg-[#519a7c] relative">
         <div className="container mx-auto px-6 py-8">
           <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
             {/* Información del módulo y estadísticas */}
@@ -199,26 +180,9 @@ const FeedingPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Contenido principal con animaciones */}
-      <div className="relative container mx-auto px-6 pb-8">
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={location.pathname}
-            initial="initial"
-            animate="animate"
-            exit="exit"
-            variants={pageTransition}
-            transition={{
-              duration: 0.4,
-              ease: "easeOut",
-            }}
-          >
-            <Routes>
-              {/* Ruta principal - Plantas (Floors) */}
-              <Route index element={<Floors />} />
-            </Routes>
-          </motion.div>
-        </AnimatePresence>
+      {/* Contenido principal - Mostrar Floors directamente */}
+      <div className="relative">
+        <Floors />
       </div>
     </div>
   );
