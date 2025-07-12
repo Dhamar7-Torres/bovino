@@ -48,6 +48,9 @@ import {
   BarChart,
   FolderOpen,
   BarChart4,
+  Users,
+  Sprout, // Icono para plantas
+  Wheat, // Icono adicional para alimentación
 } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 
@@ -229,6 +232,13 @@ const navigationSections: NavSection[] = [
             color: "text-[#4e9c75]",
           },
           {
+            id: "feeding",
+            title: "Alimentación",
+            href: "/health/feeding",
+            icon: Utensils,
+            color: "text-[#4e9c75]",
+          },
+          {
             id: "medical-history",
             title: "Historial Médico",
             href: "/health/medical-history",
@@ -360,6 +370,30 @@ const navigationSections: NavSection[] = [
       },
     ],
   },
+  // ✅ NUEVO MÓDULO DE ALIMENTACIÓN AÑADIDO AQUÍ
+  {
+    id: "feeding",
+    title: "Alimentación",
+    items: [
+      {
+        id: "feeding-management",
+        title: "Gestión de Alimentación",
+        href: "/feeding",
+        icon: Wheat,
+        color: "text-[#4e9c75]",
+        children: [
+          {
+            id: "plants",
+            title: "Plantas",
+            href: "/feeding/plants",
+            icon: Sprout,
+            color: "text-[#4e9c75]",
+            badge: "Nuevo",
+          },
+        ],
+      },
+    ],
+  },
   {
     id: "operations",
     title: "Operaciones",
@@ -462,7 +496,7 @@ const navigationSections: NavSection[] = [
           },
           {
             id: "paddock-map",
-            title: "Mapa de Potreros",
+            title: "Mapa de Pastoreo",
             href: "/maps/paddock",
             icon: MapPin,
             color: "text-[#4e9c75]",
@@ -693,9 +727,9 @@ const navigationSections: NavSection[] = [
           },
           {
             id: "ranch-documents",
-            title: "Documentos del Rancho",
+            title: "Personal",
             href: "/ranch/documents",
-            icon: FolderOpen,
+            icon: Users,
             color: "text-[#4e9c75]",
           },
         ],
@@ -712,13 +746,6 @@ const navigationSections: NavSection[] = [
             title: "Dashboard de Reportes",
             href: "/reports/dashboard",
             icon: BarChart4,
-            color: "text-[#4e9c75]",
-          },
-          {
-            id: "financial-reports",
-            title: "Reportes Financieros",
-            href: "/reports/financial",
-            icon: DollarSign,
             color: "text-[#4e9c75]",
           },
           {
@@ -909,6 +936,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                     : "perspective(100px) rotateX(5deg)",
                 }}
               />
+
               {/* Efecto de brillo 3D para iconos activos */}
               {isActive && (
                 <div
@@ -921,6 +949,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                   }}
                 />
               )}
+
               {/* Resplandor adicional para iconos activos */}
               {isActive && (
                 <div

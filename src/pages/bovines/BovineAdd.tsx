@@ -10,6 +10,7 @@ import {
   Calendar as CalendarIcon,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+
 // Importar el componente Calendar desde el índice centralizado de componentes UI
 import { Calendar } from "../../components/ui";
 
@@ -17,7 +18,15 @@ import { Calendar } from "../../components/ui";
 interface BovineFormData {
   earTag: string;
   name?: string;
-  type: "CATTLE" | "BULL" | "COW" | "CALF";
+  type:
+    | "TORO"
+    | "VACA"
+    | "BECERRO"
+    | "TERNERO"
+    | "TORETE"
+    | "NOVILLO"
+    | "TERNERA"
+    | "VAQUILLONA";
   breed: string;
   gender: "MALE" | "FEMALE";
   birthDate: Date | null;
@@ -160,7 +169,7 @@ const BovineAdd: React.FC = () => {
   const [formData, setFormData] = useState<BovineFormData>({
     earTag: "",
     name: "",
-    type: "CATTLE",
+    type: "VACA",
     breed: "",
     gender: "FEMALE",
     birthDate: null,
@@ -365,10 +374,15 @@ const BovineAdd: React.FC = () => {
                     }
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#3d8b40] focus:border-transparent transition-all"
                   >
-                    <option value="CATTLE">Ganado</option>
-                    <option value="BULL">Toro</option>
-                    <option value="COW">Vaca</option>
-                    <option value="CALF">Becerro</option>
+                    <option value="">Seleccionar tipo</option>
+                    <option value="TORO">Toro</option>
+                    <option value="VACA">Vaca</option>
+                    <option value="BECERRO">Becerro</option>
+                    <option value="TERNERO">Ternero</option>
+                    <option value="TORETE">Torete</option>
+                    <option value="NOVILLO">Novillo</option>
+                    <option value="TERNERA">Ternera</option>
+                    <option value="VAQUILLONA">Vaquillona</option>
                   </select>
                 </div>
 
