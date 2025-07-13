@@ -51,6 +51,7 @@ import {
   Wheat, // Icono adicional para alimentación
   TrendingDown, // Icono para gastos/egresos
   PieChart, // Icono para P&L
+  Leaf, // Icono para potreros
 } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 
@@ -424,24 +425,31 @@ const navigationSections: NavSection[] = [
         color: "text-[#4e9c75]",
         children: [
           {
+            id: "maps-overview",
+            title: "Vista General",
+            href: "/maps",
+            icon: BarChart3,
+            color: "text-[#4e9c75]",
+          },
+          {
             id: "ranch-map",
             title: "Mapa del Rancho",
-            href: "/maps/ranch",
+            href: "/maps?tab=ranch",
             icon: Map,
             color: "text-[#4e9c75]",
           },
           {
-            id: "paddock-map",
-            title: "Mapa de Pastoreo",
-            href: "/maps/paddock",
-            icon: MapPin,
+            id: "pasture-map",
+            title: "Mapa de Potreros",
+            href: "/maps?tab=pasture",
+            icon: Leaf,
             color: "text-[#4e9c75]",
           },
           {
             id: "livestock-location",
             title: "Ubicación del Ganado",
-            href: "/maps/livestock-location",
-            icon: MapPin,
+            href: "/maps?tab=livestock",
+            icon: Users,
             color: "text-[#4e9c75]",
           },
         ],

@@ -22,6 +22,12 @@ import { FinancesPage } from "./pages/finances"; // ← IMPORTACIÓN ACTUALIZADA
 // ✅ IMPORTAR EL MÓDULO DE SALUD REAL
 import HealthPage from "./pages/health/HealthPage"; // ← IMPORTACIÓN DEL MÓDULO HEALTH REAL
 
+// ✅ IMPORTAR EL MÓDULO DE MAPAS REAL
+import MapsPage from "./pages/maps"; // ← NUEVA IMPORTACIÓN DEL MÓDULO MAPS REAL
+
+// ✅ IMPORTAR EL MÓDULO DE INVENTORY REAL
+import InventoryPage from "./pages/inventory/InventoryPage"; // ← NUEVA IMPORTACIÓN DEL MÓDULO INVENTORY REAL
+
 // Agregar las fuentes elegantes al head
 const addGoogleFonts = () => {
   const link = document.createElement("link");
@@ -367,21 +373,23 @@ const ProductionPage: React.FC = () => (
   />
 );
 
-const MapsPage: React.FC = () => (
-  <ModulePage
-    title="Gestión de Mapas"
-    description="Geolocalización y seguimiento GPS del ganado"
-    icon="🗺️"
-  />
-);
+// ✅ COMENTAMOS EL PLACEHOLDER DE MAPS PORQUE YA TENEMOS EL REAL
+// const MapsPage: React.FC = () => (
+//   <ModulePage
+//     title="Gestión de Mapas"
+//     description="Geolocalización y seguimiento GPS del ganado"
+//     icon="🗺️"
+//   />
+// );
 
-const InventoryPage: React.FC = () => (
-  <ModulePage
-    title="Gestión de Inventario"
-    description="Control de medicinas y suministros del rancho"
-    icon="📦"
-  />
-);
+// ✅ COMENTAMOS EL PLACEHOLDER DE INVENTORY PORQUE YA TENEMOS EL REAL
+// const InventoryPage: React.FC = () => (
+//   <ModulePage
+//     title="Gestión de Inventario"
+//     description="Control de medicinas y suministros del rancho"
+//     icon="📦"
+//   />
+// );
 
 // ✅ COMENTAMOS LA PÁGINA PLACEHOLDER DE FINANZAS
 // const FinancesPage: React.FC = () => (
@@ -439,9 +447,11 @@ const App: React.FC = () => {
             {/* ← RUTA ACTUALIZADA CON MÓDULO REAL */}
             <Route path="reproduction/*" element={<ReproductionPage />} />
             <Route path="production/*" element={<ProductionPage />} />
-            <Route path="maps/*" element={<MapsPage />} />
+            <Route path="maps/*" element={<MapsPage />} />{" "}
+            {/* ← RUTA ACTUALIZADA CON MÓDULO REAL */}
             <Route path="events/*" element={<EventPage />} />
-            <Route path="inventory/*" element={<InventoryPage />} />
+            <Route path="inventory/*" element={<InventoryPage />} />{" "}
+            {/* ← RUTA ACTUALIZADA CON MÓDULO REAL */}
             <Route path="finances/*" element={<FinancesPage />} />{" "}
             {/* ← RUTA ACTUALIZADA */}
             <Route path="reports/*" element={<ReportsPage />} />
