@@ -98,49 +98,49 @@ const navigationSections: NavSection[] = [
           {
             id: "bovines-list",
             title: "Lista de Ganado",
-            href: "/bovines", // Ruta index que apunta a BovineList
+            href: "/bovines", 
             icon: ClipboardList,
             color: "text-[#4e9c75]",
           },
           {
             id: "add-bovine",
             title: "Agregar Bovino",
-            href: "/bovines/add", // Ruta directa a BovineAdd
+            href: "/bovines/add", 
             icon: Plus,
             color: "text-[#4e9c75]",
           },
           {
             id: "bovine-detail",
             title: "Perfil Individual",
-            href: "/bovines/detail/1", // Ruta con ID de ejemplo que apunta a BovineDetail
+            href: "/bovines/detail/1", 
             icon: Eye,
             color: "text-[#4e9c75]",
           },
           {
             id: "edit-bovine",
             title: "Editar Bovino",
-            href: "/bovines/edit/1", // Ruta con ID de ejemplo que apunta a BovineEdit
+            href: "/bovines/edit/1", 
             icon: Edit,
             color: "text-[#4e9c75]",
           },
           {
             id: "bovine-documents",
             title: "Documentos",
-            href: "/bovines/documents/1", // Ruta con ID de ejemplo que apunta a BovineDocuments
+            href: "/bovines/documents/1", 
             icon: FolderOpen,
             color: "text-[#4e9c75]",
           },
           {
             id: "bovine-location",
             title: "Ubicación y Movimientos",
-            href: "/bovines/location/1", // Ruta con ID de ejemplo que apunta a BovineLocation
+            href: "/bovines/location/1", 
             icon: MapPin,
             color: "text-[#4e9c75]",
           },
           {
             id: "bovine-notes",
             title: "Notas y Observaciones",
-            href: "/bovines/notes/1", // Ruta con ID de ejemplo que apunta a BovineNotes
+            href: "/bovines/notes/1", 
             icon: NotebookPen,
             color: "text-[#4e9c75]",
           },
@@ -307,7 +307,7 @@ const navigationSections: NavSection[] = [
       },
     ],
   },
-  // ✅ NUEVO MÓDULO DE ALIMENTACIÓN AÑADIDO AQUÍ
+  
   {
     id: "feeding",
     title: "Alimentación",
@@ -434,21 +434,21 @@ const navigationSections: NavSection[] = [
           {
             id: "ranch-map",
             title: "Mapa del Rancho",
-            href: "/maps?tab=ranch",
+            href: "/maps/ranch", 
             icon: Map,
             color: "text-[#4e9c75]",
           },
           {
             id: "pasture-map",
-            title: "Mapa de Potreros",
-            href: "/maps?tab=pasture",
+            title: "Mapa de Pastura",
+            href: "/maps/pastures", 
             icon: Leaf,
             color: "text-[#4e9c75]",
           },
           {
             id: "livestock-location",
             title: "Ubicación del Ganado",
-            href: "/maps?tab=livestock",
+            href: "/maps/livestock", 
             icon: Users,
             color: "text-[#4e9c75]",
           },
