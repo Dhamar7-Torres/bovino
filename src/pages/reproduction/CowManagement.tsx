@@ -1,8 +1,9 @@
 // CowManagement.tsx
-// Página para gestión integral de vacas y tabla de enmadre
+// Página para gestión integral de vacas y tabla de enmadre (CRUD completo)
 import React, { useState, useEffect, useMemo } from "react";
 import { motion, AnimatePresence, Variants } from "framer-motion";
 import {
+  Calendar,
   MapPin,
   Plus,
   Search,
@@ -11,24 +12,27 @@ import {
   Edit,
   Trash2,
   Download,
-  ChevronDown,
-  ChevronUp,
-  Users,
+  Clock,
+  CheckCircle,
   Heart,
   Scale,
-  TrendingUp,
-  Award,
   Shield,
-  UserX,
+  Crown,
   UserCheck,
+  Activity,
   Baby,
+  MapPinIcon,
+  Syringe,
+  Bell,
+  Flower2,
   Milk,
   Droplets,
-  Flower2,
-  CalendarDays,
+  Stethoscope,
+  Weight,
+  Star,
 } from "lucide-react";
 
-// Tipos e interfaces para gestión de vacas
+// Interfaces para gestión de vacas
 interface Cow {
   id: string;
   name: string;
@@ -43,6 +47,7 @@ interface Cow {
     lng: number;
     address: string;
     paddock: string;
+    facility: string;
   };
   healthStatus: "excellent" | "good" | "fair" | "poor" | "sick";
   reproductiveStatus: "maiden" | "pregnant" | "lactating" | "dry" | "open" | "retired";
@@ -122,7 +127,7 @@ interface Cow {
   updatedAt: string;
 }
 
-// Interface para registros de enmadre (donde la vaca es la madre)
+// Interface para registros de enmadre (maternidad)
 interface MotherhoodRecord {
   id: string;
   cowId: string;
@@ -185,423 +190,502 @@ interface MotherhoodRecord {
   updatedAt: string;
 }
 
+// Interfaces para filtros
 interface CowFilters {
+  searchTerm: string;
   breed: string[];
   healthStatus: string[];
   reproductiveStatus: string[];
-  ageRange: {
-    min: number;
-    max: number;
-  };
-  weightRange: {
-    min: number;
-    max: number;
-  };
+  ageRange: { min: number; max: number };
+  weightRange: { min: number; max: number };
   lactationStatus: string[];
   location: string[];
-  searchTerm: string;
   activeOnly: boolean;
 }
 
 interface MotherhoodFilters {
-  dateRange: {
-    start: string;
-    end: string;
-  };
+  searchTerm: string;
+  dateRange: { start: string; end: string };
   calvingType: string[];
   calfGender: string[];
   calfHealth: string[];
   cowId: string;
-  searchTerm: string;
+  location: string;
+  assistedBy: string;
 }
 
-// Componente principal de Gestión de Vacas
+// Componente AnimatedText para animaciones de texto
+const AnimatedText: React.FC<{ children: React.ReactNode; className?: string }> = ({ 
+  children, 
+  className = "" 
+}) => (
+  <motion.span
+    className={className}
+    initial={{ opacity: 0, y: 20 }}
+    animate={{ opacity: 1, y: 0 }}
+    transition={{ duration: 0.6, ease: "easeOut" }}
+  >
+    {children}
+  </motion.span>
+);
+
+// Variantes de animación
+const containerVariants: Variants = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: {
+      delayChildren: 0.1,
+      staggerChildren: 0.1,
+    },
+  },
+};
+
+const itemVariants: Variants = {
+  hidden: { y: 20, opacity: 0 },
+  visible: {
+    y: 0,
+    opacity: 1,
+    transition: {
+      type: "spring",
+      stiffness: 100,
+    },
+  },
+};
+
+// Componente principal
 const CowManagement: React.FC = () => {
   // Estados principales
+  const [activeTab, setActiveTab] = useState<"cows" | "motherhood">("cows");
+  const [isLoading, setIsLoading] = useState(true);
   const [cows, setCows] = useState<Cow[]>([]);
   const [motherhoodRecords, setMotherhoodRecords] = useState<MotherhoodRecord[]>([]);
   const [filteredCows, setFilteredCows] = useState<Cow[]>([]);
   const [filteredMotherhoodRecords, setFilteredMotherhoodRecords] = useState<MotherhoodRecord[]>([]);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
-  const [activeTab, setActiveTab] = useState<"cows" | "motherhood">("cows");
-  const [, setShowCowForm] = useState<boolean>(false);
-  const [, setShowMotherhoodForm] = useState<boolean>(false);
-  const [, setSelectedCow] = useState<Cow | null>(null);
-  const [, setSelectedMotherhoodRecord] = useState<MotherhoodRecord | null>(null);
-  const [] = useState<"grid" | "list">("grid");
-  const [showFilters, setShowFilters] = useState<boolean>(false);
   
-  // Estados para filtros
+  // Estados de UI
+  const [, setShowCowForm] = useState(false);
+  const [, setShowMotherhoodForm] = useState(false);
+  const [showFilters, setShowFilters] = useState(false);
+  const [, setSelectedCow] = useState<Cow | null>(null);
+  const [, setSelectedMotherhood] = useState<MotherhoodRecord | null>(null);
+  const [, setEditingCow] = useState<Cow | null>(null);
+  const [, setEditingMotherhood] = useState<MotherhoodRecord | null>(null);
+  
+  // Estados de filtros
   const [cowFilters, setCowFilters] = useState<CowFilters>({
+    searchTerm: "",
     breed: [],
     healthStatus: [],
     reproductiveStatus: [],
     ageRange: { min: 0, max: 20 },
-    weightRange: { min: 0, max: 1000 },
+    weightRange: { min: 0, max: 800 },
     lactationStatus: [],
     location: [],
-    searchTerm: "",
-    activeOnly: true,
+    activeOnly: false,
   });
-
+  
   const [motherhoodFilters, setMotherhoodFilters] = useState<MotherhoodFilters>({
+    searchTerm: "",
     dateRange: { start: "", end: "" },
     calvingType: [],
     calfGender: [],
     calfHealth: [],
     cowId: "",
-    searchTerm: "",
+    location: "",
+    assistedBy: "",
   });
 
-  // Estados para formulario
-  const [] = useState<boolean>(false);
-  const [, setCowFormData] = useState<Partial<Cow>>({});
-  const [, setMotherhoodFormData] = useState<Partial<MotherhoodRecord>>({});
-
-  // Datos de ejemplo para desarrollo
-  const mockCows: Cow[] = [
-    {
-      id: "cow-001",
-      name: "Bella Esperanza",
-      earTag: "MX-001",
-      registrationNumber: "MEX-2020-101",
-      breed: "Holstein",
-      birthDate: "2020-04-15",
-      weight: 650,
-      height: 140,
-      currentLocation: {
-        lat: 16.7569,
-        lng: -93.1292,
-        address: "Potrero Norte, Rancho San José",
-        paddock: "PN-01",
-      },
-      healthStatus: "excellent",
-      reproductiveStatus: "lactating",
-      genetics: {
-        sireId: "bull-001",
-        sireName: "Holstein Champion",
-        damId: "cow-dam-001",
-        damName: "Estrella Blanca",
-        genealogy: ["Holstein Champion", "Estrella Blanca", "Premier Line"],
-      },
-      reproductiveHistory: {
-        totalPregnancies: 3,
-        liveCalves: 3,
-        lastCalvingDate: "2024-10-15",
-        lastBreedingDate: "2024-01-15",
-        estrus: {
-          lastCycle: "2024-12-01",
-          cycleLength: 21,
-          irregular: false,
-        },
-        conception: {
-          attempts: 3,
-          averageAttempts: 1.3,
-          conceptionRate: 85,
-        },
-      },
-      lactation: {
-        isLactating: true,
-        lactationNumber: 3,
-        startDate: "2024-10-16",
-        peakMilk: 35,
-        currentMilk: 28,
-        totalMilk: 8450,
-        dryOffDate: "2025-07-15",
-      },
-      health: {
-        lastCheckupDate: "2025-01-01",
-        veterinarian: "Dr. García Mendoza",
-        bodyConditionScore: 3.5,
-        vaccinations: [
-          {
-            date: "2024-12-01",
-            vaccine: "IBR/BVD",
-            batch: "VAC-2024-120",
-            nextDue: "2025-06-01",
-          },
-        ],
-        treatments: [],
-      },
-      nutrition: {
-        diet: "TMR (Total Mixed Ration) + pasto",
-        dailyFeed: 22,
-        supplements: ["Minerales", "Vitamina E", "Calcio"],
-        lastWeightDate: "2025-01-01",
-      },
-      acquisition: {
-        date: "2020-06-20",
-        source: "Genética Superior SA",
-        cost: 45000,
-        purpose: "milk_production",
-      },
-      currentPregnancy: {
-        bullId: "bull-001",
-        bullName: "Campeón Imperial",
-        breedingDate: "2025-01-10",
-        confirmationDate: "2025-02-10",
-        expectedCalvingDate: "2025-10-10",
-        gestationDay: 35,
-      },
-      notes: "Vaca de alta producción, excelente temperamento para ordeño",
-      photos: [],
-      active: true,
-      createdAt: "2020-06-20T10:00:00Z",
-      updatedAt: "2025-01-17T15:30:00Z",
-    },
-    {
-      id: "cow-002",
-      name: "Luna Plateada",
-      earTag: "MX-002",
-      registrationNumber: "MEX-2019-205",
-      breed: "Jersey",
-      birthDate: "2019-08-22",
-      weight: 450,
-      height: 125,
-      currentLocation: {
-        lat: 16.7569,
-        lng: -93.1292,
-        address: "Potrero Sur, Rancho San José",
-        paddock: "PS-02",
-      },
-      healthStatus: "good",
-      reproductiveStatus: "pregnant",
-      genetics: {
-        sireId: "bull-jersey-001",
-        sireName: "Jersey Star",
-        damId: "cow-dam-002",
-        damName: "Golden Moon",
-        genealogy: ["Jersey Star", "Golden Moon", "Elite Jersey"],
-      },
-      reproductiveHistory: {
-        totalPregnancies: 4,
-        liveCalves: 4,
-        lastCalvingDate: "2024-03-20",
-        lastBreedingDate: "2024-06-15",
-        estrus: {
-          lastCycle: "2024-06-10",
-          cycleLength: 20,
-          irregular: false,
-        },
-        conception: {
-          attempts: 4,
-          averageAttempts: 1.5,
-          conceptionRate: 80,
-        },
-      },
-      lactation: {
-        isLactating: false,
-        lactationNumber: 4,
-        startDate: "2024-03-21",
-        peakMilk: 25,
-        currentMilk: 0,
-        totalMilk: 6200,
-        dryOffDate: "2024-12-20",
-      },
-      health: {
-        lastCheckupDate: "2024-12-15",
-        veterinarian: "MVZ. Rodríguez López",
-        bodyConditionScore: 3.0,
-        vaccinations: [
-          {
-            date: "2024-11-15",
-            vaccine: "Clostridiosis",
-            batch: "VAC-2024-115",
-            nextDue: "2025-05-15",
-          },
-        ],
-        treatments: [
-          {
-            date: "2024-10-20",
-            condition: "Mastitis leve",
-            treatment: "Antibiótico intramamario",
-            veterinarian: "MVZ. Rodríguez López",
-          },
-        ],
-      },
-      nutrition: {
-        diet: "Concentrado Jersey + heno de alfalfa",
-        dailyFeed: 18,
-        supplements: ["Mineral específico", "Vitamina A+D"],
-        lastWeightDate: "2024-12-15",
-      },
-      acquisition: {
-        date: "2019-10-12",
-        source: "Rancho La Esperanza",
-        cost: 38000,
-        purpose: "milk_production",
-      },
-      currentPregnancy: {
-        bullId: "bull-jersey-001",
-        bullName: "Jersey Premium",
-        breedingDate: "2024-06-15",
-        confirmationDate: "2024-07-15",
-        expectedCalvingDate: "2025-03-15",
-        gestationDay: 218,
-      },
-      notes: "Excelente producción de grasa láctea, requiere manejo especial",
-      photos: [],
-      active: true,
-      createdAt: "2019-10-12T14:00:00Z",
-      updatedAt: "2025-01-17T15:30:00Z",
-    },
-  ];
-
-  const mockMotherhoodRecords: MotherhoodRecord[] = [
-    {
-      id: "motherhood-001",
-      cowId: "cow-001",
-      cowName: "Bella Esperanza",
-      cowEarTag: "MX-001",
-      bullId: "bull-001",
-      bullName: "Campeón Imperial",
-      breedingDate: "2024-01-15",
-      breedingType: "artificial",
-      pregnancyConfirmDate: "2024-02-15",
-      gestationPeriod: 283,
-      calvingDate: "2024-10-15",
-      calvingTime: "14:30",
-      location: {
-        lat: 16.7569,
-        lng: -93.1292,
-        address: "Establo Principal, Rancho San José",
-        paddock: "EP-01",
-      },
-      assistedBy: {
-        id: "vet-001",
-        name: "Dr. García Mendoza",
-        role: "Veterinario",
-      },
-      calvingType: "natural",
-      complications: [],
-      calf: {
-        id: "calf-001",
-        name: "Estrella Nueva",
-        earTag: "MX-101",
-        gender: "female",
-        birthWeight: 38.5,
-        healthStatus: "excellent",
-        alive: true,
-      },
-      placentaExpelled: true,
-      placentaExpelledTime: "15:15",
-      colostrum: {
-        received: true,
-        quality: "excellent",
-        timeReceived: "14:45",
-      },
-      postCalvingCare: {
-        vitamins: true,
-        antibiotics: false,
-        monitoring: ["temperatura", "apetito", "producción inicial"],
-      },
-      lactationStart: {
-        date: "2024-10-16",
-        initialMilk: 18,
-      },
-      economicImpact: {
-        calvingCost: 2500,
-        veterinaryCost: 1500,
-        expectedValue: 35000,
-      },
-      notes: "Parto exitoso, ternera hembra de excelente calidad genética",
-      success: true,
-      createdAt: "2024-10-15T14:30:00Z",
-      updatedAt: "2024-10-15T14:30:00Z",
-    },
-    {
-      id: "motherhood-002",
-      cowId: "cow-002",
-      cowName: "Luna Plateada",
-      cowEarTag: "MX-002",
-      bullId: "bull-jersey-001",
-      bullName: "Jersey Premium",
-      breedingDate: "2023-06-20",
-      breedingType: "natural",
-      pregnancyConfirmDate: "2023-07-20",
-      gestationPeriod: 279,
-      calvingDate: "2024-03-20",
-      calvingTime: "08:15",
-      location: {
-        lat: 16.7569,
-        lng: -93.1292,
-        address: "Potrero Sur, Rancho San José",
-        paddock: "PS-02",
-      },
-      assistedBy: {
-        id: "tech-001",
-        name: "MVZ. Rodríguez López",
-        role: "Técnico",
-      },
-      calvingType: "assisted",
-      complications: ["posición anormal"],
-      calf: {
-        id: "calf-002",
-        name: "Rayo Dorado",
-        earTag: "MX-102",
-        gender: "male",
-        birthWeight: 32.2,
-        healthStatus: "good",
-        alive: true,
-      },
-      placentaExpelled: true,
-      placentaExpelledTime: "09:30",
-      colostrum: {
-        received: true,
-        quality: "good",
-        timeReceived: "08:30",
-      },
-      postCalvingCare: {
-        vitamins: true,
-        antibiotics: true,
-        monitoring: ["temperatura", "apetito", "lochia"],
-      },
-      lactationStart: {
-        date: "2024-03-21",
-        initialMilk: 15,
-      },
-      economicImpact: {
-        calvingCost: 3200,
-        veterinaryCost: 2100,
-        expectedValue: 28000,
-      },
-      notes: "Parto asistido debido a posición, madre y cría en buen estado",
-      success: true,
-      createdAt: "2024-03-20T08:15:00Z",
-      updatedAt: "2024-03-20T08:15:00Z",
-    },
-  ];
-
-  // Efecto para cargar datos iniciales
+  // Datos mock para desarrollo
   useEffect(() => {
-    const loadData = async () => {
-      setIsLoading(true);
-      try {
-        // Simular carga de datos
-        await new Promise(resolve => setTimeout(resolve, 1200));
-        setCows(mockCows);
-        setMotherhoodRecords(mockMotherhoodRecords);
-        setFilteredCows(mockCows);
-        setFilteredMotherhoodRecords(mockMotherhoodRecords);
-      } catch (error) {
-        console.error("Error al cargar datos:", error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
+    // Simular carga de datos
+    setTimeout(() => {
+      setCows([
+        {
+          id: "1",
+          name: "Vaca Luna",
+          earTag: "VL001",
+          registrationNumber: "REG-V-2024-001",
+          breed: "Holstein",
+          birthDate: "2020-05-15",
+          weight: 580,
+          height: 135,
+          currentLocation: {
+            lat: 17.9869,
+            lng: -92.9303,
+            address: "Potrero Norte, Villahermosa, Tabasco",
+            paddock: "Potrero A1",
+            facility: "Área de Ordeño"
+          },
+          healthStatus: "excellent",
+          reproductiveStatus: "lactating",
+          genetics: {
+            sireId: "SIRE001",
+            sireName: "Holstein Premium",
+            damId: "DAM001",
+            damName: "Madre Luna",
+            genealogy: ["Holstein Premium", "Línea Láctea", "Genética Superior"]
+          },
+          reproductiveHistory: {
+            totalPregnancies: 4,
+            liveCalves: 4,
+            lastCalvingDate: "2024-03-15",
+            lastBreedingDate: "2023-06-20",
+            estrus: {
+              lastCycle: "2024-07-10",
+              cycleLength: 21,
+              irregular: false
+            },
+            conception: {
+              attempts: 1,
+              averageAttempts: 1.2,
+              conceptionRate: 95
+            }
+          },
+          lactation: {
+            isLactating: true,
+            lactationNumber: 4,
+            startDate: "2024-03-18",
+            peakMilk: 32,
+            currentMilk: 28,
+            totalMilk: 3200,
+            dryOffDate: "2024-12-15"
+          },
+          health: {
+            lastCheckupDate: "2024-07-10",
+            veterinarian: "Dra. María González",
+            bodyConditionScore: 3.5,
+            vaccinations: [
+              {
+                date: "2024-06-01",
+                vaccine: "IBR-BVD",
+                batch: "IBR-2024-06",
+                nextDue: "2025-06-01"
+              }
+            ],
+            treatments: []
+          },
+          nutrition: {
+            diet: "Concentrado lácteo + alfalfa",
+            dailyFeed: 18,
+            supplements: ["Calcio", "Vitamina D", "Minerales"],
+            lastWeightDate: "2024-07-10"
+          },
+          acquisition: {
+            date: "2020-05-15",
+            source: "Ganadería Los Alpes",
+            cost: 25000,
+            purpose: "milk_production"
+          },
+          notes: "Excelente vaca lechera con alta producción",
+          photos: [],
+          active: true,
+          createdAt: "2024-01-15",
+          updatedAt: "2024-07-15"
+        },
+        {
+          id: "2",
+          name: "Vaca Estrella",
+          earTag: "VE002",
+          registrationNumber: "REG-V-2024-002",
+          breed: "Jersey",
+          birthDate: "2021-02-10",
+          weight: 450,
+          height: 125,
+          currentLocation: {
+            lat: 17.9950,
+            lng: -92.9400,
+            address: "Potrero Sur, Villahermosa, Tabasco",
+            paddock: "Potrero B2",
+            facility: "Área de Reproducción"
+          },
+          healthStatus: "good",
+          reproductiveStatus: "pregnant",
+          genetics: {
+            sireId: "SIRE002",
+            sireName: "Jersey Elite",
+            damId: "DAM002",
+            damName: "Madre Estrella",
+            genealogy: ["Jersey Elite", "Línea Premium", "Genética de Calidad"]
+          },
+          reproductiveHistory: {
+            totalPregnancies: 2,
+            liveCalves: 2,
+            lastCalvingDate: "2023-08-20",
+            lastBreedingDate: "2024-05-15",
+            estrus: {
+              lastCycle: "2024-05-12",
+              cycleLength: 20,
+              irregular: false
+            },
+            conception: {
+              attempts: 2,
+              averageAttempts: 1.5,
+              conceptionRate: 85
+            }
+          },
+          lactation: {
+            isLactating: false,
+            lactationNumber: 2,
+            dryOffDate: "2024-02-15"
+          },
+          health: {
+            lastCheckupDate: "2024-07-05",
+            veterinarian: "Dr. Luis Hernández",
+            bodyConditionScore: 3.8,
+            vaccinations: [
+              {
+                date: "2024-05-20",
+                vaccine: "Brucelosis",
+                batch: "BR-2024-05",
+                nextDue: "2025-05-20"
+              }
+            ],
+            treatments: []
+          },
+          nutrition: {
+            diet: "Pasto natural + suplemento gestacional",
+            dailyFeed: 15,
+            supplements: ["Ácido Fólico", "Hierro", "Vitaminas"],
+            lastWeightDate: "2024-07-05"
+          },
+          acquisition: {
+            date: "2021-02-10",
+            source: "Rancho San José",
+            cost: 22000,
+            purpose: "breeding"
+          },
+          currentPregnancy: {
+            bullId: "2",
+            bullName: "Toro Dorado",
+            breedingDate: "2024-05-15",
+            confirmationDate: "2024-06-15",
+            expectedCalvingDate: "2025-02-15",
+            gestationDay: 185
+          },
+          notes: "Vaca gestante con buen desarrollo fetal",
+          photos: [],
+          active: true,
+          createdAt: "2024-01-10",
+          updatedAt: "2024-07-10"
+        },
+        {
+          id: "3",
+          name: "Vaca Princesa",
+          earTag: "VP003",
+          registrationNumber: "REG-V-2024-003",
+          breed: "Brown Swiss",
+          birthDate: "2019-11-05",
+          weight: 620,
+          height: 140,
+          currentLocation: {
+            lat: 17.9800,
+            lng: -92.9350,
+            address: "Potrero Este, Villahermosa, Tabasco",
+            paddock: "Potrero C1",
+            facility: "Área de Descanso"
+          },
+          healthStatus: "good",
+          reproductiveStatus: "dry",
+          genetics: {
+            sireId: "SIRE003",
+            sireName: "Brown Elite",
+            damId: "DAM003",
+            damName: "Madre Princesa",
+            genealogy: ["Brown Elite", "Línea Europea", "Genética Tradicional"]
+          },
+          reproductiveHistory: {
+            totalPregnancies: 5,
+            liveCalves: 5,
+            lastCalvingDate: "2023-12-10",
+            lastBreedingDate: "2024-06-01",
+            estrus: {
+              lastCycle: "2024-06-28",
+              cycleLength: 22,
+              irregular: false
+            },
+            conception: {
+              attempts: 1,
+              averageAttempts: 1.1,
+              conceptionRate: 92
+            }
+          },
+          lactation: {
+            isLactating: false,
+            lactationNumber: 5,
+            dryOffDate: "2024-05-15"
+          },
+          health: {
+            lastCheckupDate: "2024-07-01",
+            veterinarian: "Dra. Ana Rodríguez",
+            bodyConditionScore: 4.0,
+            vaccinations: [
+              {
+                date: "2024-04-15",
+                vaccine: "Clostridial",
+                batch: "CL-2024-04",
+                nextDue: "2025-04-15"
+              }
+            ],
+            treatments: []
+          },
+          nutrition: {
+            diet: "Pasto mejorado + concentrado",
+            dailyFeed: 16,
+            supplements: ["Minerales", "Vitamina E"],
+            lastWeightDate: "2024-07-01"
+          },
+          acquisition: {
+            date: "2019-11-05",
+            source: "Ganadería El Progreso",
+            cost: 28000,
+            purpose: "breeding"
+          },
+          notes: "Vaca madura con excelente historial reproductivo",
+          photos: [],
+          active: true,
+          createdAt: "2024-01-05",
+          updatedAt: "2024-07-05"
+        }
+      ]);
 
-    loadData();
+      setMotherhoodRecords([
+        {
+          id: "1",
+          cowId: "1",
+          cowName: "Vaca Luna",
+          cowEarTag: "VL001",
+          bullId: "1",
+          bullName: "Toro Campeón",
+          breedingDate: "2023-06-20",
+          breedingType: "natural",
+          pregnancyConfirmDate: "2023-07-20",
+          gestationPeriod: 278,
+          calvingDate: "2024-03-15",
+          calvingTime: "06:30",
+          location: {
+            lat: 17.9869,
+            lng: -92.9303,
+            address: "Potrero Norte, Villahermosa, Tabasco",
+            paddock: "Potrero A1"
+          },
+          assistedBy: {
+            id: "VET001",
+            name: "Dr. Carlos Mendoza",
+            role: "Veterinario"
+          },
+          calvingType: "natural",
+          complications: [],
+          calf: {
+            id: "CALF001",
+            name: "Becerro Estrella",
+            earTag: "BE001",
+            gender: "male",
+            birthWeight: 35,
+            healthStatus: "excellent",
+            alive: true
+          },
+          placentaExpelled: true,
+          placentaExpelledTime: "07:45",
+          colostrum: {
+            received: true,
+            quality: "excellent",
+            timeReceived: "07:00"
+          },
+          postCalvingCare: {
+            vitamins: true,
+            antibiotics: false,
+            monitoring: ["Peso diario", "Salud general", "Alimentación"]
+          },
+          lactationStart: {
+            date: "2024-03-18",
+            initialMilk: 18
+          },
+          economicImpact: {
+            calvingCost: 1500,
+            veterinaryCost: 800,
+            expectedValue: 15000
+          },
+          notes: "Parto exitoso sin complicaciones",
+          success: true,
+          createdAt: "2024-03-15",
+          updatedAt: "2024-03-18"
+        },
+        {
+          id: "2",
+          cowId: "3",
+          cowName: "Vaca Princesa",
+          cowEarTag: "VP003",
+          bullId: "2",
+          bullName: "Toro Dorado",
+          breedingDate: "2023-03-15",
+          breedingType: "artificial",
+          pregnancyConfirmDate: "2023-04-15",
+          gestationPeriod: 280,
+          calvingDate: "2023-12-10",
+          calvingTime: "14:20",
+          location: {
+            lat: 17.9800,
+            lng: -92.9350,
+            address: "Potrero Este, Villahermosa, Tabasco",
+            paddock: "Potrero C1"
+          },
+          assistedBy: {
+            id: "VET002",
+            name: "Dra. Ana Rodríguez",
+            role: "Veterinaria"
+          },
+          calvingType: "assisted",
+          complications: ["Presentación posterior"],
+          calf: {
+            id: "CALF002",
+            name: "Becerra Dorada",
+            earTag: "BD002",
+            gender: "female",
+            birthWeight: 32,
+            healthStatus: "good",
+            alive: true
+          },
+          placentaExpelled: true,
+          placentaExpelledTime: "16:30",
+          colostrum: {
+            received: true,
+            quality: "good",
+            timeReceived: "15:00"
+          },
+          postCalvingCare: {
+            vitamins: true,
+            antibiotics: true,
+            monitoring: ["Recuperación post-parto", "Control antibiótico", "Seguimiento cría"]
+          },
+          lactationStart: {
+            date: "2023-12-13",
+            initialMilk: 15
+          },
+          economicImpact: {
+            calvingCost: 2200,
+            veterinaryCost: 1200,
+            expectedValue: 18000
+          },
+          notes: "Parto asistido exitoso, requirió antibióticos profilácticos",
+          success: true,
+          createdAt: "2023-12-10",
+          updatedAt: "2023-12-15"
+        }
+      ]);
+
+      setIsLoading(false);
+    }, 1500);
   }, []);
 
-  // Efecto para aplicar filtros de vacas
+  // Efectos para filtros
   useEffect(() => {
     applyCowFilters();
-  }, [cowFilters, cows]);
+  }, [cows, cowFilters]);
 
-  // Efecto para aplicar filtros de enmadre
   useEffect(() => {
     applyMotherhoodFilters();
-  }, [motherhoodFilters, motherhoodRecords]);
+  }, [motherhoodRecords, motherhoodFilters]);
 
   // Función para aplicar filtros de vacas
   const applyCowFilters = () => {
@@ -634,14 +718,6 @@ const CowManagement: React.FC = () => {
       filtered = filtered.filter(cow => cowFilters.reproductiveStatus.includes(cow.reproductiveStatus));
     }
 
-    // Filtro por estado de lactancia
-    if (cowFilters.lactationStatus.length > 0) {
-      filtered = filtered.filter(cow => {
-        const lactationStatus = cow.lactation.isLactating ? "lactating" : "dry";
-        return cowFilters.lactationStatus.includes(lactationStatus);
-      });
-    }
-
     // Filtro por solo activas
     if (cowFilters.activeOnly) {
       filtered = filtered.filter(cow => cow.active);
@@ -658,7 +734,7 @@ const CowManagement: React.FC = () => {
     }
 
     // Filtro por rango de peso
-    if (cowFilters.weightRange.min > 0 || cowFilters.weightRange.max < 1000) {
+    if (cowFilters.weightRange.min > 0 || cowFilters.weightRange.max < 800) {
       filtered = filtered.filter(cow => 
         cow.weight >= cowFilters.weightRange.min && 
         cow.weight <= cowFilters.weightRange.max
@@ -685,11 +761,13 @@ const CowManagement: React.FC = () => {
     }
 
     // Filtro por rango de fechas
-    if (motherhoodFilters.dateRange.start) {
-      filtered = filtered.filter(record => record.calvingDate >= motherhoodFilters.dateRange.start);
-    }
-    if (motherhoodFilters.dateRange.end) {
-      filtered = filtered.filter(record => record.calvingDate <= motherhoodFilters.dateRange.end);
+    if (motherhoodFilters.dateRange.start && motherhoodFilters.dateRange.end) {
+      filtered = filtered.filter(record => {
+        const recordDate = new Date(record.calvingDate);
+        const startDate = new Date(motherhoodFilters.dateRange.start);
+        const endDate = new Date(motherhoodFilters.dateRange.end);
+        return recordDate >= startDate && recordDate <= endDate;
+      });
     }
 
     // Filtro por tipo de parto
@@ -715,185 +793,106 @@ const CowManagement: React.FC = () => {
     setFilteredMotherhoodRecords(filtered);
   };
 
-  // Función para calcular edad en años
-  const calculateAge = (birthDate: string) => {
-    const birth = new Date(birthDate);
-    const today = new Date();
-    const age = today.getFullYear() - birth.getFullYear();
-    const monthDiff = today.getMonth() - birth.getMonth();
-    
-    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) {
-      return age - 1;
-    }
-    return age;
+  // Funciones para obtener estilos de estados
+  const getHealthStatusColor = (status: string) => {
+    const colors = {
+      excellent: "bg-green-100 text-green-800 border-green-200",
+      good: "bg-blue-100 text-blue-800 border-blue-200",
+      fair: "bg-yellow-100 text-yellow-800 border-yellow-200",
+      poor: "bg-orange-100 text-orange-800 border-orange-200",
+      sick: "bg-red-100 text-red-800 border-red-200",
+      critical: "bg-red-200 text-red-900 border-red-300",
+    };
+    return colors[status as keyof typeof colors] || colors.fair;
   };
 
-  // Función para calcular días de gestación actuales
-  const calculateGestationDays = (breedingDate: string) => {
-    const breeding = new Date(breedingDate);
-    const today = new Date();
-    const diffTime = Math.abs(today.getTime() - breeding.getTime());
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    return diffDays;
+  const getReproductiveStatusColor = (status: string) => {
+    const colors = {
+      maiden: "bg-purple-100 text-purple-800 border-purple-200",
+      pregnant: "bg-pink-100 text-pink-800 border-pink-200",
+      lactating: "bg-blue-100 text-blue-800 border-blue-200",
+      dry: "bg-yellow-100 text-yellow-800 border-yellow-200",
+      open: "bg-green-100 text-green-800 border-green-200",
+      retired: "bg-gray-100 text-gray-800 border-gray-200",
+    };
+    return colors[status as keyof typeof colors] || colors.open;
   };
 
-  // Función para obtener estadísticas de vacas
+  const getCalvingTypeColor = (type: string) => {
+    const colors = {
+      natural: "bg-green-100 text-green-800 border-green-200",
+      assisted: "bg-blue-100 text-blue-800 border-blue-200",
+      cesarean: "bg-orange-100 text-orange-800 border-orange-200",
+      emergency: "bg-red-100 text-red-800 border-red-200",
+    };
+    return colors[type as keyof typeof colors] || colors.natural;
+  };
+
+  // Calcular estadísticas
   const cowStatistics = useMemo(() => {
-    const total = cows.length;
-    const pregnant = cows.filter(c => c.reproductiveStatus === "pregnant").length;
-    const lactating = cows.filter(c => c.reproductiveStatus === "lactating").length;
-    const dry = cows.filter(c => c.reproductiveStatus === "dry").length;
-    const open = cows.filter(c => c.reproductiveStatus === "open").length;
-    const avgAge = total > 0 ? 
-      Math.round(cows.reduce((sum, c) => sum + calculateAge(c.birthDate), 0) / total * 10) / 10 : 0;
-    const avgWeight = total > 0 ? 
-      Math.round(cows.reduce((sum, c) => sum + c.weight, 0) / total) : 0;
-    const totalCalves = cows.reduce((sum, c) => sum + c.reproductiveHistory.liveCalves, 0);
-    const avgConceptionRate = total > 0 ? 
-      Math.round(cows.reduce((sum, c) => sum + c.reproductiveHistory.conception.conceptionRate, 0) / total * 10) / 10 : 0;
-    const totalMilkProduction = cows.filter(c => c.lactation.isLactating)
-      .reduce((sum, c) => sum + (c.lactation.currentMilk || 0), 0);
-    const totalInvestment = cows.reduce((sum, c) => sum + c.acquisition.cost, 0);
+    const totalCows = cows.length;
+    const activeCows = cows.filter(cow => cow.active).length;
+    const pregnantCows = cows.filter(cow => cow.reproductiveStatus === "pregnant").length;
+    const lactatingCows = cows.filter(cow => cow.lactation.isLactating).length;
+    const avgWeight = cows.length > 0 ? Math.round(cows.reduce((sum, cow) => sum + cow.weight, 0) / cows.length) : 0;
+    const avgAge = cows.length > 0 ? Math.round(cows.reduce((sum, cow) => {
+      const age = new Date().getFullYear() - new Date(cow.birthDate).getFullYear();
+      return sum + age;
+    }, 0) / cows.length) : 0;
+    const avgMilkProduction = lactatingCows > 0 ? 
+      Math.round(cows
+        .filter(cow => cow.lactation.isLactating && cow.lactation.currentMilk)
+        .reduce((sum, cow) => sum + (cow.lactation.currentMilk || 0), 0) / lactatingCows) : 0;
 
     return {
-      total,
-      pregnant,
-      lactating,
-      dry,
-      open,
-      avgAge,
+      total: totalCows,
+      active: activeCows,
+      pregnant: pregnantCows,
+      lactating: lactatingCows,
       avgWeight,
-      totalCalves,
-      avgConceptionRate,
-      totalMilkProduction,
-      totalInvestment,
+      avgAge,
+      avgMilkProduction
     };
   }, [cows]);
 
-  // Función para obtener estadísticas de enmadre
   const motherhoodStatistics = useMemo(() => {
-    const total = motherhoodRecords.length;
-    const successful = motherhoodRecords.filter(m => m.success).length;
-    const natural = motherhoodRecords.filter(m => m.calvingType === "natural").length;
-    const assisted = motherhoodRecords.filter(m => m.calvingType === "assisted").length;
-    const cesarean = motherhoodRecords.filter(m => m.calvingType === "cesarean").length;
-    const femaleCalves = motherhoodRecords.filter(m => m.calf.gender === "female").length;
-    const maleCalves = motherhoodRecords.filter(m => m.calf.gender === "male").length;
-    const avgBirthWeight = total > 0 ? 
-      Math.round(motherhoodRecords.reduce((sum, m) => sum + m.calf.birthWeight, 0) / total * 10) / 10 : 0;
-    const totalEconomicValue = motherhoodRecords.reduce((sum, m) => sum + m.economicImpact.expectedValue, 0);
-    const thisMonth = motherhoodRecords.filter(m => {
-      const recordDate = new Date(m.calvingDate);
-      const now = new Date();
-      return recordDate.getMonth() === now.getMonth() && recordDate.getFullYear() === now.getFullYear();
+    const totalBirths = motherhoodRecords.length;
+    const successfulBirths = motherhoodRecords.filter(record => record.success).length;
+    const maleCalves = motherhoodRecords.filter(record => record.calf.gender === "male").length;
+    const femaleCalves = motherhoodRecords.filter(record => record.calf.gender === "female").length;
+    const aliveCalves = motherhoodRecords.filter(record => record.calf.alive).length;
+    const naturalBirths = motherhoodRecords.filter(record => record.calvingType === "natural").length;
+    const avgBirthWeight = motherhoodRecords.length > 0 ? 
+      Math.round(motherhoodRecords.reduce((sum, record) => sum + record.calf.birthWeight, 0) / motherhoodRecords.length) : 0;
+    
+    // Registros de este mes
+    const currentMonth = new Date().getMonth();
+    const currentYear = new Date().getFullYear();
+    const thisMonth = motherhoodRecords.filter(record => {
+      const recordDate = new Date(record.calvingDate);
+      return recordDate.getMonth() === currentMonth && recordDate.getFullYear() === currentYear;
     }).length;
 
     return {
-      total,
-      successful,
-      natural,
-      assisted,
-      cesarean,
-      femaleCalves,
-      maleCalves,
+      total: totalBirths,
+      successful: successfulBirths,
+      male: maleCalves,
+      female: femaleCalves,
+      alive: aliveCalves,
+      natural: naturalBirths,
       avgBirthWeight,
-      totalEconomicValue,
-      thisMonth,
+      thisMonth
     };
   }, [motherhoodRecords]);
 
-  // Animaciones de Framer Motion
-  const containerVariants: Variants = {
-    hidden: { opacity: 0 },
-    visible: {
-      opacity: 1,
-      transition: {
-        delayChildren: 0.1,
-        staggerChildren: 0.1,
-      },
-    },
-  };
-
-  const itemVariants: Variants = {
-    hidden: { y: 20, opacity: 0 },
-    visible: {
-      y: 0,
-      opacity: 1,
-      transition: {
-        duration: 0.5,
-        ease: "easeOut",
-      },
-    },
-  };
-
-  // Función para obtener el color de estado de salud
-  const getHealthStatusColor = (status: string) => {
-    switch (status) {
-      case "excellent":
-        return "bg-emerald-100 text-emerald-800 border-emerald-200";
-      case "good":
-        return "bg-green-100 text-green-800 border-green-200";
-      case "fair":
-        return "bg-yellow-100 text-yellow-800 border-yellow-200";
-      case "poor":
-        return "bg-orange-100 text-orange-800 border-orange-200";
-      case "sick":
-        return "bg-red-100 text-red-800 border-red-200";
-      default:
-        return "bg-gray-100 text-gray-800 border-gray-200";
-    }
-  };
-
-  // Función para obtener el color de estado reproductivo
-  const getReproductiveStatusColor = (status: string) => {
-    switch (status) {
-      case "pregnant":
-        return "bg-purple-100 text-purple-800 border-purple-200";
-      case "lactating":
-        return "bg-blue-100 text-blue-800 border-blue-200";
-      case "dry":
-        return "bg-yellow-100 text-yellow-800 border-yellow-200";
-      case "open":
-        return "bg-green-100 text-green-800 border-green-200";
-      case "maiden":
-        return "bg-pink-100 text-pink-800 border-pink-200";
-      case "retired":
-        return "bg-gray-100 text-gray-800 border-gray-200";
-      default:
-        return "bg-gray-100 text-gray-800 border-gray-200";
-    }
-  };
-
-  // Función para obtener el ícono de género
-  const getGenderIcon = (gender: string) => {
-    return gender === "male" ? "♂" : "♀";
-  };
-
-  // Función para formatear fecha
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString("es-MX", {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-    });
-  };
-
-  // Función para formatear moneda
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat("es-MX", {
-      style: "currency",
-      currency: "MXN",
-    }).format(amount);
-  };
-
-  // Componente de tarjeta de estadísticas
+  // Componente de tarjeta de estadística
   const StatCard: React.FC<{
     title: string;
     value: string | number;
     icon: React.ReactNode;
-    color: string;
+    color?: string;
     subtitle?: string;
-  }> = ({ title, value, icon, color, subtitle }) => (
+  }> = ({ title, value, icon, color = "", subtitle }) => (
     <motion.div
       variants={itemVariants}
       className={`bg-white/95 backdrop-blur-sm rounded-xl p-6 shadow-lg border border-white/20 ${color}`}
@@ -912,395 +911,420 @@ const CowManagement: React.FC = () => {
   );
 
   // Componente de tarjeta de vaca
-  const CowCard: React.FC<{ cow: Cow }> = ({ cow }) => (
-    <motion.div
-      variants={itemVariants}
-      className="bg-white/95 backdrop-blur-sm rounded-xl p-6 shadow-lg border border-white/20 hover:shadow-xl transition-shadow duration-300"
-    >
-      {/* Header de la tarjeta */}
-      <div className="flex justify-between items-start mb-4">
-        <div>
-          <div className="flex items-center space-x-2 mb-1">
-            <h3 className="text-lg font-bold text-gray-900">{cow.name}</h3>
-            <Flower2 className="w-5 h-5 text-pink-600" />
+  const CowCard: React.FC<{ cow: Cow }> = ({ cow }) => {
+    const age = new Date().getFullYear() - new Date(cow.birthDate).getFullYear();
+    
+    return (
+      <motion.div
+        variants={itemVariants}
+        className="bg-white/95 backdrop-blur-sm rounded-xl p-6 shadow-lg border border-white/20 hover:shadow-xl transition-all duration-300"
+      >
+        {/* Header de la tarjeta */}
+        <div className="flex justify-between items-start mb-4">
+          <div>
+            <div className="flex items-center space-x-2 mb-1">
+              <h3 className="text-lg font-bold text-gray-900">{cow.name}</h3>
+              <Flower2 className="w-5 h-5 text-pink-600" />
+            </div>
+            <p className="text-sm text-gray-600">Arete: {cow.earTag}</p>
+            <p className="text-sm text-gray-600">Registro: {cow.registrationNumber}</p>
           </div>
-          <p className="text-sm text-gray-600">Arete: {cow.earTag}</p>
-          <p className="text-sm text-gray-600">Registro: {cow.registrationNumber}</p>
-        </div>
-        <div className="flex flex-col items-end space-y-2">
-          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${getHealthStatusColor(cow.healthStatus)}`}>
-            <Shield className="w-3 h-3 mr-1" />
-            {cow.healthStatus === "excellent" ? "Excelente" :
-             cow.healthStatus === "good" ? "Bueno" :
-             cow.healthStatus === "fair" ? "Regular" :
-             cow.healthStatus === "poor" ? "Malo" : "Enferma"}
-          </span>
-          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${getReproductiveStatusColor(cow.reproductiveStatus)}`}>
-            {cow.reproductiveStatus === "pregnant" && <Heart className="w-3 h-3 mr-1" />}
-            {cow.reproductiveStatus === "lactating" && <Milk className="w-3 h-3 mr-1" />}
-            {cow.reproductiveStatus === "dry" && <Droplets className="w-3 h-3 mr-1" />}
-            {cow.reproductiveStatus === "open" && <Heart className="w-3 h-3 mr-1" />}
-            {cow.reproductiveStatus === "maiden" && <Baby className="w-3 h-3 mr-1" />}
-            <span className="ml-1">
-              {cow.reproductiveStatus === "pregnant" ? "Embarazada" :
+          <div className="flex flex-col items-end space-y-2">
+            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${getHealthStatusColor(cow.healthStatus)}`}>
+              <Shield className="w-3 h-3 mr-1" />
+              {cow.healthStatus === "excellent" ? "Excelente" :
+               cow.healthStatus === "good" ? "Buena" :
+               cow.healthStatus === "fair" ? "Regular" :
+               cow.healthStatus === "poor" ? "Mala" : "Enferma"}
+            </span>
+            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${getReproductiveStatusColor(cow.reproductiveStatus)}`}>
+              <Heart className="w-3 h-3 mr-1" />
+              {cow.reproductiveStatus === "maiden" ? "Vaquilla" :
+               cow.reproductiveStatus === "pregnant" ? "Gestante" :
                cow.reproductiveStatus === "lactating" ? "Lactando" :
                cow.reproductiveStatus === "dry" ? "Seca" :
-               cow.reproductiveStatus === "open" ? "Abierta" :
-               cow.reproductiveStatus === "maiden" ? "Vaquilla" : "Retirada"}
+               cow.reproductiveStatus === "open" ? "Vacía" : "Retirada"}
             </span>
-          </span>
+          </div>
         </div>
-      </div>
 
-      {/* Información básica */}
-      <div className="grid grid-cols-2 gap-4 mb-4">
-        <div>
-          <p className="text-sm text-gray-600">Raza</p>
-          <p className="font-medium">{cow.breed}</p>
-        </div>
-        <div>
-          <p className="text-sm text-gray-600">Edad</p>
-          <p className="font-medium">{calculateAge(cow.birthDate)} años</p>
-        </div>
-        <div>
-          <p className="text-sm text-gray-600">Peso</p>
-          <p className="font-medium flex items-center">
-            <Scale className="w-4 h-4 mr-1 text-gray-500" />
-            {cow.weight} kg
-          </p>
-        </div>
-        <div>
-          <p className="text-sm text-gray-600">Ubicación</p>
-          <p className="font-medium">{cow.currentLocation.paddock}</p>
-        </div>
-      </div>
-
-      {/* Información reproductiva */}
-      <div className="bg-purple-50 rounded-lg p-3 mb-4">
-        <p className="text-sm font-medium text-gray-700 mb-2 flex items-center">
-          <Heart className="w-4 h-4 mr-1 text-purple-600" />
-          Historial Reproductivo
-        </p>
-        <div className="grid grid-cols-2 gap-2 text-sm">
+        {/* Información básica */}
+        <div className="grid grid-cols-2 gap-4 mb-4">
           <div>
-            <span className="text-gray-600">Embarazos:</span>
-            <span className="ml-1 font-medium">{cow.reproductiveHistory.totalPregnancies}</span>
+            <p className="text-xs text-gray-500">Raza</p>
+            <p className="text-sm font-medium text-gray-900">{cow.breed}</p>
           </div>
           <div>
-            <span className="text-gray-600">Crías vivas:</span>
-            <span className="ml-1 font-medium">{cow.reproductiveHistory.liveCalves}</span>
+            <p className="text-xs text-gray-500">Edad</p>
+            <p className="text-sm font-medium text-gray-900">{age} años</p>
           </div>
-          <div className="col-span-2">
-            <span className="text-gray-600">Tasa de concepción:</span>
-            <span className="ml-1 font-medium text-green-600">{cow.reproductiveHistory.conception.conceptionRate}%</span>
+          <div>
+            <p className="text-xs text-gray-500">Peso</p>
+            <p className="text-sm font-medium text-gray-900">{cow.weight} kg</p>
           </div>
-        </div>
-      </div>
-
-      {/* Embarazo actual */}
-      {cow.currentPregnancy && (
-        <div className="bg-pink-50 rounded-lg p-3 mb-4">
-          <p className="text-sm font-medium text-gray-700 mb-2 flex items-center">
-            <Heart className="w-4 h-4 mr-1 text-pink-600" />
-            Embarazo Actual
-          </p>
-          <div className="text-sm">
-            <div>
-              <span className="text-gray-600">Toro:</span>
-              <span className="ml-1 font-medium">{cow.currentPregnancy.bullName}</span>
-            </div>
-            <div>
-              <span className="text-gray-600">Día de gestación:</span>
-              <span className="ml-1 font-medium">{calculateGestationDays(cow.currentPregnancy.breedingDate)}</span>
-            </div>
-            <div>
-              <span className="text-gray-600">Parto esperado:</span>
-              <span className="ml-1 font-medium">{formatDate(cow.currentPregnancy.expectedCalvingDate)}</span>
-            </div>
+          <div>
+            <p className="text-xs text-gray-500">Ubicación</p>
+            <p className="text-sm font-medium text-gray-900">{cow.currentLocation.paddock}</p>
           </div>
         </div>
-      )}
 
-      {/* Lactancia */}
-      {cow.lactation.isLactating && (
-        <div className="bg-blue-50 rounded-lg p-3 mb-4">
-          <p className="text-sm font-medium text-gray-700 mb-2 flex items-center">
-            <Milk className="w-4 h-4 mr-1 text-blue-600" />
-            Lactancia Actual
-          </p>
-          <div className="grid grid-cols-2 gap-2 text-sm">
-            <div>
-              <span className="text-gray-600">Lactancia #:</span>
-              <span className="ml-1 font-medium">{cow.lactation.lactationNumber}</span>
-            </div>
-            <div>
-              <span className="text-gray-600">Producción actual:</span>
-              <span className="ml-1 font-medium">{cow.lactation.currentMilk} L/día</span>
-            </div>
-            <div className="col-span-2">
-              <span className="text-gray-600">Total producido:</span>
-              <span className="ml-1 font-medium">{cow.lactation.totalMilk} L</span>
-            </div>
+        {/* Información específica según estado */}
+        <div className="bg-gray-50 rounded-lg p-3 mb-4">
+          {cow.reproductiveStatus === "lactating" && cow.lactation.isLactating && (
+            <>
+              <h4 className="text-xs font-medium text-gray-600 mb-2 flex items-center">
+                <Milk className="w-3 h-3 mr-1" />
+                Información de Lactancia
+              </h4>
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                <div>
+                  <span className="text-gray-500">Lactancia:</span>
+                  <span className="font-medium ml-1">#{cow.lactation.lactationNumber}</span>
+                </div>
+                <div>
+                  <span className="text-gray-500">Actual:</span>
+                  <span className="font-medium ml-1">{cow.lactation.currentMilk}L/día</span>
+                </div>
+                <div>
+                  <span className="text-gray-500">Pico:</span>
+                  <span className="font-medium ml-1">{cow.lactation.peakMilk}L/día</span>
+                </div>
+                <div>
+                  <span className="text-gray-500">Total:</span>
+                  <span className="font-medium ml-1">{cow.lactation.totalMilk}L</span>
+                </div>
+              </div>
+            </>
+          )}
+
+          {cow.reproductiveStatus === "pregnant" && cow.currentPregnancy && (
+            <>
+              <h4 className="text-xs font-medium text-gray-600 mb-2 flex items-center">
+                <Baby className="w-3 h-3 mr-1" />
+                Información de Gestación
+              </h4>
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                <div>
+                  <span className="text-gray-500">Toro:</span>
+                  <span className="font-medium ml-1">{cow.currentPregnancy.bullName}</span>
+                </div>
+                <div>
+                  <span className="text-gray-500">Día:</span>
+                  <span className="font-medium ml-1">{cow.currentPregnancy.gestationDay}</span>
+                </div>
+                <div className="col-span-2">
+                  <span className="text-gray-500">Parto esperado:</span>
+                  <span className="font-medium ml-1">
+                    {new Date(cow.currentPregnancy.expectedCalvingDate).toLocaleDateString('es-MX')}
+                  </span>
+                </div>
+              </div>
+            </>
+          )}
+
+          {(cow.reproductiveStatus === "dry" || cow.reproductiveStatus === "open") && (
+            <>
+              <h4 className="text-xs font-medium text-gray-600 mb-2 flex items-center">
+                <Activity className="w-3 h-3 mr-1" />
+                Historial Reproductivo
+              </h4>
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                <div>
+                  <span className="text-gray-500">Partos:</span>
+                  <span className="font-medium ml-1">{cow.reproductiveHistory.totalPregnancies}</span>
+                </div>
+                <div>
+                  <span className="text-gray-500">Crías vivas:</span>
+                  <span className="font-medium ml-1">{cow.reproductiveHistory.liveCalves}</span>
+                </div>
+                <div>
+                  <span className="text-gray-500">Concepción:</span>
+                  <span className="font-medium ml-1">{cow.reproductiveHistory.conception.conceptionRate}%</span>
+                </div>
+                <div>
+                  <span className="text-gray-500">Último parto:</span>
+                  <span className="font-medium ml-1">
+                    {cow.reproductiveHistory.lastCalvingDate ? 
+                      new Date(cow.reproductiveHistory.lastCalvingDate).toLocaleDateString('es-MX') : 
+                      "N/A"}
+                  </span>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* Acciones */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-2">
+            <button
+              onClick={() => setSelectedCow(cow)}
+              className="p-2 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+              title="Ver detalles"
+            >
+              <Eye className="w-4 h-4" />
+            </button>
+            <button
+              onClick={() => setEditingCow(cow)}
+              className="p-2 text-gray-600 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors"
+              title="Editar"
+            >
+              <Edit className="w-4 h-4" />
+            </button>
+            <button
+              onClick={() => {/* Función para eliminar */}}
+              className="p-2 text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+              title="Eliminar"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
+          </div>
+          <div className="flex items-center space-x-1">
+            <MapPin className="w-4 h-4 text-gray-400" />
+            <span className="text-xs text-gray-500">{cow.currentLocation.facility}</span>
           </div>
         </div>
-      )}
+      </motion.div>
+    );
+  };
 
-      {/* Valor de adquisición */}
-      <div className="mb-4">
-        <p className="text-sm text-gray-600">Valor de adquisición</p>
-        <p className="text-lg font-bold text-[#519a7c]">{formatCurrency(cow.acquisition.cost)}</p>
-      </div>
-
-      {/* Ubicación */}
-      <div className="flex items-center text-sm text-gray-600 mb-4">
-        <MapPin className="w-4 h-4 mr-1" />
-        <span>{cow.currentLocation.address}</span>
-      </div>
-
-      {/* Estado activo */}
-      <div className="flex items-center justify-between mb-4">
-        <span className="text-sm text-gray-600">Estado:</span>
-        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-          cow.active ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"
-        }`}>
-          {cow.active ? <UserCheck className="w-3 h-3 mr-1" /> : <UserX className="w-3 h-3 mr-1" />}
-          {cow.active ? "Activa" : "Inactiva"}
-        </span>
-      </div>
-
-      {/* Acciones */}
-      <div className="flex justify-end space-x-2">
-        <button
-          onClick={() => setSelectedCow(cow)}
-          className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-          title="Ver detalles"
-        >
-          <Eye className="w-4 h-4" />
-        </button>
-        <button
-          onClick={() => {
-            setCowFormData(cow);
-            setShowCowForm(true);
-          }}
-          className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
-          title="Editar"
-        >
-          <Edit className="w-4 h-4" />
-        </button>
-        <button
-          onClick={() => {
-            setMotherhoodFilters(prev => ({ ...prev, cowId: cow.id }));
-            setActiveTab("motherhood");
-          }}
-          className="p-2 text-pink-600 hover:bg-pink-50 rounded-lg transition-colors"
-          title="Ver enmadres"
-        >
-          <Baby className="w-4 h-4" />
-        </button>
-        <button
-          onClick={() => {
-            if (confirm("¿Estás seguro de que quieres eliminar esta vaca?")) {
-              setCows(prev => prev.filter(c => c.id !== cow.id));
-            }
-          }}
-          className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-          title="Eliminar"
-        >
-          <Trash2 className="w-4 h-4" />
-        </button>
-      </div>
-    </motion.div>
-  );
-
-  // Componente de fila de tabla de enmadre
+  // Componente de fila de enmadre
   const MotherhoodRow: React.FC<{ record: MotherhoodRecord }> = ({ record }) => (
-    <motion.tr
-      variants={itemVariants}
-      className="bg-white/95 backdrop-blur-sm hover:bg-gray-50 transition-colors border-b border-gray-200"
-    >
-      <td className="px-6 py-4 whitespace-nowrap">
-        <div className="flex items-center">
-          <Flower2 className="w-5 h-5 text-pink-600 mr-2" />
+    <tr className="hover:bg-gray-50 transition-colors">
+      <td className="px-6 py-4">
+        <div className="flex items-center space-x-3">
+          <Flower2 className="w-5 h-5 text-pink-600" />
           <div>
-            <div className="text-sm font-medium text-gray-900">{record.cowName}</div>
-            <div className="text-sm text-gray-500">Arete: {record.cowEarTag}</div>
+            <p className="text-sm font-medium text-gray-900">{record.cowName}</p>
+            <p className="text-xs text-gray-500">Arete: {record.cowEarTag}</p>
           </div>
         </div>
       </td>
-      <td className="px-6 py-4 whitespace-nowrap">
-        <div className="flex items-center">
-          <span className="text-2xl mr-2">{getGenderIcon(record.calf.gender)}</span>
-          <div>
-            <div className="text-sm font-medium text-gray-900">{record.calf.name}</div>
-            <div className="text-sm text-gray-500">Arete: {record.calf.earTag}</div>
-          </div>
+      <td className="px-6 py-4">
+        <div>
+          <p className="text-sm font-medium text-gray-900">{record.calf.name}</p>
+          <p className="text-xs text-gray-500">Arete: {record.calf.earTag}</p>
         </div>
       </td>
-      <td className="px-6 py-4 whitespace-nowrap">
-        <div className="text-sm text-gray-900">{formatDate(record.calvingDate)}</div>
-        <div className="text-sm text-gray-500">{record.calvingTime}</div>
+      <td className="px-6 py-4">
+        <div>
+          <p className="text-sm font-medium text-gray-900">
+            {new Date(record.calvingDate).toLocaleDateString('es-MX')}
+          </p>
+          <p className="text-xs text-gray-500">{record.calvingTime}</p>
+        </div>
       </td>
-      <td className="px-6 py-4 whitespace-nowrap">
-        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-          record.calvingType === "natural" ? "bg-green-100 text-green-800" :
-          record.calvingType === "assisted" ? "bg-blue-100 text-blue-800" :
-          record.calvingType === "cesarean" ? "bg-orange-100 text-orange-800" :
-          "bg-red-100 text-red-800"
-        }`}>
-          {record.calvingType === "natural" ? "Natural" :
-           record.calvingType === "assisted" ? "Asistido" :
-           record.calvingType === "cesarean" ? "Cesárea" : "Emergencia"}
+      <td className="px-6 py-4">
+        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${getCalvingTypeColor(record.calvingType)}`}>
+          {record.calvingType === "natural" ? (
+            <>
+              <Heart className="w-3 h-3 mr-1" />
+              Natural
+            </>
+          ) : record.calvingType === "assisted" ? (
+            <>
+              <Stethoscope className="w-3 h-3 mr-1" />
+              Asistido
+            </>
+          ) : record.calvingType === "cesarean" ? (
+            <>
+              <Syringe className="w-3 h-3 mr-1" />
+              Cesárea
+            </>
+          ) : (
+            <>
+              <Bell className="w-3 h-3 mr-1" />
+              Emergencia
+            </>
+          )}
         </span>
       </td>
-      <td className="px-6 py-4 whitespace-nowrap">
-        <div className="text-sm text-gray-900">{record.calf.birthWeight} kg</div>
+      <td className="px-6 py-4">
+        <div className="flex items-center space-x-2">
+          <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+            record.calf.gender === "male" ? "bg-blue-100 text-blue-800" : "bg-pink-100 text-pink-800"
+          }`}>
+            {record.calf.gender === "male" ? "♂ Macho" : "♀ Hembra"}
+          </span>
+          <span className="text-sm text-gray-600">{record.calf.birthWeight} kg</span>
+        </div>
       </td>
-      <td className="px-6 py-4 whitespace-nowrap">
-        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getHealthStatusColor(record.calf.healthStatus)}`}>
+      <td className="px-6 py-4">
+        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${getHealthStatusColor(record.calf.healthStatus)}`}>
+          <Shield className="w-3 h-3 mr-1" />
           {record.calf.healthStatus === "excellent" ? "Excelente" :
-           record.calf.healthStatus === "good" ? "Bueno" :
+           record.calf.healthStatus === "good" ? "Buena" :
            record.calf.healthStatus === "fair" ? "Regular" :
-           record.calf.healthStatus === "poor" ? "Malo" : "Crítico"}
+           record.calf.healthStatus === "poor" ? "Mala" : "Crítica"}
         </span>
       </td>
-      <td className="px-6 py-4 whitespace-nowrap">
-        <div className="text-sm text-gray-900">{record.location.paddock}</div>
+      <td className="px-6 py-4">
+        <div className="flex items-center space-x-1">
+          <MapPinIcon className="w-4 h-4 text-gray-400" />
+          <span className="text-sm text-gray-600">{record.location.paddock}</span>
+        </div>
       </td>
-      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-        <div className="flex space-x-2">
+      <td className="px-6 py-4 text-right">
+        <div className="flex items-center justify-end space-x-2">
           <button
-            onClick={() => setSelectedMotherhoodRecord(record)}
-            className="text-blue-600 hover:text-blue-900"
+            onClick={() => setSelectedMotherhood(record)}
+            className="p-1 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
             title="Ver detalles"
           >
             <Eye className="w-4 h-4" />
           </button>
           <button
-            onClick={() => {
-              setMotherhoodFormData(record);
-              setShowMotherhoodForm(true);
-            }}
-            className="text-green-600 hover:text-green-900"
+            onClick={() => setEditingMotherhood(record)}
+            className="p-1 text-gray-600 hover:text-green-600 hover:bg-green-50 rounded transition-colors"
             title="Editar"
           >
             <Edit className="w-4 h-4" />
           </button>
           <button
-            onClick={() => {
-              if (confirm("¿Estás seguro de que quieres eliminar este registro?")) {
-                setMotherhoodRecords(prev => prev.filter(m => m.id !== record.id));
-              }
-            }}
-            className="text-red-600 hover:text-red-900"
+            onClick={() => {/* Función para eliminar */}}
+            className="p-1 text-gray-600 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
             title="Eliminar"
           >
             <Trash2 className="w-4 h-4" />
           </button>
         </div>
       </td>
-    </motion.tr>
+    </tr>
   );
 
-  // Componente de carga
-  const LoadingSpinner: React.FC = () => (
-    <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-[#519a7c] via-[#f2e9d8] to-[#f4ac3a]">
-      <motion.div
-        animate={{ rotate: 360 }}
-        transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-        className="w-16 h-16 border-4 border-white/30 border-t-white rounded-full"
-      />
-    </div>
-  );
-
+  // Pantalla de carga
   if (isLoading) {
-    return <LoadingSpinner />;
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-[#519a7c] via-[#f2e9d8] to-[#f4ac3a] flex items-center justify-center">
+        <motion.div
+          className="bg-white/90 backdrop-blur-sm rounded-2xl p-8 shadow-xl"
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.5 }}
+        >
+          <div className="flex flex-col items-center space-y-4">
+            <motion.div
+              className="w-12 h-12 border-4 border-[#519a7c] border-t-transparent rounded-full"
+              animate={{ rotate: 360 }}
+              transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+            />
+            <p className="text-gray-600 font-medium">Cargando gestión de vacas...</p>
+          </div>
+        </motion.div>
+      </div>
+    );
   }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#519a7c] via-[#f2e9d8] to-[#f4ac3a] p-6">
       <motion.div
+        className="max-w-7xl mx-auto"
         variants={containerVariants}
         initial="hidden"
         animate="visible"
-        className="max-w-7xl mx-auto"
       >
         {/* Header */}
-        <motion.div variants={itemVariants} className="mb-8">
-          <div className="flex flex-col md:flex-row md:items-center md:justify-between">
-            <div>
-              <h1 className="text-4xl font-bold text-white drop-shadow-sm mb-2">
-                Gestión de Vacas
-              </h1>
-              <p className="text-white/90 text-lg">
-                Administración integral de vacas reproductoras y registros de enmadre
-              </p>
+        <motion.div
+          className="bg-white/95 backdrop-blur-sm rounded-2xl shadow-xl p-6 mb-6 border border-white/20"
+          variants={itemVariants}
+        >
+          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+            <div className="flex items-center space-x-4">
+              <div className="w-12 h-12 bg-gradient-to-r from-[#519a7c] to-[#4e9c75] rounded-xl flex items-center justify-center">
+                <Flower2 className="w-6 h-6 text-white" />
+              </div>
+              <div>
+                <h1 className="text-3xl font-bold text-gray-900">
+                  <AnimatedText>Gestión de Vacas y Enmadre</AnimatedText>
+                </h1>
+                <p className="text-gray-600 mt-1">
+                  Control integral de vacas reproductoras y registros de maternidad
+                </p>
+              </div>
             </div>
-            <div className="mt-4 md:mt-0 flex space-x-3">
+
+            <div className="flex items-center space-x-3">
               <button
-                onClick={() => setShowCowForm(true)}
-                className="inline-flex items-center px-6 py-3 bg-white/20 backdrop-blur-sm text-white rounded-xl hover:bg-white/30 transition-all duration-200 border border-white/20"
+                onClick={() => setShowFilters(!showFilters)}
+                className={`px-4 py-2 rounded-xl border-2 transition-all duration-200 flex items-center space-x-2 ${
+                  showFilters 
+                    ? "bg-[#519a7c] text-white border-[#519a7c]" 
+                    : "bg-white text-gray-700 border-gray-300 hover:border-[#519a7c]"
+                }`}
               >
-                <Plus className="w-5 h-5 mr-2" />
-                Nueva Vaca
+                <Filter className="w-4 h-4" />
+                <span>Filtros</span>
               </button>
-              <button className="inline-flex items-center px-6 py-3 bg-white/20 backdrop-blur-sm text-white rounded-xl hover:bg-white/30 transition-all duration-200 border border-white/20">
-                <Download className="w-5 h-5 mr-2" />
-                Exportar
+              <button
+                onClick={() => {/* Función para exportar */}}
+                className="px-4 py-2 bg-white text-gray-700 rounded-xl border-2 border-gray-300 hover:border-blue-400 transition-colors flex items-center space-x-2"
+              >
+                <Download className="w-4 h-4" />
+                <span>Exportar</span>
               </button>
             </div>
           </div>
-        </motion.div>
 
-        {/* Tabs */}
-        <motion.div variants={itemVariants} className="mb-8">
-          <div className="flex space-x-1 bg-white/20 backdrop-blur-sm rounded-xl p-1">
+          {/* Tabs */}
+          <div className="flex mt-6 border-b border-gray-200">
             <button
               onClick={() => setActiveTab("cows")}
-              className={`flex-1 py-3 px-6 rounded-lg font-medium transition-all duration-200 ${
+              className={`px-6 py-3 font-medium text-sm border-b-2 transition-colors ${
                 activeTab === "cows"
-                  ? "bg-white text-gray-900 shadow-lg"
-                  : "text-white hover:bg-white/10"
+                  ? "border-[#519a7c] text-[#519a7c]"
+                  : "border-transparent text-gray-500 hover:text-gray-700"
               }`}
             >
-              <Flower2 className="w-5 h-5 inline mr-2" />
-              Vacas Reproductoras
+              <div className="flex items-center space-x-2">
+                <Flower2 className="w-4 h-4" />
+                <span>Vacas</span>
+              </div>
             </button>
             <button
               onClick={() => setActiveTab("motherhood")}
-              className={`flex-1 py-3 px-6 rounded-lg font-medium transition-all duration-200 ${
+              className={`px-6 py-3 font-medium text-sm border-b-2 transition-colors ${
                 activeTab === "motherhood"
-                  ? "bg-white text-gray-900 shadow-lg"
-                  : "text-white hover:bg-white/10"
+                  ? "border-[#519a7c] text-[#519a7c]"
+                  : "border-transparent text-gray-500 hover:text-gray-700"
               }`}
             >
-              <Baby className="w-5 h-5 inline mr-2" />
-              Tabla de Enmadre
+              <div className="flex items-center space-x-2">
+                <Baby className="w-4 h-4" />
+                <span>Enmadre</span>
+              </div>
             </button>
           </div>
         </motion.div>
 
-        {/* Contenido según el tab activo */}
+        {/* Contenido de tabs */}
         <AnimatePresence mode="wait">
-          {activeTab === "cows" ? (
+          {activeTab === "cows" && (
             <motion.div
               key="cows"
-              initial={{ opacity: 0, x: -20 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: 20 }}
-              transition={{ duration: 0.3 }}
+              variants={containerVariants}
+              initial="hidden"
+              animate="visible"
+              exit="hidden"
+              className="space-y-6"
             >
               {/* Estadísticas de vacas */}
-              <motion.div variants={itemVariants} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-6 mb-8">
+              <motion.div variants={itemVariants} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-7 gap-6">
                 <StatCard
-                  title="Total de Vacas"
+                  title="Total Vacas"
                   value={cowStatistics.total}
                   icon={<Flower2 className="w-8 h-8" />}
                   color="hover:bg-pink-50"
                 />
                 <StatCard
-                  title="Embarazadas"
+                  title="Activas"
+                  value={cowStatistics.active}
+                  icon={<UserCheck className="w-8 h-8" />}
+                  color="hover:bg-green-50"
+                />
+                <StatCard
+                  title="Gestantes"
                   value={cowStatistics.pregnant}
-                  icon={<Heart className="w-8 h-8" />}
+                  icon={<Baby className="w-8 h-8" />}
                   color="hover:bg-purple-50"
                 />
                 <StatCard
@@ -1310,28 +1334,27 @@ const CowManagement: React.FC = () => {
                   color="hover:bg-blue-50"
                 />
                 <StatCard
-                  title="Secas"
-                  value={cowStatistics.dry}
-                  icon={<Droplets className="w-8 h-8" />}
+                  title="Peso Promedio"
+                  value={`${cowStatistics.avgWeight} kg`}
+                  icon={<Scale className="w-8 h-8" />}
                   color="hover:bg-yellow-50"
                 />
                 <StatCard
-                  title="Producción Diaria"
-                  value={`${cowStatistics.totalMilkProduction} L`}
-                  icon={<TrendingUp className="w-8 h-8" />}
-                  color="hover:bg-green-50"
-                  subtitle="Leche total"
+                  title="Edad Promedio"
+                  value={`${cowStatistics.avgAge} años`}
+                  icon={<Clock className="w-8 h-8" />}
+                  color="hover:bg-orange-50"
                 />
                 <StatCard
-                  title="Inversión Total"
-                  value={formatCurrency(cowStatistics.totalInvestment)}
-                  icon={<Award className="w-8 h-8" />}
-                  color="hover:bg-orange-50"
+                  title="Leche Promedio"
+                  value={`${cowStatistics.avgMilkProduction}L`}
+                  icon={<Droplets className="w-8 h-8" />}
+                  color="hover:bg-indigo-50"
                 />
               </motion.div>
 
-              {/* Controles de búsqueda y filtros para vacas */}
-              <motion.div variants={itemVariants} className="bg-white/95 backdrop-blur-sm rounded-xl p-6 shadow-lg border border-white/20 mb-6">
+              {/* Controles para vacas */}
+              <motion.div variants={itemVariants} className="bg-white/95 backdrop-blur-sm rounded-xl p-6 shadow-lg border border-white/20">
                 <div className="flex flex-col md:flex-row md:items-center md:justify-between space-y-4 md:space-y-0">
                   <div className="relative flex-1 md:max-w-md">
                     <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
@@ -1347,25 +1370,20 @@ const CowManagement: React.FC = () => {
                   </div>
                   <div className="flex items-center space-x-3">
                     <button
-                      onClick={() => setShowFilters(!showFilters)}
-                      className={`inline-flex items-center px-4 py-2 rounded-lg transition-colors ${
-                        showFilters
-                          ? "bg-[#519a7c] text-white"
-                          : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                      }`}
+                      onClick={() => setShowCowForm(true)}
+                      className="inline-flex items-center px-4 py-2 bg-[#519a7c] text-white rounded-lg hover:bg-[#4a8970] transition-colors"
                     >
-                      <Filter className="w-4 h-4 mr-2" />
-                      Filtros
-                      {showFilters ? <ChevronUp className="w-4 h-4 ml-1" /> : <ChevronDown className="w-4 h-4 ml-1" />}
+                      <Plus className="w-4 h-4 mr-2" />
+                      Nueva Vaca
                     </button>
                   </div>
                 </div>
               </motion.div>
 
-              {/* Lista de vacas */}
+              {/* Grid de vacas */}
               <motion.div variants={itemVariants}>
                 {filteredCows.length === 0 ? (
-                  <div className="bg-white/95 backdrop-blur-sm rounded-xl p-12 shadow-lg border border-white/20 text-center">
+                  <div className="bg-white/95 backdrop-blur-sm rounded-xl p-12 text-center shadow-lg border border-white/20">
                     <Flower2 className="w-16 h-16 text-gray-400 mx-auto mb-4" />
                     <h3 className="text-xl font-semibold text-gray-900 mb-2">
                       No se encontraron vacas
@@ -1382,7 +1400,7 @@ const CowManagement: React.FC = () => {
                     </button>
                   </div>
                 ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
                     {filteredCows.map((cow) => (
                       <CowCard key={cow.id} cow={cow} />
                     ))}
@@ -1390,16 +1408,19 @@ const CowManagement: React.FC = () => {
                 )}
               </motion.div>
             </motion.div>
-          ) : (
+          )}
+
+          {activeTab === "motherhood" && (
             <motion.div
               key="motherhood"
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -20 }}
-              transition={{ duration: 0.3 }}
+              variants={containerVariants}
+              initial="hidden"
+              animate="visible"
+              exit="hidden"
+              className="space-y-6"
             >
               {/* Estadísticas de enmadre */}
-              <motion.div variants={itemVariants} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 mb-8">
+              <motion.div variants={itemVariants} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-8 gap-6">
                 <StatCard
                   title="Total Partos"
                   value={motherhoodStatistics.total}
@@ -1407,33 +1428,51 @@ const CowManagement: React.FC = () => {
                   color="hover:bg-pink-50"
                 />
                 <StatCard
-                  title="Naturales"
-                  value={motherhoodStatistics.natural}
-                  icon={<Heart className="w-8 h-8" />}
+                  title="Exitosos"
+                  value={motherhoodStatistics.successful}
+                  icon={<CheckCircle className="w-8 h-8" />}
                   color="hover:bg-green-50"
                 />
                 <StatCard
-                  title="Hembras / Machos"
-                  value={`${motherhoodStatistics.femaleCalves} / ${motherhoodStatistics.maleCalves}`}
-                  icon={<Users className="w-8 h-8" />}
+                  title="Machos"
+                  value={motherhoodStatistics.male}
+                  icon={<Crown className="w-8 h-8" />}
+                  color="hover:bg-blue-50"
+                />
+                <StatCard
+                  title="Hembras"
+                  value={motherhoodStatistics.female}
+                  icon={<Flower2 className="w-8 h-8" />}
                   color="hover:bg-purple-50"
+                />
+                <StatCard
+                  title="Crías Vivas"
+                  value={motherhoodStatistics.alive}
+                  icon={<Heart className="w-8 h-8" />}
+                  color="hover:bg-red-50"
+                />
+                <StatCard
+                  title="Naturales"
+                  value={motherhoodStatistics.natural}
+                  icon={<Star className="w-8 h-8" />}
+                  color="hover:bg-yellow-50"
                 />
                 <StatCard
                   title="Peso Promedio"
                   value={`${motherhoodStatistics.avgBirthWeight} kg`}
-                  icon={<Scale className="w-8 h-8" />}
-                  color="hover:bg-blue-50"
+                  icon={<Weight className="w-8 h-8" />}
+                  color="hover:bg-orange-50"
                 />
                 <StatCard
                   title="Este Mes"
                   value={motherhoodStatistics.thisMonth}
-                  icon={<CalendarDays className="w-8 h-8" />}
-                  color="hover:bg-orange-50"
+                  icon={<Calendar className="w-8 h-8" />}
+                  color="hover:bg-indigo-50"
                 />
               </motion.div>
 
               {/* Controles para tabla de enmadre */}
-              <motion.div variants={itemVariants} className="bg-white/95 backdrop-blur-sm rounded-xl p-6 shadow-lg border border-white/20 mb-6">
+              <motion.div variants={itemVariants} className="bg-white/95 backdrop-blur-sm rounded-xl p-6 shadow-lg border border-white/20">
                 <div className="flex flex-col md:flex-row md:items-center md:justify-between space-y-4 md:space-y-0">
                   <div className="relative flex-1 md:max-w-md">
                     <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
@@ -1484,7 +1523,7 @@ const CowManagement: React.FC = () => {
                       <thead className="bg-gray-50">
                         <tr>
                           <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Madre
+                            Vaca
                           </th>
                           <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                             Cría
@@ -1496,10 +1535,10 @@ const CowManagement: React.FC = () => {
                             Tipo de Parto
                           </th>
                           <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Peso
+                            Cría Info
                           </th>
                           <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Salud
+                            Estado
                           </th>
                           <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                             Ubicación
@@ -1521,6 +1560,10 @@ const CowManagement: React.FC = () => {
             </motion.div>
           )}
         </AnimatePresence>
+
+        {/* Modales y formularios serían implementados aquí */}
+        {/* FormModal components would go here for create/edit operations */}
+        
       </motion.div>
     </div>
   );

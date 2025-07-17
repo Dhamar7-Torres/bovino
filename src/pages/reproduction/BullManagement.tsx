@@ -1,5 +1,5 @@
 // BullManagement.tsx
-// Página para gestión integral de toros y tabla de empadre
+// Página para gestión integral de toros y tabla de empadre (CRUD completo)
 import React, { useState, useEffect, useMemo } from "react";
 import { motion, AnimatePresence, Variants } from "framer-motion";
 import {
@@ -14,23 +14,22 @@ import {
   Download,
   Clock,
   CheckCircle,
-
-  ChevronDown,
-  ChevronUp,
   Users,
   Heart,
   Scale,
   TrendingUp,
-  Award,
   Shield,
   Zap,
   Target,
   Crown,
-  UserX,
-  UserCheck,
+  MapPinIcon,
+  Syringe,
+  Microscope,
+  XCircle,
+  Timer
 } from "lucide-react";
 
-// Tipos e interfaces para gestión de toros
+// Interfaces para gestión de toros
 interface Bull {
   id: string;
   name: string;
@@ -127,321 +126,366 @@ interface MatingRecord {
   actualBirthDate?: string;
   offspring?: {
     id: string;
-    name: string;
-    gender: "male" | "female";
-    alive: boolean;
-  };
-  complications: string[];
-  notes: string;
-  cost: number;
+    earTag: string;
+    sex: "male" | "female";
+    weight: number;
+    healthStatus: string;
+  }[];
+  observations: string;
+  weatherConditions?: string;
+  temperature?: number;
   success: boolean;
+  costs: {
+    veterinary: number;
+    medication: number;
+    equipment: number;
+    total: number;
+  };
+  followUp: {
+    checkDates: string[];
+    veterinarian: string;
+    notes: string[];
+  };
+  active: boolean;
   createdAt: string;
   updatedAt: string;
 }
 
+// Interfaces para filtros
 interface BullFilters {
+  searchTerm: string;
   breed: string[];
   healthStatus: string[];
   reproductiveStatus: string[];
-  ageRange: {
-    min: number;
-    max: number;
-  };
-  weightRange: {
-    min: number;
-    max: number;
-  };
-  location: string[];
-  searchTerm: string;
+  ageRange: { min: number; max: number };
+  weightRange: { min: number; max: number };
   activeOnly: boolean;
 }
 
 interface MatingFilters {
-  dateRange: {
-    start: string;
-    end: string;
-  };
+  searchTerm: string;
+  dateRange: { start: string; end: string };
   matingType: string[];
   pregnancyResult: string[];
   bullId: string;
-  searchTerm: string;
+  location: string;
+  assistedBy: string;
 }
 
-// Componente principal de Gestión de Toros
+// Componente AnimatedText para animaciones de texto
+const AnimatedText: React.FC<{ children: React.ReactNode; className?: string }> = ({ 
+  children, 
+  className = "" 
+}) => (
+  <motion.span
+    className={className}
+    initial={{ opacity: 0, y: 20 }}
+    animate={{ opacity: 1, y: 0 }}
+    transition={{ duration: 0.6, ease: "easeOut" }}
+  >
+    {children}
+  </motion.span>
+);
+
+// Variantes de animación
+const containerVariants: Variants = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: {
+      delayChildren: 0.1,
+      staggerChildren: 0.1,
+    },
+  },
+};
+
+const itemVariants: Variants = {
+  hidden: { y: 20, opacity: 0 },
+  visible: {
+    y: 0,
+    opacity: 1,
+    transition: {
+      type: "spring",
+      stiffness: 100,
+    },
+  },
+};
+
+// Componente principal
 const BullManagement: React.FC = () => {
   // Estados principales
+  const [activeTab, setActiveTab] = useState<"bulls" | "mating">("bulls");
+  const [isLoading, setIsLoading] = useState(true);
   const [bulls, setBulls] = useState<Bull[]>([]);
   const [matingRecords, setMatingRecords] = useState<MatingRecord[]>([]);
   const [filteredBulls, setFilteredBulls] = useState<Bull[]>([]);
   const [filteredMatingRecords, setFilteredMatingRecords] = useState<MatingRecord[]>([]);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
-  const [activeTab, setActiveTab] = useState<"bulls" | "mating">("bulls");
-  const [, setShowBullForm] = useState<boolean>(false);
-  const [, setShowMatingForm] = useState<boolean>(false);
-  const [, setSelectedBull] = useState<Bull | null>(null);
-  const [, setSelectedMatingRecord] = useState<MatingRecord | null>(null);
-  const [] = useState<"grid" | "list">("grid");
-  const [showFilters, setShowFilters] = useState<boolean>(false);
   
-  // Estados para filtros
+  // Estados de UI
+  const [, setShowBullForm] = useState(false);
+  const [, setShowMatingForm] = useState(false);
+  const [showFilters, setShowFilters] = useState(false);
+  const [, setSelectedBull] = useState<Bull | null>(null);
+  const [, setSelectedMating] = useState<MatingRecord | null>(null);
+  const [, setEditingBull] = useState<Bull | null>(null);
+  const [, setEditingMating] = useState<MatingRecord | null>(null);
+  
+  // Estados de filtros
   const [bullFilters, setBullFilters] = useState<BullFilters>({
+    searchTerm: "",
     breed: [],
     healthStatus: [],
     reproductiveStatus: [],
     ageRange: { min: 0, max: 20 },
     weightRange: { min: 0, max: 2000 },
-    location: [],
-    searchTerm: "",
-    activeOnly: true,
+    activeOnly: false,
   });
-
+  
   const [matingFilters, setMatingFilters] = useState<MatingFilters>({
+    searchTerm: "",
     dateRange: { start: "", end: "" },
     matingType: [],
     pregnancyResult: [],
     bullId: "",
-    searchTerm: "",
+    location: "",
+    assistedBy: "",
   });
 
-  // Estados para formulario
-  const [] = useState<boolean>(false);
-  const [, setBullFormData] = useState<Partial<Bull>>({});
-  const [, setMatingFormData] = useState<Partial<MatingRecord>>({});
-
-  // Datos de ejemplo para desarrollo
-  const mockBulls: Bull[] = [
-    {
-      id: "bull-001",
-      name: "Campeón Imperial",
-      earTag: "BULL-001",
-      registrationNumber: "MEX-2021-001",
-      breed: "Holstein",
-      birthDate: "2020-03-15",
-      weight: 850,
-      height: 145,
-      currentLocation: {
-        lat: 16.7569,
-        lng: -93.1292,
-        address: "Potrero Norte, Rancho San José",
-        paddock: "PN-01",
-      },
-      healthStatus: "excellent",
-      reproductiveStatus: "active",
-      genetics: {
-        sireId: "bull-sire-001",
-        sireName: "Holstein Premier",
-        damId: "cow-dam-001",
-        damName: "Bella Imperial",
-        genealogy: ["Holstein Premier", "Bella Imperial", "Champion Line"],
-      },
-      performance: {
-        totalMating: 45,
-        successfulMating: 38,
-        offspring: 32,
-        pregnancyRate: 84.4,
-        lastMatingDate: "2025-01-10",
-      },
-      health: {
-        lastCheckupDate: "2025-01-01",
-        veterinarian: "Dr. García Mendoza",
-        vaccinations: [
-          {
-            date: "2024-12-01",
-            vaccine: "IBR/BVD",
-            batch: "VAC-2024-120",
-            nextDue: "2025-06-01",
-          },
-        ],
-        treatments: [],
-      },
-      nutrition: {
-        diet: "Concentrado premium + pasto",
-        dailyFeed: 25,
-        supplements: ["Vitamina E", "Selenio", "Zinc"],
-        lastWeightDate: "2025-01-01",
-      },
-      acquisition: {
-        date: "2021-05-20",
-        source: "Genética Superior SA",
-        cost: 85000,
-        purpose: "breeding",
-      },
-      notes: "Toro de alto rendimiento, excelente temperamento",
-      photos: [],
-      active: true,
-      createdAt: "2021-05-20T10:00:00Z",
-      updatedAt: "2025-01-17T15:30:00Z",
-    },
-    {
-      id: "bull-002",
-      name: "Tornado Negro",
-      earTag: "BULL-002",
-      registrationNumber: "MEX-2019-045",
-      breed: "Angus",
-      birthDate: "2019-08-10",
-      weight: 920,
-      height: 150,
-      currentLocation: {
-        lat: 16.7569,
-        lng: -93.1292,
-        address: "Potrero Sur, Rancho San José",
-        paddock: "PS-02",
-      },
-      healthStatus: "good",
-      reproductiveStatus: "active",
-      genetics: {
-        sireId: "bull-sire-002",
-        sireName: "Black Thunder",
-        damId: "cow-dam-002",
-        damName: "Midnight Beauty",
-        genealogy: ["Black Thunder", "Midnight Beauty", "Premier Angus"],
-      },
-      performance: {
-        totalMating: 62,
-        successfulMating: 51,
-        offspring: 47,
-        pregnancyRate: 82.3,
-        lastMatingDate: "2025-01-08",
-      },
-      health: {
-        lastCheckupDate: "2024-12-15",
-        veterinarian: "MVZ. Rodríguez López",
-        vaccinations: [
-          {
-            date: "2024-11-15",
-            vaccine: "Clostridiosis",
-            batch: "VAC-2024-115",
-            nextDue: "2025-05-15",
-          },
-        ],
-        treatments: [
-          {
-            date: "2024-10-20",
-            condition: "Cojera leve",
-            treatment: "Antiinflamatorio",
-            veterinarian: "MVZ. Rodríguez López",
-          },
-        ],
-      },
-      nutrition: {
-        diet: "Pasto mejorado + suplemento mineral",
-        dailyFeed: 22,
-        supplements: ["Mineral premium", "Vitamina A"],
-        lastWeightDate: "2024-12-15",
-      },
-      acquisition: {
-        date: "2019-10-12",
-        source: "Rancho La Esperanza",
-        cost: 75000,
-        purpose: "breeding",
-      },
-      notes: "Toro robusto, muy buena genética para carne",
-      photos: [],
-      active: true,
-      createdAt: "2019-10-12T14:00:00Z",
-      updatedAt: "2025-01-17T15:30:00Z",
-    },
-  ];
-
-  const mockMatingRecords: MatingRecord[] = [
-    {
-      id: "mating-001",
-      bullId: "bull-001",
-      bullName: "Campeón Imperial",
-      cowId: "cow-123",
-      cowName: "Bella",
-      cowEarTag: "MX-001",
-      matingDate: "2025-01-10",
-      matingTime: "08:30",
-      location: {
-        lat: 16.7569,
-        lng: -93.1292,
-        address: "Potrero Norte, Rancho San José",
-        paddock: "PN-01",
-      },
-      matingType: "natural",
-      estrusDetected: true,
-      estrusDate: "2025-01-09",
-      assistedBy: {
-        id: "staff-001",
-        name: "Juan Pérez",
-        role: "Vaquero",
-      },
-      pregnancyTestDate: "2025-02-10",
-      pregnancyResult: "pregnant",
-      expectedBirthDate: "2025-10-10",
-      complications: [],
-      notes: "Monta natural exitosa, vaca receptiva",
-      cost: 0,
-      success: true,
-      createdAt: "2025-01-10T08:30:00Z",
-      updatedAt: "2025-01-10T08:30:00Z",
-    },
-    {
-      id: "mating-002",
-      bullId: "bull-002",
-      bullName: "Tornado Negro",
-      cowId: "cow-124",
-      cowName: "Luna",
-      cowEarTag: "MX-002",
-      matingDate: "2025-01-08",
-      matingTime: "14:15",
-      location: {
-        lat: 16.7569,
-        lng: -93.1292,
-        address: "Potrero Sur, Rancho San José",
-        paddock: "PS-02",
-      },
-      matingType: "natural",
-      estrusDetected: true,
-      estrusDate: "2025-01-07",
-      assistedBy: {
-        id: "staff-002",
-        name: "Carlos López",
-        role: "Vaquero",
-      },
-      pregnancyTestDate: "2025-02-08",
-      pregnancyResult: "pending",
-      expectedBirthDate: "2025-10-08",
-      complications: [],
-      notes: "Segunda monta, monitorear desarrollo",
-      cost: 0,
-      success: false,
-      createdAt: "2025-01-08T14:15:00Z",
-      updatedAt: "2025-01-08T14:15:00Z",
-    },
-  ];
-
-  // Efecto para cargar datos iniciales
+  // Datos mock para desarrollo
   useEffect(() => {
-    const loadData = async () => {
-      setIsLoading(true);
-      try {
-        // Simular carga de datos
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        setBulls(mockBulls);
-        setMatingRecords(mockMatingRecords);
-        setFilteredBulls(mockBulls);
-        setFilteredMatingRecords(mockMatingRecords);
-      } catch (error) {
-        console.error("Error al cargar datos:", error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
+    // Simular carga de datos
+    setTimeout(() => {
+      setBulls([
+        {
+          id: "1",
+          name: "Toro Campeón",
+          earTag: "TC001",
+          registrationNumber: "REG-2024-001",
+          breed: "Brahman",
+          birthDate: "2020-03-15",
+          weight: 850,
+          height: 145,
+          currentLocation: {
+            lat: 17.9869,
+            lng: -92.9303,
+            address: "Potrero Norte, Villahermosa, Tabasco",
+            paddock: "Potrero A1"
+          },
+          healthStatus: "excellent",
+          reproductiveStatus: "active",
+          genetics: {
+            sireId: "SIRE001",
+            sireName: "Brahman Elite",
+            damId: "DAM001",
+            damName: "Vaca Madre",
+            genealogy: ["Brahman Elite", "Toro Superior", "Línea Premium"]
+          },
+          performance: {
+            totalMating: 45,
+            successfulMating: 38,
+            offspring: 32,
+            pregnancyRate: 84.4,
+            lastMatingDate: "2024-06-15"
+          },
+          health: {
+            lastCheckupDate: "2024-07-10",
+            veterinarian: "Dr. Carlos Mendoza",
+            vaccinations: [
+              {
+                date: "2024-06-01",
+                vaccine: "Triple Bovina",
+                batch: "TB-2024-06",
+                nextDue: "2025-06-01"
+              }
+            ],
+            treatments: []
+          },
+          nutrition: {
+            diet: "Pasto estrella + concentrado",
+            dailyFeed: 12,
+            supplements: ["Vitamina A", "Minerales"],
+            lastWeightDate: "2024-07-10"
+          },
+          acquisition: {
+            date: "2020-03-15",
+            source: "Rancho Los Altos",
+            cost: 45000,
+            purpose: "breeding"
+          },
+          notes: "Excelente toro reproductor con alta tasa de preñez",
+          photos: [],
+          active: true,
+          createdAt: "2024-01-15",
+          updatedAt: "2024-07-15"
+        },
+        {
+          id: "2",
+          name: "Toro Dorado",
+          earTag: "TD002",
+          registrationNumber: "REG-2024-002",
+          breed: "Angus",
+          birthDate: "2019-08-22",
+          weight: 920,
+          height: 150,
+          currentLocation: {
+            lat: 17.9950,
+            lng: -92.9400,
+            address: "Potrero Sur, Villahermosa, Tabasco",
+            paddock: "Potrero B2"
+          },
+          healthStatus: "good",
+          reproductiveStatus: "active",
+          genetics: {
+            sireId: "SIRE002",
+            sireName: "Angus Premium",
+            damId: "DAM002",
+            damName: "Madre Dorada",
+            genealogy: ["Angus Premium", "Línea Dorada", "Genética Superior"]
+          },
+          performance: {
+            totalMating: 52,
+            successfulMating: 44,
+            offspring: 38,
+            pregnancyRate: 84.6,
+            lastMatingDate: "2024-07-01"
+          },
+          health: {
+            lastCheckupDate: "2024-07-05",
+            veterinarian: "Dra. Ana Rodríguez",
+            vaccinations: [
+              {
+                date: "2024-05-15",
+                vaccine: "Brucelosis",
+                batch: "BR-2024-05",
+                nextDue: "2025-05-15"
+              }
+            ],
+            treatments: []
+          },
+          nutrition: {
+            diet: "Pasto bermuda + suplemento proteico",
+            dailyFeed: 14,
+            supplements: ["Proteína", "Minerales", "Vitamina E"],
+            lastWeightDate: "2024-07-05"
+          },
+          acquisition: {
+            date: "2019-08-22",
+            source: "Ganadería La Esperanza",
+            cost: 52000,
+            purpose: "genetic_improvement"
+          },
+          notes: "Toro con excelente conformación y buenos índices reproductivos",
+          photos: [],
+          active: true,
+          createdAt: "2024-01-10",
+          updatedAt: "2024-07-10"
+        }
+      ]);
 
-    loadData();
+      setMatingRecords([
+        {
+          id: "1",
+          bullId: "1",
+          bullName: "Toro Campeón",
+          cowId: "COW001",
+          cowName: "Vaca Luna",
+          cowEarTag: "VL001",
+          matingDate: "2024-07-15",
+          matingTime: "08:30",
+          location: {
+            lat: 17.9869,
+            lng: -92.9303,
+            address: "Potrero Norte, Villahermosa, Tabasco",
+            paddock: "Potrero A1"
+          },
+          matingType: "natural",
+          estrusDetected: true,
+          estrusDate: "2024-07-14",
+          assistedBy: {
+            id: "VET001",
+            name: "Dr. Carlos Mendoza",
+            role: "Veterinario"
+          },
+          pregnancyTestDate: "2024-08-15",
+          pregnancyResult: "pregnant",
+          expectedBirthDate: "2025-04-15",
+          observations: "Monta natural exitosa, vaca en celo evidente",
+          weatherConditions: "Soleado",
+          temperature: 28,
+          success: true,
+          costs: {
+            veterinary: 800,
+            medication: 200,
+            equipment: 0,
+            total: 1000
+          },
+          followUp: {
+            checkDates: ["2024-08-15", "2024-09-15"],
+            veterinarian: "Dr. Carlos Mendoza",
+            notes: ["Gestación confirmada", "Desarrollo normal"]
+          },
+          active: true,
+          createdAt: "2024-07-15",
+          updatedAt: "2024-08-15"
+        },
+        {
+          id: "2",
+          bullId: "2",
+          bullName: "Toro Dorado",
+          cowId: "COW002",
+          cowName: "Vaca Estrella",
+          cowEarTag: "VE002",
+          matingDate: "2024-07-10",
+          matingTime: "14:15",
+          location: {
+            lat: 17.9950,
+            lng: -92.9400,
+            address: "Potrero Sur, Villahermosa, Tabasco",
+            paddock: "Potrero B2"
+          },
+          matingType: "artificial",
+          estrusDetected: true,
+          estrusDate: "2024-07-09",
+          assistedBy: {
+            id: "VET002",
+            name: "Dra. Ana Rodríguez",
+            role: "Veterinaria"
+          },
+          pregnancyTestDate: "2024-08-10",
+          pregnancyResult: "pending",
+          observations: "Inseminación artificial programada, sincronización exitosa",
+          weatherConditions: "Nublado",
+          temperature: 26,
+          success: true,
+          costs: {
+            veterinary: 1200,
+            medication: 400,
+            equipment: 300,
+            total: 1900
+          },
+          followUp: {
+            checkDates: ["2024-08-10"],
+            veterinarian: "Dra. Ana Rodríguez",
+            notes: ["Esperando resultado de gestación"]
+          },
+          active: true,
+          createdAt: "2024-07-10",
+          updatedAt: "2024-07-10"
+        }
+      ]);
+
+      setIsLoading(false);
+    }, 1500);
   }, []);
 
-  // Efecto para aplicar filtros de toros
+  // Efectos para filtros
   useEffect(() => {
     applyBullFilters();
-  }, [bullFilters, bulls]);
+  }, [bulls, bullFilters]);
 
-  // Efecto para aplicar filtros de empadre
   useEffect(() => {
     applyMatingFilters();
-  }, [matingFilters, matingRecords]);
+  }, [matingRecords, matingFilters]);
 
   // Función para aplicar filtros de toros
   const applyBullFilters = () => {
@@ -454,7 +498,6 @@ const BullManagement: React.FC = () => {
         bull =>
           bull.name.toLowerCase().includes(searchLower) ||
           bull.earTag.toLowerCase().includes(searchLower) ||
-          bull.breed.toLowerCase().includes(searchLower) ||
           bull.registrationNumber?.toLowerCase().includes(searchLower)
       );
     }
@@ -516,11 +559,13 @@ const BullManagement: React.FC = () => {
     }
 
     // Filtro por rango de fechas
-    if (matingFilters.dateRange.start) {
-      filtered = filtered.filter(record => record.matingDate >= matingFilters.dateRange.start);
-    }
-    if (matingFilters.dateRange.end) {
-      filtered = filtered.filter(record => record.matingDate <= matingFilters.dateRange.end);
+    if (matingFilters.dateRange.start && matingFilters.dateRange.end) {
+      filtered = filtered.filter(record => {
+        const recordDate = new Date(record.matingDate);
+        const startDate = new Date(matingFilters.dateRange.start);
+        const endDate = new Date(matingFilters.dateRange.end);
+        return recordDate >= startDate && recordDate <= endDate;
+      });
     }
 
     // Filtro por tipo de monta
@@ -528,7 +573,7 @@ const BullManagement: React.FC = () => {
       filtered = filtered.filter(record => matingFilters.matingType.includes(record.matingType));
     }
 
-    // Filtro por resultado de embarazo
+    // Filtro por resultado de gestación
     if (matingFilters.pregnancyResult.length > 0) {
       filtered = filtered.filter(record => 
         record.pregnancyResult && matingFilters.pregnancyResult.includes(record.pregnancyResult)
@@ -543,151 +588,92 @@ const BullManagement: React.FC = () => {
     setFilteredMatingRecords(filtered);
   };
 
-  // Función para calcular edad en años
-  const calculateAge = (birthDate: string) => {
-    const birth = new Date(birthDate);
-    const today = new Date();
-    const age = today.getFullYear() - birth.getFullYear();
-    const monthDiff = today.getMonth() - birth.getMonth();
-    
-    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) {
-      return age - 1;
-    }
-    return age;
+  // Funciones para obtener estilos de estados
+  const getHealthStatusColor = (status: string) => {
+    const colors = {
+      excellent: "bg-green-100 text-green-800 border-green-200",
+      good: "bg-blue-100 text-blue-800 border-blue-200",
+      fair: "bg-yellow-100 text-yellow-800 border-yellow-200",
+      poor: "bg-orange-100 text-orange-800 border-orange-200",
+      quarantine: "bg-red-100 text-red-800 border-red-200",
+    };
+    return colors[status as keyof typeof colors] || colors.fair;
   };
 
-  // Función para obtener estadísticas de toros
+  const getReproductiveStatusColor = (status: string) => {
+    const colors = {
+      active: "bg-green-100 text-green-800 border-green-200",
+      resting: "bg-blue-100 text-blue-800 border-blue-200",
+      retired: "bg-gray-100 text-gray-800 border-gray-200",
+      testing: "bg-purple-100 text-purple-800 border-purple-200",
+    };
+    return colors[status as keyof typeof colors] || colors.active;
+  };
+
+  const getPregnancyResultColor = (result?: string) => {
+    const colors = {
+      pregnant: "bg-emerald-100 text-emerald-800 border-emerald-200",
+      not_pregnant: "bg-red-100 text-red-800 border-red-200",
+      pending: "bg-blue-100 text-blue-800 border-blue-200",
+    };
+    return result ? colors[result as keyof typeof colors] || colors.pending : colors.pending;
+  };
+
+  // Calcular estadísticas
   const bullStatistics = useMemo(() => {
-    const total = bulls.length;
-    const active = bulls.filter(b => b.active && b.reproductiveStatus === "active").length;
-    const avgAge = total > 0 ? 
-      Math.round(bulls.reduce((sum, b) => sum + calculateAge(b.birthDate), 0) / total * 10) / 10 : 0;
-    const avgWeight = total > 0 ? 
-      Math.round(bulls.reduce((sum, b) => sum + b.weight, 0) / total) : 0;
-    const totalOffspring = bulls.reduce((sum, b) => sum + b.performance.offspring, 0);
-    const avgPregnancyRate = total > 0 ? 
-      Math.round(bulls.reduce((sum, b) => sum + b.performance.pregnancyRate, 0) / total * 10) / 10 : 0;
-    const totalInvestment = bulls.reduce((sum, b) => sum + b.acquisition.cost, 0);
+    const totalBulls = bulls.length;
+    const activeBulls = bulls.filter(bull => bull.active && bull.reproductiveStatus === "active").length;
+    const avgWeight = bulls.length > 0 ? Math.round(bulls.reduce((sum, bull) => sum + bull.weight, 0) / bulls.length) : 0;
+    const avgAge = bulls.length > 0 ? Math.round(bulls.reduce((sum, bull) => {
+      const age = new Date().getFullYear() - new Date(bull.birthDate).getFullYear();
+      return sum + age;
+    }, 0) / bulls.length) : 0;
+    const avgPregnancyRate = bulls.length > 0 ? Math.round(bulls.reduce((sum, bull) => sum + bull.performance.pregnancyRate, 0) / bulls.length) : 0;
 
     return {
-      total,
-      active,
-      avgAge,
+      total: totalBulls,
+      active: activeBulls,
       avgWeight,
-      totalOffspring,
-      avgPregnancyRate,
-      totalInvestment,
+      avgAge,
+      avgPregnancyRate
     };
   }, [bulls]);
 
-  // Función para obtener estadísticas de empadre
   const matingStatistics = useMemo(() => {
-    const total = matingRecords.length;
-    const successful = matingRecords.filter(m => m.success).length;
-    const pregnant = matingRecords.filter(m => m.pregnancyResult === "pregnant").length;
-    const pending = matingRecords.filter(m => m.pregnancyResult === "pending").length;
-    const successRate = total > 0 ? Math.round((successful / total) * 100) : 0;
-    const pregnancyRate = total > 0 ? Math.round((pregnant / total) * 100) : 0;
-    const thisMonth = matingRecords.filter(m => {
-      const recordDate = new Date(m.matingDate);
-      const now = new Date();
-      return recordDate.getMonth() === now.getMonth() && recordDate.getFullYear() === now.getFullYear();
+    const totalMating = matingRecords.length;
+    const successful = matingRecords.filter(record => record.success).length;
+    const pregnant = matingRecords.filter(record => record.pregnancyResult === "pregnant").length;
+    const pending = matingRecords.filter(record => record.pregnancyResult === "pending").length;
+    const successRate = totalMating > 0 ? Math.round((successful / totalMating) * 100) : 0;
+    const pregnancyRate = totalMating > 0 ? Math.round((pregnant / totalMating) * 100) : 0;
+    
+    // Registros de este mes
+    const currentMonth = new Date().getMonth();
+    const currentYear = new Date().getFullYear();
+    const thisMonth = matingRecords.filter(record => {
+      const recordDate = new Date(record.matingDate);
+      return recordDate.getMonth() === currentMonth && recordDate.getFullYear() === currentYear;
     }).length;
 
     return {
-      total,
+      total: totalMating,
       successful,
       pregnant,
       pending,
       successRate,
       pregnancyRate,
-      thisMonth,
+      thisMonth
     };
   }, [matingRecords]);
 
-  // Animaciones de Framer Motion
-  const containerVariants: Variants = {
-    hidden: { opacity: 0 },
-    visible: {
-      opacity: 1,
-      transition: {
-        delayChildren: 0.1,
-        staggerChildren: 0.1,
-      },
-    },
-  };
-
-  const itemVariants: Variants = {
-    hidden: { y: 20, opacity: 0 },
-    visible: {
-      y: 0,
-      opacity: 1,
-      transition: {
-        duration: 0.5,
-        ease: "easeOut",
-      },
-    },
-  };
-
-  // Función para obtener el color de estado de salud
-  const getHealthStatusColor = (status: string) => {
-    switch (status) {
-      case "excellent":
-        return "bg-emerald-100 text-emerald-800 border-emerald-200";
-      case "good":
-        return "bg-green-100 text-green-800 border-green-200";
-      case "fair":
-        return "bg-yellow-100 text-yellow-800 border-yellow-200";
-      case "poor":
-        return "bg-orange-100 text-orange-800 border-orange-200";
-      case "quarantine":
-        return "bg-red-100 text-red-800 border-red-200";
-      default:
-        return "bg-gray-100 text-gray-800 border-gray-200";
-    }
-  };
-
-  // Función para obtener el color de estado reproductivo
-  const getReproductiveStatusColor = (status: string) => {
-    switch (status) {
-      case "active":
-        return "bg-green-100 text-green-800 border-green-200";
-      case "resting":
-        return "bg-blue-100 text-blue-800 border-blue-200";
-      case "retired":
-        return "bg-gray-100 text-gray-800 border-gray-200";
-      case "testing":
-        return "bg-yellow-100 text-yellow-800 border-yellow-200";
-      default:
-        return "bg-gray-100 text-gray-800 border-gray-200";
-    }
-  };
-
-  // Función para formatear fecha
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString("es-MX", {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-    });
-  };
-
-  // Función para formatear moneda
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat("es-MX", {
-      style: "currency",
-      currency: "MXN",
-    }).format(amount);
-  };
-
-  // Componente de tarjeta de estadísticas
+  // Componente de tarjeta de estadística
   const StatCard: React.FC<{
     title: string;
     value: string | number;
     icon: React.ReactNode;
-    color: string;
+    color?: string;
     subtitle?: string;
-  }> = ({ title, value, icon, color, subtitle }) => (
+  }> = ({ title, value, icon, color = "", subtitle }) => (
     <motion.div
       variants={itemVariants}
       className={`bg-white/95 backdrop-blur-sm rounded-xl p-6 shadow-lg border border-white/20 ${color}`}
@@ -706,351 +692,341 @@ const BullManagement: React.FC = () => {
   );
 
   // Componente de tarjeta de toro
-  const BullCard: React.FC<{ bull: Bull }> = ({ bull }) => (
-    <motion.div
-      variants={itemVariants}
-      className="bg-white/95 backdrop-blur-sm rounded-xl p-6 shadow-lg border border-white/20 hover:shadow-xl transition-shadow duration-300"
-    >
-      {/* Header de la tarjeta */}
-      <div className="flex justify-between items-start mb-4">
-        <div>
-          <div className="flex items-center space-x-2 mb-1">
-            <h3 className="text-lg font-bold text-gray-900">{bull.name}</h3>
-            <Crown className="w-5 h-5 text-yellow-600" />
-          </div>
-          <p className="text-sm text-gray-600">Arete: {bull.earTag}</p>
-          <p className="text-sm text-gray-600">Registro: {bull.registrationNumber}</p>
-        </div>
-        <div className="flex flex-col items-end space-y-2">
-          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${getHealthStatusColor(bull.healthStatus)}`}>
-            <Shield className="w-3 h-3 mr-1" />
-            {bull.healthStatus === "excellent" ? "Excelente" :
-             bull.healthStatus === "good" ? "Bueno" :
-             bull.healthStatus === "fair" ? "Regular" :
-             bull.healthStatus === "poor" ? "Malo" : "Cuarentena"}
-          </span>
-          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${getReproductiveStatusColor(bull.reproductiveStatus)}`}>
-            <Zap className="w-3 h-3 mr-1" />
-            {bull.reproductiveStatus === "active" ? "Activo" :
-             bull.reproductiveStatus === "resting" ? "Descanso" :
-             bull.reproductiveStatus === "retired" ? "Retirado" : "Prueba"}
-          </span>
-        </div>
-      </div>
-
-      {/* Información básica */}
-      <div className="grid grid-cols-2 gap-4 mb-4">
-        <div>
-          <p className="text-sm text-gray-600">Raza</p>
-          <p className="font-medium">{bull.breed}</p>
-        </div>
-        <div>
-          <p className="text-sm text-gray-600">Edad</p>
-          <p className="font-medium">{calculateAge(bull.birthDate)} años</p>
-        </div>
-        <div>
-          <p className="text-sm text-gray-600">Peso</p>
-          <p className="font-medium flex items-center">
-            <Scale className="w-4 h-4 mr-1 text-gray-500" />
-            {bull.weight} kg
-          </p>
-        </div>
-        <div>
-          <p className="text-sm text-gray-600">Ubicación</p>
-          <p className="font-medium">{bull.currentLocation.paddock}</p>
-        </div>
-      </div>
-
-      {/* Rendimiento reproductivo */}
-      <div className="bg-blue-50 rounded-lg p-3 mb-4">
-        <p className="text-sm font-medium text-gray-700 mb-2 flex items-center">
-          <Target className="w-4 h-4 mr-1 text-blue-600" />
-          Rendimiento Reproductivo
-        </p>
-        <div className="grid grid-cols-2 gap-2 text-sm">
+  const BullCard: React.FC<{ bull: Bull }> = ({ bull }) => {
+    const age = new Date().getFullYear() - new Date(bull.birthDate).getFullYear();
+    
+    return (
+      <motion.div
+        variants={itemVariants}
+        className="bg-white/95 backdrop-blur-sm rounded-xl p-6 shadow-lg border border-white/20 hover:shadow-xl transition-all duration-300"
+      >
+        {/* Header de la tarjeta */}
+        <div className="flex justify-between items-start mb-4">
           <div>
-            <span className="text-gray-600">Montas totales:</span>
-            <span className="ml-1 font-medium">{bull.performance.totalMating}</span>
-          </div>
-          <div>
-            <span className="text-gray-600">Exitosas:</span>
-            <span className="ml-1 font-medium">{bull.performance.successfulMating}</span>
-          </div>
-          <div>
-            <span className="text-gray-600">Crías:</span>
-            <span className="ml-1 font-medium">{bull.performance.offspring}</span>
-          </div>
-          <div>
-            <span className="text-gray-600">Tasa de preñez:</span>
-            <span className="ml-1 font-medium text-green-600">{bull.performance.pregnancyRate}%</span>
-          </div>
-        </div>
-      </div>
-
-      {/* Genética */}
-      <div className="bg-purple-50 rounded-lg p-3 mb-4">
-        <p className="text-sm font-medium text-gray-700 mb-2 flex items-center">
-          <Award className="w-4 h-4 mr-1 text-purple-600" />
-          Información Genética
-        </p>
-        <div className="text-sm">
-          {bull.genetics.sireName && (
-            <div>
-              <span className="text-gray-600">Padre:</span>
-              <span className="ml-1 font-medium">{bull.genetics.sireName}</span>
+            <div className="flex items-center space-x-2 mb-1">
+              <h3 className="text-lg font-bold text-gray-900">{bull.name}</h3>
+              <Crown className="w-5 h-5 text-yellow-600" />
             </div>
-          )}
-          {bull.genetics.damName && (
-            <div>
-              <span className="text-gray-600">Madre:</span>
-              <span className="ml-1 font-medium">{bull.genetics.damName}</span>
-            </div>
-          )}
+            <p className="text-sm text-gray-600">Arete: {bull.earTag}</p>
+            <p className="text-sm text-gray-600">Registro: {bull.registrationNumber}</p>
+          </div>
+          <div className="flex flex-col items-end space-y-2">
+            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${getHealthStatusColor(bull.healthStatus)}`}>
+              <Shield className="w-3 h-3 mr-1" />
+              {bull.healthStatus === "excellent" ? "Excelente" :
+               bull.healthStatus === "good" ? "Bueno" :
+               bull.healthStatus === "fair" ? "Regular" :
+               bull.healthStatus === "poor" ? "Malo" : "Cuarentena"}
+            </span>
+            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${getReproductiveStatusColor(bull.reproductiveStatus)}`}>
+              <Zap className="w-3 h-3 mr-1" />
+              {bull.reproductiveStatus === "active" ? "Activo" :
+               bull.reproductiveStatus === "resting" ? "Descanso" :
+               bull.reproductiveStatus === "retired" ? "Retirado" : "Prueba"}
+            </span>
+          </div>
         </div>
-      </div>
 
-      {/* Valor de adquisición */}
-      <div className="mb-4">
-        <p className="text-sm text-gray-600">Valor de adquisición</p>
-        <p className="text-lg font-bold text-[#519a7c]">{formatCurrency(bull.acquisition.cost)}</p>
-      </div>
+        {/* Información básica */}
+        <div className="grid grid-cols-2 gap-4 mb-4">
+          <div>
+            <p className="text-xs text-gray-500">Raza</p>
+            <p className="text-sm font-medium text-gray-900">{bull.breed}</p>
+          </div>
+          <div>
+            <p className="text-xs text-gray-500">Edad</p>
+            <p className="text-sm font-medium text-gray-900">{age} años</p>
+          </div>
+          <div>
+            <p className="text-xs text-gray-500">Peso</p>
+            <p className="text-sm font-medium text-gray-900">{bull.weight} kg</p>
+          </div>
+          <div>
+            <p className="text-xs text-gray-500">Ubicación</p>
+            <p className="text-sm font-medium text-gray-900">{bull.currentLocation.paddock}</p>
+          </div>
+        </div>
 
-      {/* Ubicación */}
-      <div className="flex items-center text-sm text-gray-600 mb-4">
-        <MapPin className="w-4 h-4 mr-1" />
-        <span>{bull.currentLocation.address}</span>
-      </div>
+        {/* Estadísticas de rendimiento */}
+        <div className="bg-gray-50 rounded-lg p-3 mb-4">
+          <h4 className="text-xs font-medium text-gray-600 mb-2">Rendimiento Reproductivo</h4>
+          <div className="grid grid-cols-2 gap-2 text-xs">
+            <div>
+              <span className="text-gray-500">Total Montas:</span>
+              <span className="font-medium ml-1">{bull.performance.totalMating}</span>
+            </div>
+            <div>
+              <span className="text-gray-500">Exitosas:</span>
+              <span className="font-medium ml-1">{bull.performance.successfulMating}</span>
+            </div>
+            <div>
+              <span className="text-gray-500">Crías:</span>
+              <span className="font-medium ml-1">{bull.performance.offspring}</span>
+            </div>
+            <div>
+              <span className="text-gray-500">Tasa Preñez:</span>
+              <span className="font-medium ml-1">{bull.performance.pregnancyRate}%</span>
+            </div>
+          </div>
+        </div>
 
-      {/* Estado activo */}
-      <div className="flex items-center justify-between mb-4">
-        <span className="text-sm text-gray-600">Estado:</span>
-        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-          bull.active ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"
-        }`}>
-          {bull.active ? <UserCheck className="w-3 h-3 mr-1" /> : <UserX className="w-3 h-3 mr-1" />}
-          {bull.active ? "Activo" : "Inactivo"}
-        </span>
-      </div>
+        {/* Acciones */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-2">
+            <button
+              onClick={() => setSelectedBull(bull)}
+              className="p-2 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+              title="Ver detalles"
+            >
+              <Eye className="w-4 h-4" />
+            </button>
+            <button
+              onClick={() => setEditingBull(bull)}
+              className="p-2 text-gray-600 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors"
+              title="Editar"
+            >
+              <Edit className="w-4 h-4" />
+            </button>
+            <button
+              onClick={() => {/* Función para eliminar */}}
+              className="p-2 text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+              title="Eliminar"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
+          </div>
+          <div className="flex items-center space-x-1">
+            <MapPin className="w-4 h-4 text-gray-400" />
+            <span className="text-xs text-gray-500">{bull.currentLocation.address.split(',')[0]}</span>
+          </div>
+        </div>
+      </motion.div>
+    );
+  };
 
-      {/* Acciones */}
-      <div className="flex justify-end space-x-2">
-        <button
-          onClick={() => setSelectedBull(bull)}
-          className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-          title="Ver detalles"
-        >
-          <Eye className="w-4 h-4" />
-        </button>
-        <button
-          onClick={() => {
-            setBullFormData(bull);
-            setShowBullForm(true);
-          }}
-          className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
-          title="Editar"
-        >
-          <Edit className="w-4 h-4" />
-        </button>
-        <button
-          onClick={() => {
-            setMatingFilters(prev => ({ ...prev, bullId: bull.id }));
-            setActiveTab("mating");
-          }}
-          className="p-2 text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
-          title="Ver empadres"
-        >
-          <Heart className="w-4 h-4" />
-        </button>
-        <button
-          onClick={() => {
-            if (confirm("¿Estás seguro de que quieres eliminar este toro?")) {
-              setBulls(prev => prev.filter(b => b.id !== bull.id));
-            }
-          }}
-          className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-          title="Eliminar"
-        >
-          <Trash2 className="w-4 h-4" />
-        </button>
-      </div>
-    </motion.div>
-  );
-
-  // Componente de fila de tabla de empadre
+  // Componente de fila de empadre
   const MatingRow: React.FC<{ record: MatingRecord }> = ({ record }) => (
-    <motion.tr
-      variants={itemVariants}
-      className="bg-white/95 backdrop-blur-sm hover:bg-gray-50 transition-colors border-b border-gray-200"
-    >
-      <td className="px-6 py-4 whitespace-nowrap">
-        <div className="flex items-center">
-          <Crown className="w-5 h-5 text-yellow-600 mr-2" />
+    <tr className="hover:bg-gray-50 transition-colors">
+      <td className="px-6 py-4">
+        <div className="flex items-center space-x-3">
+          <Crown className="w-5 h-5 text-yellow-600" />
           <div>
-            <div className="text-sm font-medium text-gray-900">{record.bullName}</div>
-            <div className="text-sm text-gray-500">ID: {record.bullId}</div>
+            <p className="text-sm font-medium text-gray-900">{record.bullName}</p>
+            <p className="text-xs text-gray-500">ID: {record.bullId}</p>
           </div>
         </div>
       </td>
-      <td className="px-6 py-4 whitespace-nowrap">
+      <td className="px-6 py-4">
         <div>
-          <div className="text-sm font-medium text-gray-900">{record.cowName}</div>
-          <div className="text-sm text-gray-500">Arete: {record.cowEarTag}</div>
+          <p className="text-sm font-medium text-gray-900">{record.cowName}</p>
+          <p className="text-xs text-gray-500">Arete: {record.cowEarTag}</p>
         </div>
       </td>
-      <td className="px-6 py-4 whitespace-nowrap">
-        <div className="text-sm text-gray-900">{formatDate(record.matingDate)}</div>
-        <div className="text-sm text-gray-500">{record.matingTime}</div>
+      <td className="px-6 py-4">
+        <div>
+          <p className="text-sm font-medium text-gray-900">
+            {new Date(record.matingDate).toLocaleDateString('es-MX')}
+          </p>
+          <p className="text-xs text-gray-500">{record.matingTime}</p>
+        </div>
       </td>
-      <td className="px-6 py-4 whitespace-nowrap">
+      <td className="px-6 py-4">
         <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
           record.matingType === "natural" ? "bg-green-100 text-green-800" :
           record.matingType === "artificial" ? "bg-blue-100 text-blue-800" :
           "bg-purple-100 text-purple-800"
         }`}>
-          {record.matingType === "natural" ? "Natural" :
-           record.matingType === "artificial" ? "Artificial" : "Transferencia"}
+          {record.matingType === "natural" ? (
+            <>
+              <Heart className="w-3 h-3 mr-1" />
+              Natural
+            </>
+          ) : record.matingType === "artificial" ? (
+            <>
+              <Syringe className="w-3 h-3 mr-1" />
+              Artificial
+            </>
+          ) : (
+            <>
+              <Microscope className="w-3 h-3 mr-1" />
+              Transferencia
+            </>
+          )}
         </span>
       </td>
-      <td className="px-6 py-4 whitespace-nowrap">
-        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-          record.pregnancyResult === "pregnant" ? "bg-green-100 text-green-800" :
-          record.pregnancyResult === "not_pregnant" ? "bg-red-100 text-red-800" :
-          "bg-yellow-100 text-yellow-800"
-        }`}>
-          {record.pregnancyResult === "pregnant" ? "Embarazada" :
-           record.pregnancyResult === "not_pregnant" ? "No embarazada" : "Pendiente"}
+      <td className="px-6 py-4">
+        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${getPregnancyResultColor(record.pregnancyResult)}`}>
+          {record.pregnancyResult === "pregnant" ? (
+            <>
+              <CheckCircle className="w-3 h-3 mr-1" />
+              Preñada
+            </>
+          ) : record.pregnancyResult === "not_pregnant" ? (
+            <>
+              <XCircle className="w-3 h-3 mr-1" />
+              No Preñada
+            </>
+          ) : (
+            <>
+              <Timer className="w-3 h-3 mr-1" />
+              Pendiente
+            </>
+          )}
         </span>
       </td>
-      <td className="px-6 py-4 whitespace-nowrap">
-        <div className="text-sm text-gray-900">{record.location.paddock}</div>
+      <td className="px-6 py-4">
+        <div className="flex items-center space-x-1">
+          <MapPinIcon className="w-4 h-4 text-gray-400" />
+          <span className="text-sm text-gray-600">{record.location.paddock}</span>
+        </div>
       </td>
-      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-        <div className="flex space-x-2">
+      <td className="px-6 py-4 text-right">
+        <div className="flex items-center justify-end space-x-2">
           <button
-            onClick={() => setSelectedMatingRecord(record)}
-            className="text-blue-600 hover:text-blue-900"
+            onClick={() => setSelectedMating(record)}
+            className="p-1 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
             title="Ver detalles"
           >
             <Eye className="w-4 h-4" />
           </button>
           <button
-            onClick={() => {
-              setMatingFormData(record);
-              setShowMatingForm(true);
-            }}
-            className="text-green-600 hover:text-green-900"
+            onClick={() => setEditingMating(record)}
+            className="p-1 text-gray-600 hover:text-green-600 hover:bg-green-50 rounded transition-colors"
             title="Editar"
           >
             <Edit className="w-4 h-4" />
           </button>
           <button
-            onClick={() => {
-              if (confirm("¿Estás seguro de que quieres eliminar este registro?")) {
-                setMatingRecords(prev => prev.filter(m => m.id !== record.id));
-              }
-            }}
-            className="text-red-600 hover:text-red-900"
+            onClick={() => {/* Función para eliminar */}}
+            className="p-1 text-gray-600 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
             title="Eliminar"
           >
             <Trash2 className="w-4 h-4" />
           </button>
         </div>
       </td>
-    </motion.tr>
+    </tr>
   );
 
-  // Componente de carga
-  const LoadingSpinner: React.FC = () => (
-    <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-[#519a7c] via-[#f2e9d8] to-[#f4ac3a]">
-      <motion.div
-        animate={{ rotate: 360 }}
-        transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-        className="w-16 h-16 border-4 border-white/30 border-t-white rounded-full"
-      />
-    </div>
-  );
-
+  // Pantalla de carga
   if (isLoading) {
-    return <LoadingSpinner />;
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-[#519a7c] via-[#f2e9d8] to-[#f4ac3a] flex items-center justify-center">
+        <motion.div
+          className="bg-white/90 backdrop-blur-sm rounded-2xl p-8 shadow-xl"
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.5 }}
+        >
+          <div className="flex flex-col items-center space-y-4">
+            <motion.div
+              className="w-12 h-12 border-4 border-[#519a7c] border-t-transparent rounded-full"
+              animate={{ rotate: 360 }}
+              transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+            />
+            <p className="text-gray-600 font-medium">Cargando gestión de toros...</p>
+          </div>
+        </motion.div>
+      </div>
+    );
   }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#519a7c] via-[#f2e9d8] to-[#f4ac3a] p-6">
       <motion.div
+        className="max-w-7xl mx-auto"
         variants={containerVariants}
         initial="hidden"
         animate="visible"
-        className="max-w-7xl mx-auto"
       >
         {/* Header */}
-        <motion.div variants={itemVariants} className="mb-8">
-          <div className="flex flex-col md:flex-row md:items-center md:justify-between">
-            <div>
-              <h1 className="text-4xl font-bold text-white drop-shadow-sm mb-2">
-                Gestión de Toros
-              </h1>
-              <p className="text-white/90 text-lg">
-                Administración integral de toros reproductores y registros de empadre
-              </p>
+        <motion.div
+          className="bg-white/95 backdrop-blur-sm rounded-2xl shadow-xl p-6 mb-6 border border-white/20"
+          variants={itemVariants}
+        >
+          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+            <div className="flex items-center space-x-4">
+              <div className="w-12 h-12 bg-gradient-to-r from-[#519a7c] to-[#4e9c75] rounded-xl flex items-center justify-center">
+                <Crown className="w-6 h-6 text-white" />
+              </div>
+              <div>
+                <h1 className="text-3xl font-bold text-gray-900">
+                  <AnimatedText>Gestión de Toros y Empadre</AnimatedText>
+                </h1>
+                <p className="text-gray-600 mt-1">
+                  Control integral de toros reproductores y registros de empadre
+                </p>
+              </div>
             </div>
-            <div className="mt-4 md:mt-0 flex space-x-3">
+
+            <div className="flex items-center space-x-3">
               <button
-                onClick={() => setShowBullForm(true)}
-                className="inline-flex items-center px-6 py-3 bg-white/20 backdrop-blur-sm text-white rounded-xl hover:bg-white/30 transition-all duration-200 border border-white/20"
+                onClick={() => setShowFilters(!showFilters)}
+                className={`px-4 py-2 rounded-xl border-2 transition-all duration-200 flex items-center space-x-2 ${
+                  showFilters 
+                    ? "bg-[#519a7c] text-white border-[#519a7c]" 
+                    : "bg-white text-gray-700 border-gray-300 hover:border-[#519a7c]"
+                }`}
               >
-                <Plus className="w-5 h-5 mr-2" />
-                Nuevo Toro
+                <Filter className="w-4 h-4" />
+                <span>Filtros</span>
               </button>
-              <button className="inline-flex items-center px-6 py-3 bg-white/20 backdrop-blur-sm text-white rounded-xl hover:bg-white/30 transition-all duration-200 border border-white/20">
-                <Download className="w-5 h-5 mr-2" />
-                Exportar
+              <button
+                onClick={() => {/* Función para exportar */}}
+                className="px-4 py-2 bg-white text-gray-700 rounded-xl border-2 border-gray-300 hover:border-blue-400 transition-colors flex items-center space-x-2"
+              >
+                <Download className="w-4 h-4" />
+                <span>Exportar</span>
               </button>
             </div>
           </div>
-        </motion.div>
 
-        {/* Tabs */}
-        <motion.div variants={itemVariants} className="mb-8">
-          <div className="flex space-x-1 bg-white/20 backdrop-blur-sm rounded-xl p-1">
+          {/* Tabs */}
+          <div className="flex mt-6 border-b border-gray-200">
             <button
               onClick={() => setActiveTab("bulls")}
-              className={`flex-1 py-3 px-6 rounded-lg font-medium transition-all duration-200 ${
+              className={`px-6 py-3 font-medium text-sm border-b-2 transition-colors ${
                 activeTab === "bulls"
-                  ? "bg-white text-gray-900 shadow-lg"
-                  : "text-white hover:bg-white/10"
+                  ? "border-[#519a7c] text-[#519a7c]"
+                  : "border-transparent text-gray-500 hover:text-gray-700"
               }`}
             >
-              <Crown className="w-5 h-5 inline mr-2" />
-              Toros Reproductores
+              <div className="flex items-center space-x-2">
+                <Crown className="w-4 h-4" />
+                <span>Toros</span>
+              </div>
             </button>
             <button
               onClick={() => setActiveTab("mating")}
-              className={`flex-1 py-3 px-6 rounded-lg font-medium transition-all duration-200 ${
+              className={`px-6 py-3 font-medium text-sm border-b-2 transition-colors ${
                 activeTab === "mating"
-                  ? "bg-white text-gray-900 shadow-lg"
-                  : "text-white hover:bg-white/10"
+                  ? "border-[#519a7c] text-[#519a7c]"
+                  : "border-transparent text-gray-500 hover:text-gray-700"
               }`}
             >
-              <Heart className="w-5 h-5 inline mr-2" />
-              Tabla de Empadre
+              <div className="flex items-center space-x-2">
+                <Heart className="w-4 h-4" />
+                <span>Empadre</span>
+              </div>
             </button>
           </div>
         </motion.div>
 
-        {/* Contenido según el tab activo */}
+        {/* Contenido de tabs */}
         <AnimatePresence mode="wait">
-          {activeTab === "bulls" ? (
+          {activeTab === "bulls" && (
             <motion.div
               key="bulls"
-              initial={{ opacity: 0, x: -20 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: 20 }}
-              transition={{ duration: 0.3 }}
+              variants={containerVariants}
+              initial="hidden"
+              animate="visible"
+              exit="hidden"
+              className="space-y-6"
             >
               {/* Estadísticas de toros */}
-              <motion.div variants={itemVariants} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7 gap-6 mb-8">
+              <motion.div variants={itemVariants} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
                 <StatCard
-                  title="Total de Toros"
+                  title="Total Toros"
                   value={bullStatistics.total}
                   icon={<Crown className="w-8 h-8" />}
                   color="hover:bg-yellow-50"
@@ -1062,45 +1038,33 @@ const BullManagement: React.FC = () => {
                   color="hover:bg-green-50"
                 />
                 <StatCard
-                  title="Edad Promedio"
-                  value={`${bullStatistics.avgAge} años`}
-                  icon={<Clock className="w-8 h-8" />}
-                  color="hover:bg-blue-50"
-                />
-                <StatCard
                   title="Peso Promedio"
                   value={`${bullStatistics.avgWeight} kg`}
                   icon={<Scale className="w-8 h-8" />}
-                  color="hover:bg-purple-50"
+                  color="hover:bg-blue-50"
                 />
                 <StatCard
-                  title="Total Crías"
-                  value={bullStatistics.totalOffspring}
-                  icon={<Users className="w-8 h-8" />}
-                  color="hover:bg-pink-50"
+                  title="Edad Promedio"
+                  value={`${bullStatistics.avgAge} años`}
+                  icon={<Clock className="w-8 h-8" />}
+                  color="hover:bg-purple-50"
                 />
                 <StatCard
                   title="Tasa Preñez Prom."
                   value={`${bullStatistics.avgPregnancyRate}%`}
-                  icon={<Target className="w-8 h-8" />}
-                  color="hover:bg-indigo-50"
-                />
-                <StatCard
-                  title="Inversión Total"
-                  value={formatCurrency(bullStatistics.totalInvestment)}
                   icon={<TrendingUp className="w-8 h-8" />}
                   color="hover:bg-orange-50"
                 />
               </motion.div>
 
-              {/* Controles de búsqueda y filtros para toros */}
-              <motion.div variants={itemVariants} className="bg-white/95 backdrop-blur-sm rounded-xl p-6 shadow-lg border border-white/20 mb-6">
+              {/* Controles para toros */}
+              <motion.div variants={itemVariants} className="bg-white/95 backdrop-blur-sm rounded-xl p-6 shadow-lg border border-white/20">
                 <div className="flex flex-col md:flex-row md:items-center md:justify-between space-y-4 md:space-y-0">
                   <div className="relative flex-1 md:max-w-md">
                     <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
                     <input
                       type="text"
-                      placeholder="Buscar por nombre, arete, raza..."
+                      placeholder="Buscar por nombre, arete, registro..."
                       value={bullFilters.searchTerm}
                       onChange={(e) =>
                         setBullFilters(prev => ({ ...prev, searchTerm: e.target.value }))
@@ -1110,25 +1074,20 @@ const BullManagement: React.FC = () => {
                   </div>
                   <div className="flex items-center space-x-3">
                     <button
-                      onClick={() => setShowFilters(!showFilters)}
-                      className={`inline-flex items-center px-4 py-2 rounded-lg transition-colors ${
-                        showFilters
-                          ? "bg-[#519a7c] text-white"
-                          : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                      }`}
+                      onClick={() => setShowBullForm(true)}
+                      className="inline-flex items-center px-4 py-2 bg-[#519a7c] text-white rounded-lg hover:bg-[#4a8970] transition-colors"
                     >
-                      <Filter className="w-4 h-4 mr-2" />
-                      Filtros
-                      {showFilters ? <ChevronUp className="w-4 h-4 ml-1" /> : <ChevronDown className="w-4 h-4 ml-1" />}
+                      <Plus className="w-4 h-4 mr-2" />
+                      Nuevo Toro
                     </button>
                   </div>
                 </div>
               </motion.div>
 
-              {/* Lista de toros */}
+              {/* Grid de toros */}
               <motion.div variants={itemVariants}>
                 {filteredBulls.length === 0 ? (
-                  <div className="bg-white/95 backdrop-blur-sm rounded-xl p-12 shadow-lg border border-white/20 text-center">
+                  <div className="bg-white/95 backdrop-blur-sm rounded-xl p-12 text-center shadow-lg border border-white/20">
                     <Crown className="w-16 h-16 text-gray-400 mx-auto mb-4" />
                     <h3 className="text-xl font-semibold text-gray-900 mb-2">
                       No se encontraron toros
@@ -1145,7 +1104,7 @@ const BullManagement: React.FC = () => {
                     </button>
                   </div>
                 ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
                     {filteredBulls.map((bull) => (
                       <BullCard key={bull.id} bull={bull} />
                     ))}
@@ -1153,21 +1112,24 @@ const BullManagement: React.FC = () => {
                 )}
               </motion.div>
             </motion.div>
-          ) : (
+          )}
+
+          {activeTab === "mating" && (
             <motion.div
               key="mating"
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -20 }}
-              transition={{ duration: 0.3 }}
+              variants={containerVariants}
+              initial="hidden"
+              animate="visible"
+              exit="hidden"
+              className="space-y-6"
             >
               {/* Estadísticas de empadre */}
-              <motion.div variants={itemVariants} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7 gap-6 mb-8">
+              <motion.div variants={itemVariants} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-6">
                 <StatCard
                   title="Total Empadres"
                   value={matingStatistics.total}
                   icon={<Heart className="w-8 h-8" />}
-                  color="hover:bg-red-50"
+                  color="hover:bg-pink-50"
                 />
                 <StatCard
                   title="Exitosos"
@@ -1194,12 +1156,6 @@ const BullManagement: React.FC = () => {
                   color="hover:bg-blue-50"
                 />
                 <StatCard
-                  title="Tasa de Preñez"
-                  value={`${matingStatistics.pregnancyRate}%`}
-                  icon={<TrendingUp className="w-8 h-8" />}
-                  color="hover:bg-indigo-50"
-                />
-                <StatCard
                   title="Este Mes"
                   value={matingStatistics.thisMonth}
                   icon={<Calendar className="w-8 h-8" />}
@@ -1208,7 +1164,7 @@ const BullManagement: React.FC = () => {
               </motion.div>
 
               {/* Controles para tabla de empadre */}
-              <motion.div variants={itemVariants} className="bg-white/95 backdrop-blur-sm rounded-xl p-6 shadow-lg border border-white/20 mb-6">
+              <motion.div variants={itemVariants} className="bg-white/95 backdrop-blur-sm rounded-xl p-6 shadow-lg border border-white/20">
                 <div className="flex flex-col md:flex-row md:items-center md:justify-between space-y-4 md:space-y-0">
                   <div className="relative flex-1 md:max-w-md">
                     <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
@@ -1293,6 +1249,10 @@ const BullManagement: React.FC = () => {
             </motion.div>
           )}
         </AnimatePresence>
+
+        {/* Modales y formularios serían implementados aquí */}
+        {/* FormModal components would go here for create/edit operations */}
+        
       </motion.div>
     </div>
   );
