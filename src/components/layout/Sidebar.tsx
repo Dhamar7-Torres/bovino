@@ -778,13 +778,6 @@ const Sidebar: React.FC<SidebarProps> = ({
               icon: Bell,
               color: "text-[#4e9c75]",
             },
-            {
-              id: "system-preferences",
-              title: "Preferencias del Sistema",
-              href: "/settings/system-preferences",
-              icon: Settings,
-              color: "text-[#4e9c75]",
-            },
           ],
         },
       ],

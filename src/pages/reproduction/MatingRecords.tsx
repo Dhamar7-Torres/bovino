@@ -1,1516 +1,2017 @@
-import React, { useState, useEffect } from 'react';
-import { motion, AnimatePresence, Variants } from 'framer-motion';
-import { Calendar, MapPin, Beef, User, Heart, Clock, CheckCircle, AlertCircle, Plus, Search, Edit, Trash2, Eye, X, Save } from 'lucide-react';
+// MatingRecords.tsx
+// CRUD completo para gestión de registros de apareamiento bovino
+// Sistema de gestión ganadera - Universidad Juárez Autónoma de Tabasco (UJAT)
 
-// Función utility para clases CSS
-const cn = (...classes: (string | undefined)[]) => {
-  return classes.filter(Boolean).join(' ');
+import React, { useState, useEffect, useMemo } from "react";
+import { motion, AnimatePresence, Variants } from "framer-motion";
+import {
+  Heart,
+  Plus,
+  Search,
+  Filter,
+  Eye,
+  Edit,
+  Trash2,
+  Download,
+  Clock,
+  CheckCircle,
+  XCircle,
+  AlertTriangle,
+  Activity,
+  FileText,
+  X,
+  ChevronDown,
+  ChevronUp,
+  Target,
+  Calendar,
+  User,
+  Save,
+  ArrowLeft,
+  MapPin,
+  Info,
+  Zap,
+  Crown,
+  Baby,
+  TestTube,
+  Thermometer,
+  Timer,
+  TrendingUp,
+  Award,
+  Droplets,
+} from "lucide-react";
+
+// Simulación de react-bits para animación de texto
+const AnimatedText: React.FC<{ children: string; className?: string }> = ({ 
+  children, 
+  className = "" 
+}) => {
+  return (
+    <motion.span
+      className={className}
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.6, ease: "easeOut" }}
+    >
+      {children.split("").map((char, index) => (
+        <motion.span
+          key={index}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ 
+            delay: index * 0.03,
+            duration: 0.3 
+          }}
+        >
+          {char}
+        </motion.span>
+      ))}
+    </motion.span>
+  );
 };
 
-
-// Interfaces específicas para el CRUD de Registros de Apareamiento
-interface MatingRecordsProps {
-  className?: string;
-}
-
+// Interfaces para registros de apareamiento
 interface MatingRecord {
   id: string;
-  
-  // Información de la hembra
-  female: {
-    id: string;
-    tag: string;
-    name: string;
-    breed: string;
-    age: number;
-    weight: number;
-    reproductiveStatus: string;
+  bullId: string;
+  bullName: string;
+  bullEarTag: string;
+  cowId: string;
+  cowName: string;
+  cowEarTag: string;
+  matingDate: string;
+  matingTime: string;
+  location: {
+    lat: number;
+    lng: number;
+    address: string;
+    paddock?: string;
+    environment: "field" | "barn" | "breeding_facility";
   };
-  
-  // Información del macho
-  male: {
-    id: string;
-    tag: string;
-    name: string;
-    breed: string;
-    age: number;
-    weight: number;
-    performance: {
-      libido: number; // 1-10
-      fertility: number; // porcentaje
-      offspring: number; // número de crías
+  matingType: "natural" | "artificial_insemination" | "embryo_transfer" | "synchronized";
+  method: "natural_service" | "hand_mating" | "pasture_breeding" | "controlled_breeding";
+  estrusDetection: {
+    detected: boolean;
+    detectionDate: string;
+    detectionTime: string;
+    intensity: "weak" | "moderate" | "strong";
+    signs: string[];
+    detectedBy: string;
+  };
+  technicalDetails: {
+    assistedBy: {
+      id: string;
+      name: string;
+      role: "veterinarian" | "technician" | "inseminator" | "staff";
+      certification?: string;
+    };
+    procedure: {
+      startTime: string;
+      endTime: string;
+      duration: number; // minutos
+      difficulty: "easy" | "moderate" | "difficult";
+      equipment: string[];
+    };
+    animalCondition: {
+      bullCondition: "excellent" | "good" | "fair" | "poor";
+      cowCondition: "excellent" | "good" | "fair" | "poor";
+      cowReceptivity: "very_receptive" | "receptive" | "reluctant" | "resistant";
+      stressLevel: "low" | "moderate" | "high";
     };
   };
-  
-  // Información del apareamiento
-  mating: {
-    date: Date;
-    time: string;
-    duration: number; // minutos
-    naturalBehavior: boolean;
-    assistanceRequired: boolean;
-    location: {
-      lat: number;
-      lng: number;
-      address: string;
-      sector: string;
-      potrero: string;
-      paddock: string;
-    };
-    weather: {
-      temperature: number;
-      humidity: number;
-      condition: string;
-    };
-  };
-  
-  // Condiciones y observaciones
-  conditions: {
-    femaleCondition: string;
-    maleCondition: string;
-    estrusStage: string;
-    matingScore: number; // 1-10
-    complications: string[];
-    supervision: {
-      supervisor: string;
-      veterinarian?: string;
-      assistants: string[];
-    };
-  };
-  
-  // Seguimiento post-apareamiento
   followUp: {
-    pregnancyCheck?: {
-      date: Date;
-      result: boolean;
-      method: string;
-      veterinarian: string;
+    pregnancyTestScheduled: boolean;
+    pregnancyTestDate?: string;
+    pregnancyTestMethod?: "palpation" | "ultrasound" | "blood_test";
+    pregnancyResult?: "pregnant" | "not_pregnant" | "questionable";
+    pregnancyConfirmDate?: string;
+    expectedCalvingDate?: string;
+    repeatBreeding?: {
+      scheduled: boolean;
+      nextDate?: string;
+      reason?: string;
     };
-    behaviorObservations: string[];
-    healthStatus: {
-      female: string;
-      male: string;
-    };
-    nextCheckDate?: Date;
   };
-  
-  // Costos y análisis económico
-  economics: {
-    matingCost: number;
-    supervisionCost: number;
-    veterinaryCost: number;
-    facilityUsage: number;
-    totalCost: number;
-    expectedValue: number; // valor esperado de la cría
+  environmentalFactors: {
+    temperature: number;
+    humidity: number;
+    weather: string;
+    moonPhase?: string;
+    timeOfDay: "early_morning" | "morning" | "afternoon" | "evening" | "night";
   };
-  
-  // Datos genéticos
-  genetics: {
-    pedigreeCompatibility: number; // 1-10
-    expectedTraits: string[];
-    breedingObjective: string;
-    geneticDiversity: number; // 1-10
-    inbreedingCoefficient: number;
-  };
-  
-  // Metadatos
   notes: string;
-  status: 'completed' | 'monitoring' | 'confirmed_pregnancy' | 'failed';
-  createdAt: Date;
-  updatedAt: Date;
-  createdBy: string;
+  cost: number;
+  status: "scheduled" | "in_progress" | "completed" | "failed" | "cancelled";
+  result?: "successful" | "unsuccessful" | "pending";
+  complications?: string[];
+  createdAt: string;
+  updatedAt: string;
 }
 
-interface FilterOptions {
-  dateRange: string;
-  supervisor: string;
-  sector: string;
-  pregnancyResult: string;
-  maleBreed: string;
-  femaleBreed: string;
+interface MatingFilters {
+  dateRange: {
+    start: string;
+    end: string;
+  };
+  matingType: string[];
+  status: string[];
+  result: string[];
+  bullId: string;
+  cowId: string;
+  assistedBy: string[];
+  location: string[];
+  searchTerm: string;
 }
 
-interface FormData {
-  femaleId?: string;
-  maleId?: string;
-  matingDate?: string;
-  matingTime?: string;
-  location?: string;
-  supervisor?: string;
-  notes?: string;
-}
-
-// Componente principal del CRUD de Registros de Apareamiento
-export const MatingRecords: React.FC<MatingRecordsProps> = ({ 
-  className 
-}) => {
-  // Estados del componente
+// Componente principal de Registros de Apareamiento
+const MatingRecords: React.FC = () => {
+  // Estados principales
   const [records, setRecords] = useState<MatingRecord[]>([]);
+  const [filteredRecords, setFilteredRecords] = useState<MatingRecord[]>([]);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [showForm, setShowForm] = useState<boolean>(false);
   const [selectedRecord, setSelectedRecord] = useState<MatingRecord | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [showCreateModal, setShowCreateModal] = useState(false);
-  const [showEditModal, setShowEditModal] = useState(false);
-  const [showViewModal, setShowViewModal] = useState(false);
+  const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
+  const [showFilters, setShowFilters] = useState<boolean>(false);
   const [editingRecord, setEditingRecord] = useState<MatingRecord | null>(null);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [filters, setFilters] = useState<FilterOptions>({
-    dateRange: 'month',
-    supervisor: 'all',
-    sector: 'all',
-    pregnancyResult: 'all',
-    maleBreed: 'all',
-    femaleBreed: 'all'
+  
+  // Estados para filtros
+  const [filters, setFilters] = useState<MatingFilters>({
+    dateRange: {
+      start: "",
+      end: "",
+    },
+    matingType: [],
+    status: [],
+    result: [],
+    bullId: "",
+    cowId: "",
+    assistedBy: [],
+    location: [],
+    searchTerm: "",
   });
 
-  // Estados para formulario de creación/edición
-  const [formData, setFormData] = useState<FormData>({});
+  // Estados para formulario
+  const [formData, setFormData] = useState<Partial<MatingRecord>>({
+    matingType: "natural",
+    method: "natural_service",
+    status: "scheduled",
+    cost: 0,
+    estrusDetection: {
+      detected: false,
+      detectionDate: "",
+      detectionTime: "",
+      intensity: "moderate",
+      signs: [],
+      detectedBy: "",
+    },
+    location: {
+      lat: 17.989,
+      lng: -92.247,
+      address: "Villahermosa, Tabasco",
+      environment: "field",
+    },
+    technicalDetails: {
+      assistedBy: {
+        id: "",
+        name: "",
+        role: "staff",
+      },
+      procedure: {
+        startTime: "",
+        endTime: "",
+        duration: 0,
+        difficulty: "easy",
+        equipment: [],
+      },
+      animalCondition: {
+        bullCondition: "good",
+        cowCondition: "good",
+        cowReceptivity: "receptive",
+        stressLevel: "low",
+      },
+    },
+    followUp: {
+      pregnancyTestScheduled: false,
+    },
+    environmentalFactors: {
+      temperature: 25,
+      humidity: 60,
+      weather: "",
+      timeOfDay: "morning",
+    },
+  });
 
-  // Datos de ejemplo para registros de apareamiento
+  // Datos de ejemplo para desarrollo
   const mockRecords: MatingRecord[] = [
     {
-      id: 'MT-001',
-      female: {
-        id: 'COW-F-156',
-        tag: 'F-TAG-0156',
-        name: 'Esperanza',
-        breed: 'Holstein',
-        age: 4,
-        weight: 450,
-        reproductiveStatus: 'En celo'
+      id: "mating-001",
+      bullId: "bull-001",
+      bullName: "Campeón",
+      bullEarTag: "T-001",
+      cowId: "cow-123",
+      cowName: "Bella",
+      cowEarTag: "MX-001",
+      matingDate: "2025-07-15",
+      matingTime: "07:30",
+      location: {
+        lat: 17.989,
+        lng: -92.247,
+        address: "Potrero Norte, Rancho San Miguel",
+        paddock: "Potrero 3",
+        environment: "field",
       },
-      male: {
-        id: 'BULL-M-001',
-        tag: 'M-TAG-001',
-        name: 'Campeón Real',
-        breed: 'Holstein',
-        age: 6,
-        weight: 850,
-        performance: {
-          libido: 9,
-          fertility: 85,
-          offspring: 47
-        }
+      matingType: "natural",
+      method: "natural_service",
+      estrusDetection: {
+        detected: true,
+        detectionDate: "2025-07-14",
+        detectionTime: "18:00",
+        intensity: "strong",
+        signs: ["Monta activa", "Vulva hinchada", "Moco claro", "Inquietud"],
+        detectedBy: "Miguel Hernández",
       },
-      mating: {
-        date: new Date('2025-07-15'),
-        time: '08:45',
-        duration: 12,
-        naturalBehavior: true,
-        assistanceRequired: false,
-        location: {
-          lat: 17.0732,
-          lng: -93.1451,
-          address: 'Potrero Norte, Paddock A1',
-          sector: 'Norte',
-          potrero: 'San José',
-          paddock: 'A1'
+      technicalDetails: {
+        assistedBy: {
+          id: "staff-001",
+          name: "Miguel Hernández",
+          role: "staff",
         },
-        weather: {
-          temperature: 24,
-          humidity: 68,
-          condition: 'Despejado'
-        }
-      },
-      conditions: {
-        femaleCondition: 'Excelente',
-        maleCondition: 'Excelente',
-        estrusStage: 'Estro óptimo',
-        matingScore: 9,
-        complications: [],
-        supervision: {
-          supervisor: 'Carlos Mendoza',
-          veterinarian: 'Dr. María González',
-          assistants: ['Juan Pérez', 'Ana López']
-        }
+        procedure: {
+          startTime: "07:30",
+          endTime: "07:45",
+          duration: 15,
+          difficulty: "easy",
+          equipment: ["Cuerda de manejo", "Collar de servicio"],
+        },
+        animalCondition: {
+          bullCondition: "excellent",
+          cowCondition: "excellent",
+          cowReceptivity: "very_receptive",
+          stressLevel: "low",
+        },
       },
       followUp: {
-        pregnancyCheck: {
-          date: new Date('2025-08-12'),
-          result: true,
-          method: 'Ultrasonido',
-          veterinarian: 'Dr. María González'
-        },
-        behaviorObservations: [
-          'Comportamiento normal post-apareamiento',
-          'No signos de estrés',
-          'Alimentación regular'
-        ],
-        healthStatus: {
-          female: 'Excelente',
-          male: 'Excelente'
-        },
-        nextCheckDate: new Date('2025-09-15')
+        pregnancyTestScheduled: true,
+        pregnancyTestDate: "2025-08-15",
+        pregnancyTestMethod: "ultrasound",
+        pregnancyResult: "pregnant",
+        pregnancyConfirmDate: "2025-08-15",
+        expectedCalvingDate: "2026-04-22",
       },
-      economics: {
-        matingCost: 150,
-        supervisionCost: 100,
-        veterinaryCost: 200,
-        facilityUsage: 50,
-        totalCost: 500,
-        expectedValue: 25000
+      environmentalFactors: {
+        temperature: 24,
+        humidity: 65,
+        weather: "Soleado, brisa ligera",
+        moonPhase: "Cuarto creciente",
+        timeOfDay: "early_morning",
       },
-      genetics: {
-        pedigreeCompatibility: 8,
-        expectedTraits: ['Alta producción lechera', 'Resistencia a enfermedades', 'Conformación corporal'],
-        breedingObjective: 'Mejoramiento genético para producción lechera',
-        geneticDiversity: 7,
-        inbreedingCoefficient: 0.05
-      },
-      notes: 'Apareamiento exitoso entre animales de alto valor genético. Excelente comportamiento natural.',
-      status: 'confirmed_pregnancy',
-      createdAt: new Date('2025-07-15'),
-      updatedAt: new Date('2025-08-12'),
-      createdBy: 'Carlos Mendoza'
+      notes: "Apareamiento natural exitoso. Vaca muy receptiva. Toro mostró excelente comportamiento. Sin complicaciones.",
+      cost: 800,
+      status: "completed",
+      result: "successful",
+      createdAt: "2025-07-15T07:30:00Z",
+      updatedAt: "2025-08-15T10:00:00Z",
     },
     {
-      id: 'MT-002',
-      female: {
-        id: 'COW-F-089',
-        tag: 'F-TAG-0089',
-        name: 'Marisol',
-        breed: 'Angus',
-        age: 3,
-        weight: 420,
-        reproductiveStatus: 'Celo moderado'
+      id: "mating-002",
+      bullId: "bull-002",
+      bullName: "Emperador",
+      bullEarTag: "T-002",
+      cowId: "cow-124",
+      cowName: "Luna",
+      cowEarTag: "MX-002",
+      matingDate: "2025-07-16",
+      matingTime: "08:15",
+      location: {
+        lat: 17.995,
+        lng: -92.255,
+        address: "Potrero Sur, Rancho San Miguel",
+        paddock: "Potrero 7",
+        environment: "barn",
       },
-      male: {
-        id: 'BULL-M-002',
-        tag: 'M-TAG-002',
-        name: 'Black Thunder',
-        breed: 'Angus',
-        age: 5,
-        weight: 900,
-        performance: {
-          libido: 8,
-          fertility: 78,
-          offspring: 32
-        }
+      matingType: "natural",
+      method: "hand_mating",
+      estrusDetection: {
+        detected: true,
+        detectionDate: "2025-07-15",
+        detectionTime: "16:30",
+        intensity: "moderate",
+        signs: ["Vulva ligeramente hinchada", "Inquietud leve"],
+        detectedBy: "Ana López",
       },
-      mating: {
-        date: new Date('2025-07-12'),
-        time: '15:30',
-        duration: 15,
-        naturalBehavior: true,
-        assistanceRequired: true,
-        location: {
-          lat: 17.0845,
-          lng: -93.1523,
-          address: 'Potrero Sur, Paddock B2',
-          sector: 'Sur',
-          potrero: 'Las Flores',
-          paddock: 'B2'
+      technicalDetails: {
+        assistedBy: {
+          id: "vet-001",
+          name: "Dr. García",
+          role: "veterinarian",
+          certification: "MVZ Reproductivo",
         },
-        weather: {
-          temperature: 26,
-          humidity: 72,
-          condition: 'Parcialmente nublado'
-        }
-      },
-      conditions: {
-        femaleCondition: 'Buena',
-        maleCondition: 'Buena',
-        estrusStage: 'Celo tardío',
-        matingScore: 7,
-        complications: ['Resistencia inicial de la hembra'],
-        supervision: {
-          supervisor: 'Miguel Rodríguez',
-          veterinarian: 'Dr. Pedro Martínez',
-          assistants: ['Carlos Ruiz']
-        }
+        procedure: {
+          startTime: "08:15",
+          endTime: "08:35",
+          duration: 20,
+          difficulty: "moderate",
+          equipment: ["Manga de manejo", "Nariguera", "Collar de servicio"],
+        },
+        animalCondition: {
+          bullCondition: "good",
+          cowCondition: "good",
+          cowReceptivity: "receptive",
+          stressLevel: "moderate",
+        },
       },
       followUp: {
-        pregnancyCheck: {
-          date: new Date('2025-08-09'),
-          result: false,
-          method: 'Palpación rectal',
-          veterinarian: 'Dr. Pedro Martínez'
-        },
-        behaviorObservations: [
-          'Comportamiento ligeramente estresado inicialmente',
-          'Normalización después de 24 horas',
-          'Alimentación regular'
-        ],
-        healthStatus: {
-          female: 'Buena',
-          male: 'Excelente'
-        },
-        nextCheckDate: new Date('2025-08-25')
+        pregnancyTestScheduled: true,
+        pregnancyTestDate: "2025-08-16",
+        pregnancyTestMethod: "palpation",
+        pregnancyResult: "pending",
       },
-      economics: {
-        matingCost: 150,
-        supervisionCost: 120,
-        veterinaryCost: 180,
-        facilityUsage: 50,
-        totalCost: 500,
-        expectedValue: 20000
+      environmentalFactors: {
+        temperature: 26,
+        humidity: 70,
+        weather: "Nublado, sin viento",
+        moonPhase: "Cuarto creciente",
+        timeOfDay: "morning",
       },
-      genetics: {
-        pedigreeCompatibility: 7,
-        expectedTraits: ['Carne de calidad', 'Resistencia al clima', 'Crecimiento rápido'],
-        breedingObjective: 'Mejoramiento para producción cárnica',
-        geneticDiversity: 6,
-        inbreedingCoefficient: 0.08
-      },
-      notes: 'Apareamiento con asistencia debido a resistencia inicial. No resultó en gestación.',
-      status: 'failed',
-      createdAt: new Date('2025-07-12'),
-      updatedAt: new Date('2025-08-09'),
-      createdBy: 'Miguel Rodríguez'
+      notes: "Apareamiento controlado en corral. Se requirió ligera asistencia para posicionamiento. Vaca mostró receptividad moderada.",
+      cost: 1200,
+      status: "completed",
+      result: "pending",
+      createdAt: "2025-07-16T08:15:00Z",
+      updatedAt: "2025-07-16T08:35:00Z",
     },
     {
-      id: 'MT-003',
-      female: {
-        id: 'COW-F-203',
-        tag: 'F-TAG-0203',
-        name: 'Paloma',
-        breed: 'Charolais',
-        age: 5,
-        weight: 520,
-        reproductiveStatus: 'Celo intenso'
+      id: "mating-003",
+      bullId: "bull-003",
+      bullName: "Titán",
+      bullEarTag: "T-003",
+      cowId: "cow-125",
+      cowName: "Esperanza",
+      cowEarTag: "MX-003",
+      matingDate: "2025-07-18",
+      matingTime: "09:00",
+      location: {
+        lat: 17.992,
+        lng: -92.250,
+        address: "Área de Reproducción, Rancho San Miguel",
+        paddock: "Corral de Servicio",
+        environment: "breeding_facility",
       },
-      male: {
-        id: 'BULL-M-003',
-        tag: 'M-TAG-003',
-        name: 'Golden King',
-        breed: 'Charolais',
-        age: 7,
-        weight: 950,
-        performance: {
-          libido: 9,
-          fertility: 82,
-          offspring: 55
-        }
+      matingType: "synchronized",
+      method: "controlled_breeding",
+      estrusDetection: {
+        detected: true,
+        detectionDate: "2025-07-17",
+        detectionTime: "14:00",
+        intensity: "strong",
+        signs: ["Estro sincronizado", "Vulva hinchada", "Moco abundante"],
+        detectedBy: "Dr. García",
       },
-      mating: {
-        date: new Date('2025-07-10'),
-        time: '10:15',
-        duration: 18,
-        naturalBehavior: true,
-        assistanceRequired: false,
-        location: {
-          lat: 17.0698,
-          lng: -93.1389,
-          address: 'Potrero Este, Paddock C3',
-          sector: 'Este',
-          potrero: 'El Roble',
-          paddock: 'C3'
+      technicalDetails: {
+        assistedBy: {
+          id: "vet-001",
+          name: "Dr. García",
+          role: "veterinarian",
+          certification: "MVZ Reproductivo",
         },
-        weather: {
-          temperature: 22,
-          humidity: 65,
-          condition: 'Lluvia ligera'
-        }
-      },
-      conditions: {
-        femaleCondition: 'Excelente',
-        maleCondition: 'Excelente',
-        estrusStage: 'Estro intenso',
-        matingScore: 10,
-        complications: [],
-        supervision: {
-          supervisor: 'Carlos Mendoza',
-          veterinarian: 'Dr. Ana Morales',
-          assistants: ['Luis García', 'María Fernández']
-        }
+        procedure: {
+          startTime: "09:00",
+          endTime: "09:10",
+          duration: 10,
+          difficulty: "easy",
+          equipment: ["Protocolo IATF", "Hormonas", "Equipos de sincronización"],
+        },
+        animalCondition: {
+          bullCondition: "excellent",
+          cowCondition: "excellent",
+          cowReceptivity: "very_receptive",
+          stressLevel: "low",
+        },
       },
       followUp: {
-        behaviorObservations: [
-          'Comportamiento excelente post-apareamiento',
-          'Signos positivos de gestación',
-          'Alimentación incrementada'
-        ],
-        healthStatus: {
-          female: 'Excelente',
-          male: 'Excelente'
-        },
-        nextCheckDate: new Date('2025-08-07')
+        pregnancyTestScheduled: true,
+        pregnancyTestDate: "2025-08-18",
+        pregnancyTestMethod: "ultrasound",
       },
-      economics: {
-        matingCost: 200,
-        supervisionCost: 150,
-        veterinaryCost: 250,
-        facilityUsage: 75,
-        totalCost: 675,
-        expectedValue: 30000
+      environmentalFactors: {
+        temperature: 23,
+        humidity: 55,
+        weather: "Fresco, ideal para reproducción",
+        moonPhase: "Luna llena",
+        timeOfDay: "morning",
       },
-      genetics: {
-        pedigreeCompatibility: 9,
-        expectedTraits: ['Crecimiento superior', 'Musculatura excepcional', 'Resistencia'],
-        breedingObjective: 'Línea de élite para reproducción',
-        geneticDiversity: 8,
-        inbreedingCoefficient: 0.03
-      },
-      notes: 'Apareamiento de élite entre animales de alto valor genético. Resultados esperados excelentes.',
-      status: 'monitoring',
-      createdAt: new Date('2025-07-10'),
-      updatedAt: new Date('2025-07-10'),
-      createdBy: 'Carlos Mendoza'
-    }
+      notes: "Programa de sincronización de estros exitoso. Condiciones ideales para apareamiento. Animal en protocolo IATF.",
+      cost: 2500,
+      status: "scheduled",
+      result: "pending",
+      createdAt: "2025-07-17T14:00:00Z",
+      updatedAt: "2025-07-17T14:00:00Z",
+    },
   ];
 
-  // Efectos del componente
-  useEffect(() => {
-    // Simular carga de datos
-    const timer = setTimeout(() => {
-      setRecords(mockRecords);
-      setIsLoading(false);
-    }, 1200);
-
-    return () => clearTimeout(timer);
-  }, []);
-
-  // Variantes de animación para Framer Motion
+  // Variantes de animación
   const containerVariants: Variants = {
-    hidden: { opacity: 0 },
+    hidden: { opacity: 0, y: 20 },
     visible: {
       opacity: 1,
+      y: 0,
       transition: {
-        delayChildren: 0.2,
-        staggerChildren: 0.1
-      }
-    }
+        duration: 0.6,
+        staggerChildren: 0.1,
+      },
+    },
   };
 
   const itemVariants: Variants = {
-    hidden: { y: 20, opacity: 0 },
+    hidden: { opacity: 0, y: 20 },
     visible: {
-      y: 0,
       opacity: 1,
-      transition: {
-        duration: 0.5,
-        ease: "easeOut"
-      }
-    }
+      y: 0,
+      transition: { duration: 0.4 },
+    },
   };
 
-  const modalVariants: Variants = {
-    hidden: { opacity: 0, scale: 0.8 },
-    visible: { 
-      opacity: 1, 
-      scale: 1,
-      transition: { duration: 0.3, ease: "easeOut" }
-    },
-    exit: { 
-      opacity: 0, 
-      scale: 0.8,
-      transition: { duration: 0.2 }
+  // Cargar datos iniciales
+  useEffect(() => {
+    const loadData = async () => {
+      setIsLoading(true);
+      try {
+        // Simular carga de datos
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        setRecords(mockRecords);
+        setFilteredRecords(mockRecords);
+      } catch (error) {
+        console.error("Error cargando datos:", error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadData();
+  }, []);
+
+  // Aplicar filtros a los registros
+  useEffect(() => {
+    let filtered = records;
+
+    // Filtro de búsqueda por texto
+    if (filters.searchTerm) {
+      filtered = filtered.filter(record =>
+        record.bullName.toLowerCase().includes(filters.searchTerm.toLowerCase()) ||
+        record.cowName.toLowerCase().includes(filters.searchTerm.toLowerCase()) ||
+        record.bullEarTag.toLowerCase().includes(filters.searchTerm.toLowerCase()) ||
+        record.cowEarTag.toLowerCase().includes(filters.searchTerm.toLowerCase()) ||
+        record.technicalDetails.assistedBy.name.toLowerCase().includes(filters.searchTerm.toLowerCase())
+      );
     }
-  };
+
+    // Filtro por tipo de apareamiento
+    if (filters.matingType.length > 0) {
+      filtered = filtered.filter(record => filters.matingType.includes(record.matingType));
+    }
+
+    // Filtro por estado
+    if (filters.status.length > 0) {
+      filtered = filtered.filter(record => filters.status.includes(record.status));
+    }
+
+    // Filtro por resultado
+    if (filters.result.length > 0) {
+      filtered = filtered.filter(record => 
+        record.result && filters.result.includes(record.result)
+      );
+    }
+
+    // Filtro por toro específico
+    if (filters.bullId) {
+      filtered = filtered.filter(record => record.bullId === filters.bullId);
+    }
+
+    // Filtro por vaca específica
+    if (filters.cowId) {
+      filtered = filtered.filter(record => record.cowId === filters.cowId);
+    }
+
+    // Filtro por rango de fechas
+    if (filters.dateRange.start && filters.dateRange.end) {
+      filtered = filtered.filter(record => {
+        const recordDate = new Date(record.matingDate);
+        const startDate = new Date(filters.dateRange.start);
+        const endDate = new Date(filters.dateRange.end);
+        return recordDate >= startDate && recordDate <= endDate;
+      });
+    }
+
+    setFilteredRecords(filtered);
+  }, [records, filters]);
+
+  // Estadísticas calculadas
+  const stats = useMemo(() => {
+    const total = records.length;
+    const completed = records.filter(r => r.status === "completed").length;
+    const successful = records.filter(r => r.result === "successful").length;
+    const pregnant = records.filter(r => r.followUp.pregnancyResult === "pregnant").length;
+    const successRate = completed > 0 ? ((successful / completed) * 100).toFixed(1) : "0";
+    const pregnancyRate = completed > 0 ? ((pregnant / completed) * 100).toFixed(1) : "0";
+
+    return {
+      total,
+      completed,
+      successful,
+      pregnant,
+      successRate: `${successRate}%`,
+      pregnancyRate: `${pregnancyRate}%`,
+      scheduled: records.filter(r => r.status === "scheduled").length,
+      pending: records.filter(r => r.result === "pending").length,
+    };
+  }, [records]);
 
   // Funciones CRUD
-  const handleCreate = () => {
-    setFormData({});
-    setEditingRecord(null);
-    setShowCreateModal(true);
+
+  // Crear nuevo registro
+  const handleCreate = (data: Partial<MatingRecord>) => {
+    const newRecord: MatingRecord = {
+      id: `mating-${Date.now()}`,
+      bullId: data.bullId || "",
+      bullName: data.bullName || "",
+      bullEarTag: data.bullEarTag || "",
+      cowId: data.cowId || "",
+      cowName: data.cowName || "",
+      cowEarTag: data.cowEarTag || "",
+      matingDate: data.matingDate || new Date().toISOString().split('T')[0],
+      matingTime: data.matingTime || new Date().toTimeString().slice(0, 5),
+      location: data.location || {
+        lat: 17.989,
+        lng: -92.247,
+        address: "Villahermosa, Tabasco",
+        environment: "field",
+      },
+      matingType: data.matingType || "natural",
+      method: data.method || "natural_service",
+      estrusDetection: data.estrusDetection || {
+        detected: false,
+        detectionDate: "",
+        detectionTime: "",
+        intensity: "moderate",
+        signs: [],
+        detectedBy: "",
+      },
+      technicalDetails: data.technicalDetails || {
+        assistedBy: {
+          id: "",
+          name: "",
+          role: "staff",
+        },
+        procedure: {
+          startTime: "",
+          endTime: "",
+          duration: 0,
+          difficulty: "easy",
+          equipment: [],
+        },
+        animalCondition: {
+          bullCondition: "good",
+          cowCondition: "good",
+          cowReceptivity: "receptive",
+          stressLevel: "low",
+        },
+      },
+      followUp: data.followUp || {
+        pregnancyTestScheduled: false,
+      },
+      environmentalFactors: data.environmentalFactors || {
+        temperature: 25,
+        humidity: 60,
+        weather: "",
+        timeOfDay: "morning",
+      },
+      notes: data.notes || "",
+      cost: data.cost || 0,
+      status: data.status || "scheduled",
+      result: data.result,
+      complications: data.complications,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    setRecords(prev => [newRecord, ...prev]);
+    setShowForm(false);
+    resetForm();
   };
 
-  const handleEdit = (record: MatingRecord) => {
-    setEditingRecord(record);
+  // Actualizar registro existente
+  const handleUpdate = (id: string, data: Partial<MatingRecord>) => {
+    setRecords(prev => prev.map(record => 
+      record.id === id 
+        ? { ...record, ...data, updatedAt: new Date().toISOString() }
+        : record
+    ));
+    setEditingRecord(null);
+    setShowForm(false);
+    resetForm();
+  };
+
+  // Eliminar registro
+  const handleDelete = (id: string) => {
+    if (window.confirm("¿Está seguro de que desea eliminar este registro de apareamiento?")) {
+      setRecords(prev => prev.filter(record => record.id !== id));
+    }
+  };
+
+  // Resetear formulario
+  const resetForm = () => {
     setFormData({
-      femaleId: record.female.id,
-      maleId: record.male.id,
-      matingDate: record.mating.date.toISOString().split('T')[0],
-      matingTime: record.mating.time,
-      location: record.mating.location.address,
-      supervisor: record.conditions.supervision.supervisor,
-      notes: record.notes
-    });
-    setShowEditModal(true);
-  };
-
-  const handleView = (record: MatingRecord) => {
-    setSelectedRecord(record);
-    setShowViewModal(true);
-  };
-
-  const handleDelete = (recordId: string) => {
-    if (window.confirm('¿Estás seguro de que deseas eliminar este registro de apareamiento?')) {
-      setRecords(records.filter(record => record.id !== recordId));
-    }
-  };
-
-  const handleSave = () => {
-    if (editingRecord) {
-      // Actualizar registro existente
-      const updatedRecord = {
-        ...editingRecord,
-        // Actualizar campos editables
-        notes: formData.notes || editingRecord.notes,
-        updatedAt: new Date()
-      };
-      
-      setRecords(records.map(record => 
-        record.id === editingRecord.id ? updatedRecord : record
-      ));
-      setShowEditModal(false);
-    } else {
-      // Crear nuevo registro - simplificado para demostración
-      const newRecord: MatingRecord = {
-        id: `MT-${Date.now()}`,
-        female: {
-          id: formData.femaleId || 'COW-NEW',
-          tag: 'NEW-TAG',
-          name: 'Nueva Hembra',
-          breed: 'Holstein',
-          age: 3,
-          weight: 400,
-          reproductiveStatus: 'En celo'
+      matingType: "natural",
+      method: "natural_service",
+      status: "scheduled",
+      cost: 0,
+      estrusDetection: {
+        detected: false,
+        detectionDate: "",
+        detectionTime: "",
+        intensity: "moderate",
+        signs: [],
+        detectedBy: "",
+      },
+      location: {
+        lat: 17.989,
+        lng: -92.247,
+        address: "Villahermosa, Tabasco",
+        environment: "field",
+      },
+      technicalDetails: {
+        assistedBy: {
+          id: "",
+          name: "",
+          role: "staff",
         },
-        male: {
-          id: formData.maleId || 'BULL-NEW',
-          tag: 'NEW-BULL',
-          name: 'Nuevo Macho',
-          breed: 'Holstein',
-          age: 5,
-          weight: 800,
-          performance: { libido: 8, fertility: 80, offspring: 20 }
+        procedure: {
+          startTime: "",
+          endTime: "",
+          duration: 0,
+          difficulty: "easy",
+          equipment: [],
         },
-        mating: {
-          date: new Date(formData.matingDate || new Date()),
-          time: formData.matingTime || '08:00',
-          duration: 15,
-          naturalBehavior: true,
-          assistanceRequired: false,
-          location: {
-            lat: 17.0732,
-            lng: -93.1451,
-            address: formData.location || 'Nueva ubicación',
-            sector: 'Norte',
-            potrero: 'Nuevo',
-            paddock: 'A1'
-          },
-          weather: { temperature: 25, humidity: 70, condition: 'Despejado' }
+        animalCondition: {
+          bullCondition: "good",
+          cowCondition: "good",
+          cowReceptivity: "receptive",
+          stressLevel: "low",
         },
-        conditions: {
-          femaleCondition: 'Buena',
-          maleCondition: 'Buena',
-          estrusStage: 'Celo moderado',
-          matingScore: 7,
-          complications: [],
-          supervision: {
-            supervisor: formData.supervisor || 'Supervisor',
-            assistants: []
-          }
-        },
-        followUp: {
-          behaviorObservations: [],
-          healthStatus: { female: 'Buena', male: 'Buena' }
-        },
-        economics: {
-          matingCost: 150,
-          supervisionCost: 100,
-          veterinaryCost: 150,
-          facilityUsage: 50,
-          totalCost: 450,
-          expectedValue: 20000
-        },
-        genetics: {
-          pedigreeCompatibility: 7,
-          expectedTraits: ['Producción estándar'],
-          breedingObjective: 'Mejoramiento general',
-          geneticDiversity: 6,
-          inbreedingCoefficient: 0.06
-        },
-        notes: formData.notes || 'Nuevo registro de apareamiento',
-        status: 'monitoring',
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        createdBy: 'Usuario'
-      };
-      
-      setRecords([newRecord, ...records]);
-      setShowCreateModal(false);
-    }
-    
-    setFormData({});
-    setEditingRecord(null);
-  };
-
-  // Función para filtrar registros
-  const getFilteredRecords = () => {
-    return records.filter(record => {
-      const matchesSearch = record.female.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                           record.female.tag.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                           record.male.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                           record.male.tag.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                           record.conditions.supervision.supervisor.toLowerCase().includes(searchTerm.toLowerCase());
-      
-      const matchesSupervisor = filters.supervisor === 'all' || record.conditions.supervision.supervisor === filters.supervisor;
-      const matchesSector = filters.sector === 'all' || record.mating.location.sector === filters.sector;
-      const matchesMaleBreed = filters.maleBreed === 'all' || record.male.breed === filters.maleBreed;
-      const matchesFemaleBreed = filters.femaleBreed === 'all' || record.female.breed === filters.femaleBreed;
-      
-      let matchesPregnancy = true;
-      if (filters.pregnancyResult !== 'all') {
-        if (record.followUp.pregnancyCheck) {
-          matchesPregnancy = filters.pregnancyResult === 'positive' ? 
-            record.followUp.pregnancyCheck.result : 
-            !record.followUp.pregnancyCheck.result;
-        } else {
-          matchesPregnancy = filters.pregnancyResult === 'pending';
-        }
-      }
-      
-      return matchesSearch && matchesSupervisor && matchesSector && matchesMaleBreed && matchesFemaleBreed && matchesPregnancy;
+      },
+      followUp: {
+        pregnancyTestScheduled: false,
+      },
+      environmentalFactors: {
+        temperature: 25,
+        humidity: 60,
+        weather: "",
+        timeOfDay: "morning",
+      },
     });
   };
 
-  // Función para obtener el color según el estado
+  // Función para obtener color del estado
   const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'confirmed_pregnancy': return 'bg-green-100 text-green-800';
-      case 'monitoring': return 'bg-blue-100 text-blue-800';
-      case 'completed': return 'bg-yellow-100 text-yellow-800';
-      case 'failed': return 'bg-red-100 text-red-800';
-      default: return 'bg-gray-100 text-gray-800';
-    }
+    const colors = {
+      scheduled: "bg-yellow-100 text-yellow-800 border-yellow-200",
+      in_progress: "bg-blue-100 text-blue-800 border-blue-200",
+      completed: "bg-green-100 text-green-800 border-green-200",
+      failed: "bg-red-100 text-red-800 border-red-200",
+      cancelled: "bg-gray-100 text-gray-800 border-gray-200",
+    };
+    return colors[status as keyof typeof colors] || colors.scheduled;
   };
 
-  // Función para obtener el texto del estado
-  const getStatusText = (status: string) => {
-    switch (status) {
-      case 'confirmed_pregnancy': return 'Gestación Confirmada';
-      case 'monitoring': return 'En Seguimiento';
-      case 'completed': return 'Completado';
-      case 'failed': return 'Fallido';
-      default: return 'Sin Estado';
-    }
+  // Función para obtener color del resultado
+  const getResultColor = (result?: string) => {
+    const colors = {
+      successful: "bg-emerald-100 text-emerald-800 border-emerald-200",
+      unsuccessful: "bg-red-100 text-red-800 border-red-200",
+      pending: "bg-blue-100 text-blue-800 border-blue-200",
+    };
+    return result ? colors[result as keyof typeof colors] || colors.pending : colors.pending;
   };
 
-  // Función para formatear moneda
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('es-MX', {
-      style: 'currency',
-      currency: 'MXN'
-    }).format(amount);
+  // Función para obtener icono del tipo de apareamiento
+  const getMatingTypeIcon = (type: string) => {
+    const icons = {
+      natural: <Heart className="w-5 h-5" />,
+      artificial_insemination: <TestTube className="w-5 h-5" />,
+      embryo_transfer: <Zap className="w-5 h-5" />,
+      synchronized: <Timer className="w-5 h-5" />,
+    };
+    return icons[type as keyof typeof icons] || icons.natural;
   };
 
-  // Componente de loading con spinner
-  const LoadingSpinner: React.FC = () => (
-    <div className="flex items-center justify-center min-h-[400px]">
-      <motion.div
-        animate={{ rotate: 360 }}
-        transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-        className="w-12 h-12 border-4 border-[#519a7c] border-t-transparent rounded-full"
-      />
-    </div>
-  );
-
-  // Componente para tarjeta de registro
-  const RecordCard: React.FC<{ record: MatingRecord }> = ({ record }) => {
-    const pregnancyStatus = record.followUp.pregnancyCheck ? 
-      (record.followUp.pregnancyCheck.result ? 'Gestante' : 'No gestante') : 'Pendiente';
-    
-    const pregnancyColor = record.followUp.pregnancyCheck ? 
-      (record.followUp.pregnancyCheck.result ? 'text-green-600' : 'text-red-600') : 'text-yellow-600';
-
-    return (
-      <motion.div
-        variants={itemVariants}
-        className="bg-white/95 backdrop-blur-sm rounded-xl shadow-lg border border-white/20 p-6 hover:shadow-xl transition-all duration-300"
-      >
-        <div className="flex items-start justify-between mb-4">
-          <div className="flex items-center space-x-3">
-            <div className="p-3 bg-gradient-to-r from-[#519a7c] to-[#4e9c75] rounded-lg">
-              <Heart className="w-6 h-6 text-white" />
-            </div>
-            <div>
-              <h3 className="text-lg font-bold text-gray-800">
-                {record.female.name} ♀ × {record.male.name} ♂
-              </h3>
-              <p className="text-sm text-gray-600">
-                {record.female.tag} × {record.male.tag}
-              </p>
-            </div>
-          </div>
-          <div className="flex items-center space-x-2">
-            <span className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(record.status)}`}>
-              {getStatusText(record.status)}
-            </span>
-            <button
-              onClick={() => handleView(record)}
-              className="p-2 text-gray-600 hover:text-[#519a7c] transition-colors"
-            >
-              <Eye className="w-4 h-4" />
-            </button>
-            <button
-              onClick={() => handleEdit(record)}
-              className="p-2 text-gray-600 hover:text-blue-600 transition-colors"
-            >
-              <Edit className="w-4 h-4" />
-            </button>
-            <button
-              onClick={() => handleDelete(record.id)}
-              className="p-2 text-gray-600 hover:text-red-600 transition-colors"
-            >
-              <Trash2 className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-2 gap-4 mb-4">
-          <div className="flex items-center space-x-2">
-            <Calendar className="w-4 h-4 text-[#519a7c]" />
-            <span className="text-sm text-gray-600">
-              {record.mating.date.toLocaleDateString('es-MX')}
-            </span>
-          </div>
-          <div className="flex items-center space-x-2">
-            <Clock className="w-4 h-4 text-[#519a7c]" />
-            <span className="text-sm text-gray-600">{record.mating.time}</span>
-          </div>
-          <div className="flex items-center space-x-2">
-            <MapPin className="w-4 h-4 text-[#519a7c]" />
-            <span className="text-sm text-gray-600">{record.mating.location.sector}</span>
-          </div>
-          <div className="flex items-center space-x-2">
-            <User className="w-4 h-4 text-[#519a7c]" />
-            <span className="text-sm text-gray-600">{record.conditions.supervision.supervisor}</span>
-          </div>
-        </div>
-
-        <div className="border-t pt-4 space-y-2">
-          <div className="flex justify-between items-center">
-            <span className="text-sm text-gray-600">Duración:</span>
-            <span className="text-sm font-medium text-gray-800">{record.mating.duration} min</span>
-          </div>
-          <div className="flex justify-between items-center">
-            <span className="text-sm text-gray-600">Puntuación:</span>
-            <span className="text-sm font-medium text-gray-800">{record.conditions.matingScore}/10</span>
-          </div>
-          <div className="flex justify-between items-center">
-            <span className="text-sm text-gray-600">Estado gestación:</span>
-            <span className={`text-sm font-medium ${pregnancyColor}`}>{pregnancyStatus}</span>
-          </div>
-          <div className="flex justify-between items-center">
-            <span className="text-sm text-gray-600">Costo total:</span>
-            <span className="text-sm font-bold text-[#519a7c]">{formatCurrency(record.economics.totalCost)}</span>
-          </div>
-        </div>
-      </motion.div>
-    );
-  };
-
-  // Modal para crear/editar registros
-  const FormModal: React.FC<{ isEdit: boolean }> = ({ isEdit }) => (
-    <AnimatePresence>
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4"
-        onClick={() => {
-          setShowCreateModal(false);
-          setShowEditModal(false);
-        }}
-      >
-        <motion.div
-          variants={modalVariants}
-          initial="hidden"
-          animate="visible"
-          exit="exit"
-          className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto"
-          onClick={(e) => e.stopPropagation()}
-        >
-          <div className="p-6">
-            {/* Header del modal */}
-            <div className="flex items-center justify-between mb-6">
-              <div className="flex items-center space-x-3">
-                <div className="p-3 bg-gradient-to-r from-[#519a7c] to-[#4e9c75] rounded-lg">
-                  <Heart className="w-6 h-6 text-white" />
-                </div>
-                <div>
-                  <h2 className="text-2xl font-bold text-gray-800">
-                    {isEdit ? 'Editar Registro de Apareamiento' : 'Nuevo Registro de Apareamiento'}
-                  </h2>
-                </div>
-              </div>
-              <button
-                onClick={() => {
-                  setShowCreateModal(false);
-                  setShowEditModal(false);
-                }}
-                className="p-2 text-gray-600 hover:text-gray-800 transition-colors"
-              >
-                <X className="w-6 h-6" />
-              </button>
-            </div>
-
-            {/* Formulario */}
-            <div className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    ID Hembra
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.femaleId || ''}
-                    onChange={(e) => setFormData(prev => ({ ...prev, femaleId: e.target.value }))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
-                    placeholder="COW-F-001"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    ID Macho
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.maleId || ''}
-                    onChange={(e) => setFormData(prev => ({ ...prev, maleId: e.target.value }))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
-                    placeholder="BULL-M-001"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Fecha de Apareamiento
-                  </label>
-                  <input
-                    type="date"
-                    value={formData.matingDate || ''}
-                    onChange={(e) => setFormData(prev => ({ ...prev, matingDate: e.target.value }))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Hora
-                  </label>
-                  <input
-                    type="time"
-                    value={formData.matingTime || ''}
-                    onChange={(e) => setFormData(prev => ({ ...prev, matingTime: e.target.value }))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Ubicación
-                </label>
-                <input
-                  type="text"
-                  value={formData.location || ''}
-                  onChange={(e) => setFormData(prev => ({ ...prev, location: e.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
-                  placeholder="Potrero Norte, Paddock A1"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Supervisor
-                </label>
-                <input
-                  type="text"
-                  value={formData.supervisor || ''}
-                  onChange={(e) => setFormData(prev => ({ ...prev, supervisor: e.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
-                  placeholder="Nombre del supervisor"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Notas
-                </label>
-                <textarea
-                  value={formData.notes || ''}
-                  onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
-                  rows={4}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
-                  placeholder="Observaciones del apareamiento..."
-                />
-              </div>
-            </div>
-
-            {/* Botones de acción */}
-            <div className="flex justify-end space-x-4 mt-6 pt-6 border-t">
-              <button
-                onClick={() => {
-                  setShowCreateModal(false);
-                  setShowEditModal(false);
-                }}
-                className="px-4 py-2 text-gray-600 hover:text-gray-800 transition-colors"
-              >
-                Cancelar
-              </button>
-              <motion.button
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                onClick={handleSave}
-                className="bg-gradient-to-r from-[#2d6f51] to-[#4e9c75] text-white px-6 py-2 rounded-lg hover:from-[#265a44] hover:to-[#3d7a5c] transition-all duration-200 flex items-center space-x-2"
-              >
-                <Save className="w-5 h-5" />
-                <span>{isEdit ? 'Actualizar' : 'Guardar'}</span>
-              </motion.button>
-            </div>
-          </div>
-        </motion.div>
-      </motion.div>
-    </AnimatePresence>
-  );
-
-  // Modal para ver detalles completos
-  const ViewModal: React.FC = () => {
-    if (!selectedRecord) return null;
-
-    return (
-      <AnimatePresence>
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4"
-          onClick={() => setShowViewModal(false)}
-        >
-          <motion.div
-            variants={modalVariants}
-            initial="hidden"
-            animate="visible"
-            exit="exit"
-            className="bg-white rounded-xl shadow-2xl max-w-6xl w-full max-h-[90vh] overflow-y-auto"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="p-6">
-              {/* Header del modal */}
-              <div className="flex items-center justify-between mb-6">
-                <div className="flex items-center space-x-3">
-                  <div className="p-3 bg-gradient-to-r from-[#519a7c] to-[#4e9c75] rounded-lg">
-                    <Heart className="w-6 h-6 text-white" />
-                  </div>
-                  <div>
-                    <h2 className="text-2xl font-bold text-gray-800">
-                      Registro de Apareamiento
-                    </h2>
-                    <p className="text-gray-600">ID: {selectedRecord.id}</p>
-                  </div>
-                </div>
-                <button
-                  onClick={() => setShowViewModal(false)}
-                  className="p-2 text-gray-600 hover:text-gray-800 transition-colors"
-                >
-                  <X className="w-6 h-6" />
-                </button>
-              </div>
-
-              {/* Contenido del modal */}
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                {/* Información de la hembra */}
-                <div className="bg-pink-50 rounded-lg p-4">
-                  <h3 className="text-lg font-semibold text-gray-800 mb-3 flex items-center">
-                    <Beef className="w-5 h-5 mr-2 text-pink-600" />
-                    Hembra
-                  </h3>
-                  <div className="space-y-2">
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Nombre:</span>
-                      <span className="font-medium">{selectedRecord.female.name}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Etiqueta:</span>
-                      <span className="font-medium">{selectedRecord.female.tag}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Raza:</span>
-                      <span className="font-medium">{selectedRecord.female.breed}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Edad:</span>
-                      <span className="font-medium">{selectedRecord.female.age} años</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Peso:</span>
-                      <span className="font-medium">{selectedRecord.female.weight} kg</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Estado reproductivo:</span>
-                      <span className="font-medium">{selectedRecord.female.reproductiveStatus}</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Información del macho */}
-                <div className="bg-blue-50 rounded-lg p-4">
-                  <h3 className="text-lg font-semibold text-gray-800 mb-3 flex items-center">
-                    <Beef className="w-5 h-5 mr-2 text-blue-600" />
-                    Macho
-                  </h3>
-                  <div className="space-y-2">
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Nombre:</span>
-                      <span className="font-medium">{selectedRecord.male.name}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Etiqueta:</span>
-                      <span className="font-medium">{selectedRecord.male.tag}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Raza:</span>
-                      <span className="font-medium">{selectedRecord.male.breed}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Edad:</span>
-                      <span className="font-medium">{selectedRecord.male.age} años</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Peso:</span>
-                      <span className="font-medium">{selectedRecord.male.weight} kg</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Libido:</span>
-                      <span className="font-medium">{selectedRecord.male.performance.libido}/10</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Fertilidad:</span>
-                      <span className="font-medium">{selectedRecord.male.performance.fertility}%</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Información del apareamiento */}
-                <div className="bg-green-50 rounded-lg p-4">
-                  <h3 className="text-lg font-semibold text-gray-800 mb-3 flex items-center">
-                    <Heart className="w-5 h-5 mr-2 text-green-600" />
-                    Apareamiento
-                  </h3>
-                  <div className="space-y-2">
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Fecha:</span>
-                      <span className="font-medium">{selectedRecord.mating.date.toLocaleDateString('es-MX')}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Hora:</span>
-                      <span className="font-medium">{selectedRecord.mating.time}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Duración:</span>
-                      <span className="font-medium">{selectedRecord.mating.duration} min</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Natural:</span>
-                      <span className="font-medium">{selectedRecord.mating.naturalBehavior ? 'Sí' : 'No'}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Asistencia:</span>
-                      <span className="font-medium">{selectedRecord.mating.assistanceRequired ? 'Sí' : 'No'}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Puntuación:</span>
-                      <span className="font-medium">{selectedRecord.conditions.matingScore}/10</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Información adicional */}
-              <div className="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* Ubicación y condiciones */}
-                <div className="bg-gray-50 rounded-lg p-4">
-                  <h3 className="text-lg font-semibold text-gray-800 mb-3 flex items-center">
-                    <MapPin className="w-5 h-5 mr-2 text-[#519a7c]" />
-                    Ubicación y Condiciones
-                  </h3>
-                  <div className="space-y-2">
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Sector:</span>
-                      <span className="font-medium">{selectedRecord.mating.location.sector}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Potrero:</span>
-                      <span className="font-medium">{selectedRecord.mating.location.potrero}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Paddock:</span>
-                      <span className="font-medium">{selectedRecord.mating.location.paddock}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Temperatura:</span>
-                      <span className="font-medium">{selectedRecord.mating.weather.temperature}°C</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Humedad:</span>
-                      <span className="font-medium">{selectedRecord.mating.weather.humidity}%</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Clima:</span>
-                      <span className="font-medium">{selectedRecord.mating.weather.condition}</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Supervisión y personal */}
-                <div className="bg-gray-50 rounded-lg p-4">
-                  <h3 className="text-lg font-semibold text-gray-800 mb-3 flex items-center">
-                    <User className="w-5 h-5 mr-2 text-[#519a7c]" />
-                    Personal y Supervisión
-                  </h3>
-                  <div className="space-y-2">
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Supervisor:</span>
-                      <span className="font-medium">{selectedRecord.conditions.supervision.supervisor}</span>
-                    </div>
-                    {selectedRecord.conditions.supervision.veterinarian && (
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">Veterinario:</span>
-                        <span className="font-medium">{selectedRecord.conditions.supervision.veterinarian}</span>
-                      </div>
-                    )}
-                    {selectedRecord.conditions.supervision.assistants.length > 0 && (
-                      <div>
-                        <span className="text-gray-600">Asistentes:</span>
-                        <div className="mt-1">
-                          {selectedRecord.conditions.supervision.assistants.map((assistant, index) => (
-                            <span key={index} className="inline-block bg-gray-200 rounded-full px-2 py-1 text-xs text-gray-700 mr-1 mb-1">
-                              {assistant}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* Resultados y economía */}
-              <div className="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* Seguimiento y resultados */}
-                <div className="bg-gray-50 rounded-lg p-4">
-                  <h3 className="text-lg font-semibold text-gray-800 mb-3 flex items-center">
-                    <CheckCircle className="w-5 h-5 mr-2 text-[#519a7c]" />
-                    Seguimiento y Resultados
-                  </h3>
-                  <div className="space-y-2">
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Estado:</span>
-                      <span className={`font-medium ${
-                        selectedRecord.status === 'confirmed_pregnancy' ? 'text-green-600' :
-                        selectedRecord.status === 'monitoring' ? 'text-blue-600' :
-                        selectedRecord.status === 'failed' ? 'text-red-600' : 'text-gray-600'
-                      }`}>
-                        {getStatusText(selectedRecord.status)}
-                      </span>
-                    </div>
-                    {selectedRecord.followUp.pregnancyCheck && (
-                      <>
-                        <div className="flex justify-between">
-                          <span className="text-gray-600">Chequeo gestación:</span>
-                          <span className="font-medium">
-                            {selectedRecord.followUp.pregnancyCheck.date.toLocaleDateString('es-MX')}
-                          </span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-gray-600">Resultado:</span>
-                          <span className={`font-medium ${selectedRecord.followUp.pregnancyCheck.result ? 'text-green-600' : 'text-red-600'}`}>
-                            {selectedRecord.followUp.pregnancyCheck.result ? 'Gestante' : 'No gestante'}
-                          </span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-gray-600">Método:</span>
-                          <span className="font-medium">{selectedRecord.followUp.pregnancyCheck.method}</span>
-                        </div>
-                      </>
-                    )}
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Estado hembra:</span>
-                      <span className="font-medium">{selectedRecord.followUp.healthStatus.female}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Estado macho:</span>
-                      <span className="font-medium">{selectedRecord.followUp.healthStatus.male}</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Análisis económico */}
-                <div className="bg-gray-50 rounded-lg p-4">
-                  <h3 className="text-lg font-semibold text-gray-800 mb-3">
-                    Análisis Económico
-                  </h3>
-                  <div className="space-y-2">
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Costo apareamiento:</span>
-                      <span className="font-medium">{formatCurrency(selectedRecord.economics.matingCost)}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Costo supervisión:</span>
-                      <span className="font-medium">{formatCurrency(selectedRecord.economics.supervisionCost)}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Costo veterinario:</span>
-                      <span className="font-medium">{formatCurrency(selectedRecord.economics.veterinaryCost)}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Uso de instalaciones:</span>
-                      <span className="font-medium">{formatCurrency(selectedRecord.economics.facilityUsage)}</span>
-                    </div>
-                    <div className="border-t pt-2">
-                      <div className="flex justify-between">
-                        <span className="text-gray-800 font-semibold">Total:</span>
-                        <span className="font-bold text-[#519a7c] text-lg">{formatCurrency(selectedRecord.economics.totalCost)}</span>
-                      </div>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Valor esperado:</span>
-                      <span className="font-bold text-green-600">{formatCurrency(selectedRecord.economics.expectedValue)}</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Información genética */}
-              <div className="mt-6 bg-yellow-50 rounded-lg p-4">
-                <h3 className="text-lg font-semibold text-gray-800 mb-3">
-                  Información Genética
-                </h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Compatibilidad pedigrí:</span>
-                      <span className="font-medium">{selectedRecord.genetics.pedigreeCompatibility}/10</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Diversidad genética:</span>
-                      <span className="font-medium">{selectedRecord.genetics.geneticDiversity}/10</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Coef. consanguinidad:</span>
-                      <span className="font-medium">{selectedRecord.genetics.inbreedingCoefficient}</span>
-                    </div>
-                  </div>
-                  <div>
-                    <span className="text-gray-600">Objetivo reproductivo:</span>
-                    <p className="font-medium text-sm mt-1">{selectedRecord.genetics.breedingObjective}</p>
-                  </div>
-                </div>
-                {selectedRecord.genetics.expectedTraits.length > 0 && (
-                  <div className="mt-4">
-                    <span className="text-gray-600">Características esperadas:</span>
-                    <div className="mt-1">
-                      {selectedRecord.genetics.expectedTraits.map((trait, index) => (
-                        <span key={index} className="inline-block bg-yellow-200 rounded-full px-2 py-1 text-xs text-yellow-800 mr-1 mb-1">
-                          {trait}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Notas */}
-              {selectedRecord.notes && (
-                <div className="mt-6 bg-gray-50 rounded-lg p-4">
-                  <h3 className="text-lg font-semibold text-gray-800 mb-3">Notas Adicionales</h3>
-                  <p className="text-gray-700">{selectedRecord.notes}</p>
-                </div>
-              )}
-            </div>
-          </motion.div>
-        </motion.div>
-      </AnimatePresence>
-    );
-  };
-
-  // Renderizado principal
+  // Si está cargando
   if (isLoading) {
     return (
-      <div className={cn(
-        "min-h-screen",
-        "bg-gradient-to-br from-[#519a7c] via-[#f2e9d8] to-[#f4ac3a]",
-        className
-      )}>
-        <LoadingSpinner />
+      <div className="min-h-screen bg-gradient-to-br from-[#519a7c] via-[#f2e9d8] to-[#f4ac3a] flex items-center justify-center">
+        <motion.div
+          className="bg-white/90 backdrop-blur-sm rounded-2xl p-8 shadow-xl"
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.5 }}
+        >
+          <div className="flex flex-col items-center space-y-4">
+            <motion.div
+              className="w-12 h-12 border-4 border-[#519a7c] border-t-transparent rounded-full"
+              animate={{ rotate: 360 }}
+              transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+            />
+            <p className="text-gray-600 font-medium">Cargando registros de apareamiento...</p>
+          </div>
+        </motion.div>
       </div>
     );
   }
 
-  const filteredRecords = getFilteredRecords();
-
   return (
-    <div className={cn(
-      "min-h-screen",
-      // Fondo degradado principal del layout
-      "bg-gradient-to-br from-[#519a7c] via-[#f2e9d8] to-[#f4ac3a]",
-      className
-    )}>
-      <div className="p-6">
-        {/* Header con título y controles principales */}
+    <div className="min-h-screen bg-gradient-to-br from-[#519a7c] via-[#f2e9d8] to-[#f4ac3a] p-6">
+      <motion.div
+        className="max-w-7xl mx-auto"
+        variants={containerVariants}
+        initial="hidden"
+        animate="visible"
+      >
+        {/* Header */}
         <motion.div
-          initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="mb-8"
+          className="bg-white/95 backdrop-blur-sm rounded-2xl shadow-xl p-6 mb-6 border border-white/20"
+          variants={itemVariants}
         >
           <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-            <div>
-              <h1 className="text-3xl font-bold text-white drop-shadow-sm mb-2">
-                Registros de Apareamiento
-              </h1>
-              <p className="text-white/90">
-                Gestión completa de apareamientos naturales con seguimiento genético y geolocalización
-              </p>
-            </div>
-            
             <div className="flex items-center space-x-4">
+              <div className="w-12 h-12 bg-gradient-to-r from-[#519a7c] to-[#4e9c75] rounded-xl flex items-center justify-center">
+                <Heart className="w-6 h-6 text-white" />
+              </div>
+              <div>
+                <h1 className="text-3xl font-bold text-gray-900">
+                  <AnimatedText>Registros de Apareamiento</AnimatedText>
+                </h1>
+                <p className="text-gray-600 mt-1">
+                  Gestión completa de servicios reproductivos y apareamientos
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center space-x-3">
               <motion.button
+                onClick={() => setShowFilters(!showFilters)}
+                className={`px-4 py-2 rounded-xl border-2 transition-all duration-200 flex items-center space-x-2 ${
+                  showFilters 
+                    ? "bg-[#519a7c] text-white border-[#519a7c]" 
+                    : "bg-white text-gray-700 border-gray-300 hover:border-[#519a7c]"
+                }`}
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
-                onClick={handleCreate}
-                className="bg-gradient-to-r from-[#2d6f51] to-[#4e9c75] text-white px-6 py-2 rounded-lg hover:from-[#265a44] hover:to-[#3d7a5c] transition-all duration-200 flex items-center space-x-2"
               >
-                <Plus className="w-5 h-5" />
-                <span>Registrar Apareamiento</span>
+                <Filter className="w-4 h-4" />
+                <span>Filtros</span>
+              </motion.button>
+
+              <motion.button
+                onClick={() => {
+                  setEditingRecord(null);
+                  resetForm();
+                  setShowForm(true);
+                }}
+                className="px-6 py-2 bg-gradient-to-r from-[#519a7c] to-[#4e9c75] text-white rounded-xl hover:from-[#4e9c75] hover:to-[#519a7c] transition-all duration-200 flex items-center space-x-2 shadow-lg"
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+              >
+                <Plus className="w-4 h-4" />
+                <span>Nuevo Apareamiento</span>
+              </motion.button>
+            </div>
+          </div>
+
+          {/* Estadísticas rápidas */}
+          <div className="grid grid-cols-2 md:grid-cols-6 gap-4 mt-6">
+            {[
+              { label: "Total", value: stats.total, icon: Activity, color: "text-blue-600" },
+              { label: "Programados", value: stats.scheduled, icon: Clock, color: "text-yellow-600" },
+              { label: "Completados", value: stats.completed, icon: CheckCircle, color: "text-green-600" },
+              { label: "Exitosos", value: stats.successful, icon: Award, color: "text-emerald-600" },
+              { label: "Tasa Éxito", value: stats.successRate, icon: Target, color: "text-purple-600" },
+              { label: "Tasa Gestación", value: stats.pregnancyRate, icon: Baby, color: "text-pink-600" },
+            ].map((stat, index) => (
+              <motion.div
+                key={index}
+                className="bg-white/80 backdrop-blur-sm rounded-xl p-4 border border-white/30"
+                variants={itemVariants}
+                whileHover={{ scale: 1.02 }}
+              >
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-gray-600 font-medium">{stat.label}</p>
+                    <p className="text-2xl font-bold text-gray-900">{stat.value}</p>
+                  </div>
+                  <stat.icon className={`w-8 h-8 ${stat.color}`} />
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        </motion.div>
+
+        {/* Panel de filtros */}
+        <AnimatePresence>
+          {showFilters && (
+            <motion.div
+              className="bg-white/95 backdrop-blur-sm rounded-2xl shadow-xl p-6 mb-6 border border-white/20"
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+              exit={{ opacity: 0, height: 0 }}
+              transition={{ duration: 0.3 }}
+            >
+              <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4">
+                {/* Búsqueda por texto */}
+                <div className="lg:col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Buscar
+                  </label>
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                    <input
+                      type="text"
+                      value={filters.searchTerm}
+                      onChange={(e) => setFilters(prev => ({ ...prev, searchTerm: e.target.value }))}
+                      placeholder="Toro, vaca, técnico..."
+                      className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
+                    />
+                  </div>
+                </div>
+
+                {/* Filtro de fecha inicio */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Fecha Inicio
+                  </label>
+                  <input
+                    type="date"
+                    value={filters.dateRange.start}
+                    onChange={(e) => setFilters(prev => ({ 
+                      ...prev, 
+                      dateRange: { ...prev.dateRange, start: e.target.value }
+                    }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
+                  />
+                </div>
+
+                {/* Filtro de fecha fin */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Fecha Fin
+                  </label>
+                  <input
+                    type="date"
+                    value={filters.dateRange.end}
+                    onChange={(e) => setFilters(prev => ({ 
+                      ...prev, 
+                      dateRange: { ...prev.dateRange, end: e.target.value }
+                    }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
+                  />
+                </div>
+
+                {/* Filtro de tipo */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Tipo
+                  </label>
+                  <select
+                    multiple
+                    value={filters.matingType}
+                    onChange={(e) => {
+                      const values = Array.from(e.target.selectedOptions, option => option.value);
+                      setFilters(prev => ({ ...prev, matingType: values }));
+                    }}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
+                  >
+                    <option value="natural">Natural</option>
+                    <option value="artificial_insemination">IA</option>
+                    <option value="embryo_transfer">Transferencia</option>
+                    <option value="synchronized">Sincronizado</option>
+                  </select>
+                </div>
+
+                {/* Filtro de estado */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Estado
+                  </label>
+                  <select
+                    multiple
+                    value={filters.status}
+                    onChange={(e) => {
+                      const values = Array.from(e.target.selectedOptions, option => option.value);
+                      setFilters(prev => ({ ...prev, status: values }));
+                    }}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
+                  >
+                    <option value="scheduled">Programado</option>
+                    <option value="in_progress">En Progreso</option>
+                    <option value="completed">Completado</option>
+                    <option value="failed">Fallido</option>
+                    <option value="cancelled">Cancelado</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Botones de control de filtros */}
+              <div className="flex justify-end space-x-3 mt-4 pt-4 border-t border-gray-200">
+                <button
+                  onClick={() => setFilters({
+                    dateRange: { start: "", end: "" },
+                    matingType: [],
+                    status: [],
+                    result: [],
+                    bullId: "",
+                    cowId: "",
+                    assistedBy: [],
+                    location: [],
+                    searchTerm: "",
+                  })}
+                  className="px-4 py-2 text-gray-600 hover:text-gray-800 transition-colors"
+                >
+                  Limpiar Filtros
+                </button>
+                <button
+                  onClick={() => setShowFilters(false)}
+                  className="px-6 py-2 bg-gradient-to-r from-[#519a7c] to-[#4e9c75] text-white rounded-lg hover:from-[#4e9c75] hover:to-[#519a7c] transition-all duration-200"
+                >
+                  Aplicar
+                </button>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Controles de vista */}
+        <motion.div
+          className="bg-white/95 backdrop-blur-sm rounded-2xl shadow-xl p-4 mb-6 border border-white/20"
+          variants={itemVariants}
+        >
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-4">
+              <span className="text-sm text-gray-600 font-medium">
+                Mostrando {filteredRecords.length} de {records.length} registros
+              </span>
+            </div>
+
+            <div className="flex items-center space-x-3">
+              {/* Botones de vista */}
+              <div className="flex items-center bg-gray-100 rounded-lg p-1">
+                <button
+                  onClick={() => setViewMode("grid")}
+                  className={`px-3 py-1 rounded-md text-sm font-medium transition-all duration-200 ${
+                    viewMode === "grid"
+                      ? "bg-white text-gray-900 shadow-sm"
+                      : "text-gray-600 hover:text-gray-900"
+                  }`}
+                >
+                  Tarjetas
+                </button>
+                <button
+                  onClick={() => setViewMode("list")}
+                  className={`px-3 py-1 rounded-md text-sm font-medium transition-all duration-200 ${
+                    viewMode === "list"
+                      ? "bg-white text-gray-900 shadow-sm"
+                      : "text-gray-600 hover:text-gray-900"
+                  }`}
+                >
+                  Lista
+                </button>
+              </div>
+
+              {/* Botón de exportar */}
+              <motion.button
+                className="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:border-[#519a7c] hover:text-[#519a7c] transition-all duration-200 flex items-center space-x-2"
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+              >
+                <Download className="w-4 h-4" />
+                <span>Exportar</span>
               </motion.button>
             </div>
           </div>
         </motion.div>
 
-        {/* Barra de búsqueda y filtros */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
-          className="bg-white/95 backdrop-blur-sm rounded-xl shadow-lg border border-white/20 p-6 mb-6"
-        >
-          <div className="flex flex-col lg:flex-row lg:items-center gap-4">
-            {/* Barra de búsqueda */}
-            <div className="flex-1 relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
-              <input
-                type="text"
-                placeholder="Buscar por animal, supervisor..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
-              />
-            </div>
-
-            {/* Filtros */}
-            <div className="flex items-center space-x-4">
-              <select
-                value={filters.supervisor}
-                onChange={(e) => setFilters(prev => ({ ...prev, supervisor: e.target.value }))}
-                className="px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
-              >
-                <option value="all">Todos los supervisores</option>
-                <option value="Carlos Mendoza">Carlos Mendoza</option>
-                <option value="Miguel Rodríguez">Miguel Rodríguez</option>
-              </select>
-
-              <select
-                value={filters.sector}
-                onChange={(e) => setFilters(prev => ({ ...prev, sector: e.target.value }))}
-                className="px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
-              >
-                <option value="all">Todos los sectores</option>
-                <option value="Norte">Norte</option>
-                <option value="Sur">Sur</option>
-                <option value="Este">Este</option>
-                <option value="Oeste">Oeste</option>
-              </select>
-
-              <select
-                value={filters.pregnancyResult}
-                onChange={(e) => setFilters(prev => ({ ...prev, pregnancyResult: e.target.value }))}
-                className="px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
-              >
-                <option value="all">Todos los resultados</option>
-                <option value="positive">Gestantes</option>
-                <option value="negative">No gestantes</option>
-                <option value="pending">Pendientes</option>
-              </select>
-            </div>
-          </div>
-        </motion.div>
-
-        {/* Estadísticas rápidas */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
-          className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8"
-        >
-          {[
-            { 
-              label: 'Total Apareamientos', 
-              value: records.length.toString(), 
-              icon: Heart, 
-              color: 'from-[#519a7c] to-[#4e9c75]' 
-            },
-            { 
-              label: 'Gestaciones Confirmadas', 
-              value: records.filter(r => r.followUp.pregnancyCheck?.result).length.toString(), 
-              icon: CheckCircle, 
-              color: 'from-green-500 to-green-600' 
-            },
-            { 
-              label: 'Tasa de Éxito', 
-              value: `${Math.round((records.filter(r => r.followUp.pregnancyCheck?.result).length / records.filter(r => r.followUp.pregnancyCheck).length) * 100) || 0}%`, 
-              icon: Clock, 
-              color: 'from-blue-500 to-blue-600' 
-            },
-            { 
-              label: 'Valor Promedio', 
-              value: formatCurrency(records.reduce((acc, r) => acc + r.economics.expectedValue, 0) / records.length || 0), 
-              icon: Beef, 
-              color: 'from-yellow-500 to-yellow-600' 
-            }
-          ].map((stat) => (
-            <motion.div
-              key={stat.label}
-              variants={itemVariants}
-              className="bg-white/95 backdrop-blur-sm rounded-xl shadow-lg border border-white/20 p-6"
-            >
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-600 mb-1">{stat.label}</p>
-                  <p className="text-2xl font-bold text-gray-800">{stat.value}</p>
-                </div>
-                <div className={`p-3 rounded-lg bg-gradient-to-r ${stat.color}`}>
-                  <stat.icon className="w-6 h-6 text-white" />
-                </div>
-              </div>
-            </motion.div>
-          ))}
-        </motion.div>
-
         {/* Lista de registros */}
-        <motion.div
-          variants={containerVariants}
-          initial="hidden"
-          animate="visible"
-          className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6"
-        >
-          {filteredRecords.length > 0 ? (
-            filteredRecords.map((record) => (
-              <RecordCard key={record.id} record={record} />
-            ))
-          ) : (
+        {viewMode === "grid" ? (
+          <motion.div
+            className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6"
+            variants={containerVariants}
+          >
+            {filteredRecords.map((record) => (
+              <motion.div
+                key={record.id}
+                className="bg-white/95 backdrop-blur-sm rounded-2xl shadow-xl border border-white/20 overflow-hidden hover:shadow-2xl transition-all duration-300"
+                variants={itemVariants}
+                whileHover={{ y: -5 }}
+              >
+                {/* Header de la tarjeta */}
+                <div className="bg-gradient-to-r from-[#519a7c] to-[#4e9c75] p-4 text-white">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-3">
+                      <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center">
+                        {getMatingTypeIcon(record.matingType)}
+                      </div>
+                      <div>
+                        <h3 className="font-bold text-lg">{record.bullName} × {record.cowName}</h3>
+                        <p className="text-white/80 text-sm">
+                          {record.bullEarTag} × {record.cowEarTag}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex flex-col items-end space-y-1">
+                      <span className={`px-2 py-1 rounded-full text-xs font-medium border ${getStatusColor(record.status)}`}>
+                        {record.status === "scheduled" && "Programado"}
+                        {record.status === "in_progress" && "En Progreso"}
+                        {record.status === "completed" && "Completado"}
+                        {record.status === "failed" && "Fallido"}
+                        {record.status === "cancelled" && "Cancelado"}
+                      </span>
+                      {record.result && (
+                        <span className={`px-2 py-1 rounded-full text-xs font-medium border ${getResultColor(record.result)}`}>
+                          {record.result === "successful" && "Exitoso"}
+                          {record.result === "unsuccessful" && "Fallido"}
+                          {record.result === "pending" && "Pendiente"}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Contenido de la tarjeta */}
+                <div className="p-4 space-y-4">
+                  {/* Información principal */}
+                  <div className="grid grid-cols-2 gap-4 text-sm">
+                    <div>
+                      <p className="text-gray-600 font-medium">Fecha:</p>
+                      <p className="text-gray-900">{new Date(record.matingDate).toLocaleDateString()}</p>
+                    </div>
+                    <div>
+                      <p className="text-gray-600 font-medium">Hora:</p>
+                      <p className="text-gray-900">{record.matingTime}</p>
+                    </div>
+                    <div>
+                      <p className="text-gray-600 font-medium">Tipo:</p>
+                      <p className="text-gray-900">
+                        {record.matingType === "natural" && "Natural"}
+                        {record.matingType === "artificial_insemination" && "IA"}
+                        {record.matingType === "embryo_transfer" && "Transferencia"}
+                        {record.matingType === "synchronized" && "Sincronizado"}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-gray-600 font-medium">Método:</p>
+                      <p className="text-gray-900">
+                        {record.method === "natural_service" && "Servicio Natural"}
+                        {record.method === "hand_mating" && "Monta Asistida"}
+                        {record.method === "pasture_breeding" && "Potrero"}
+                        {record.method === "controlled_breeding" && "Controlado"}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Detección de estro */}
+                  {record.estrusDetection.detected && (
+                    <div className="bg-pink-50 rounded-lg p-3">
+                      <h4 className="font-medium text-gray-900 mb-2 flex items-center">
+                        <Zap className="w-4 h-4 mr-2 text-pink-600" />
+                        Detección de Estro
+                      </h4>
+                      <div className="space-y-1 text-sm">
+                        <p><span className="text-gray-600">Intensidad:</span> 
+                          <span className={`ml-1 font-medium ${
+                            record.estrusDetection.intensity === "strong" ? "text-green-600" :
+                            record.estrusDetection.intensity === "moderate" ? "text-yellow-600" :
+                            "text-red-600"
+                          }`}>
+                            {record.estrusDetection.intensity === "strong" && "Fuerte"}
+                            {record.estrusDetection.intensity === "moderate" && "Moderada"}
+                            {record.estrusDetection.intensity === "weak" && "Débil"}
+                          </span>
+                        </p>
+                        <p><span className="text-gray-600">Detectado por:</span> {record.estrusDetection.detectedBy}</p>
+                        {record.estrusDetection.signs.length > 0 && (
+                          <div>
+                            <p className="text-gray-600 font-medium">Signos:</p>
+                            <div className="flex flex-wrap gap-1 mt-1">
+                              {record.estrusDetection.signs.slice(0, 3).map((sign, index) => (
+                                <span key={index} className="bg-pink-100 text-pink-800 px-2 py-1 rounded-full text-xs">
+                                  {sign}
+                                </span>
+                              ))}
+                              {record.estrusDetection.signs.length > 3 && (
+                                <span className="text-xs text-gray-500">
+                                  +{record.estrusDetection.signs.length - 3} más
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Condición de los animales */}
+                  <div className="bg-blue-50 rounded-lg p-3">
+                    <h4 className="font-medium text-gray-900 mb-2 flex items-center">
+                      <Crown className="w-4 h-4 mr-2 text-blue-600" />
+                      Condición de Animales
+                    </h4>
+                    <div className="grid grid-cols-2 gap-2 text-sm">
+                      <div>
+                        <p className="text-gray-600">Toro:</p>
+                        <span className={`font-medium ${
+                          record.technicalDetails.animalCondition.bullCondition === "excellent" ? "text-green-600" :
+                          record.technicalDetails.animalCondition.bullCondition === "good" ? "text-blue-600" :
+                          record.technicalDetails.animalCondition.bullCondition === "fair" ? "text-yellow-600" :
+                          "text-red-600"
+                        }`}>
+                          {record.technicalDetails.animalCondition.bullCondition === "excellent" && "Excelente"}
+                          {record.technicalDetails.animalCondition.bullCondition === "good" && "Bueno"}
+                          {record.technicalDetails.animalCondition.bullCondition === "fair" && "Regular"}
+                          {record.technicalDetails.animalCondition.bullCondition === "poor" && "Malo"}
+                        </span>
+                      </div>
+                      <div>
+                        <p className="text-gray-600">Vaca:</p>
+                        <span className={`font-medium ${
+                          record.technicalDetails.animalCondition.cowCondition === "excellent" ? "text-green-600" :
+                          record.technicalDetails.animalCondition.cowCondition === "good" ? "text-blue-600" :
+                          record.technicalDetails.animalCondition.cowCondition === "fair" ? "text-yellow-600" :
+                          "text-red-600"
+                        }`}>
+                          {record.technicalDetails.animalCondition.cowCondition === "excellent" && "Excelente"}
+                          {record.technicalDetails.animalCondition.cowCondition === "good" && "Bueno"}
+                          {record.technicalDetails.animalCondition.cowCondition === "fair" && "Regular"}
+                          {record.technicalDetails.animalCondition.cowCondition === "poor" && "Malo"}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Seguimiento */}
+                  {record.followUp.pregnancyTestScheduled && (
+                    <div className="bg-green-50 rounded-lg p-3">
+                      <h4 className="font-medium text-gray-900 mb-2 flex items-center">
+                        <Baby className="w-4 h-4 mr-2 text-green-600" />
+                        Seguimiento
+                      </h4>
+                      <div className="space-y-1 text-sm">
+                        {record.followUp.pregnancyTestDate && (
+                          <p><span className="text-gray-600">Prueba gestación:</span> {new Date(record.followUp.pregnancyTestDate).toLocaleDateString()}</p>
+                        )}
+                        {record.followUp.pregnancyResult && (
+                          <p><span className="text-gray-600">Resultado:</span> 
+                            <span className={`ml-1 font-medium ${
+                              record.followUp.pregnancyResult === "pregnant" ? "text-green-600" :
+                              record.followUp.pregnancyResult === "not_pregnant" ? "text-red-600" :
+                              "text-yellow-600"
+                            }`}>
+                              {record.followUp.pregnancyResult === "pregnant" && "Gestante"}
+                              {record.followUp.pregnancyResult === "not_pregnant" && "No Gestante"}
+                              {record.followUp.pregnancyResult === "questionable" && "Dudoso"}
+                            </span>
+                          </p>
+                        )}
+                        {record.followUp.expectedCalvingDate && (
+                          <p><span className="text-gray-600">Parto esperado:</span> {new Date(record.followUp.expectedCalvingDate).toLocaleDateString()}</p>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Factores ambientales */}
+                  <div className="bg-orange-50 rounded-lg p-3">
+                    <h4 className="font-medium text-gray-900 mb-2 flex items-center">
+                      <Thermometer className="w-4 h-4 mr-2 text-orange-600" />
+                      Condiciones Ambientales
+                    </h4>
+                    <div className="grid grid-cols-2 gap-2 text-sm">
+                      <p><span className="text-gray-600">Temperatura:</span> {record.environmentalFactors.temperature}°C</p>
+                      <p><span className="text-gray-600">Humedad:</span> {record.environmentalFactors.humidity}%</p>
+                    </div>
+                    {record.environmentalFactors.weather && (
+                      <p className="text-sm text-gray-700 mt-1">{record.environmentalFactors.weather}</p>
+                    )}
+                  </div>
+
+                  {/* Ubicación */}
+                  <div className="flex items-center space-x-2 text-sm text-gray-600">
+                    <MapPin className="w-4 h-4" />
+                    <span>{record.location.address}</span>
+                  </div>
+
+                  {/* Costo */}
+                  <div className="flex items-center justify-between">
+                    <span className="text-lg font-bold text-[#519a7c]">
+                      ${record.cost.toLocaleString()}
+                    </span>
+                    <span className="text-sm text-gray-600">
+                      Asistido por: {record.technicalDetails.assistedBy.name}
+                    </span>
+                  </div>
+
+                  {/* Notas */}
+                  {record.notes && (
+                    <div className="bg-gray-50 rounded-lg p-3">
+                      <h4 className="font-medium text-gray-900 mb-1 flex items-center">
+                        <FileText className="w-4 h-4 mr-2 text-gray-600" />
+                        Notas
+                      </h4>
+                      <p className="text-sm text-gray-700">{record.notes}</p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Acciones */}
+                <div className="bg-gray-50 px-4 py-3 flex items-center justify-between">
+                  <div className="flex items-center space-x-2">
+                    <motion.button
+                      onClick={() => setSelectedRecord(record)}
+                      className="p-2 text-gray-600 hover:text-[#519a7c] hover:bg-white rounded-lg transition-all duration-200"
+                      whileHover={{ scale: 1.1 }}
+                      whileTap={{ scale: 0.9 }}
+                    >
+                      <Eye className="w-4 h-4" />
+                    </motion.button>
+                    <motion.button
+                      onClick={() => {
+                        setEditingRecord(record);
+                        setFormData(record);
+                        setShowForm(true);
+                      }}
+                      className="p-2 text-gray-600 hover:text-blue-600 hover:bg-white rounded-lg transition-all duration-200"
+                      whileHover={{ scale: 1.1 }}
+                      whileTap={{ scale: 0.9 }}
+                    >
+                      <Edit className="w-4 h-4" />
+                    </motion.button>
+                    <motion.button
+                      onClick={() => handleDelete(record.id)}
+                      className="p-2 text-gray-600 hover:text-red-600 hover:bg-white rounded-lg transition-all duration-200"
+                      whileHover={{ scale: 1.1 }}
+                      whileTap={{ scale: 0.9 }}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </motion.button>
+                  </div>
+                  <div className="text-xs text-gray-500">
+                    {new Date(record.createdAt).toLocaleDateString()}
+                  </div>
+                </div>
+              </motion.div>
+            ))}
+          </motion.div>
+        ) : (
+          // Vista de lista
+          <motion.div
+            className="bg-white/95 backdrop-blur-sm rounded-2xl shadow-xl border border-white/20 overflow-hidden"
+            variants={itemVariants}
+          >
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-gradient-to-r from-[#519a7c] to-[#4e9c75] text-white">
+                  <tr>
+                    <th className="px-6 py-4 text-left text-sm font-medium">Animales</th>
+                    <th className="px-6 py-4 text-left text-sm font-medium">Fecha</th>
+                    <th className="px-6 py-4 text-left text-sm font-medium">Tipo</th>
+                    <th className="px-6 py-4 text-left text-sm font-medium">Estado</th>
+                    <th className="px-6 py-4 text-left text-sm font-medium">Resultado</th>
+                    <th className="px-6 py-4 text-left text-sm font-medium">Gestación</th>
+                    <th className="px-6 py-4 text-left text-sm font-medium">Costo</th>
+                    <th className="px-6 py-4 text-center text-sm font-medium">Acciones</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200">
+                  {filteredRecords.map((record) => (
+                    <motion.tr
+                      key={record.id}
+                      className="hover:bg-gray-50 transition-colors"
+                      whileHover={{ backgroundColor: "rgba(81, 154, 124, 0.05)" }}
+                    >
+                      <td className="px-6 py-4">
+                        <div>
+                          <p className="font-medium text-gray-900">{record.bullName} × {record.cowName}</p>
+                          <p className="text-sm text-gray-600">{record.bullEarTag} × {record.cowEarTag}</p>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div>
+                          <p className="text-gray-900">{new Date(record.matingDate).toLocaleDateString()}</p>
+                          <p className="text-sm text-gray-600">{record.matingTime}</p>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex items-center space-x-2">
+                          {getMatingTypeIcon(record.matingType)}
+                          <span className="text-gray-900">
+                            {record.matingType === "natural" && "Natural"}
+                            {record.matingType === "artificial_insemination" && "IA"}
+                            {record.matingType === "embryo_transfer" && "Transferencia"}
+                            {record.matingType === "synchronized" && "Sincronizado"}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className={`inline-flex px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(record.status)}`}>
+                          {record.status === "scheduled" && "Programado"}
+                          {record.status === "in_progress" && "En Progreso"}
+                          {record.status === "completed" && "Completado"}
+                          {record.status === "failed" && "Fallido"}
+                          {record.status === "cancelled" && "Cancelado"}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4">
+                        {record.result && (
+                          <span className={`inline-flex px-2 py-1 rounded-full text-xs font-medium ${getResultColor(record.result)}`}>
+                            {record.result === "successful" && "Exitoso"}
+                            {record.result === "unsuccessful" && "Fallido"}
+                            {record.result === "pending" && "Pendiente"}
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-6 py-4">
+                        {record.followUp.pregnancyResult && (
+                          <span className={`inline-flex px-2 py-1 rounded-full text-xs font-medium ${
+                            record.followUp.pregnancyResult === "pregnant" ? "bg-green-100 text-green-800" :
+                            record.followUp.pregnancyResult === "not_pregnant" ? "bg-red-100 text-red-800" :
+                            "bg-yellow-100 text-yellow-800"
+                          }`}>
+                            {record.followUp.pregnancyResult === "pregnant" && "Gestante"}
+                            {record.followUp.pregnancyResult === "not_pregnant" && "No Gestante"}
+                            {record.followUp.pregnancyResult === "questionable" && "Dudoso"}
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className="font-medium text-[#519a7c]">
+                          ${record.cost.toLocaleString()}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex items-center justify-center space-x-2">
+                          <motion.button
+                            onClick={() => setSelectedRecord(record)}
+                            className="p-1 text-gray-600 hover:text-[#519a7c] transition-colors"
+                            whileHover={{ scale: 1.1 }}
+                            whileTap={{ scale: 0.9 }}
+                          >
+                            <Eye className="w-4 h-4" />
+                          </motion.button>
+                          <motion.button
+                            onClick={() => {
+                              setEditingRecord(record);
+                              setFormData(record);
+                              setShowForm(true);
+                            }}
+                            className="p-1 text-gray-600 hover:text-blue-600 transition-colors"
+                            whileHover={{ scale: 1.1 }}
+                            whileTap={{ scale: 0.9 }}
+                          >
+                            <Edit className="w-4 h-4" />
+                          </motion.button>
+                          <motion.button
+                            onClick={() => handleDelete(record.id)}
+                            className="p-1 text-gray-600 hover:text-red-600 transition-colors"
+                            whileHover={{ scale: 1.1 }}
+                            whileTap={{ scale: 0.9 }}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </motion.button>
+                        </div>
+                      </td>
+                    </motion.tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </motion.div>
+        )}
+
+        {/* Modal de formulario */}
+        <AnimatePresence>
+          {showForm && (
             <motion.div
-              variants={itemVariants}
-              className="col-span-full bg-white/95 backdrop-blur-sm rounded-xl shadow-lg border border-white/20 p-12 text-center"
+              className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
             >
-              <AlertCircle className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-              <h3 className="text-xl font-semibold text-gray-600 mb-2">
-                No se encontraron registros
-              </h3>
-              <p className="text-gray-500">
-                No hay registros de apareamiento que coincidan con los filtros aplicados.
-              </p>
+              <motion.div
+                className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[90vh] overflow-y-auto"
+                initial={{ opacity: 0, scale: 0.9, y: 20 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.9, y: 20 }}
+                transition={{ duration: 0.3 }}
+              >
+                {/* Header del formulario */}
+                <div className="bg-gradient-to-r from-[#519a7c] to-[#4e9c75] p-6 text-white">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-3">
+                      <Heart className="w-6 h-6" />
+                      <h2 className="text-xl font-bold">
+                        {editingRecord ? "Editar Apareamiento" : "Nuevo Apareamiento"}
+                      </h2>
+                    </div>
+                    <button
+                      onClick={() => {
+                        setShowForm(false);
+                        setEditingRecord(null);
+                        resetForm();
+                      }}
+                      className="p-2 hover:bg-white/20 rounded-lg transition-colors"
+                    >
+                      <X className="w-5 h-5" />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Contenido del formulario */}
+                <div className="p-6 space-y-6">
+                  {/* Información de los animales */}
+                  <div className="bg-blue-50 rounded-xl p-4">
+                    <h3 className="font-semibold text-gray-900 mb-4 flex items-center">
+                      <Crown className="w-5 h-5 mr-2 text-blue-600" />
+                      Información de los Animales
+                    </h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      {/* Información del toro */}
+                      <div className="space-y-4">
+                        <h4 className="font-medium text-gray-900">Toro</h4>
+                        <div className="space-y-3">
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                              ID del Toro *
+                            </label>
+                            <input
+                              type="text"
+                              value={formData.bullId || ""}
+                              onChange={(e) => setFormData(prev => ({ ...prev, bullId: e.target.value }))}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
+                              placeholder="bull-001"
+                              required
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                              Nombre del Toro *
+                            </label>
+                            <input
+                              type="text"
+                              value={formData.bullName || ""}
+                              onChange={(e) => setFormData(prev => ({ ...prev, bullName: e.target.value }))}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
+                              placeholder="Campeón"
+                              required
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                              Arete del Toro *
+                            </label>
+                            <input
+                              type="text"
+                              value={formData.bullEarTag || ""}
+                              onChange={(e) => setFormData(prev => ({ ...prev, bullEarTag: e.target.value }))}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
+                              placeholder="T-001"
+                              required
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Información de la vaca */}
+                      <div className="space-y-4">
+                        <h4 className="font-medium text-gray-900">Vaca</h4>
+                        <div className="space-y-3">
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                              ID de la Vaca *
+                            </label>
+                            <input
+                              type="text"
+                              value={formData.cowId || ""}
+                              onChange={(e) => setFormData(prev => ({ ...prev, cowId: e.target.value }))}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
+                              placeholder="cow-123"
+                              required
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                              Nombre de la Vaca *
+                            </label>
+                            <input
+                              type="text"
+                              value={formData.cowName || ""}
+                              onChange={(e) => setFormData(prev => ({ ...prev, cowName: e.target.value }))}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
+                              placeholder="Bella"
+                              required
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                              Arete de la Vaca *
+                            </label>
+                            <input
+                              type="text"
+                              value={formData.cowEarTag || ""}
+                              onChange={(e) => setFormData(prev => ({ ...prev, cowEarTag: e.target.value }))}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
+                              placeholder="MX-001"
+                              required
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Detalles del apareamiento */}
+                  <div className="bg-green-50 rounded-xl p-4">
+                    <h3 className="font-semibold text-gray-900 mb-4 flex items-center">
+                      <Heart className="w-5 h-5 mr-2 text-green-600" />
+                      Detalles del Apareamiento
+                    </h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Fecha *
+                        </label>
+                        <input
+                          type="date"
+                          value={formData.matingDate || ""}
+                          onChange={(e) => setFormData(prev => ({ ...prev, matingDate: e.target.value }))}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Hora *
+                        </label>
+                        <input
+                          type="time"
+                          value={formData.matingTime || ""}
+                          onChange={(e) => setFormData(prev => ({ ...prev, matingTime: e.target.value }))}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Tipo *
+                        </label>
+                        <select
+                          value={formData.matingType || "natural"}
+                          onChange={(e) => setFormData(prev => ({ ...prev, matingType: e.target.value as any }))}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
+                          required
+                        >
+                          <option value="natural">Natural</option>
+                          <option value="artificial_insemination">Inseminación Artificial</option>
+                          <option value="embryo_transfer">Transferencia de Embriones</option>
+                          <option value="synchronized">Sincronizado</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Método *
+                        </label>
+                        <select
+                          value={formData.method || "natural_service"}
+                          onChange={(e) => setFormData(prev => ({ ...prev, method: e.target.value as any }))}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
+                          required
+                        >
+                          <option value="natural_service">Servicio Natural</option>
+                          <option value="hand_mating">Monta Asistida</option>
+                          <option value="pasture_breeding">Apareamiento en Potrero</option>
+                          <option value="controlled_breeding">Apareamiento Controlado</option>
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Ubicación */}
+                  <div className="bg-purple-50 rounded-xl p-4">
+                    <h3 className="font-semibold text-gray-900 mb-4 flex items-center">
+                      <MapPin className="w-5 h-5 mr-2 text-purple-600" />
+                      Ubicación
+                    </h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Latitud
+                        </label>
+                        <input
+                          type="number"
+                          step="any"
+                          value={formData.location?.lat || 17.989}
+                          onChange={(e) => setFormData(prev => ({ 
+                            ...prev, 
+                            location: { 
+                              ...prev.location!, 
+                              lat: parseFloat(e.target.value) || 17.989 
+                            }
+                          }))}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Longitud
+                        </label>
+                        <input
+                          type="number"
+                          step="any"
+                          value={formData.location?.lng || -92.247}
+                          onChange={(e) => setFormData(prev => ({ 
+                            ...prev, 
+                            location: { 
+                              ...prev.location!, 
+                              lng: parseFloat(e.target.value) || -92.247 
+                            }
+                          }))}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Ambiente
+                        </label>
+                        <select
+                          value={formData.location?.environment || "field"}
+                          onChange={(e) => setFormData(prev => ({ 
+                            ...prev, 
+                            location: { 
+                              ...prev.location!, 
+                              environment: e.target.value as any 
+                            }
+                          }))}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
+                        >
+                          <option value="field">Campo</option>
+                          <option value="barn">Establo</option>
+                          <option value="breeding_facility">Instalación de Reproducción</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Dirección
+                        </label>
+                        <input
+                          type="text"
+                          value={formData.location?.address || ""}
+                          onChange={(e) => setFormData(prev => ({ 
+                            ...prev, 
+                            location: { 
+                              ...prev.location!, 
+                              address: e.target.value 
+                            }
+                          }))}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
+                          placeholder="Potrero Norte, Rancho San Miguel"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Información adicional */}
+                  <div className="bg-yellow-50 rounded-xl p-4">
+                    <h3 className="font-semibold text-gray-900 mb-4 flex items-center">
+                      <Info className="w-5 h-5 mr-2 text-yellow-600" />
+                      Información Adicional
+                    </h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Estado
+                        </label>
+                        <select
+                          value={formData.status || "scheduled"}
+                          onChange={(e) => setFormData(prev => ({ ...prev, status: e.target.value as any }))}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
+                        >
+                          <option value="scheduled">Programado</option>
+                          <option value="in_progress">En Progreso</option>
+                          <option value="completed">Completado</option>
+                          <option value="failed">Fallido</option>
+                          <option value="cancelled">Cancelado</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Costo ($)
+                        </label>
+                        <input
+                          type="number"
+                          min="0"
+                          value={formData.cost || 0}
+                          onChange={(e) => setFormData(prev => ({ ...prev, cost: parseInt(e.target.value) || 0 }))}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
+                        />
+                      </div>
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Notas
+                      </label>
+                      <textarea
+                        value={formData.notes || ""}
+                        onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
+                        rows={3}
+                        placeholder="Observaciones adicionales del apareamiento..."
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Botones de acción */}
+                <div className="bg-gray-50 px-6 py-4 flex items-center justify-end space-x-3 rounded-b-2xl">
+                  <button
+                    onClick={() => {
+                      setShowForm(false);
+                      setEditingRecord(null);
+                      resetForm();
+                    }}
+                    className="px-6 py-2 text-gray-600 hover:text-gray-800 transition-colors flex items-center space-x-2"
+                  >
+                    <ArrowLeft className="w-4 h-4" />
+                    <span>Cancelar</span>
+                  </button>
+                  <motion.button
+                    onClick={() => {
+                      if (editingRecord) {
+                        handleUpdate(editingRecord.id, formData);
+                      } else {
+                        handleCreate(formData);
+                      }
+                    }}
+                    className="px-6 py-2 bg-gradient-to-r from-[#519a7c] to-[#4e9c75] text-white rounded-lg hover:from-[#4e9c75] hover:to-[#519a7c] transition-all duration-200 flex items-center space-x-2 shadow-lg"
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                  >
+                    <Save className="w-4 h-4" />
+                    <span>{editingRecord ? "Actualizar" : "Guardar"}</span>
+                  </motion.button>
+                </div>
+              </motion.div>
             </motion.div>
           )}
-        </motion.div>
+        </AnimatePresence>
 
-        {/* Modales */}
-        {showCreateModal && <FormModal isEdit={false} />}
-        {showEditModal && <FormModal isEdit={true} />}
-        {showViewModal && <ViewModal />}
-      </div>
+        {/* Modal de detalles */}
+        <AnimatePresence>
+          {selectedRecord && (
+            <motion.div
+              className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setSelectedRecord(null)}
+            >
+              <motion.div
+                className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto"
+                initial={{ opacity: 0, scale: 0.9, y: 20 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.9, y: 20 }}
+                transition={{ duration: 0.3 }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                {/* Header del modal */}
+                <div className="bg-gradient-to-r from-[#519a7c] to-[#4e9c75] p-6 text-white">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h2 className="text-2xl font-bold">
+                        {selectedRecord.bullName} × {selectedRecord.cowName}
+                      </h2>
+                      <p className="text-white/80">
+                        {selectedRecord.bullEarTag} × {selectedRecord.cowEarTag}
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => setSelectedRecord(null)}
+                      className="p-2 hover:bg-white/20 rounded-lg transition-colors"
+                    >
+                      <X className="w-5 h-5" />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Contenido del modal */}
+                <div className="p-6 space-y-6">
+                  {/* Información general */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="space-y-4">
+                      <h3 className="font-semibold text-gray-900 border-b pb-2">Información General</h3>
+                      <div className="space-y-2">
+                        <p><span className="font-medium text-gray-600">Fecha:</span> {new Date(selectedRecord.matingDate).toLocaleDateString()}</p>
+                        <p><span className="font-medium text-gray-600">Hora:</span> {selectedRecord.matingTime}</p>
+                        <p><span className="font-medium text-gray-600">Tipo:</span> {selectedRecord.matingType}</p>
+                        <p><span className="font-medium text-gray-600">Método:</span> {selectedRecord.method}</p>
+                        <p><span className="font-medium text-gray-600">Estado:</span> 
+                          <span className={`inline-flex px-2 py-1 rounded-full text-xs font-medium ml-2 ${getStatusColor(selectedRecord.status)}`}>
+                            {selectedRecord.status}
+                          </span>
+                        </p>
+                        <p><span className="font-medium text-gray-600">Costo:</span> ${selectedRecord.cost.toLocaleString()}</p>
+                      </div>
+                    </div>
+
+                    <div className="space-y-4">
+                      <h3 className="font-semibold text-gray-900 border-b pb-2">Resultados</h3>
+                      <div className="space-y-2">
+                        {selectedRecord.result && (
+                          <p><span className="font-medium text-gray-600">Resultado:</span>
+                            <span className={`inline-flex px-2 py-1 rounded-full text-xs font-medium ml-2 ${getResultColor(selectedRecord.result)}`}>
+                              {selectedRecord.result}
+                            </span>
+                          </p>
+                        )}
+                        {selectedRecord.followUp.pregnancyResult && (
+                          <p><span className="font-medium text-gray-600">Gestación:</span>
+                            <span className={`inline-flex px-2 py-1 rounded-full text-xs font-medium ml-2 ${
+                              selectedRecord.followUp.pregnancyResult === "pregnant" ? "bg-green-100 text-green-800" :
+                              selectedRecord.followUp.pregnancyResult === "not_pregnant" ? "bg-red-100 text-red-800" :
+                              "bg-yellow-100 text-yellow-800"
+                            }`}>
+                              {selectedRecord.followUp.pregnancyResult}
+                            </span>
+                          </p>
+                        )}
+                        {selectedRecord.followUp.expectedCalvingDate && (
+                          <p><span className="font-medium text-gray-600">Parto esperado:</span> {new Date(selectedRecord.followUp.expectedCalvingDate).toLocaleDateString()}</p>
+                        )}
+                        <p><span className="font-medium text-gray-600">Asistido por:</span> {selectedRecord.technicalDetails.assistedBy.name}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Detección de estro */}
+                  {selectedRecord.estrusDetection.detected && (
+                    <div className="bg-pink-50 rounded-xl p-4">
+                      <h3 className="font-semibold text-gray-900 mb-3">Detección de Estro</h3>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <p><span className="font-medium text-gray-600">Fecha detección:</span> {new Date(selectedRecord.estrusDetection.detectionDate).toLocaleDateString()}</p>
+                          <p><span className="font-medium text-gray-600">Hora:</span> {selectedRecord.estrusDetection.detectionTime}</p>
+                          <p><span className="font-medium text-gray-600">Intensidad:</span> {selectedRecord.estrusDetection.intensity}</p>
+                          <p><span className="font-medium text-gray-600">Detectado por:</span> {selectedRecord.estrusDetection.detectedBy}</p>
+                        </div>
+                        <div>
+                          <p className="font-medium text-gray-600 mb-2">Signos observados:</p>
+                          <div className="flex flex-wrap gap-1">
+                            {selectedRecord.estrusDetection.signs.map((sign, index) => (
+                              <span key={index} className="bg-pink-100 text-pink-800 px-2 py-1 rounded-full text-xs">
+                                {sign}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Condición de animales */}
+                  <div className="bg-blue-50 rounded-xl p-4">
+                    <h3 className="font-semibold text-gray-900 mb-3">Condición de los Animales</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <h4 className="font-medium text-gray-900 mb-2">Toro</h4>
+                        <p><span className="font-medium text-gray-600">Condición:</span> {selectedRecord.technicalDetails.animalCondition.bullCondition}</p>
+                      </div>
+                      <div>
+                        <h4 className="font-medium text-gray-900 mb-2">Vaca</h4>
+                        <p><span className="font-medium text-gray-600">Condición:</span> {selectedRecord.technicalDetails.animalCondition.cowCondition}</p>
+                        <p><span className="font-medium text-gray-600">Receptividad:</span> {selectedRecord.technicalDetails.animalCondition.cowReceptivity}</p>
+                        <p><span className="font-medium text-gray-600">Nivel de estrés:</span> {selectedRecord.technicalDetails.animalCondition.stressLevel}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Factores ambientales */}
+                  <div className="bg-orange-50 rounded-xl p-4">
+                    <h3 className="font-semibold text-gray-900 mb-3">Condiciones Ambientales</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <p><span className="font-medium text-gray-600">Temperatura:</span> {selectedRecord.environmentalFactors.temperature}°C</p>
+                        <p><span className="font-medium text-gray-600">Humedad:</span> {selectedRecord.environmentalFactors.humidity}%</p>
+                      </div>
+                      <div>
+                        <p><span className="font-medium text-gray-600">Momento del día:</span> {selectedRecord.environmentalFactors.timeOfDay}</p>
+                        {selectedRecord.environmentalFactors.weather && (
+                          <p><span className="font-medium text-gray-600">Clima:</span> {selectedRecord.environmentalFactors.weather}</p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Ubicación */}
+                  <div className="bg-purple-50 rounded-xl p-4">
+                    <h3 className="font-semibold text-gray-900 mb-3">Ubicación</h3>
+                    <p className="text-gray-700">{selectedRecord.location.address}</p>
+                    <p className="text-sm text-gray-600 mt-1">
+                      Coordenadas: {selectedRecord.location.lat.toFixed(6)}, {selectedRecord.location.lng.toFixed(6)}
+                    </p>
+                    <p className="text-sm text-gray-600">
+                      Ambiente: {selectedRecord.location.environment}
+                    </p>
+                  </div>
+
+                  {/* Notas */}
+                  {selectedRecord.notes && (
+                    <div className="bg-gray-50 rounded-xl p-4">
+                      <h3 className="font-semibold text-gray-900 mb-3">Notas</h3>
+                      <p className="text-gray-700">{selectedRecord.notes}</p>
+                    </div>
+                  )}
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Mensaje cuando no hay registros */}
+        {filteredRecords.length === 0 && !isLoading && (
+          <motion.div
+            className="bg-white/95 backdrop-blur-sm rounded-2xl shadow-xl p-12 text-center border border-white/20"
+            variants={itemVariants}
+          >
+            <div className="max-w-md mx-auto">
+              <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Heart className="w-8 h-8 text-gray-400" />
+              </div>
+              <h3 className="text-xl font-semibold text-gray-900 mb-2">
+                No se encontraron registros
+              </h3>
+              <p className="text-gray-600 mb-6">
+                No hay registros de apareamiento que coincidan con los filtros aplicados.
+              </p>
+              <button
+                onClick={() => {
+                  setEditingRecord(null);
+                  resetForm();
+                  setShowForm(true);
+                }}
+                className="px-6 py-3 bg-gradient-to-r from-[#519a7c] to-[#4e9c75] text-white rounded-xl hover:from-[#4e9c75] hover:to-[#519a7c] transition-all duration-200 flex items-center space-x-2 mx-auto"
+              >
+                <Plus className="w-5 h-5" />
+                <span>Crear Primer Apareamiento</span>
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </motion.div>
     </div>
   );
 };
