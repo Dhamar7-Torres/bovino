@@ -1,4 +1,13 @@
-// MatingRecords.tsx
+// Función para obtener color del resultado de embarazo
+  const getPregnancyResultColor = (result?: string) => {
+    const colors = {
+      pregnant: "bg-green-100 text-green-800 border-green-200",
+      not_pregnant: "bg-red-100 text-red-800 border-red-200",
+      questionable: "bg-yellow-100 text-yellow-800 border-yellow-200",
+      pending: "bg-blue-100 text-blue-800 border-blue-200",
+    };
+    return result ? colors[result as keyof typeof colors] || colors.pending : colors.pending;
+  };// MatingRecords.tsx
 // CRUD completo para gestión de registros de apareamiento bovino
 // Sistema de gestión ganadera - Universidad Juárez Autónoma de Tabasco (UJAT)
 
@@ -15,16 +24,10 @@ import {
   Download,
   Clock,
   CheckCircle,
-  XCircle,
-  AlertTriangle,
   Activity,
   FileText,
   X,
-  ChevronDown,
-  ChevronUp,
   Target,
-  Calendar,
-  User,
   Save,
   ArrowLeft,
   MapPin,
@@ -35,9 +38,7 @@ import {
   TestTube,
   Thermometer,
   Timer,
-  TrendingUp,
   Award,
-  Droplets,
 } from "lucide-react";
 
 // Simulación de react-bits para animación de texto
@@ -122,7 +123,7 @@ interface MatingRecord {
     pregnancyTestScheduled: boolean;
     pregnancyTestDate?: string;
     pregnancyTestMethod?: "palpation" | "ultrasound" | "blood_test";
-    pregnancyResult?: "pregnant" | "not_pregnant" | "questionable";
+    pregnancyResult?: "pregnant" | "not_pregnant" | "questionable" | "pending";
     pregnancyConfirmDate?: string;
     expectedCalvingDate?: string;
     repeatBreeding?: {
@@ -141,7 +142,7 @@ interface MatingRecord {
   notes: string;
   cost: number;
   status: "scheduled" | "in_progress" | "completed" | "failed" | "cancelled";
-  result?: "successful" | "unsuccessful" | "pending";
+  result?: "successful" | "unsuccessful" | "pending" | "questionable";
   complications?: string[];
   createdAt: string;
   updatedAt: string;
@@ -729,6 +730,7 @@ const MatingRecords: React.FC = () => {
       successful: "bg-emerald-100 text-emerald-800 border-emerald-200",
       unsuccessful: "bg-red-100 text-red-800 border-red-200",
       pending: "bg-blue-100 text-blue-800 border-blue-200",
+      questionable: "bg-yellow-100 text-yellow-800 border-yellow-200",
     };
     return result ? colors[result as keyof typeof colors] || colors.pending : colors.pending;
   };
@@ -1372,19 +1374,17 @@ const MatingRecords: React.FC = () => {
                             {record.result === "successful" && "Exitoso"}
                             {record.result === "unsuccessful" && "Fallido"}
                             {record.result === "pending" && "Pendiente"}
+                            {record.result === "questionable" && "Dudoso"}
                           </span>
                         )}
                       </td>
                       <td className="px-6 py-4">
                         {record.followUp.pregnancyResult && (
-                          <span className={`inline-flex px-2 py-1 rounded-full text-xs font-medium ${
-                            record.followUp.pregnancyResult === "pregnant" ? "bg-green-100 text-green-800" :
-                            record.followUp.pregnancyResult === "not_pregnant" ? "bg-red-100 text-red-800" :
-                            "bg-yellow-100 text-yellow-800"
-                          }`}>
+                          <span className={`inline-flex px-2 py-1 rounded-full text-xs font-medium ${getPregnancyResultColor(record.followUp.pregnancyResult)}`}>
                             {record.followUp.pregnancyResult === "pregnant" && "Gestante"}
                             {record.followUp.pregnancyResult === "not_pregnant" && "No Gestante"}
                             {record.followUp.pregnancyResult === "questionable" && "Dudoso"}
+                            {record.followUp.pregnancyResult === "pending" && "Pendiente"}
                           </span>
                         )}
                       </td>
@@ -1874,18 +1874,20 @@ const MatingRecords: React.FC = () => {
                         {selectedRecord.result && (
                           <p><span className="font-medium text-gray-600">Resultado:</span>
                             <span className={`inline-flex px-2 py-1 rounded-full text-xs font-medium ml-2 ${getResultColor(selectedRecord.result)}`}>
-                              {selectedRecord.result}
+                              {selectedRecord.result === "successful" && "Exitoso"}
+                              {selectedRecord.result === "unsuccessful" && "Fallido"}
+                              {selectedRecord.result === "pending" && "Pendiente"}
+                              {selectedRecord.result === "questionable" && "Dudoso"}
                             </span>
                           </p>
                         )}
                         {selectedRecord.followUp.pregnancyResult && (
                           <p><span className="font-medium text-gray-600">Gestación:</span>
-                            <span className={`inline-flex px-2 py-1 rounded-full text-xs font-medium ml-2 ${
-                              selectedRecord.followUp.pregnancyResult === "pregnant" ? "bg-green-100 text-green-800" :
-                              selectedRecord.followUp.pregnancyResult === "not_pregnant" ? "bg-red-100 text-red-800" :
-                              "bg-yellow-100 text-yellow-800"
-                            }`}>
-                              {selectedRecord.followUp.pregnancyResult}
+                            <span className={`inline-flex px-2 py-1 rounded-full text-xs font-medium ml-2 ${getPregnancyResultColor(selectedRecord.followUp.pregnancyResult)}`}>
+                              {selectedRecord.followUp.pregnancyResult === "pregnant" && "Gestante"}
+                              {selectedRecord.followUp.pregnancyResult === "not_pregnant" && "No Gestante"}
+                              {selectedRecord.followUp.pregnancyResult === "questionable" && "Dudoso"}
+                              {selectedRecord.followUp.pregnancyResult === "pending" && "Pendiente"}
                             </span>
                           </p>
                         )}

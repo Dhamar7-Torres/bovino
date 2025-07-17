@@ -1,14 +1,17 @@
 import React from "react";
+
 import {
   BrowserRouter as Router,
   Routes,
   Route,
   Navigate,
 } from "react-router-dom";
+
 import { motion } from "framer-motion";
+
 import { Plus, Beef, Syringe, Calendar, Bell } from "lucide-react";
 
-// Importar el Layout completo
+
 import { Layout } from "./components/layout";
 import AuthPage from "./pages/auth/AuthPage";
 import BovinesPage from "./pages/bovines/BovinesPage";
@@ -23,6 +26,7 @@ import ProductionPage from "./pages/production";
 import RanchPage from "./pages/ranch/RanchPage";
 import { ReportsPage } from "./pages/reports";
 import { ReproductionPage } from "./pages/reproduction";
+import SettingsPage from "./pages/settings";
 
 // Agregar las fuentes elegantes al head
 const addGoogleFonts = () => {
@@ -154,6 +158,7 @@ const DashboardPage: React.FC = () => {
           >
             {/* Efecto de brillo sutil al hover */}
             <div className="absolute inset-0 bg-gradient-to-r from-white/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+
             <div className="relative">
               {/* Header con título e ícono */}
               <div className="flex items-start justify-between mb-4">
@@ -176,6 +181,7 @@ const DashboardPage: React.FC = () => {
                   <stat.icon size={32} style={{ color: stat.iconColor }} />
                 </div>
               </div>
+
               {/* Valor principal y cambio */}
               <div className="mb-3">
                 <div className="flex items-baseline gap-3">
@@ -197,10 +203,12 @@ const DashboardPage: React.FC = () => {
                   )}
                 </div>
               </div>
+
               {/* Descripción */}
               <p className="text-xs text-black font-medium mb-4">
                 {stat.description}
               </p>
+
               {/* Barra de progreso */}
               <div className="w-full bg-gray-200 rounded-full h-1.5">
                 <motion.div
@@ -215,6 +223,7 @@ const DashboardPage: React.FC = () => {
           </motion.div>
         ))}
       </div>
+
       {/* Sección adicional simplificada */}
       <motion.div
         initial={{ opacity: 0, y: 40 }}
@@ -235,11 +244,13 @@ const DashboardPage: React.FC = () => {
                 </p>
               </div>
             </div>
+
             <p className="text-black leading-relaxed mb-6 font-medium">
               Sistema integral para el manejo, seguimiento y control de ganado
               bovino con tecnología de geolocalización avanzada desarrollado en
               la UJAT.
             </p>
+
             <div className="grid grid-cols-2 gap-4">
               <div className="text-center p-4 bg-white/70 backdrop-blur-sm rounded-xl border border-gray-200">
                 <div className="text-2xl font-bold text-[#3d8b40]">1,247</div>
@@ -256,6 +267,7 @@ const DashboardPage: React.FC = () => {
             </div>
           </div>
         </div>
+
         <div className="space-y-6">
           <div className="bg-[#f5f5dc]/90 backdrop-blur-sm rounded-2xl p-6 border border-gray-200/30">
             <h4 className="font-semibold text-black mb-4">Enlaces Útiles</h4>
@@ -278,6 +290,7 @@ const DashboardPage: React.FC = () => {
               ))}
             </ul>
           </div>
+
           <div className="bg-[#f5f5dc]/90 backdrop-blur-sm rounded-2xl p-6 border border-gray-200/30">
             <h4 className="font-semibold text-black mb-4">Funcionalidades</h4>
             <ul className="space-y-3">
@@ -305,125 +318,6 @@ const DashboardPage: React.FC = () => {
   );
 };
 
-// Páginas de módulos con diseño actualizado
-const ModulePage: React.FC<{
-  title: string;
-  description: string;
-  icon: string;
-}> = ({ title, description, icon }) => (
-  <div className="min-h-screen bg-gradient-to-br from-white/30 via-white/15 to-white/5 backdrop-blur-sm flex flex-col items-center justify-center p-8 rounded-3xl border border-white/20">
-    <motion.div
-      initial={{ opacity: 0, y: 40 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.6 }}
-      className="text-center max-w-2xl"
-    >
-      <h1 className="text-5xl font-bold text-black mb-6 drop-shadow-lg">
-        {title}
-      </h1>
-      <p className="text-xl text-black/90 mb-12 drop-shadow">{description}</p>
-      <motion.div
-        initial={{ scale: 0.8, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
-        transition={{ duration: 0.8, delay: 0.3 }}
-        className="mb-8"
-      >
-        <div className="w-32 h-32 mx-auto mb-8 text-8xl">{icon}</div>
-      </motion.div>
-      <motion.p
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ delay: 0.6 }}
-        className="text-lg text-black/80 bg-white/30 backdrop-blur-sm px-6 py-3 rounded-2xl border border-white/30"
-      >
-        Página en construcción...
-      </motion.p>
-    </motion.div>
-  </div>
-);
-
-// Páginas específicas de módulos
-
-// ✅ COMENTAMOS EL PLACEHOLDER DE HEALTH PORQUE YA TENEMOS EL REAL
-// const HealthPage: React.FC = () => (
-//   <ModulePage
-//     title="Gestión de Salud"
-//     description="Control veterinario y salud del ganado"
-//     icon="💉"
-//   />
-// );
-
-// ✅ COMENTAMOS EL PLACEHOLDER DE REPRODUCTION PORQUE YA TENEMOS EL REAL
-// const ReproductionPage: React.FC = () => (
-//   <ModulePage
-//     title="Gestión de Reproducción"
-//     description="Control reproductivo y genético del ganado"
-//     icon="🍼"
-//   />
-// );
-
-// ✅ COMENTAMOS EL PLACEHOLDER DE PRODUCTION PORQUE YA TENEMOS EL REAL
-// const ProductionPage: React.FC = () => (
-//   <ModulePage
-//     title="Gestión de Producción"
-//     description="Control y métricas de producción ganadera"
-//     icon="📈"
-//   />
-// );
-
-// ✅ COMENTAMOS EL PLACEHOLDER DE MAPS PORQUE YA TENEMOS EL REAL
-// const MapsPage: React.FC = () => (
-//   <ModulePage
-//     title="Gestión de Mapas"
-//     description="Geolocalización y seguimiento GPS del ganado"
-//     icon="🗺️"
-//   />
-// );
-
-// ✅ COMENTAMOS EL PLACEHOLDER DE INVENTORY PORQUE YA TENEMOS EL REAL
-// const InventoryPage: React.FC = () => (
-//   <ModulePage
-//     title="Gestión de Inventario"
-//     description="Control de medicinas y suministros del rancho"
-//     icon="📦"
-//   />
-// );
-
-// ✅ COMENTAMOS LA PÁGINA PLACEHOLDER DE FINANZAS
-// const FinancesPage: React.FC = () => (
-//   <ModulePage
-//     title="Gestión Financiera"
-//     description="Control de costos, ingresos y gastos del rancho"
-//     icon="💰"
-//   />
-// );
-
-// ✅ COMENTAMOS EL PLACEHOLDER DE REPORTES PORQUE YA TENEMOS EL REAL
-// const ReportsPage: React.FC = () => (
-//   <ModulePage
-//     title="Gestión de Reportes"
-//     description="Informes y análisis del rendimiento del rancho"
-//     icon="📊"
-//   />
-// );
-
-// ✅ COMENTAMOS EL PLACEHOLDER DE RANCH PORQUE YA TENEMOS EL REAL
-// const RanchPage: React.FC = () => (
-//   <ModulePage
-//     title="Gestión del Rancho"
-//     description="Administración de instalaciones y propiedades"
-//     icon="🏡"
-//   />
-// );
-
-const SettingsPage: React.FC = () => (
-  <ModulePage
-    title="Configuración del Sistema"
-    description="Preferencias y configuración de la aplicación"
-    icon="⚙️"
-  />
-);
-
 // Componente principal de la aplicación
 const App: React.FC = () => {
   return (
@@ -432,26 +326,28 @@ const App: React.FC = () => {
         <Routes>
           {/* Ruta raíz - redirige al dashboard */}
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
+
           {/* Rutas de autenticación - FUERA del Layout */}
           <Route path="/auth" element={<AuthPage />} />
           <Route path="/auth/*" element={<AuthPage />} />
+
           {/* Layout principal con rutas anidadas */}
           <Route path="/*" element={<Layout />}>
             <Route path="dashboard/*" element={<DashboardPage />} />
             <Route path="bovines/*" element={<BovinesPage />} />
             <Route path="calendar/*" element={<CalendarPage />} />
-            <Route path="feeding/*" element={<FeedingPage />} /> {/* ← NUEVA RUTA */}
-            {/* Resto de módulos (mantenemos los existentes) */}
-            <Route path="health/*" element={<HealthPage />} /> {/* ← RUTA ACTUALIZADA CON MÓDULO REAL */}
-            <Route path="reproduction/*" element={<ReproductionPage />} /> {/* ← RUTA ACTUALIZADA CON MÓDULO REAL */}
-            <Route path="production/*" element={<ProductionPage />} /> {/* ← RUTA ACTUALIZADA CON MÓDULO REAL */}
-            <Route path="maps/*" element={<MapsPage />} /> {/* ← RUTA ACTUALIZADA CON MÓDULO REAL */}
+            <Route path="feeding/*" element={<FeedingPage />} /> 
+            <Route path="health/*" element={<HealthPage />} /> 
+            <Route path="reproduction/*" element={<ReproductionPage />} /> 
+            <Route path="production/*" element={<ProductionPage />} /> 
+            <Route path="maps/*" element={<MapsPage />} /> 
             <Route path="events/*" element={<EventPage />} />
-            <Route path="inventory/*" element={<InventoryPage />} /> {/* ← RUTA ACTUALIZADA CON MÓDULO REAL */}
-            <Route path="finances/*" element={<FinancesPage />} /> {/* ← RUTA ACTUALIZADA */}
-            <Route path="reports/*" element={<ReportsPage />} /> {/* ← RUTA ACTUALIZADA CON MÓDULO REAL */}
-            <Route path="ranch/*" element={<RanchPage />} /> {/* ← RUTA ACTUALIZADA CON MÓDULO RANCH REAL */}
-            <Route path="settings/*" element={<SettingsPage />} />
+            <Route path="inventory/*" element={<InventoryPage />} /> 
+            <Route path="finances/*" element={<FinancesPage />} /> 
+            <Route path="reports/*" element={<ReportsPage />} /> 
+            <Route path="ranch/*" element={<RanchPage />} /> 
+            <Route path="settings/*" element={<SettingsPage />} /> 
+
             {/* Ruta 404 actualizada con nueva paleta */}
             <Route
               path="*"

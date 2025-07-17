@@ -1,1865 +1,2032 @@
-import React, { useState, useEffect } from 'react';
-import { motion, AnimatePresence, Variants } from 'framer-motion';
-import { Calendar, MapPin, Beef, User, Baby, Clock, AlertCircle, Plus, Search, Edit, Trash2, Eye, X, Save, Heart, Activity, Scale, Stethoscope } from 'lucide-react';
+// PregnancyTracking.tsx
+// CRUD completo para seguimiento de gestaciones bovinas
+// Sistema de gestión ganadera - Universidad Juárez Autónoma de Tabasco (UJAT)
 
-// Función utility para clases CSS
-const cn = (...classes: (string | undefined)[]) => {
-  return classes.filter(Boolean).join(' ');
+import React, { useState, useEffect, useMemo } from "react";
+import { motion, AnimatePresence, Variants } from "framer-motion";
+import {
+  Baby,
+  Plus,
+  Search,
+  Filter,
+  Eye,
+  Edit,
+  Trash2,
+  Download,
+  Clock,
+  Activity,
+  FileText,
+  X,
+  Calendar,
+  Save,
+  ArrowLeft,
+  MapPin,
+  Info,
+  Heart,
+  Stethoscope,
+  Timer,
+  AlertTriangle,
+  User,
+  Crown,
+} from "lucide-react";
+
+// Simulación de react-bits para animación de texto
+const AnimatedText: React.FC<{ children: string; className?: string }> = ({ 
+  children, 
+  className = "" 
+}) => {
+  return (
+    <motion.span
+      className={className}
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.6, ease: "easeOut" }}
+    >
+      {children.split("").map((char, index) => (
+        <motion.span
+          key={index}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ 
+            delay: index * 0.03,
+            duration: 0.3 
+          }}
+        >
+          {char}
+        </motion.span>
+      ))}
+    </motion.span>
+  );
 };
 
-// Tipos locales para seguimiento de gestación
-interface Coordinates {
-  lat: number;
-  lng: number;
-}
-
-// Interfaces específicas para el CRUD de Seguimiento de Gestación
-interface PregnancyTrackingProps {
-  className?: string;
-}
-
+// Interfaces para seguimiento de gestación
 interface PregnancyRecord {
   id: string;
-  
-  // Información básica de la gestación
-  pregnancy: {
-    animalId: string;
-    animalTag: string;
-    animalName: string;
-    breed: string;
-    age: number;
-    parity: number; // número de partos previos
-    
-    // Detalles de la concepción
-    conceptionDate: Date;
-    conceptionMethod: 'artificial_insemination' | 'natural_mating';
-    serviceId: string; // ID del registro de IA o apareamiento
-    
-    // Fechas importantes
-    confirmationDate: Date;
-    estimatedCalvingDate: Date;
-    actualCalvingDate?: Date;
-    
-    // Estado actual
-    currentStatus: 'early_pregnancy' | 'mid_pregnancy' | 'late_pregnancy' | 'pre_calving' | 'calved' | 'aborted';
-    gestationDay: number;
-    gestationWeek: number;
-  };
-  
-  // Información del padre
-  sire: {
+  animalId: string;
+  animalName: string;
+  animalEarTag: string;
+  bullId?: string;
+  bullName?: string;
+  bullEarTag?: string;
+  breedingDate: string;
+  breedingType: "natural" | "artificial_insemination" | "embryo_transfer";
+  confirmationDate: string;
+  confirmationMethod: "palpation" | "ultrasound" | "blood_test" | "visual";
+  gestationDay: number;
+  expectedCalvingDate: string;
+  currentStage: "early" | "middle" | "late";
+  pregnancyNumber: number; // Número de gestación de la vaca
+  veterinarian: {
     id: string;
     name: string;
-    breed: string;
-    registrationNumber?: string;
+    license: string;
+    phone?: string;
+    email?: string;
   };
-  
-  // Exámenes y chequeos veterinarios
+  location: {
+    lat: number;
+    lng: number;
+    address: string;
+    paddock?: string;
+    facility?: string;
+  };
   examinations: PregnancyExamination[];
-  
-  // Seguimiento de condición corporal
-  bodyCondition: BodyConditionRecord[];
-  
-  // Manejo nutricional
-  nutrition: NutritionManagement;
-  
-  // Ubicación y manejo
-  management: {
-    currentLocation: {
-      lat: number;
-      lng: number;
-      address: string;
-      sector: string;
-      potrero: string;
-      paddock: string;
-    };
-    housingType: string;
-    specialCare: string[];
-    exerciseProgram: string;
-    socialGrouping: string;
+  nutritionPlan: {
+    currentStage: "maintenance" | "increased" | "pre_calving";
+    supplements: string[];
+    specialDiet: boolean;
+    waterAccess: "excellent" | "good" | "fair" | "poor";
+    notes?: string;
   };
-  
-  // Preparativos para el parto
-  calvingPreparation: {
-    facilities: any;
-    calvingArea: {
-      lat: number;
-      lng: number;
-      address: string;
-      facilities: string[];
-    };
-    equipmentReady: boolean;
-    veterinarianOnCall: string;
-    assistantAssigned: string;
-    emergencyPlan: string;
-    signalSigns: string[];
+  healthStatus: {
+    overall: "excellent" | "good" | "fair" | "poor" | "critical";
+    bodyCondition: number; // 1-5 escala
+    weight: number; // kg
+    temperature: number; // °C
+    heartRate: number; // bpm
+    respiratoryRate: number; // por minuto
+    bloodPressure?: string;
   };
-  
-  // Complicaciones y observaciones
-  complications: PregnancyComplication[];
-  
-  // Observaciones diarias
-  dailyObservations: DailyObservation[];
-  
-  // Costos y economía
-  economics: {
-    veterinaryCosts: number;
-    nutritionCosts: number;
-    facilityUsage: number;
-    specialCareCosts: number;
-    totalInvestment: number;
-    expectedValue: number; // valor esperado del ternero
+  complications: {
+    hasComplications: boolean;
+    type?: "metabolic" | "reproductive" | "physical" | "nutritional" | "infectious";
+    description?: string;
+    severity: "mild" | "moderate" | "severe";
+    treatmentRequired: boolean;
+    veterinaryAction?: string;
   };
-  
-  // Predicciones y análisis
-  predictions: {
-    calvingDifficulty: 'easy' | 'moderate' | 'difficult';
-    calfWeight: number; // peso estimado del ternero
-    calfSex?: 'male' | 'female';
-    maternalHealth: 'excellent' | 'good' | 'fair' | 'poor';
-    lactationPotential: number; // 1-10
+  monitoringSchedule: {
+    nextExamDate: string;
+    frequency: "weekly" | "biweekly" | "monthly";
+    specialRequirements?: string[];
   };
-  
-  // Metadatos
   notes: string;
-  assignedVeterinarian: string;
-  assignedCaretaker: string;
-  createdAt: Date;
-  updatedAt: Date;
-  createdBy: string;
+  cost: number;
+  status: "active" | "completed" | "lost" | "transferred" | "aborted";
+  outcome?: {
+    type: "successful_birth" | "miscarriage" | "stillbirth" | "early_termination";
+    date?: string;
+    details?: string;
+  };
+  alerts: PregnancyAlert[];
+  photos: string[];
+  createdAt: string;
+  updatedAt: string;
 }
 
 interface PregnancyExamination {
   id: string;
-  date: Date;
-  gestationDay: number;
-  examinationType: 'ultrasound' | 'palpation' | 'blood_test' | 'routine_checkup';
+  date: string;
+  time: string;
+  type: "routine" | "emergency" | "follow_up" | "pre_calving";
   veterinarian: string;
-  location: Coordinates & { address: string };
-  
+  gestationDay: number;
   findings: {
-    fetalViability: boolean;
-    fetalHeartRate?: number;
-    fetalMovement: 'active' | 'normal' | 'reduced' | 'absent';
-    fetalSize: 'small' | 'normal' | 'large';
-    amnioticFluid: 'normal' | 'oligohydramnios' | 'polyhydramnios';
-    placentalHealth: 'normal' | 'abnormal';
+    fetalMovement: "strong" | "moderate" | "weak" | "none";
+    fetalSize: "normal" | "small" | "large";
+    placentalHealth: "normal" | "concerning" | "abnormal";
+    amnioticFluid: "normal" | "low" | "high";
+    cervicalCondition: "normal" | "soft" | "dilated";
   };
-  
   measurements: {
-    crownRumpLength?: number; // mm
-    biparietal?: number; // mm
-    abdominalCircumference?: number; // mm
-    estimatedWeight?: number; // kg
+    fetalLength?: number; // cm
+    fetalWeight?: number; // kg estimado
+    heartRate?: number; // bpm
   };
-  
-  maternalAssessment: {
-    bodyConditionScore: number; // 1-5
-    weight: number;
-    temperature: number;
-    heartRate: number;
-    respiratoryRate: number;
-    rumenFill: number; // 1-5
-  };
-  
+  ultrasoundImages?: string[];
   recommendations: string[];
-  nextCheckDate: Date;
+  nextExamDate?: string;
   cost: number;
-  images?: string[]; // URLs de ultrasonidos
-}
-
-interface BodyConditionRecord {
-  date: Date;
-  score: number; // 1-5 (1=muy delgada, 5=muy gorda)
-  weight: number; // kg
-  backFat?: number; // mm
-  muscleScore?: number; // 1-5
-  evaluator: string;
-  location: string;
   notes: string;
 }
 
-interface NutritionManagement {
-  currentDiet: {
-    energyRequirement: number; // Mcal/día
-    proteinRequirement: number; // kg/día
-    feedIntake: number; // kg/día
-    supplementation: string[];
-    waterIntake: number; // litros/día
-  };
-  
-  feedingSchedule: {
-    timesPerDay: number;
-    portions: number[];
-    feedTypes: string[];
-    specialIngredients: string[];
-  };
-  
-  nutritionalGoals: {
-    targetWeight: number;
-    targetBCS: number;
-    calvingWeight: number;
-  };
-  
-  adjustments: {
-    date: Date;
-    reason: string;
-    changes: string[];
-    expectedResults: string[];
-  }[];
-}
-
-interface PregnancyComplication {
+interface PregnancyAlert {
   id: string;
-  date: Date;
-  type: 'abortion_risk' | 'metabolic_disorder' | 'infectious_disease' | 'physical_trauma' | 'nutritional_deficiency' | 'stress' | 'other';
-  severity: 'mild' | 'moderate' | 'severe' | 'critical';
-  description: string;
-  symptoms: string[];
-  treatment: string[];
-  veterinarian: string;
-  resolution: 'resolved' | 'monitoring' | 'ongoing' | 'worsened';
-  cost: number;
+  type: "health" | "schedule" | "nutrition" | "behavior" | "emergency";
+  severity: "low" | "medium" | "high" | "critical";
+  title: string;
+  message: string;
+  date: string;
+  resolved: boolean;
+  resolvedDate?: string;
+  resolvedBy?: string;
+  actionTaken?: string;
 }
 
-interface DailyObservation {
-  date: Date;
-  observer: string;
-  
-  behavior: {
-    appetite: 'excellent' | 'good' | 'fair' | 'poor' | 'none';
-    activity: 'very_active' | 'active' | 'normal' | 'lethargic' | 'inactive';
-    socialInteraction: 'normal' | 'isolated' | 'aggressive' | 'submissive';
-    restingPattern: 'normal' | 'restless' | 'excessive_lying' | 'discomfort';
+interface PregnancyFilters {
+  dateRange: {
+    start: string;
+    end: string;
   };
-  
-  physicalSigns: {
-    udderDevelopment: 'none' | 'early' | 'moderate' | 'advanced' | 'full';
-    vulvaChanges: 'none' | 'slight' | 'moderate' | 'pronounced';
-    discharge: 'none' | 'clear' | 'mucoid' | 'bloody' | 'abnormal';
-    bodyTemperature?: number;
+  stage: string[];
+  status: string[];
+  veterinarian: string[];
+  complications: string[];
+  pregnancyNumber: string[];
+  searchTerm: string;
+  dueRange: {
+    start: string;
+    end: string;
   };
-  
-  calvingPreparation: {
-    nestingBehavior: boolean;
-    isolationSeeking: boolean;
-    restlessness: boolean;
-    lossOfAppetite: boolean;
-    udderFilling: boolean;
-    cervicalChanges: boolean;
-  };
-  
-  concerns: string[];
-  location: string;
 }
 
-interface FilterOptions {
-  status: string;
-  veterinarian: string;
-  sector: string;
-  gestationStage: string;
-  riskLevel: string;
-}
-
-interface FormData {
-  animalId?: string;
-  conceptionDate?: string;
-  conceptionMethod?: string;
-  veterinarian?: string;
-  caretaker?: string;
-  notes?: string;
-}
-
-// Componente principal del CRUD de Seguimiento de Gestación
-export const PregnancyTracking: React.FC<PregnancyTrackingProps> = ({ 
-  className 
-}) => {
-  // Estados del componente
+// Componente principal de Seguimiento de Gestación
+const PregnancyTracking: React.FC = () => {
+  // Estados principales
   const [records, setRecords] = useState<PregnancyRecord[]>([]);
+  const [filteredRecords, setFilteredRecords] = useState<PregnancyRecord[]>([]);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [showForm, setShowForm] = useState<boolean>(false);
   const [selectedRecord, setSelectedRecord] = useState<PregnancyRecord | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [showCreateModal, setShowCreateModal] = useState(false);
-  const [showEditModal, setShowEditModal] = useState(false);
-  const [showViewModal, setShowViewModal] = useState(false);
+  const [viewMode, setViewMode] = useState<"grid" | "list" | "calendar">("grid");
+  const [showFilters, setShowFilters] = useState<boolean>(false);
   const [editingRecord, setEditingRecord] = useState<PregnancyRecord | null>(null);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [filters, setFilters] = useState<FilterOptions>({
-    status: 'all',
-    veterinarian: 'all',
-    sector: 'all',
-    gestationStage: 'all',
-    riskLevel: 'all'
+  
+  // Estados para filtros
+  const [filters, setFilters] = useState<PregnancyFilters>({
+    dateRange: {
+      start: "",
+      end: "",
+    },
+    stage: [],
+    status: [],
+    veterinarian: [],
+    complications: [],
+    pregnancyNumber: [],
+    searchTerm: "",
+    dueRange: {
+      start: "",
+      end: "",
+    },
   });
 
-  // Estados para formulario de creación/edición
-  const [formData, setFormData] = useState<FormData>({});
+  // Estados para formulario
+  const [formData, setFormData] = useState<Partial<PregnancyRecord>>({
+    breedingType: "natural",
+    confirmationMethod: "ultrasound",
+    currentStage: "early",
+    pregnancyNumber: 1,
+    gestationDay: 0,
+    cost: 0,
+    status: "active",
+    veterinarian: {
+      id: "",
+      name: "",
+      license: "",
+    },
+    location: {
+      lat: 17.989,
+      lng: -92.247,
+      address: "Villahermosa, Tabasco",
+    },
+    examinations: [],
+    nutritionPlan: {
+      currentStage: "maintenance",
+      supplements: [],
+      specialDiet: false,
+      waterAccess: "good",
+    },
+    healthStatus: {
+      overall: "good",
+      bodyCondition: 3,
+      weight: 500,
+      temperature: 38.5,
+      heartRate: 60,
+      respiratoryRate: 20,
+    },
+    complications: {
+      hasComplications: false,
+      severity: "mild",
+      treatmentRequired: false,
+    },
+    monitoringSchedule: {
+      nextExamDate: "",
+      frequency: "monthly",
+    },
+    alerts: [],
+    photos: [],
+  });
 
-  // Datos de ejemplo para registros de seguimiento de gestación
+  // Datos de ejemplo para desarrollo
   const mockRecords: PregnancyRecord[] = [
     {
-      id: 'PG-001',
-      pregnancy: {
-        animalId: 'COW-F-156',
-        animalTag: 'F-TAG-0156',
-        animalName: 'Esperanza',
-        breed: 'Holstein',
-        age: 4,
-        parity: 2,
-        conceptionDate: new Date('2025-05-15'),
-        conceptionMethod: 'artificial_insemination',
-        serviceId: 'IA-001',
-        confirmationDate: new Date('2025-06-12'),
-        estimatedCalvingDate: new Date('2026-02-22'),
-        currentStatus: 'mid_pregnancy',
-        gestationDay: 135,
-        gestationWeek: 19
+      id: "pregnancy-001",
+      animalId: "cow-123",
+      animalName: "Bella",
+      animalEarTag: "MX-001",
+      bullId: "bull-001",
+      bullName: "Campeón",
+      bullEarTag: "T-001",
+      breedingDate: "2025-04-15",
+      breedingType: "natural",
+      confirmationDate: "2025-05-15",
+      confirmationMethod: "ultrasound",
+      gestationDay: 92,
+      expectedCalvingDate: "2026-01-22",
+      currentStage: "early",
+      pregnancyNumber: 3,
+      veterinarian: {
+        id: "vet-001",
+        name: "Dr. García",
+        license: "MVZ-123456",
+        phone: "+52 993 123 4567",
+        email: "dr.garcia@veterinaria.com",
       },
-      sire: {
-        id: 'BULL-001',
-        name: 'Elite Champion 2024',
-        breed: 'Holstein',
-        registrationNumber: 'REG-2024-001'
+      location: {
+        lat: 17.989,
+        lng: -92.247,
+        address: "Potrero Norte, Rancho San Miguel",
+        paddock: "Potrero 3",
+        facility: "Área de Maternidad",
       },
       examinations: [
         {
-          id: 'EXAM-001',
-          date: new Date('2025-07-10'),
-          gestationDay: 90,
-          examinationType: 'ultrasound',
-          veterinarian: 'Dr. María González',
-          location: {
-            lat: 17.0732,
-            lng: -93.1451,
-            address: 'Clínica Veterinaria Móvil'
-          },
+          id: "exam-001",
+          date: "2025-05-15",
+          time: "09:00",
+          type: "routine",
+          veterinarian: "Dr. García",
+          gestationDay: 30,
           findings: {
-            fetalViability: true,
-            fetalHeartRate: 180,
-            fetalMovement: 'active',
-            fetalSize: 'normal',
-            amnioticFluid: 'normal',
-            placentalHealth: 'normal'
+            fetalMovement: "strong",
+            fetalSize: "normal",
+            placentalHealth: "normal",
+            amnioticFluid: "normal",
+            cervicalCondition: "normal",
           },
           measurements: {
-            crownRumpLength: 85,
-            biparietal: 45,
-            estimatedWeight: 8.5
+            fetalLength: 8.5,
+            heartRate: 180,
           },
-          maternalAssessment: {
-            bodyConditionScore: 3.5,
-            weight: 465,
-            temperature: 38.8,
-            heartRate: 72,
-            respiratoryRate: 28,
-            rumenFill: 4
-          },
-          recommendations: [
-            'Continuar con dieta actual',
-            'Próximo chequeo en 4 semanas',
-            'Monitorear actividad fetal'
-          ],
-          nextCheckDate: new Date('2025-08-07'),
-          cost: 350
-        }
-      ],
-      bodyCondition: [
+          recommendations: ["Continuar monitoreo mensual", "Suplementos vitamínicos"],
+          nextExamDate: "2025-06-15",
+          cost: 800,
+          notes: "Desarrollo fetal normal. Sin complicaciones observadas.",
+        },
         {
-          date: new Date('2025-07-15'),
-          score: 3.5,
-          weight: 465,
-          backFat: 8,
-          muscleScore: 3,
-          evaluator: 'Carlos Mendoza',
-          location: 'Potrero Norte',
-          notes: 'Condición corporal óptima para esta etapa'
-        }
+          id: "exam-002",
+          date: "2025-06-15",
+          time: "10:30",
+          type: "routine",
+          veterinarian: "Dr. García",
+          gestationDay: 61,
+          findings: {
+            fetalMovement: "strong",
+            fetalSize: "normal",
+            placentalHealth: "normal",
+            amnioticFluid: "normal",
+            cervicalCondition: "normal",
+          },
+          measurements: {
+            fetalLength: 15.2,
+            fetalWeight: 2.5,
+            heartRate: 175,
+          },
+          recommendations: ["Aumentar proteína en dieta", "Monitoreo quincenal"],
+          nextExamDate: "2025-07-01",
+          cost: 850,
+          notes: "Crecimiento fetal excelente. Incrementar nutrición.",
+        },
       ],
-      nutrition: {
-        currentDiet: {
-          energyRequirement: 28.5,
-          proteinRequirement: 1.8,
-          feedIntake: 18.5,
-          supplementation: ['Calcio', 'Fósforo', 'Vitamina E'],
-          waterIntake: 85
-        },
-        feedingSchedule: {
-          timesPerDay: 3,
-          portions: [6, 7, 5.5],
-          feedTypes: ['Heno de alfalfa', 'Concentrado gestación', 'Pasto'],
-          specialIngredients: ['Melaza', 'Sales minerales']
-        },
-        nutritionalGoals: {
-          targetWeight: 485,
-          targetBCS: 3.5,
-          calvingWeight: 510
-        },
-        adjustments: [
-          {
-            date: new Date('2025-07-01'),
-            reason: 'Incremento requerimientos nutricionales',
-            changes: ['Aumento concentrado 0.5kg/día'],
-            expectedResults: ['Mejor desarrollo fetal', 'Mantenimiento BCS']
-          }
-        ]
+      nutritionPlan: {
+        currentStage: "increased",
+        supplements: ["Vitaminas prenatales", "Calcio", "Fósforo"],
+        specialDiet: true,
+        waterAccess: "excellent",
+        notes: "Dieta rica en proteínas y minerales",
       },
-      management: {
-        currentLocation: {
-          lat: 17.0732,
-          lng: -93.1451,
-          address: 'Potrero Norte, Paddock A1',
-          sector: 'Norte',
-          potrero: 'San José',
-          paddock: 'A1'
-        },
-        housingType: 'Pastoreo con refugio',
-        specialCare: ['Monitoreo diario', 'Suplementación mineral'],
-        exerciseProgram: 'Pastoreo libre controlado',
-        socialGrouping: 'Grupo gestantes'
+      healthStatus: {
+        overall: "excellent",
+        bodyCondition: 4,
+        weight: 580,
+        temperature: 38.3,
+        heartRate: 65,
+        respiratoryRate: 18,
+        bloodPressure: "120/80",
       },
-      calvingPreparation: {
-        calvingArea: {
-          lat: 17.0745,
-          lng: -93.1465,
-          address: 'Área de Partos - Sector Norte',
-          facilities: ['Box individual', 'Iluminación', 'Agua corriente', 'Cámaras']
-        },
-        equipmentReady: true,
-        veterinarianOnCall: 'Dr. María González',
-        assistantAssigned: 'Carlos Mendoza',
-        emergencyPlan: 'Protocolo A - Parto asistido',
-        signalSigns: [
-          'Desarrollo udder',
-          'Relajación ligamentos',
-          'Cambios vulva',
-          'Comportamiento nesting'
-        ],
-        facilities: undefined
+      complications: {
+        hasComplications: false,
+        severity: "mild",
+        treatmentRequired: false,
       },
-      complications: [],
-      dailyObservations: [
-        {
-          date: new Date('2025-07-16'),
-          observer: 'Juan Pérez',
-          behavior: {
-            appetite: 'excellent',
-            activity: 'normal',
-            socialInteraction: 'normal',
-            restingPattern: 'normal'
-          },
-          physicalSigns: {
-            udderDevelopment: 'moderate',
-            vulvaChanges: 'slight',
-            discharge: 'none'
-          },
-          calvingPreparation: {
-            nestingBehavior: false,
-            isolationSeeking: false,
-            restlessness: false,
-            lossOfAppetite: false,
-            udderFilling: false,
-            cervicalChanges: false
-          },
-          concerns: [],
-          location: 'Potrero Norte'
-        }
-      ],
-      economics: {
-        veterinaryCosts: 1250,
-        nutritionCosts: 2800,
-        facilityUsage: 450,
-        specialCareCosts: 300,
-        totalInvestment: 4800,
-        expectedValue: 35000
+      monitoringSchedule: {
+        nextExamDate: "2025-07-01",
+        frequency: "biweekly",
+        specialRequirements: ["Ultrasonido mensual", "Análisis de sangre"],
       },
-      predictions: {
-        calvingDifficulty: 'easy',
-        calfWeight: 42,
-        maternalHealth: 'excellent',
-        lactationPotential: 9
-      },
-      notes: 'Gestación progresando excelentemente. Animal en condiciones óptimas.',
-      assignedVeterinarian: 'Dr. María González',
-      assignedCaretaker: 'Carlos Mendoza',
-      createdAt: new Date('2025-06-12'),
-      updatedAt: new Date('2025-07-16'),
-      createdBy: 'Dr. María González'
+      notes: "Gestación transcurriendo normalmente. Vaca en excelentes condiciones. Propietario muy colaborativo con el programa de seguimiento.",
+      cost: 15000,
+      status: "active",
+      alerts: [],
+      photos: ["ultrasound_001.jpg", "exam_002.jpg"],
+      createdAt: "2025-05-15T09:00:00Z",
+      updatedAt: "2025-06-15T10:30:00Z",
     },
     {
-      id: 'PG-002',
-      pregnancy: {
-        animalId: 'COW-F-203',
-        animalTag: 'F-TAG-0203',
-        animalName: 'Paloma',
-        breed: 'Charolais',
-        age: 5,
-        parity: 3,
-        conceptionDate: new Date('2025-04-20'),
-        conceptionMethod: 'natural_mating',
-        serviceId: 'MT-003',
-        confirmationDate: new Date('2025-05-18'),
-        estimatedCalvingDate: new Date('2026-01-28'),
-        currentStatus: 'late_pregnancy',
-        gestationDay: 175,
-        gestationWeek: 25
+      id: "pregnancy-002",
+      animalId: "cow-124",
+      animalName: "Luna",
+      animalEarTag: "MX-002",
+      bullId: "bull-002",
+      bullName: "Emperador",
+      bullEarTag: "T-002",
+      breedingDate: "2025-03-20",
+      breedingType: "artificial_insemination",
+      confirmationDate: "2025-04-20",
+      confirmationMethod: "palpation",
+      gestationDay: 118,
+      expectedCalvingDate: "2025-12-26",
+      currentStage: "middle",
+      pregnancyNumber: 1,
+      veterinarian: {
+        id: "vet-002",
+        name: "Dra. Martínez",
+        license: "MVZ-789012",
+        phone: "+52 993 987 6543",
+        email: "dra.martinez@reprovet.com",
       },
-      sire: {
-        id: 'BULL-003',
-        name: 'Golden King',
-        breed: 'Charolais',
-        registrationNumber: 'REG-2024-003'
+      location: {
+        lat: 17.995,
+        lng: -92.255,
+        address: "Potrero Sur, Rancho San Miguel",
+        paddock: "Potrero 7",
+        facility: "Área de Gestación",
       },
       examinations: [
         {
-          id: 'EXAM-002',
-          date: new Date('2025-07-12'),
-          gestationDay: 170,
-          examinationType: 'routine_checkup',
-          veterinarian: 'Dr. Pedro Martínez',
-          location: {
-            lat: 17.0698,
-            lng: -93.1389,
-            address: 'Potrero Este'
-          },
+          id: "exam-003",
+          date: "2025-04-20",
+          time: "14:00",
+          type: "routine",
+          veterinarian: "Dra. Martínez",
+          gestationDay: 31,
           findings: {
-            fetalViability: true,
-            fetalHeartRate: 165,
-            fetalMovement: 'active',
-            fetalSize: 'large',
-            amnioticFluid: 'normal',
-            placentalHealth: 'normal'
+            fetalMovement: "moderate",
+            fetalSize: "normal",
+            placentalHealth: "normal",
+            amnioticFluid: "normal",
+            cervicalCondition: "normal",
           },
           measurements: {
-            estimatedWeight: 25
+            fetalLength: 9.0,
+            heartRate: 170,
           },
-          maternalAssessment: {
-            bodyConditionScore: 4.0,
-            weight: 540,
-            temperature: 38.9,
-            heartRate: 68,
-            respiratoryRate: 30,
-            rumenFill: 3
-          },
-          recommendations: [
-            'Reducir concentrado',
-            'Incrementar fibra',
-            'Preparar área de parto',
-            'Monitoreo diario'
-          ],
-          nextCheckDate: new Date('2025-08-09'),
-          cost: 280
-        }
+          recommendations: ["Monitoreo cada 3 semanas", "Suplementación mineral"],
+          nextExamDate: "2025-05-11",
+          cost: 750,
+          notes: "Primera gestación. Desarrollo normal.",
+        },
       ],
-      bodyCondition: [
+      nutritionPlan: {
+        currentStage: "increased",
+        supplements: ["Complejo vitamínico", "Minerales"],
+        specialDiet: false,
+        waterAccess: "good",
+        notes: "Dieta estándar con suplementos",
+      },
+      healthStatus: {
+        overall: "good",
+        bodyCondition: 3,
+        weight: 520,
+        temperature: 38.4,
+        heartRate: 68,
+        respiratoryRate: 22,
+      },
+      complications: {
+        hasComplications: true,
+        type: "nutritional",
+        description: "Ligera pérdida de condición corporal",
+        severity: "mild",
+        treatmentRequired: true,
+        veterinaryAction: "Ajuste nutricional y suplementación",
+      },
+      monitoringSchedule: {
+        nextExamDate: "2025-07-20",
+        frequency: "monthly",
+        specialRequirements: ["Control de peso semanal"],
+      },
+      notes: "Primera gestación. Requiere monitoreo cercano de condición corporal. Vaquilla joven adaptándose bien.",
+      cost: 12000,
+      status: "active",
+      alerts: [
         {
-          date: new Date('2025-07-12'),
-          score: 4.0,
-          weight: 540,
-          backFat: 12,
-          muscleScore: 4,
-          evaluator: 'Miguel Rodríguez',
-          location: 'Potrero Este',
-          notes: 'BCS ligeramente alto, ajustar dieta'
-        }
+          id: "alert-001",
+          type: "nutrition",
+          severity: "medium",
+          title: "Pérdida de Condición Corporal",
+          message: "Se observa ligera pérdida de peso. Revisar plan nutricional.",
+          date: "2025-06-15T00:00:00Z",
+          resolved: false,
+        },
       ],
-      nutrition: {
-        currentDiet: {
-          energyRequirement: 32.5,
-          proteinRequirement: 2.1,
-          feedIntake: 16.8,
-          supplementation: ['Calcio', 'Magnesio', 'Vitamina D'],
-          waterIntake: 95
-        },
-        feedingSchedule: {
-          timesPerDay: 4,
-          portions: [4, 4.5, 4, 4.3],
-          feedTypes: ['Heno de pasto', 'Concentrado reducido', 'Forraje verde'],
-          specialIngredients: ['Bicarbonato de sodio']
-        },
-        nutritionalGoals: {
-          targetWeight: 545,
-          targetBCS: 3.5,
-          calvingWeight: 550
-        },
-        adjustments: [
-          {
-            date: new Date('2025-07-12'),
-            reason: 'BCS alto - riesgo distocia',
-            changes: ['Reducir concentrado 1kg/día', 'Incrementar ejercicio'],
-            expectedResults: ['Reducción BCS a 3.5', 'Parto más fácil']
-          }
-        ]
+      photos: ["luna_exam_001.jpg"],
+      createdAt: "2025-04-20T14:00:00Z",
+      updatedAt: "2025-06-15T16:00:00Z",
+    },
+    {
+      id: "pregnancy-003",
+      animalId: "cow-125",
+      animalName: "Esperanza",
+      animalEarTag: "MX-003",
+      bullId: "bull-003",
+      bullName: "Titán",
+      bullEarTag: "T-003",
+      breedingDate: "2025-01-10",
+      breedingType: "embryo_transfer",
+      confirmationDate: "2025-02-10",
+      confirmationMethod: "ultrasound",
+      gestationDay: 188,
+      expectedCalvingDate: "2025-10-18",
+      currentStage: "late",
+      pregnancyNumber: 5,
+      veterinarian: {
+        id: "vet-001",
+        name: "Dr. García",
+        license: "MVZ-123456",
+        phone: "+52 993 123 4567",
+        email: "dr.garcia@veterinaria.com",
       },
-      management: {
-        currentLocation: {
-          lat: 17.0698,
-          lng: -93.1389,
-          address: 'Potrero Este, Paddock C3',
-          sector: 'Este',
-          potrero: 'El Roble',
-          paddock: 'C3'
-        },
-        housingType: 'Confinamiento parcial',
-        specialCare: ['Ejercicio controlado', 'Monitoreo peso'],
-        exerciseProgram: 'Caminate 2km diarios',
-        socialGrouping: 'Grupo preparto'
+      location: {
+        lat: 17.992,
+        lng: -92.250,
+        address: "Área de Maternidad, Rancho San Miguel",
+        paddock: "Corral de Maternidad",
+        facility: "Instalación de Partos",
       },
-      calvingPreparation: {
-        calvingArea: {
-          lat: 17.0710,
-          lng: -93.1395,
-          address: 'Área de Partos - Sector Este',
-          facilities: ['Box amplio', 'Equipo asistencia', 'Calefacción']
-        },
-        equipmentReady: true,
-        veterinarianOnCall: 'Dr. Pedro Martínez',
-        assistantAssigned: 'Miguel Rodríguez',
-        emergencyPlan: 'Protocolo B - Cesárea disponible',
-        signalSigns: [
-          'Ternero grande esperado',
-          'Primera señal: llamar veterinario',
-          'Equipo cesárea listo'
-        ],
-        facilities: undefined
-      },
-      complications: [
+      examinations: [
         {
-          id: 'COMP-001',
-          date: new Date('2025-07-12'),
-          type: 'other',
-          severity: 'mild',
-          description: 'BCS elevado - riesgo distocia',
-          symptoms: ['Sobrepeso', 'Reducida movilidad'],
-          treatment: ['Ajuste dietético', 'Ejercicio controlado'],
-          veterinarian: 'Dr. Pedro Martínez',
-          resolution: 'monitoring',
-          cost: 150
-        }
+          id: "exam-004",
+          date: "2025-07-10",
+          time: "08:00",
+          type: "pre_calving",
+          veterinarian: "Dr. García",
+          gestationDay: 180,
+          findings: {
+            fetalMovement: "strong",
+            fetalSize: "large",
+            placentalHealth: "normal",
+            amnioticFluid: "normal",
+            cervicalCondition: "soft",
+          },
+          measurements: {
+            fetalLength: 45.0,
+            fetalWeight: 35.0,
+            heartRate: 160,
+          },
+          recommendations: ["Monitoreo diario", "Preparar área de parto", "Asistencia veterinaria en parto"],
+          nextExamDate: "2025-07-17",
+          cost: 1200,
+          notes: "Preparándose para parto. Becerro grande, posible parto asistido.",
+        },
       ],
-      dailyObservations: [
+      nutritionPlan: {
+        currentStage: "pre_calving",
+        supplements: ["Calcio", "Magnesio", "Vitamina D"],
+        specialDiet: true,
+        waterAccess: "excellent",
+        notes: "Dieta pre-parto con restricción energética controlada",
+      },
+      healthStatus: {
+        overall: "good",
+        bodyCondition: 4,
+        weight: 650,
+        temperature: 38.6,
+        heartRate: 72,
+        respiratoryRate: 24,
+        bloodPressure: "125/85",
+      },
+      complications: {
+        hasComplications: true,
+        type: "physical",
+        description: "Becerro de gran tamaño, posible distocia",
+        severity: "moderate",
+        treatmentRequired: true,
+        veterinaryAction: "Preparación para parto asistido",
+      },
+      monitoringSchedule: {
+        nextExamDate: "2025-07-17",
+        frequency: "weekly",
+        specialRequirements: ["Monitoreo diario", "Vigilancia 24/7 cerca del parto"],
+      },
+      notes: "Vaca multípara experimentada. Gestación avanzada con becerro grande. Preparación para posible parto asistido. Ubicada en área de maternidad para monitoreo intensivo.",
+      cost: 25000,
+      status: "active",
+      alerts: [
         {
-          date: new Date('2025-07-16'),
-          observer: 'Miguel Rodríguez',
-          behavior: {
-            appetite: 'good',
-            activity: 'normal',
-            socialInteraction: 'normal',
-            restingPattern: 'normal'
-          },
-          physicalSigns: {
-            udderDevelopment: 'advanced',
-            vulvaChanges: 'moderate',
-            discharge: 'clear'
-          },
-          calvingPreparation: {
-            nestingBehavior: false,
-            isolationSeeking: false,
-            restlessness: false,
-            lossOfAppetite: false,
-            udderFilling: true,
-            cervicalChanges: false
-          },
-          concerns: ['BCS aún alto'],
-          location: 'Potrero Este'
-        }
+          id: "alert-002",
+          type: "emergency",
+          severity: "high",
+          title: "Parto Próximo - Becerro Grande",
+          message: "Monitoreo intensivo requerido. Preparar para posible asistencia en parto.",
+          date: "2025-07-10T00:00:00Z",
+          resolved: false,
+        },
       ],
-      economics: {
-        veterinaryCosts: 1580,
-        nutritionCosts: 3200,
-        facilityUsage: 600,
-        specialCareCosts: 450,
-        totalInvestment: 5830,
-        expectedValue: 45000
-      },
-      predictions: {
-        calvingDifficulty: 'moderate',
-        calfWeight: 48,
-        maternalHealth: 'good',
-        lactationPotential: 8
-      },
-      notes: 'Gestación avanzada. Ternero grande esperado. Monitorear BCS y preparar asistencia al parto.',
-      assignedVeterinarian: 'Dr. Pedro Martínez',
-      assignedCaretaker: 'Miguel Rodríguez',
-      createdAt: new Date('2025-05-18'),
-      updatedAt: new Date('2025-07-16'),
-      createdBy: 'Dr. Pedro Martínez'
-    }
+      photos: ["esperanza_ultrasound_latest.jpg", "maternity_area.jpg"],
+      createdAt: "2025-02-10T10:00:00Z",
+      updatedAt: "2025-07-10T08:00:00Z",
+    },
   ];
 
-  // Efectos del componente
-  useEffect(() => {
-    // Simular carga de datos
-    const timer = setTimeout(() => {
-      setRecords(mockRecords);
-      setIsLoading(false);
-    }, 1200);
-
-    return () => clearTimeout(timer);
-  }, []);
-
-  // Variantes de animación para Framer Motion
+  // Variantes de animación
   const containerVariants: Variants = {
-    hidden: { opacity: 0 },
+    hidden: { opacity: 0, y: 20 },
     visible: {
       opacity: 1,
+      y: 0,
       transition: {
-        delayChildren: 0.2,
-        staggerChildren: 0.1
-      }
-    }
+        duration: 0.6,
+        staggerChildren: 0.1,
+      },
+    },
   };
 
   const itemVariants: Variants = {
-    hidden: { y: 20, opacity: 0 },
+    hidden: { opacity: 0, y: 20 },
     visible: {
-      y: 0,
       opacity: 1,
-      transition: {
-        duration: 0.5,
-        ease: "easeOut"
-      }
-    }
+      y: 0,
+      transition: { duration: 0.4 },
+    },
   };
 
-  const modalVariants: Variants = {
-    hidden: { opacity: 0, scale: 0.8 },
-    visible: { 
-      opacity: 1, 
-      scale: 1,
-      transition: { duration: 0.3, ease: "easeOut" }
-    },
-    exit: { 
-      opacity: 0, 
-      scale: 0.8,
-      transition: { duration: 0.2 }
+  // Cargar datos iniciales
+  useEffect(() => {
+    const loadData = async () => {
+      setIsLoading(true);
+      try {
+        // Simular carga de datos
+        await new Promise(resolve => setTimeout(resolve, 1200));
+        setRecords(mockRecords);
+        setFilteredRecords(mockRecords);
+      } catch (error) {
+        console.error("Error cargando datos:", error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadData();
+  }, []);
+
+  // Aplicar filtros a los registros
+  useEffect(() => {
+    let filtered = records;
+
+    // Filtro de búsqueda por texto
+    if (filters.searchTerm) {
+      filtered = filtered.filter(record =>
+        record.animalName.toLowerCase().includes(filters.searchTerm.toLowerCase()) ||
+        record.animalEarTag.toLowerCase().includes(filters.searchTerm.toLowerCase()) ||
+        record.bullName?.toLowerCase().includes(filters.searchTerm.toLowerCase()) ||
+        record.veterinarian.name.toLowerCase().includes(filters.searchTerm.toLowerCase())
+      );
     }
-  };
+
+    // Filtro por etapa
+    if (filters.stage.length > 0) {
+      filtered = filtered.filter(record => filters.stage.includes(record.currentStage));
+    }
+
+    // Filtro por estado
+    if (filters.status.length > 0) {
+      filtered = filtered.filter(record => filters.status.includes(record.status));
+    }
+
+    // Filtro por veterinario
+    if (filters.veterinarian.length > 0) {
+      filtered = filtered.filter(record => filters.veterinarian.includes(record.veterinarian.id));
+    }
+
+    // Filtro por complicaciones
+    if (filters.complications.length > 0) {
+      filtered = filtered.filter(record => {
+        if (filters.complications.includes("none") && !record.complications.hasComplications) return true;
+        if (filters.complications.includes("has_complications") && record.complications.hasComplications) return true;
+        return record.complications.type && filters.complications.includes(record.complications.type);
+      });
+    }
+
+    // Filtro por rango de fechas de confirmación
+    if (filters.dateRange.start && filters.dateRange.end) {
+      filtered = filtered.filter(record => {
+        const recordDate = new Date(record.confirmationDate);
+        const startDate = new Date(filters.dateRange.start);
+        const endDate = new Date(filters.dateRange.end);
+        return recordDate >= startDate && recordDate <= endDate;
+      });
+    }
+
+    // Filtro por rango de fechas de parto esperado
+    if (filters.dueRange.start && filters.dueRange.end) {
+      filtered = filtered.filter(record => {
+        const dueDate = new Date(record.expectedCalvingDate);
+        const startDate = new Date(filters.dueRange.start);
+        const endDate = new Date(filters.dueRange.end);
+        return dueDate >= startDate && dueDate <= endDate;
+      });
+    }
+
+    setFilteredRecords(filtered);
+  }, [records, filters]);
+
+  // Estadísticas calculadas
+  const stats = useMemo(() => {
+    const total = records.length;
+    const active = records.filter(r => r.status === "active").length;
+    const early = records.filter(r => r.currentStage === "early").length;
+    const middle = records.filter(r => r.currentStage === "middle").length;
+    const late = records.filter(r => r.currentStage === "late").length;
+    const withComplications = records.filter(r => r.complications.hasComplications).length;
+    const dueThisWeek = records.filter(r => {
+      const dueDate = new Date(r.expectedCalvingDate);
+      const today = new Date();
+      const nextWeek = new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000);
+      return dueDate >= today && dueDate <= nextWeek;
+    }).length;
+
+    return {
+      total,
+      active,
+      early,
+      middle,
+      late,
+      withComplications,
+      dueThisWeek,
+      averageGestationDay: records.length > 0 ? Math.round(records.reduce((sum, r) => sum + r.gestationDay, 0) / records.length) : 0,
+    };
+  }, [records]);
 
   // Funciones CRUD
-  const handleCreate = () => {
-    setFormData({});
-    setEditingRecord(null);
-    setShowCreateModal(true);
-  };
 
-  const handleEdit = (record: PregnancyRecord) => {
-    setEditingRecord(record);
-    setFormData({
-      animalId: record.pregnancy.animalId,
-      conceptionDate: record.pregnancy.conceptionDate.toISOString().split('T')[0],
-      conceptionMethod: record.pregnancy.conceptionMethod,
-      veterinarian: record.assignedVeterinarian,
-      caretaker: record.assignedCaretaker,
-      notes: record.notes
-    });
-    setShowEditModal(true);
-  };
-
-  const handleView = (record: PregnancyRecord) => {
-    setSelectedRecord(record);
-    setShowViewModal(true);
-  };
-
-  const handleDelete = (recordId: string) => {
-    if (window.confirm('¿Estás seguro de que deseas eliminar este registro de seguimiento de gestación?')) {
-      setRecords(records.filter(record => record.id !== recordId));
-    }
-  };
-
-  const handleSave = () => {
-    if (editingRecord) {
-      // Actualizar registro existente
-      const updatedRecord = {
-        ...editingRecord,
-        notes: formData.notes || editingRecord.notes,
-        assignedVeterinarian: formData.veterinarian || editingRecord.assignedVeterinarian,
-        assignedCaretaker: formData.caretaker || editingRecord.assignedCaretaker,
-        updatedAt: new Date()
-      };
-      
-      setRecords(records.map(record => 
-        record.id === editingRecord.id ? updatedRecord : record
-      ));
-      setShowEditModal(false);
-    } else {
-      // Crear nuevo registro - simplificado para demostración
-      const newRecord: PregnancyRecord = {
-        id: `PG-${Date.now()}`,
-        pregnancy: {
-          animalId: formData.animalId || 'COW-NEW',
-          animalTag: 'NEW-TAG',
-          animalName: 'Nueva Gestante',
-          breed: 'Holstein',
-          age: 4,
-          parity: 1,
-          conceptionDate: new Date(formData.conceptionDate || new Date()),
-          conceptionMethod: (formData.conceptionMethod as any) || 'artificial_insemination',
-          serviceId: 'SRV-NEW',
-          confirmationDate: new Date(),
-          estimatedCalvingDate: new Date(Date.now() + 280 * 24 * 60 * 60 * 1000), // +280 días
-          currentStatus: 'early_pregnancy',
-          gestationDay: 30,
-          gestationWeek: 4
-        },
-        sire: {
-          id: 'BULL-NEW',
-          name: 'Toro Nuevo',
-          breed: 'Holstein'
-        },
-        examinations: [],
-        bodyCondition: [],
-        nutrition: {
-          currentDiet: {
-            energyRequirement: 25,
-            proteinRequirement: 1.5,
-            feedIntake: 16,
-            supplementation: [],
-            waterIntake: 70
-          },
-          feedingSchedule: {
-            timesPerDay: 2,
-            portions: [8, 8],
-            feedTypes: ['Pasto', 'Concentrado'],
-            specialIngredients: []
-          },
-          nutritionalGoals: {
-            targetWeight: 450,
-            targetBCS: 3.5,
-            calvingWeight: 480
-          },
-          adjustments: []
-        },
-        management: {
-          currentLocation: {
-            lat: 17.0732,
-            lng: -93.1451,
-            address: 'Nueva ubicación',
-            sector: 'Norte',
-            potrero: 'Nuevo',
-            paddock: 'A1'
-          },
-          housingType: 'Pastoreo',
-          specialCare: [],
-          exerciseProgram: 'Libre',
-          socialGrouping: 'General'
-        },
-        calvingPreparation: {
-          calvingArea: {
-            lat: 17.0732,
-            lng: -93.1451,
-            address: 'Área de partos',
-            facilities: []
-          },
-          equipmentReady: false,
-          veterinarianOnCall: formData.veterinarian || 'Por asignar',
-          assistantAssigned: formData.caretaker || 'Por asignar',
-          emergencyPlan: 'Por definir',
-          signalSigns: [],
-          facilities: undefined
-        },
-        complications: [],
-        dailyObservations: [],
-        economics: {
-          veterinaryCosts: 0,
-          nutritionCosts: 0,
-          facilityUsage: 0,
-          specialCareCosts: 0,
-          totalInvestment: 0,
-          expectedValue: 25000
-        },
-        predictions: {
-          calvingDifficulty: 'easy',
-          calfWeight: 38,
-          maternalHealth: 'good',
-          lactationPotential: 7
-        },
-        notes: formData.notes || 'Nuevo seguimiento de gestación',
-        assignedVeterinarian: formData.veterinarian || 'Por asignar',
-        assignedCaretaker: formData.caretaker || 'Por asignar',
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        createdBy: 'Usuario'
-      };
-      
-      setRecords([newRecord, ...records]);
-      setShowCreateModal(false);
-    }
-    
-    setFormData({});
-    setEditingRecord(null);
-  };
-
-  // Función para filtrar registros
-  const getFilteredRecords = () => {
-    return records.filter(record => {
-      const matchesSearch = record.pregnancy.animalName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                           record.pregnancy.animalTag.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                           record.assignedVeterinarian.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                           record.assignedCaretaker.toLowerCase().includes(searchTerm.toLowerCase());
-      
-      const matchesStatus = filters.status === 'all' || record.pregnancy.currentStatus === filters.status;
-      const matchesVeterinarian = filters.veterinarian === 'all' || record.assignedVeterinarian === filters.veterinarian;
-      const matchesSector = filters.sector === 'all' || record.management.currentLocation.sector === filters.sector;
-      
-      let matchesGestationStage = true;
-      if (filters.gestationStage !== 'all') {
-        const week = record.pregnancy.gestationWeek;
-        switch (filters.gestationStage) {
-          case 'first_trimester':
-            matchesGestationStage = week <= 12;
-            break;
-          case 'second_trimester':
-            matchesGestationStage = week > 12 && week <= 24;
-            break;
-          case 'third_trimester':
-            matchesGestationStage = week > 24;
-            break;
-        }
-      }
-      
-      return matchesSearch && matchesStatus && matchesVeterinarian && matchesSector && matchesGestationStage;
-    });
-  };
-
-  // Función para obtener el color según el estado
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'early_pregnancy': return 'bg-blue-100 text-blue-800';
-      case 'mid_pregnancy': return 'bg-green-100 text-green-800';
-      case 'late_pregnancy': return 'bg-yellow-100 text-yellow-800';
-      case 'pre_calving': return 'bg-orange-100 text-orange-800';
-      case 'calved': return 'bg-purple-100 text-purple-800';
-      case 'aborted': return 'bg-red-100 text-red-800';
-      default: return 'bg-gray-100 text-gray-800';
-    }
-  };
-
-  // Función para obtener el texto del estado
-  const getStatusText = (status: string) => {
-    switch (status) {
-      case 'early_pregnancy': return 'Gestación Temprana';
-      case 'mid_pregnancy': return 'Gestación Media';
-      case 'late_pregnancy': return 'Gestación Tardía';
-      case 'pre_calving': return 'Pre-Parto';
-      case 'calved': return 'Parida';
-      case 'aborted': return 'Aborto';
-      default: return 'Sin Estado';
-    }
-  };
-
-  // Función para calcular días restantes para el parto
-  const getDaysToCalving = (estimatedDate: Date) => {
+  // Crear nuevo registro
+  const handleCreate = (data: Partial<PregnancyRecord>) => {
     const today = new Date();
-    const diffTime = estimatedDate.getTime() - today.getTime();
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    return diffDays;
+    const breedingDate = new Date(data.breedingDate || today);
+    const gestationDays = Math.floor((today.getTime() - breedingDate.getTime()) / (1000 * 60 * 60 * 24));
+    const expectedCalving = new Date(breedingDate.getTime() + (283 * 24 * 60 * 60 * 1000)); // 283 días promedio
+
+    const newRecord: PregnancyRecord = {
+      id: `pregnancy-${Date.now()}`,
+      animalId: data.animalId || "",
+      animalName: data.animalName || "",
+      animalEarTag: data.animalEarTag || "",
+      bullId: data.bullId,
+      bullName: data.bullName,
+      bullEarTag: data.bullEarTag,
+      breedingDate: data.breedingDate || today.toISOString().split('T')[0],
+      breedingType: data.breedingType || "natural",
+      confirmationDate: data.confirmationDate || today.toISOString().split('T')[0],
+      confirmationMethod: data.confirmationMethod || "ultrasound",
+      gestationDay: data.gestationDay || gestationDays,
+      expectedCalvingDate: data.expectedCalvingDate || expectedCalving.toISOString().split('T')[0],
+      currentStage: data.currentStage || "early",
+      pregnancyNumber: data.pregnancyNumber || 1,
+      veterinarian: data.veterinarian || {
+        id: "",
+        name: "",
+        license: "",
+      },
+      location: data.location || {
+        lat: 17.989,
+        lng: -92.247,
+        address: "Villahermosa, Tabasco",
+      },
+      examinations: data.examinations || [],
+      nutritionPlan: data.nutritionPlan || {
+        currentStage: "maintenance",
+        supplements: [],
+        specialDiet: false,
+        waterAccess: "good",
+      },
+      healthStatus: data.healthStatus || {
+        overall: "good",
+        bodyCondition: 3,
+        weight: 500,
+        temperature: 38.5,
+        heartRate: 60,
+        respiratoryRate: 20,
+      },
+      complications: data.complications || {
+        hasComplications: false,
+        severity: "mild",
+        treatmentRequired: false,
+      },
+      monitoringSchedule: data.monitoringSchedule || {
+        nextExamDate: "",
+        frequency: "monthly",
+      },
+      notes: data.notes || "",
+      cost: data.cost || 0,
+      status: data.status || "active",
+      outcome: data.outcome,
+      alerts: data.alerts || [],
+      photos: data.photos || [],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    setRecords(prev => [newRecord, ...prev]);
+    setShowForm(false);
+    resetForm();
   };
 
-  // Función para formatear moneda
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('es-MX', {
-      style: 'currency',
-      currency: 'MXN'
-    }).format(amount);
+  // Actualizar registro existente
+  const handleUpdate = (id: string, data: Partial<PregnancyRecord>) => {
+    setRecords(prev => prev.map(record => 
+      record.id === id 
+        ? { ...record, ...data, updatedAt: new Date().toISOString() }
+        : record
+    ));
+    setEditingRecord(null);
+    setShowForm(false);
+    resetForm();
   };
 
-  // Componente de loading con spinner
-  const LoadingSpinner: React.FC = () => (
-    <div className="flex items-center justify-center min-h-[400px]">
-      <motion.div
-        animate={{ rotate: 360 }}
-        transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-        className="w-12 h-12 border-4 border-[#519a7c] border-t-transparent rounded-full"
-      />
-    </div>
-  );
-
-  // Componente para tarjeta de registro
-  const RecordCard: React.FC<{ record: PregnancyRecord }> = ({ record }) => {
-    const daysToCalving = getDaysToCalving(record.pregnancy.estimatedCalvingDate);
-    const lastExam = record.examinations[record.examinations.length - 1];
-
-    return (
-      <motion.div
-        variants={itemVariants}
-        className="bg-white/95 backdrop-blur-sm rounded-xl shadow-lg border border-white/20 p-6 hover:shadow-xl transition-all duration-300"
-      >
-        <div className="flex items-start justify-between mb-4">
-          <div className="flex items-center space-x-3">
-            <div className="p-3 bg-gradient-to-r from-[#519a7c] to-[#4e9c75] rounded-lg">
-              <Baby className="w-6 h-6 text-white" />
-            </div>
-            <div>
-              <h3 className="text-lg font-bold text-gray-800">{record.pregnancy.animalName}</h3>
-              <p className="text-sm text-gray-600">{record.pregnancy.animalTag} • {record.pregnancy.breed}</p>
-            </div>
-          </div>
-          <div className="flex items-center space-x-2">
-            <span className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(record.pregnancy.currentStatus)}`}>
-              {getStatusText(record.pregnancy.currentStatus)}
-            </span>
-            <button
-              onClick={() => handleView(record)}
-              className="p-2 text-gray-600 hover:text-[#519a7c] transition-colors"
-            >
-              <Eye className="w-4 h-4" />
-            </button>
-            <button
-              onClick={() => handleEdit(record)}
-              className="p-2 text-gray-600 hover:text-blue-600 transition-colors"
-            >
-              <Edit className="w-4 h-4" />
-            </button>
-            <button
-              onClick={() => handleDelete(record.id)}
-              className="p-2 text-gray-600 hover:text-red-600 transition-colors"
-            >
-              <Trash2 className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-2 gap-4 mb-4">
-          <div className="flex items-center space-x-2">
-            <Calendar className="w-4 h-4 text-[#519a7c]" />
-            <span className="text-sm text-gray-600">
-              Día {record.pregnancy.gestationDay}
-            </span>
-          </div>
-          <div className="flex items-center space-x-2">
-            <Clock className="w-4 h-4 text-[#519a7c]" />
-            <span className="text-sm text-gray-600">
-              {daysToCalving > 0 ? `${daysToCalving} días` : 'Vencida'}
-            </span>
-          </div>
-          <div className="flex items-center space-x-2">
-            <MapPin className="w-4 h-4 text-[#519a7c]" />
-            <span className="text-sm text-gray-600">{record.management.currentLocation.sector}</span>
-          </div>
-          <div className="flex items-center space-x-2">
-            <User className="w-4 h-4 text-[#519a7c]" />
-            <span className="text-sm text-gray-600">{record.assignedCaretaker}</span>
-          </div>
-        </div>
-
-        <div className="border-t pt-4 space-y-2">
-          <div className="flex justify-between items-center">
-            <span className="text-sm text-gray-600">Semana gestación:</span>
-            <span className="text-sm font-medium text-gray-800">{record.pregnancy.gestationWeek}</span>
-          </div>
-          {lastExam && (
-            <div className="flex justify-between items-center">
-              <span className="text-sm text-gray-600">Último examen:</span>
-              <span className="text-sm font-medium text-gray-800">
-                {lastExam.date.toLocaleDateString('es-MX')}
-              </span>
-            </div>
-          )}
-          <div className="flex justify-between items-center">
-            <span className="text-sm text-gray-600">Dificultad esperada:</span>
-            <span className={`text-sm font-medium ${
-              record.predictions.calvingDifficulty === 'easy' ? 'text-green-600' :
-              record.predictions.calvingDifficulty === 'moderate' ? 'text-yellow-600' : 'text-red-600'
-            }`}>
-              {record.predictions.calvingDifficulty === 'easy' ? 'Fácil' :
-               record.predictions.calvingDifficulty === 'moderate' ? 'Moderado' : 'Difícil'}
-            </span>
-          </div>
-          <div className="flex justify-between items-center">
-            <span className="text-sm text-gray-600">Inversión total:</span>
-            <span className="text-sm font-bold text-[#519a7c]">{formatCurrency(record.economics.totalInvestment)}</span>
-          </div>
-        </div>
-      </motion.div>
-    );
+  // Eliminar registro
+  const handleDelete = (id: string) => {
+    if (window.confirm("¿Está seguro de que desea eliminar este registro de gestación?")) {
+      setRecords(prev => prev.filter(record => record.id !== id));
+    }
   };
 
-  // Modal para crear/editar registros
-  const FormModal: React.FC<{ isEdit: boolean }> = ({ isEdit }) => (
-    <AnimatePresence>
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4"
-        onClick={() => {
-          setShowCreateModal(false);
-          setShowEditModal(false);
-        }}
-      >
-        <motion.div
-          variants={modalVariants}
-          initial="hidden"
-          animate="visible"
-          exit="exit"
-          className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto"
-          onClick={(e) => e.stopPropagation()}
-        >
-          <div className="p-6">
-            {/* Header del modal */}
-            <div className="flex items-center justify-between mb-6">
-              <div className="flex items-center space-x-3">
-                <div className="p-3 bg-gradient-to-r from-[#519a7c] to-[#4e9c75] rounded-lg">
-                  <Baby className="w-6 h-6 text-white" />
-                </div>
-                <div>
-                  <h2 className="text-2xl font-bold text-gray-800">
-                    {isEdit ? 'Editar Seguimiento de Gestación' : 'Nuevo Seguimiento de Gestación'}
-                  </h2>
-                </div>
-              </div>
-              <button
-                onClick={() => {
-                  setShowCreateModal(false);
-                  setShowEditModal(false);
-                }}
-                className="p-2 text-gray-600 hover:text-gray-800 transition-colors"
-              >
-                <X className="w-6 h-6" />
-              </button>
-            </div>
-
-            {/* Formulario */}
-            <div className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    ID Animal
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.animalId || ''}
-                    onChange={(e) => setFormData(prev => ({ ...prev, animalId: e.target.value }))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
-                    placeholder="COW-F-001"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Fecha de Concepción
-                  </label>
-                  <input
-                    type="date"
-                    value={formData.conceptionDate || ''}
-                    onChange={(e) => setFormData(prev => ({ ...prev, conceptionDate: e.target.value }))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Método de Concepción
-                </label>
-                <select
-                  value={formData.conceptionMethod || ''}
-                  onChange={(e) => setFormData(prev => ({ ...prev, conceptionMethod: e.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
-                >
-                  <option value="">Seleccionar método</option>
-                  <option value="artificial_insemination">Inseminación Artificial</option>
-                  <option value="natural_mating">Monta Natural</option>
-                </select>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Veterinario Asignado
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.veterinarian || ''}
-                    onChange={(e) => setFormData(prev => ({ ...prev, veterinarian: e.target.value }))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
-                    placeholder="Dr. Nombre Apellido"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Cuidador Asignado
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.caretaker || ''}
-                    onChange={(e) => setFormData(prev => ({ ...prev, caretaker: e.target.value }))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
-                    placeholder="Nombre del cuidador"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Notas
-                </label>
-                <textarea
-                  value={formData.notes || ''}
-                  onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
-                  rows={4}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
-                  placeholder="Observaciones sobre la gestación..."
-                />
-              </div>
-            </div>
-
-            {/* Botones de acción */}
-            <div className="flex justify-end space-x-4 mt-6 pt-6 border-t">
-              <button
-                onClick={() => {
-                  setShowCreateModal(false);
-                  setShowEditModal(false);
-                }}
-                className="px-4 py-2 text-gray-600 hover:text-gray-800 transition-colors"
-              >
-                Cancelar
-              </button>
-              <motion.button
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                onClick={handleSave}
-                className="bg-gradient-to-r from-[#2d6f51] to-[#4e9c75] text-white px-6 py-2 rounded-lg hover:from-[#265a44] hover:to-[#3d7a5c] transition-all duration-200 flex items-center space-x-2"
-              >
-                <Save className="w-5 h-5" />
-                <span>{isEdit ? 'Actualizar' : 'Guardar'}</span>
-              </motion.button>
-            </div>
-          </div>
-        </motion.div>
-      </motion.div>
-    </AnimatePresence>
-  );
-
-  // Modal para ver detalles completos
-  const ViewModal: React.FC = () => {
-    if (!selectedRecord) return null;
-
-    const daysToCalving = getDaysToCalving(selectedRecord.pregnancy.estimatedCalvingDate);
-    const lastExam = selectedRecord.examinations[selectedRecord.examinations.length - 1];
-    const lastBodyCondition = selectedRecord.bodyCondition[selectedRecord.bodyCondition.length - 1];
-
-    return (
-      <AnimatePresence>
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4"
-          onClick={() => setShowViewModal(false)}
-        >
-          <motion.div
-            variants={modalVariants}
-            initial="hidden"
-            animate="visible"
-            exit="exit"
-            className="bg-white rounded-xl shadow-2xl max-w-6xl w-full max-h-[90vh] overflow-y-auto"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="p-6">
-              {/* Header del modal */}
-              <div className="flex items-center justify-between mb-6">
-                <div className="flex items-center space-x-3">
-                  <div className="p-3 bg-gradient-to-r from-[#519a7c] to-[#4e9c75] rounded-lg">
-                    <Baby className="w-6 h-6 text-white" />
-                  </div>
-                  <div>
-                    <h2 className="text-2xl font-bold text-gray-800">
-                      Seguimiento de Gestación
-                    </h2>
-                    <p className="text-gray-600">{selectedRecord.pregnancy.animalName} - ID: {selectedRecord.id}</p>
-                  </div>
-                </div>
-                <button
-                  onClick={() => setShowViewModal(false)}
-                  className="p-2 text-gray-600 hover:text-gray-800 transition-colors"
-                >
-                  <X className="w-6 h-6" />
-                </button>
-              </div>
-
-              {/* Información principal */}
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
-                {/* Información de la gestación */}
-                <div className="bg-blue-50 rounded-lg p-4">
-                  <h3 className="text-lg font-semibold text-gray-800 mb-3 flex items-center">
-                    <Baby className="w-5 h-5 mr-2 text-blue-600" />
-                    Estado de Gestación
-                  </h3>
-                  <div className="space-y-2">
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Estado:</span>
-                      <span className="font-medium">{getStatusText(selectedRecord.pregnancy.currentStatus)}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Día gestación:</span>
-                      <span className="font-medium">{selectedRecord.pregnancy.gestationDay}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Semana:</span>
-                      <span className="font-medium">{selectedRecord.pregnancy.gestationWeek}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Parto estimado:</span>
-                      <span className="font-medium">
-                        {selectedRecord.pregnancy.estimatedCalvingDate.toLocaleDateString('es-MX')}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Días restantes:</span>
-                      <span className={`font-medium ${daysToCalving <= 14 ? 'text-red-600' : daysToCalving <= 30 ? 'text-yellow-600' : 'text-green-600'}`}>
-                        {daysToCalving > 0 ? daysToCalving : 'Vencida'}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Partos previos:</span>
-                      <span className="font-medium">{selectedRecord.pregnancy.parity}</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Información del animal */}
-                <div className="bg-green-50 rounded-lg p-4">
-                  <h3 className="text-lg font-semibold text-gray-800 mb-3 flex items-center">
-                    <Beef className="w-5 h-5 mr-2 text-green-600" />
-                    Información del Animal
-                  </h3>
-                  <div className="space-y-2">
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Nombre:</span>
-                      <span className="font-medium">{selectedRecord.pregnancy.animalName}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Etiqueta:</span>
-                      <span className="font-medium">{selectedRecord.pregnancy.animalTag}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Raza:</span>
-                      <span className="font-medium">{selectedRecord.pregnancy.breed}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Edad:</span>
-                      <span className="font-medium">{selectedRecord.pregnancy.age} años</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Método concepción:</span>
-                      <span className="font-medium">
-                        {selectedRecord.pregnancy.conceptionMethod === 'artificial_insemination' ? 'IA' : 'Monta Natural'}
-                      </span>
-                    </div>
-                    {lastBodyCondition && (
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">BCS actual:</span>
-                        <span className="font-medium">{lastBodyCondition.score}/5</span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Información del padre */}
-                <div className="bg-yellow-50 rounded-lg p-4">
-                  <h3 className="text-lg font-semibold text-gray-800 mb-3 flex items-center">
-                    <Heart className="w-5 h-5 mr-2 text-yellow-600" />
-                    Información del Padre
-                  </h3>
-                  <div className="space-y-2">
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Nombre:</span>
-                      <span className="font-medium">{selectedRecord.sire.name}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Raza:</span>
-                      <span className="font-medium">{selectedRecord.sire.breed}</span>
-                    </div>
-                    {selectedRecord.sire.registrationNumber && (
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">Registro:</span>
-                        <span className="font-medium">{selectedRecord.sire.registrationNumber}</span>
-                      </div>
-                    )}
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Dificultad esperada:</span>
-                      <span className={`font-medium ${
-                        selectedRecord.predictions.calvingDifficulty === 'easy' ? 'text-green-600' :
-                        selectedRecord.predictions.calvingDifficulty === 'moderate' ? 'text-yellow-600' : 'text-red-600'
-                      }`}>
-                        {selectedRecord.predictions.calvingDifficulty === 'easy' ? 'Fácil' :
-                         selectedRecord.predictions.calvingDifficulty === 'moderate' ? 'Moderado' : 'Difícil'}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Peso estimado ternero:</span>
-                      <span className="font-medium">{selectedRecord.predictions.calfWeight} kg</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Último examen */}
-              {lastExam && (
-                <div className="mb-6 bg-gray-50 rounded-lg p-4">
-                  <h3 className="text-lg font-semibold text-gray-800 mb-3 flex items-center">
-                    <Stethoscope className="w-5 h-5 mr-2 text-[#519a7c]" />
-                    Último Examen Veterinario
-                  </h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    <div className="space-y-2">
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">Fecha:</span>
-                        <span className="font-medium">{lastExam.date.toLocaleDateString('es-MX')}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">Tipo:</span>
-                        <span className="font-medium">
-                          {lastExam.examinationType === 'ultrasound' ? 'Ultrasonido' :
-                           lastExam.examinationType === 'palpation' ? 'Palpación' :
-                           lastExam.examinationType === 'blood_test' ? 'Análisis sangre' : 'Chequeo rutina'}
-                        </span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">Veterinario:</span>
-                        <span className="font-medium">{lastExam.veterinarian}</span>
-                      </div>
-                    </div>
-                    <div className="space-y-2">
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">Viabilidad fetal:</span>
-                        <span className={`font-medium ${lastExam.findings.fetalViability ? 'text-green-600' : 'text-red-600'}`}>
-                          {lastExam.findings.fetalViability ? 'Viable' : 'No viable'}
-                        </span>
-                      </div>
-                      {lastExam.findings.fetalHeartRate && (
-                        <div className="flex justify-between">
-                          <span className="text-gray-600">FC fetal:</span>
-                          <span className="font-medium">{lastExam.findings.fetalHeartRate} lpm</span>
-                        </div>
-                      )}
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">Movimiento:</span>
-                        <span className="font-medium">{lastExam.findings.fetalMovement}</span>
-                      </div>
-                    </div>
-                    <div className="space-y-2">
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">BCS:</span>
-                        <span className="font-medium">{lastExam.maternalAssessment.bodyConditionScore}/5</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">Peso:</span>
-                        <span className="font-medium">{lastExam.maternalAssessment.weight} kg</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">Temperatura:</span>
-                        <span className="font-medium">{lastExam.maternalAssessment.temperature}°C</span>
-                      </div>
-                    </div>
-                  </div>
-                  {lastExam.recommendations.length > 0 && (
-                    <div className="mt-4">
-                      <span className="text-gray-600 font-medium">Recomendaciones:</span>
-                      <ul className="mt-2 space-y-1">
-                        {lastExam.recommendations.map((rec, index) => (
-                          <li key={index} className="text-sm text-gray-700 ml-4">• {rec}</li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Manejo actual */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-                {/* Ubicación y manejo */}
-                <div className="bg-gray-50 rounded-lg p-4">
-                  <h3 className="text-lg font-semibold text-gray-800 mb-3 flex items-center">
-                    <MapPin className="w-5 h-5 mr-2 text-[#519a7c]" />
-                    Ubicación y Manejo
-                  </h3>
-                  <div className="space-y-2">
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Sector:</span>
-                      <span className="font-medium">{selectedRecord.management.currentLocation.sector}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Potrero:</span>
-                      <span className="font-medium">{selectedRecord.management.currentLocation.potrero}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Paddock:</span>
-                      <span className="font-medium">{selectedRecord.management.currentLocation.paddock}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Alojamiento:</span>
-                      <span className="font-medium">{selectedRecord.management.housingType}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Ejercicio:</span>
-                      <span className="font-medium">{selectedRecord.management.exerciseProgram}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Agrupamiento:</span>
-                      <span className="font-medium">{selectedRecord.management.socialGrouping}</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Nutrición */}
-                <div className="bg-gray-50 rounded-lg p-4">
-                  <h3 className="text-lg font-semibold text-gray-800 mb-3 flex items-center">
-                    <Scale className="w-5 h-5 mr-2 text-[#519a7c]" />
-                    Manejo Nutricional
-                  </h3>
-                  <div className="space-y-2">
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Energía req.:</span>
-                      <span className="font-medium">{selectedRecord.nutrition.currentDiet.energyRequirement} Mcal/día</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Proteína req.:</span>
-                      <span className="font-medium">{selectedRecord.nutrition.currentDiet.proteinRequirement} kg/día</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Ingesta total:</span>
-                      <span className="font-medium">{selectedRecord.nutrition.currentDiet.feedIntake} kg/día</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Agua:</span>
-                      <span className="font-medium">{selectedRecord.nutrition.currentDiet.waterIntake} L/día</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">BCS objetivo:</span>
-                      <span className="font-medium">{selectedRecord.nutrition.nutritionalGoals.targetBCS}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Peso al parto:</span>
-                      <span className="font-medium">{selectedRecord.nutrition.nutritionalGoals.calvingWeight} kg</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Preparativos para el parto */}
-              <div className="mb-6 bg-orange-50 rounded-lg p-4">
-                <h3 className="text-lg font-semibold text-gray-800 mb-3 flex items-center">
-                  <Activity className="w-5 h-5 mr-2 text-orange-600" />
-                  Preparativos para el Parto
-                </h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Área de parto:</span>
-                      <span className="font-medium">{selectedRecord.calvingPreparation.calvingArea.address}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Equipo listo:</span>
-                      <span className={`font-medium ${selectedRecord.calvingPreparation.equipmentReady ? 'text-green-600' : 'text-red-600'}`}>
-                        {selectedRecord.calvingPreparation.equipmentReady ? 'Sí' : 'No'}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Veterinario de guardia:</span>
-                      <span className="font-medium">{selectedRecord.calvingPreparation.veterinarianOnCall}</span>
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Asistente:</span>
-                      <span className="font-medium">{selectedRecord.calvingPreparation.assistantAssigned}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Plan emergencia:</span>
-                      <span className="font-medium">{selectedRecord.calvingPreparation.emergencyPlan}</span>
-                    </div>
-                  </div>
-                </div>
-                {selectedRecord.calvingPreparation.facilities.length > 0 && (
-                  <div className="mt-4">
-                    <span className="text-gray-600 font-medium">Instalaciones:</span>
-                    <div className="mt-2">
-                      {selectedRecord.calvingPreparation.facilities.map((facility: string | number | bigint | boolean | React.ReactElement<unknown, string | React.JSXElementConstructor<any>> | Iterable<React.ReactNode> | React.ReactPortal | Promise<string | number | bigint | boolean | React.ReactPortal | React.ReactElement<unknown, string | React.JSXElementConstructor<any>> | Iterable<React.ReactNode> | null | undefined> | null | undefined, index: React.Key | null | undefined) => (
-                        <span key={index} className="inline-block bg-orange-200 rounded-full px-2 py-1 text-xs text-orange-800 mr-1 mb-1">
-                          {facility}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Análisis económico */}
-              <div className="mb-6 bg-green-50 rounded-lg p-4">
-                <h3 className="text-lg font-semibold text-gray-800 mb-3">
-                  Análisis Económico
-                </h3>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  <div className="text-center">
-                    <p className="text-sm text-gray-600">Costos Veterinarios</p>
-                    <p className="text-lg font-bold text-gray-800">{formatCurrency(selectedRecord.economics.veterinaryCosts)}</p>
-                  </div>
-                  <div className="text-center">
-                    <p className="text-sm text-gray-600">Costos Nutrición</p>
-                    <p className="text-lg font-bold text-gray-800">{formatCurrency(selectedRecord.economics.nutritionCosts)}</p>
-                  </div>
-                  <div className="text-center">
-                    <p className="text-sm text-gray-600">Inversión Total</p>
-                    <p className="text-lg font-bold text-[#519a7c]">{formatCurrency(selectedRecord.economics.totalInvestment)}</p>
-                  </div>
-                  <div className="text-center">
-                    <p className="text-sm text-gray-600">Valor Esperado</p>
-                    <p className="text-lg font-bold text-green-600">{formatCurrency(selectedRecord.economics.expectedValue)}</p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Complicaciones */}
-              {selectedRecord.complications.length > 0 && (
-                <div className="mb-6 bg-red-50 rounded-lg p-4">
-                  <h3 className="text-lg font-semibold text-gray-800 mb-3 flex items-center">
-                    <AlertCircle className="w-5 h-5 mr-2 text-red-600" />
-                    Complicaciones
-                  </h3>
-                  <div className="space-y-3">
-                    {selectedRecord.complications.map((complication) => (
-                      <div key={complication.id} className="border border-red-200 rounded-lg p-3">
-                        <div className="flex justify-between items-start mb-2">
-                          <span className="font-medium text-gray-800">{complication.description}</span>
-                          <span className={`px-2 py-1 rounded text-xs ${
-                            complication.severity === 'critical' ? 'bg-red-200 text-red-800' :
-                            complication.severity === 'severe' ? 'bg-orange-200 text-orange-800' :
-                            complication.severity === 'moderate' ? 'bg-yellow-200 text-yellow-800' : 'bg-green-200 text-green-800'
-                          }`}>
-                            {complication.severity}
-                          </span>
-                        </div>
-                        <p className="text-sm text-gray-600 mb-2">
-                          Fecha: {complication.date.toLocaleDateString('es-MX')} | 
-                          Veterinario: {complication.veterinarian} | 
-                          Estado: {complication.resolution}
-                        </p>
-                        {complication.treatment.length > 0 && (
-                          <div>
-                            <span className="text-sm font-medium text-gray-700">Tratamiento:</span>
-                            <ul className="text-sm text-gray-600 ml-4">
-                              {complication.treatment.map((treatment, index) => (
-                                <li key={index}>• {treatment}</li>
-                              ))}
-                            </ul>
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Notas */}
-              {selectedRecord.notes && (
-                <div className="bg-gray-50 rounded-lg p-4">
-                  <h3 className="text-lg font-semibold text-gray-800 mb-3">Notas Adicionales</h3>
-                  <p className="text-gray-700">{selectedRecord.notes}</p>
-                </div>
-              )}
-            </div>
-          </motion.div>
-        </motion.div>
-      </AnimatePresence>
-    );
+  // Resetear formulario
+  const resetForm = () => {
+    setFormData({
+      breedingType: "natural",
+      confirmationMethod: "ultrasound",
+      currentStage: "early",
+      pregnancyNumber: 1,
+      gestationDay: 0,
+      cost: 0,
+      status: "active",
+      veterinarian: {
+        id: "",
+        name: "",
+        license: "",
+      },
+      location: {
+        lat: 17.989,
+        lng: -92.247,
+        address: "Villahermosa, Tabasco",
+      },
+      examinations: [],
+      nutritionPlan: {
+        currentStage: "maintenance",
+        supplements: [],
+        specialDiet: false,
+        waterAccess: "good",
+      },
+      healthStatus: {
+        overall: "good",
+        bodyCondition: 3,
+        weight: 500,
+        temperature: 38.5,
+        heartRate: 60,
+        respiratoryRate: 20,
+      },
+      complications: {
+        hasComplications: false,
+        severity: "mild",
+        treatmentRequired: false,
+      },
+      monitoringSchedule: {
+        nextExamDate: "",
+        frequency: "monthly",
+      },
+      alerts: [],
+      photos: [],
+    });
   };
 
-  // Renderizado principal
+  // Función para obtener color del estado
+  const getStatusColor = (status: string) => {
+    const colors = {
+      active: "bg-green-100 text-green-800 border-green-200",
+      completed: "bg-blue-100 text-blue-800 border-blue-200",
+      lost: "bg-red-100 text-red-800 border-red-200",
+      transferred: "bg-yellow-100 text-yellow-800 border-yellow-200",
+      aborted: "bg-gray-100 text-gray-800 border-gray-200",
+    };
+    return colors[status as keyof typeof colors] || colors.active;
+  };
+
+  // Función para obtener color de la etapa
+  const getStageColor = (stage: string) => {
+    const colors = {
+      early: "bg-blue-100 text-blue-800 border-blue-200",
+      middle: "bg-yellow-100 text-yellow-800 border-yellow-200",
+      late: "bg-orange-100 text-orange-800 border-orange-200",
+    };
+    return colors[stage as keyof typeof colors] || colors.early;
+  };
+
+  // Función para obtener color de salud
+  const getHealthColor = (health: string) => {
+    const colors = {
+      excellent: "bg-green-100 text-green-800 border-green-200",
+      good: "bg-blue-100 text-blue-800 border-blue-200",
+      fair: "bg-yellow-100 text-yellow-800 border-yellow-200",
+      poor: "bg-orange-100 text-orange-800 border-orange-200",
+      critical: "bg-red-100 text-red-800 border-red-200",
+    };
+    return colors[health as keyof typeof colors] || colors.good;
+  };
+
+  // Función para calcular días restantes
+  const getDaysRemaining = (dueDate: string): number => {
+    const today = new Date();
+    const due = new Date(dueDate);
+    const diffTime = due.getTime() - today.getTime();
+    return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  };
+
+  // Función para obtener icono de alerta
+  const getAlertIcon = (severity: string) => {
+    const icons = {
+      critical: <AlertTriangle className="w-4 h-4 text-red-600" />,
+      high: <AlertTriangle className="w-4 h-4 text-orange-600" />,
+      medium: <Info className="w-4 h-4 text-yellow-600" />,
+      low: <Info className="w-4 h-4 text-blue-600" />,
+    };
+    return icons[severity as keyof typeof icons] || icons.low;
+  };
+
+  // Si está cargando
   if (isLoading) {
     return (
-      <div className={cn(
-        "min-h-screen",
-        "bg-gradient-to-br from-[#519a7c] via-[#f2e9d8] to-[#f4ac3a]",
-        className
-      )}>
-        <LoadingSpinner />
+      <div className="min-h-screen bg-gradient-to-br from-[#519a7c] via-[#f2e9d8] to-[#f4ac3a] flex items-center justify-center">
+        <motion.div
+          className="bg-white/90 backdrop-blur-sm rounded-2xl p-8 shadow-xl"
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.5 }}
+        >
+          <div className="flex flex-col items-center space-y-4">
+            <motion.div
+              className="w-12 h-12 border-4 border-[#519a7c] border-t-transparent rounded-full"
+              animate={{ rotate: 360 }}
+              transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+            />
+            <p className="text-gray-600 font-medium">Cargando seguimiento de gestaciones...</p>
+          </div>
+        </motion.div>
       </div>
     );
   }
 
-  const filteredRecords = getFilteredRecords();
-
   return (
-    <div className={cn(
-      "min-h-screen",
-      // Fondo degradado principal del layout
-      "bg-gradient-to-br from-[#519a7c] via-[#f2e9d8] to-[#f4ac3a]",
-      className
-    )}>
-      <div className="p-6">
-        {/* Header con título y controles principales */}
+    <div className="min-h-screen bg-gradient-to-br from-[#519a7c] via-[#f2e9d8] to-[#f4ac3a] p-6">
+      <motion.div
+        className="max-w-7xl mx-auto"
+        variants={containerVariants}
+        initial="hidden"
+        animate="visible"
+      >
+        {/* Header */}
         <motion.div
-          initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="mb-8"
+          className="bg-white/95 backdrop-blur-sm rounded-2xl shadow-xl p-6 mb-6 border border-white/20"
+          variants={itemVariants}
         >
           <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-            <div>
-              <h1 className="text-3xl font-bold text-white drop-shadow-sm mb-2">
-                Seguimiento de Gestación
-              </h1>
-              <p className="text-white/90">
-                Monitoreo integral del embarazo con geolocalización y análisis predictivo
-              </p>
-            </div>
-            
             <div className="flex items-center space-x-4">
+              <div className="w-12 h-12 bg-gradient-to-r from-[#519a7c] to-[#4e9c75] rounded-xl flex items-center justify-center">
+                <Baby className="w-6 h-6 text-white" />
+              </div>
+              <div>
+                <h1 className="text-3xl font-bold text-gray-900">
+                  <AnimatedText>Seguimiento de Gestaciones</AnimatedText>
+                </h1>
+                <p className="text-gray-600 mt-1">
+                  Monitoreo integral de embarazos y salud maternal bovina
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center space-x-3">
               <motion.button
+                onClick={() => setShowFilters(!showFilters)}
+                className={`px-4 py-2 rounded-xl border-2 transition-all duration-200 flex items-center space-x-2 ${
+                  showFilters 
+                    ? "bg-[#519a7c] text-white border-[#519a7c]" 
+                    : "bg-white text-gray-700 border-gray-300 hover:border-[#519a7c]"
+                }`}
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
-                onClick={handleCreate}
-                className="bg-gradient-to-r from-[#2d6f51] to-[#4e9c75] text-white px-6 py-2 rounded-lg hover:from-[#265a44] hover:to-[#3d7a5c] transition-all duration-200 flex items-center space-x-2"
               >
-                <Plus className="w-5 h-5" />
-                <span>Nuevo Seguimiento</span>
+                <Filter className="w-4 h-4" />
+                <span>Filtros</span>
+              </motion.button>
+
+              <motion.button
+                onClick={() => {
+                  setEditingRecord(null);
+                  resetForm();
+                  setShowForm(true);
+                }}
+                className="px-6 py-2 bg-gradient-to-r from-[#519a7c] to-[#4e9c75] text-white rounded-xl hover:from-[#4e9c75] hover:to-[#519a7c] transition-all duration-200 flex items-center space-x-2 shadow-lg"
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+              >
+                <Plus className="w-4 h-4" />
+                <span>Nueva Gestación</span>
+              </motion.button>
+            </div>
+          </div>
+
+          {/* Estadísticas rápidas */}
+          <div className="grid grid-cols-2 md:grid-cols-6 gap-4 mt-6">
+            {[
+              { label: "Total", value: stats.total, icon: Activity, color: "text-blue-600" },
+              { label: "Activas", value: stats.active, icon: Heart, color: "text-green-600" },
+              { label: "Temprana", value: stats.early, icon: Timer, color: "text-blue-600" },
+              { label: "Media", value: stats.middle, icon: Clock, color: "text-yellow-600" },
+              { label: "Tardía", value: stats.late, icon: Baby, color: "text-orange-600" },
+              { label: "Partos Semana", value: stats.dueThisWeek, icon: Calendar, color: "text-red-600" },
+            ].map((stat, index) => (
+              <motion.div
+                key={index}
+                className="bg-white/80 backdrop-blur-sm rounded-xl p-4 border border-white/30"
+                variants={itemVariants}
+                whileHover={{ scale: 1.02 }}
+              >
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-gray-600 font-medium">{stat.label}</p>
+                    <p className="text-2xl font-bold text-gray-900">{stat.value}</p>
+                  </div>
+                  <stat.icon className={`w-8 h-8 ${stat.color}`} />
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        </motion.div>
+
+        {/* Panel de filtros */}
+        <AnimatePresence>
+          {showFilters && (
+            <motion.div
+              className="bg-white/95 backdrop-blur-sm rounded-2xl shadow-xl p-6 mb-6 border border-white/20"
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+              exit={{ opacity: 0, height: 0 }}
+              transition={{ duration: 0.3 }}
+            >
+              <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4">
+                {/* Búsqueda por texto */}
+                <div className="lg:col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Buscar
+                  </label>
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                    <input
+                      type="text"
+                      value={filters.searchTerm}
+                      onChange={(e) => setFilters(prev => ({ ...prev, searchTerm: e.target.value }))}
+                      placeholder="Animal, veterinario, arete..."
+                      className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
+                    />
+                  </div>
+                </div>
+
+                {/* Filtro de etapa */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Etapa
+                  </label>
+                  <select
+                    multiple
+                    value={filters.stage}
+                    onChange={(e) => {
+                      const values = Array.from(e.target.selectedOptions, option => option.value);
+                      setFilters(prev => ({ ...prev, stage: values }));
+                    }}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
+                  >
+                    <option value="early">Temprana (0-90d)</option>
+                    <option value="middle">Media (91-210d)</option>
+                    <option value="late">Tardía (210+d)</option>
+                  </select>
+                </div>
+
+                {/* Filtro de estado */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Estado
+                  </label>
+                  <select
+                    multiple
+                    value={filters.status}
+                    onChange={(e) => {
+                      const values = Array.from(e.target.selectedOptions, option => option.value);
+                      setFilters(prev => ({ ...prev, status: values }));
+                    }}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
+                  >
+                    <option value="active">Activa</option>
+                    <option value="completed">Completada</option>
+                    <option value="lost">Perdida</option>
+                    <option value="transferred">Transferida</option>
+                    <option value="aborted">Abortada</option>
+                  </select>
+                </div>
+
+                {/* Filtro de complicaciones */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Complicaciones
+                  </label>
+                  <select
+                    multiple
+                    value={filters.complications}
+                    onChange={(e) => {
+                      const values = Array.from(e.target.selectedOptions, option => option.value);
+                      setFilters(prev => ({ ...prev, complications: values }));
+                    }}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
+                  >
+                    <option value="none">Sin Complicaciones</option>
+                    <option value="has_complications">Con Complicaciones</option>
+                    <option value="metabolic">Metabólicas</option>
+                    <option value="reproductive">Reproductivas</option>
+                    <option value="physical">Físicas</option>
+                    <option value="nutritional">Nutricionales</option>
+                  </select>
+                </div>
+
+                {/* Filtro de parto próximo */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Parto Inicio
+                  </label>
+                  <input
+                    type="date"
+                    value={filters.dueRange.start}
+                    onChange={(e) => setFilters(prev => ({ 
+                      ...prev, 
+                      dueRange: { ...prev.dueRange, start: e.target.value }
+                    }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
+                  />
+                </div>
+              </div>
+
+              {/* Botones de control de filtros */}
+              <div className="flex justify-end space-x-3 mt-4 pt-4 border-t border-gray-200">
+                <button
+                  onClick={() => setFilters({
+                    dateRange: { start: "", end: "" },
+                    stage: [],
+                    status: [],
+                    veterinarian: [],
+                    complications: [],
+                    pregnancyNumber: [],
+                    searchTerm: "",
+                    dueRange: { start: "", end: "" },
+                  })}
+                  className="px-4 py-2 text-gray-600 hover:text-gray-800 transition-colors"
+                >
+                  Limpiar Filtros
+                </button>
+                <button
+                  onClick={() => setShowFilters(false)}
+                  className="px-6 py-2 bg-gradient-to-r from-[#519a7c] to-[#4e9c75] text-white rounded-lg hover:from-[#4e9c75] hover:to-[#519a7c] transition-all duration-200"
+                >
+                  Aplicar
+                </button>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Controles de vista */}
+        <motion.div
+          className="bg-white/95 backdrop-blur-sm rounded-2xl shadow-xl p-4 mb-6 border border-white/20"
+          variants={itemVariants}
+        >
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-4">
+              <span className="text-sm text-gray-600 font-medium">
+                Mostrando {filteredRecords.length} de {records.length} gestaciones
+              </span>
+            </div>
+
+            <div className="flex items-center space-x-3">
+              {/* Botones de vista */}
+              <div className="flex items-center bg-gray-100 rounded-lg p-1">
+                <button
+                  onClick={() => setViewMode("grid")}
+                  className={`px-3 py-1 rounded-md text-sm font-medium transition-all duration-200 ${
+                    viewMode === "grid"
+                      ? "bg-white text-gray-900 shadow-sm"
+                      : "text-gray-600 hover:text-gray-900"
+                  }`}
+                >
+                  Tarjetas
+                </button>
+                <button
+                  onClick={() => setViewMode("list")}
+                  className={`px-3 py-1 rounded-md text-sm font-medium transition-all duration-200 ${
+                    viewMode === "list"
+                      ? "bg-white text-gray-900 shadow-sm"
+                      : "text-gray-600 hover:text-gray-900"
+                  }`}
+                >
+                  Lista
+                </button>
+                <button
+                  onClick={() => setViewMode("calendar")}
+                  className={`px-3 py-1 rounded-md text-sm font-medium transition-all duration-200 ${
+                    viewMode === "calendar"
+                      ? "bg-white text-gray-900 shadow-sm"
+                      : "text-gray-600 hover:text-gray-900"
+                  }`}
+                >
+                  Calendario
+                </button>
+              </div>
+
+              {/* Botón de exportar */}
+              <motion.button
+                className="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:border-[#519a7c] hover:text-[#519a7c] transition-all duration-200 flex items-center space-x-2"
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+              >
+                <Download className="w-4 h-4" />
+                <span>Exportar</span>
               </motion.button>
             </div>
           </div>
         </motion.div>
 
-        {/* Barra de búsqueda y filtros */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
-          className="bg-white/95 backdrop-blur-sm rounded-xl shadow-lg border border-white/20 p-6 mb-6"
-        >
-          <div className="flex flex-col lg:flex-row lg:items-center gap-4">
-            {/* Barra de búsqueda */}
-            <div className="flex-1 relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
-              <input
-                type="text"
-                placeholder="Buscar por animal, veterinario, cuidador..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
-              />
-            </div>
-
-            {/* Filtros */}
-            <div className="flex items-center space-x-4">
-              <select
-                value={filters.status}
-                onChange={(e) => setFilters(prev => ({ ...prev, status: e.target.value }))}
-                className="px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
-              >
-                <option value="all">Todos los estados</option>
-                <option value="early_pregnancy">Gestación Temprana</option>
-                <option value="mid_pregnancy">Gestación Media</option>
-                <option value="late_pregnancy">Gestación Tardía</option>
-                <option value="pre_calving">Pre-Parto</option>
-              </select>
-
-              <select
-                value={filters.gestationStage}
-                onChange={(e) => setFilters(prev => ({ ...prev, gestationStage: e.target.value }))}
-                className="px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
-              >
-                <option value="all">Todos los trimestres</option>
-                <option value="first_trimester">Primer Trimestre</option>
-                <option value="second_trimester">Segundo Trimestre</option>
-                <option value="third_trimester">Tercer Trimestre</option>
-              </select>
-
-              <select
-                value={filters.sector}
-                onChange={(e) => setFilters(prev => ({ ...prev, sector: e.target.value }))}
-                className="px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
-              >
-                <option value="all">Todos los sectores</option>
-                <option value="Norte">Norte</option>
-                <option value="Sur">Sur</option>
-                <option value="Este">Este</option>
-                <option value="Oeste">Oeste</option>
-              </select>
-            </div>
-          </div>
-        </motion.div>
-
-        {/* Estadísticas rápidas */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
-          className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8"
-        >
-          {[
-            { 
-              label: 'Gestaciones Activas', 
-              value: records.filter(r => !['calved', 'aborted'].includes(r.pregnancy.currentStatus)).length.toString(), 
-              icon: Baby, 
-              color: 'from-[#519a7c] to-[#4e9c75]' 
-            },
-            { 
-              label: 'Próximos Partos (30d)', 
-              value: records.filter(r => getDaysToCalving(r.pregnancy.estimatedCalvingDate) <= 30 && getDaysToCalving(r.pregnancy.estimatedCalvingDate) > 0).length.toString(), 
-              icon: Clock, 
-              color: 'from-orange-500 to-orange-600' 
-            },
-            { 
-              label: 'Partos Vencidos', 
-              value: records.filter(r => getDaysToCalving(r.pregnancy.estimatedCalvingDate) < 0).length.toString(), 
-              icon: AlertCircle, 
-              color: 'from-red-500 to-red-600' 
-            },
-            { 
-              label: 'Inversión Total', 
-              value: formatCurrency(records.reduce((acc, r) => acc + r.economics.totalInvestment, 0)), 
-              icon: Activity, 
-              color: 'from-green-500 to-green-600' 
-            }
-          ].map((stat) => (
-            <motion.div
-              key={stat.label}
-              variants={itemVariants}
-              className="bg-white/95 backdrop-blur-sm rounded-xl shadow-lg border border-white/20 p-6"
-            >
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-600 mb-1">{stat.label}</p>
-                  <p className="text-2xl font-bold text-gray-800">{stat.value}</p>
-                </div>
-                <div className={`p-3 rounded-lg bg-gradient-to-r ${stat.color}`}>
-                  <stat.icon className="w-6 h-6 text-white" />
-                </div>
-              </div>
-            </motion.div>
-          ))}
-        </motion.div>
-
         {/* Lista de registros */}
-        <motion.div
-          variants={containerVariants}
-          initial="hidden"
-          animate="visible"
-          className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6"
-        >
-          {filteredRecords.length > 0 ? (
-            filteredRecords.map((record) => (
-              <RecordCard key={record.id} record={record} />
-            ))
-          ) : (
+        {viewMode === "grid" ? (
+          <motion.div
+            className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6"
+            variants={containerVariants}
+          >
+            {filteredRecords.map((record) => (
+              <motion.div
+                key={record.id}
+                className="bg-white/95 backdrop-blur-sm rounded-2xl shadow-xl border border-white/20 overflow-hidden hover:shadow-2xl transition-all duration-300"
+                variants={itemVariants}
+                whileHover={{ y: -5 }}
+              >
+                {/* Header de la tarjeta */}
+                <div className="bg-gradient-to-r from-[#519a7c] to-[#4e9c75] p-4 text-white">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-3">
+                      <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center">
+                        <Baby className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <h3 className="font-bold text-lg">{record.animalName}</h3>
+                        <p className="text-white/80 text-sm">Arete: {record.animalEarTag}</p>
+                      </div>
+                    </div>
+                    <div className="flex flex-col items-end space-y-1">
+                      <span className={`px-2 py-1 rounded-full text-xs font-medium border ${getStageColor(record.currentStage)}`}>
+                        {record.currentStage === "early" && "Temprana"}
+                        {record.currentStage === "middle" && "Media"}
+                        {record.currentStage === "late" && "Tardía"}
+                      </span>
+                      <span className={`px-2 py-1 rounded-full text-xs font-medium border ${getStatusColor(record.status)}`}>
+                        {record.status === "active" && "Activa"}
+                        {record.status === "completed" && "Completada"}
+                        {record.status === "lost" && "Perdida"}
+                        {record.status === "transferred" && "Transferida"}
+                        {record.status === "aborted" && "Abortada"}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Contenido de la tarjeta */}
+                <div className="p-4 space-y-4">
+                  {/* Información principal */}
+                  <div className="grid grid-cols-2 gap-4 text-sm">
+                    <div>
+                      <p className="text-gray-600 font-medium">Día Gestación:</p>
+                      <p className="text-2xl font-bold text-[#519a7c]">{record.gestationDay}</p>
+                    </div>
+                    <div>
+                      <p className="text-gray-600 font-medium">Días Restantes:</p>
+                      <p className="text-2xl font-bold text-orange-600">{getDaysRemaining(record.expectedCalvingDate)}</p>
+                    </div>
+                    <div>
+                      <p className="text-gray-600 font-medium">Parto Esperado:</p>
+                      <p className="text-gray-900">{new Date(record.expectedCalvingDate).toLocaleDateString()}</p>
+                    </div>
+                    <div>
+                      <p className="text-gray-600 font-medium">Gestación #:</p>
+                      <p className="text-gray-900">{record.pregnancyNumber}</p>
+                    </div>
+                  </div>
+
+                  {/* Información del toro */}
+                  {record.bullName && (
+                    <div className="bg-blue-50 rounded-lg p-3">
+                      <h4 className="font-medium text-gray-900 mb-2 flex items-center">
+                        <Crown className="w-4 h-4 mr-2 text-blue-600" />
+                        Información del Toro
+                      </h4>
+                      <div className="space-y-1 text-sm">
+                        <p><span className="text-gray-600">Nombre:</span> {record.bullName}</p>
+                        <p><span className="text-gray-600">Arete:</span> {record.bullEarTag}</p>
+                        <p><span className="text-gray-600">Tipo apareamiento:</span> 
+                          <span className="ml-1">
+                            {record.breedingType === "natural" && "Natural"}
+                            {record.breedingType === "artificial_insemination" && "IA"}
+                            {record.breedingType === "embryo_transfer" && "Transferencia"}
+                          </span>
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Estado de salud */}
+                  <div className="bg-green-50 rounded-lg p-3">
+                    <h4 className="font-medium text-gray-900 mb-2 flex items-center">
+                      <Stethoscope className="w-4 h-4 mr-2 text-green-600" />
+                      Estado de Salud
+                    </h4>
+                    <div className="grid grid-cols-2 gap-2 text-sm">
+                      <div>
+                        <p className="text-gray-600">General:</p>
+                        <span className={`inline-flex px-2 py-1 rounded-full text-xs font-medium ${getHealthColor(record.healthStatus.overall)}`}>
+                          {record.healthStatus.overall === "excellent" && "Excelente"}
+                          {record.healthStatus.overall === "good" && "Bueno"}
+                          {record.healthStatus.overall === "fair" && "Regular"}
+                          {record.healthStatus.overall === "poor" && "Malo"}
+                          {record.healthStatus.overall === "critical" && "Crítico"}
+                        </span>
+                      </div>
+                      <div>
+                        <p className="text-gray-600">Condición Corporal:</p>
+                        <p className="font-medium text-[#519a7c]">{record.healthStatus.bodyCondition}/5</p>
+                      </div>
+                      <div>
+                        <p className="text-gray-600">Peso:</p>
+                        <p className="font-medium">{record.healthStatus.weight} kg</p>
+                      </div>
+                      <div>
+                        <p className="text-gray-600">Temperatura:</p>
+                        <p className="font-medium">{record.healthStatus.temperature}°C</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Complicaciones */}
+                  {record.complications.hasComplications && (
+                    <div className="bg-red-50 rounded-lg p-3">
+                      <h4 className="font-medium text-gray-900 mb-2 flex items-center">
+                        <AlertTriangle className="w-4 h-4 mr-2 text-red-600" />
+                        Complicaciones
+                      </h4>
+                      <div className="space-y-1 text-sm">
+                        <p><span className="text-gray-600">Tipo:</span> {record.complications.type}</p>
+                        <p><span className="text-gray-600">Severidad:</span> 
+                          <span className={`ml-1 font-medium ${
+                            record.complications.severity === "severe" ? "text-red-600" :
+                            record.complications.severity === "moderate" ? "text-yellow-600" :
+                            "text-green-600"
+                          }`}>
+                            {record.complications.severity === "severe" && "Severa"}
+                            {record.complications.severity === "moderate" && "Moderada"}
+                            {record.complications.severity === "mild" && "Leve"}
+                          </span>
+                        </p>
+                        {record.complications.description && (
+                          <p className="text-gray-700 mt-1">{record.complications.description}</p>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Veterinario */}
+                  <div className="bg-purple-50 rounded-lg p-3">
+                    <h4 className="font-medium text-gray-900 mb-2 flex items-center">
+                      <User className="w-4 h-4 mr-2 text-purple-600" />
+                      Veterinario Responsable
+                    </h4>
+                    <div className="space-y-1 text-sm">
+                      <p><span className="text-gray-600">Nombre:</span> {record.veterinarian.name}</p>
+                      <p><span className="text-gray-600">Licencia:</span> {record.veterinarian.license}</p>
+                      {record.veterinarian.phone && (
+                        <p><span className="text-gray-600">Teléfono:</span> {record.veterinarian.phone}</p>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Próximo examen */}
+                  <div className="bg-yellow-50 rounded-lg p-3">
+                    <h4 className="font-medium text-gray-900 mb-2 flex items-center">
+                      <Calendar className="w-4 h-4 mr-2 text-yellow-600" />
+                      Próximo Examen
+                    </h4>
+                    <div className="space-y-1 text-sm">
+                      <p><span className="text-gray-600">Fecha:</span> {new Date(record.monitoringSchedule.nextExamDate).toLocaleDateString()}</p>
+                      <p><span className="text-gray-600">Frecuencia:</span> 
+                        <span className="ml-1">
+                          {record.monitoringSchedule.frequency === "weekly" && "Semanal"}
+                          {record.monitoringSchedule.frequency === "biweekly" && "Quincenal"}
+                          {record.monitoringSchedule.frequency === "monthly" && "Mensual"}
+                        </span>
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Alertas activas */}
+                  {record.alerts.filter(alert => !alert.resolved).length > 0 && (
+                    <div className="bg-orange-50 rounded-lg p-3">
+                      <h4 className="font-medium text-gray-900 mb-2 flex items-center">
+                        <AlertTriangle className="w-4 h-4 mr-2 text-orange-600" />
+                        Alertas Activas ({record.alerts.filter(alert => !alert.resolved).length})
+                      </h4>
+                      <div className="space-y-2">
+                        {record.alerts.filter(alert => !alert.resolved).slice(0, 2).map((alert) => (
+                          <div key={alert.id} className="flex items-start space-x-2 text-sm">
+                            {getAlertIcon(alert.severity)}
+                            <div>
+                              <p className="font-medium text-gray-900">{alert.title}</p>
+                              <p className="text-gray-600">{alert.message}</p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Ubicación */}
+                  <div className="flex items-center space-x-2 text-sm text-gray-600">
+                    <MapPin className="w-4 h-4" />
+                    <span>{record.location.address}</span>
+                  </div>
+
+                  {/* Costo total */}
+                  <div className="flex items-center justify-between">
+                    <span className="text-lg font-bold text-[#519a7c]">
+                      ${record.cost.toLocaleString()}
+                    </span>
+                    <span className="text-sm text-gray-600">
+                      {record.examinations.length} exámenes
+                    </span>
+                  </div>
+
+                  {/* Notas */}
+                  {record.notes && (
+                    <div className="bg-gray-50 rounded-lg p-3">
+                      <h4 className="font-medium text-gray-900 mb-1 flex items-center">
+                        <FileText className="w-4 h-4 mr-2 text-gray-600" />
+                        Notas
+                      </h4>
+                      <p className="text-sm text-gray-700">{record.notes}</p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Acciones */}
+                <div className="bg-gray-50 px-4 py-3 flex items-center justify-between">
+                  <div className="flex items-center space-x-2">
+                    <motion.button
+                      onClick={() => setSelectedRecord(record)}
+                      className="p-2 text-gray-600 hover:text-[#519a7c] hover:bg-white rounded-lg transition-all duration-200"
+                      whileHover={{ scale: 1.1 }}
+                      whileTap={{ scale: 0.9 }}
+                    >
+                      <Eye className="w-4 h-4" />
+                    </motion.button>
+                    <motion.button
+                      onClick={() => {
+                        setEditingRecord(record);
+                        setFormData(record);
+                        setShowForm(true);
+                      }}
+                      className="p-2 text-gray-600 hover:text-blue-600 hover:bg-white rounded-lg transition-all duration-200"
+                      whileHover={{ scale: 1.1 }}
+                      whileTap={{ scale: 0.9 }}
+                    >
+                      <Edit className="w-4 h-4" />
+                    </motion.button>
+                    <motion.button
+                      onClick={() => handleDelete(record.id)}
+                      className="p-2 text-gray-600 hover:text-red-600 hover:bg-white rounded-lg transition-all duration-200"
+                      whileHover={{ scale: 1.1 }}
+                      whileTap={{ scale: 0.9 }}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </motion.button>
+                  </div>
+                  <div className="text-xs text-gray-500">
+                    {new Date(record.createdAt).toLocaleDateString()}
+                  </div>
+                </div>
+              </motion.div>
+            ))}
+          </motion.div>
+        ) : viewMode === "list" ? (
+          // Vista de lista
+          <motion.div
+            className="bg-white/95 backdrop-blur-sm rounded-2xl shadow-xl border border-white/20 overflow-hidden"
+            variants={itemVariants}
+          >
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-gradient-to-r from-[#519a7c] to-[#4e9c75] text-white">
+                  <tr>
+                    <th className="px-6 py-4 text-left text-sm font-medium">Animal</th>
+                    <th className="px-6 py-4 text-left text-sm font-medium">Gestación</th>
+                    <th className="px-6 py-4 text-left text-sm font-medium">Etapa</th>
+                    <th className="px-6 py-4 text-left text-sm font-medium">Parto Esperado</th>
+                    <th className="px-6 py-4 text-left text-sm font-medium">Salud</th>
+                    <th className="px-6 py-4 text-left text-sm font-medium">Veterinario</th>
+                    <th className="px-6 py-4 text-left text-sm font-medium">Estado</th>
+                    <th className="px-6 py-4 text-center text-sm font-medium">Acciones</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200">
+                  {filteredRecords.map((record) => (
+                    <motion.tr
+                      key={record.id}
+                      className="hover:bg-gray-50 transition-colors"
+                      whileHover={{ backgroundColor: "rgba(81, 154, 124, 0.05)" }}
+                    >
+                      <td className="px-6 py-4">
+                        <div>
+                          <p className="font-medium text-gray-900">{record.animalName}</p>
+                          <p className="text-sm text-gray-600">{record.animalEarTag}</p>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div>
+                          <p className="font-bold text-[#519a7c]">Día {record.gestationDay}</p>
+                          <p className="text-sm text-gray-600">Gestación #{record.pregnancyNumber}</p>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className={`inline-flex px-2 py-1 rounded-full text-xs font-medium ${getStageColor(record.currentStage)}`}>
+                          {record.currentStage === "early" && "Temprana"}
+                          {record.currentStage === "middle" && "Media"}
+                          {record.currentStage === "late" && "Tardía"}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div>
+                          <p className="text-gray-900">{new Date(record.expectedCalvingDate).toLocaleDateString()}</p>
+                          <p className="text-sm text-orange-600 font-medium">{getDaysRemaining(record.expectedCalvingDate)} días</p>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className={`inline-flex px-2 py-1 rounded-full text-xs font-medium ${getHealthColor(record.healthStatus.overall)}`}>
+                          {record.healthStatus.overall === "excellent" && "Excelente"}
+                          {record.healthStatus.overall === "good" && "Bueno"}
+                          {record.healthStatus.overall === "fair" && "Regular"}
+                          {record.healthStatus.overall === "poor" && "Malo"}
+                          {record.healthStatus.overall === "critical" && "Crítico"}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 text-gray-900">{record.veterinarian.name}</td>
+                      <td className="px-6 py-4">
+                        <span className={`inline-flex px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(record.status)}`}>
+                          {record.status === "active" && "Activa"}
+                          {record.status === "completed" && "Completada"}
+                          {record.status === "lost" && "Perdida"}
+                          {record.status === "transferred" && "Transferida"}
+                          {record.status === "aborted" && "Abortada"}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex items-center justify-center space-x-2">
+                          <motion.button
+                            onClick={() => setSelectedRecord(record)}
+                            className="p-1 text-gray-600 hover:text-[#519a7c] transition-colors"
+                            whileHover={{ scale: 1.1 }}
+                            whileTap={{ scale: 0.9 }}
+                          >
+                            <Eye className="w-4 h-4" />
+                          </motion.button>
+                          <motion.button
+                            onClick={() => {
+                              setEditingRecord(record);
+                              setFormData(record);
+                              setShowForm(true);
+                            }}
+                            className="p-1 text-gray-600 hover:text-blue-600 transition-colors"
+                            whileHover={{ scale: 1.1 }}
+                            whileTap={{ scale: 0.9 }}
+                          >
+                            <Edit className="w-4 h-4" />
+                          </motion.button>
+                          <motion.button
+                            onClick={() => handleDelete(record.id)}
+                            className="p-1 text-gray-600 hover:text-red-600 transition-colors"
+                            whileHover={{ scale: 1.1 }}
+                            whileTap={{ scale: 0.9 }}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </motion.button>
+                        </div>
+                      </td>
+                    </motion.tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </motion.div>
+        ) : (
+          // Vista de calendario (próximos partos)
+          <motion.div
+            className="bg-white/95 backdrop-blur-sm rounded-2xl shadow-xl p-6 border border-white/20"
+            variants={itemVariants}
+          >
+            <h2 className="text-xl font-bold text-gray-900 mb-6 flex items-center">
+              <Calendar className="w-5 h-5 mr-2 text-[#519a7c]" />
+              Calendario de Partos
+            </h2>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {filteredRecords
+                .sort((a, b) => new Date(a.expectedCalvingDate).getTime() - new Date(b.expectedCalvingDate).getTime())
+                .slice(0, 12)
+                .map((record) => (
+                  <motion.div
+                    key={record.id}
+                    className="bg-gradient-to-r from-blue-50 to-green-50 rounded-xl p-4 border-l-4 border-[#519a7c]"
+                    whileHover={{ scale: 1.02 }}
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <h3 className="font-bold text-gray-900">{record.animalName}</h3>
+                      <span className="text-sm text-gray-600">{record.animalEarTag}</span>
+                    </div>
+                    <div className="space-y-1 text-sm">
+                      <p><span className="font-medium text-gray-600">Parto esperado:</span> {new Date(record.expectedCalvingDate).toLocaleDateString()}</p>
+                      <p><span className="font-medium text-gray-600">Días restantes:</span> 
+                        <span className={`ml-1 font-bold ${
+                          getDaysRemaining(record.expectedCalvingDate) <= 7 ? "text-red-600" :
+                          getDaysRemaining(record.expectedCalvingDate) <= 30 ? "text-orange-600" :
+                          "text-green-600"
+                        }`}>
+                          {getDaysRemaining(record.expectedCalvingDate)}
+                        </span>
+                      </p>
+                      <p><span className="font-medium text-gray-600">Gestación:</span> Día {record.gestationDay}</p>
+                      <p><span className="font-medium text-gray-600">Veterinario:</span> {record.veterinarian.name}</p>
+                    </div>
+                    
+                    {getDaysRemaining(record.expectedCalvingDate) <= 7 && (
+                      <div className="mt-3 bg-red-100 border border-red-200 rounded-lg p-2">
+                        <p className="text-red-800 text-xs font-medium">
+                          ⚠️ Parto inminente - Requiere monitoreo intensivo
+                        </p>
+                      </div>
+                    )}
+                  </motion.div>
+                ))}
+            </div>
+          </motion.div>
+        )}
+
+        {/* Modal de formulario */}
+        <AnimatePresence>
+          {showForm && (
             <motion.div
-              variants={itemVariants}
-              className="col-span-full bg-white/95 backdrop-blur-sm rounded-xl shadow-lg border border-white/20 p-12 text-center"
+              className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
             >
-              <AlertCircle className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-              <h3 className="text-xl font-semibold text-gray-600 mb-2">
-                No se encontraron registros
-              </h3>
-              <p className="text-gray-500">
-                No hay seguimientos de gestación que coincidan con los filtros aplicados.
-              </p>
+              <motion.div
+                className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[90vh] overflow-y-auto"
+                initial={{ opacity: 0, scale: 0.9, y: 20 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.9, y: 20 }}
+                transition={{ duration: 0.3 }}
+              >
+                {/* Header del formulario */}
+                <div className="bg-gradient-to-r from-[#519a7c] to-[#4e9c75] p-6 text-white">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-3">
+                      <Baby className="w-6 h-6" />
+                      <h2 className="text-xl font-bold">
+                        {editingRecord ? "Editar Gestación" : "Nueva Gestación"}
+                      </h2>
+                    </div>
+                    <button
+                      onClick={() => {
+                        setShowForm(false);
+                        setEditingRecord(null);
+                        resetForm();
+                      }}
+                      className="p-2 hover:bg-white/20 rounded-lg transition-colors"
+                    >
+                      <X className="w-5 h-5" />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Contenido del formulario - Simplificado para ejemplo */}
+                <div className="p-6 space-y-6">
+                  {/* Información básica del animal */}
+                  <div className="bg-blue-50 rounded-xl p-4">
+                    <h3 className="font-semibold text-gray-900 mb-4 flex items-center">
+                      <Heart className="w-5 h-5 mr-2 text-blue-600" />
+                      Información del Animal
+                    </h3>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          ID del Animal *
+                        </label>
+                        <input
+                          type="text"
+                          value={formData.animalId || ""}
+                          onChange={(e) => setFormData(prev => ({ ...prev, animalId: e.target.value }))}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
+                          placeholder="cow-123"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Nombre del Animal *
+                        </label>
+                        <input
+                          type="text"
+                          value={formData.animalName || ""}
+                          onChange={(e) => setFormData(prev => ({ ...prev, animalName: e.target.value }))}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
+                          placeholder="Bella"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Arete *
+                        </label>
+                        <input
+                          type="text"
+                          value={formData.animalEarTag || ""}
+                          onChange={(e) => setFormData(prev => ({ ...prev, animalEarTag: e.target.value }))}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
+                          placeholder="MX-001"
+                          required
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Información de gestación */}
+                  <div className="bg-green-50 rounded-xl p-4">
+                    <h3 className="font-semibold text-gray-900 mb-4 flex items-center">
+                      <Baby className="w-5 h-5 mr-2 text-green-600" />
+                      Detalles de Gestación
+                    </h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Fecha de Apareamiento *
+                        </label>
+                        <input
+                          type="date"
+                          value={formData.breedingDate || ""}
+                          onChange={(e) => setFormData(prev => ({ ...prev, breedingDate: e.target.value }))}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Fecha de Confirmación *
+                        </label>
+                        <input
+                          type="date"
+                          value={formData.confirmationDate || ""}
+                          onChange={(e) => setFormData(prev => ({ ...prev, confirmationDate: e.target.value }))}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Método de Confirmación *
+                        </label>
+                        <select
+                          value={formData.confirmationMethod || "ultrasound"}
+                          onChange={(e) => setFormData(prev => ({ ...prev, confirmationMethod: e.target.value as any }))}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
+                          required
+                        >
+                          <option value="ultrasound">Ultrasonido</option>
+                          <option value="palpation">Palpación</option>
+                          <option value="blood_test">Análisis de Sangre</option>
+                          <option value="visual">Visual</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Número de Gestación
+                        </label>
+                        <input
+                          type="number"
+                          min="1"
+                          value={formData.pregnancyNumber || 1}
+                          onChange={(e) => setFormData(prev => ({ ...prev, pregnancyNumber: parseInt(e.target.value) || 1 }))}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Información adicional simplificada */}
+                  <div className="bg-yellow-50 rounded-xl p-4">
+                    <h3 className="font-semibold text-gray-900 mb-4 flex items-center">
+                      <Info className="w-5 h-5 mr-2 text-yellow-600" />
+                      Información Adicional
+                    </h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Estado
+                        </label>
+                        <select
+                          value={formData.status || "active"}
+                          onChange={(e) => setFormData(prev => ({ ...prev, status: e.target.value as any }))}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
+                        >
+                          <option value="active">Activa</option>
+                          <option value="completed">Completada</option>
+                          <option value="lost">Perdida</option>
+                          <option value="transferred">Transferida</option>
+                          <option value="aborted">Abortada</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Costo Total ($)
+                        </label>
+                        <input
+                          type="number"
+                          min="0"
+                          value={formData.cost || 0}
+                          onChange={(e) => setFormData(prev => ({ ...prev, cost: parseInt(e.target.value) || 0 }))}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
+                        />
+                      </div>
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Notas Generales
+                      </label>
+                      <textarea
+                        value={formData.notes || ""}
+                        onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
+                        rows={3}
+                        placeholder="Observaciones sobre la gestación..."
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Botones de acción */}
+                <div className="bg-gray-50 px-6 py-4 flex items-center justify-end space-x-3 rounded-b-2xl">
+                  <button
+                    onClick={() => {
+                      setShowForm(false);
+                      setEditingRecord(null);
+                      resetForm();
+                    }}
+                    className="px-6 py-2 text-gray-600 hover:text-gray-800 transition-colors flex items-center space-x-2"
+                  >
+                    <ArrowLeft className="w-4 h-4" />
+                    <span>Cancelar</span>
+                  </button>
+                  <motion.button
+                    onClick={() => {
+                      if (editingRecord) {
+                        handleUpdate(editingRecord.id, formData);
+                      } else {
+                        handleCreate(formData);
+                      }
+                    }}
+                    className="px-6 py-2 bg-gradient-to-r from-[#519a7c] to-[#4e9c75] text-white rounded-lg hover:from-[#4e9c75] hover:to-[#519a7c] transition-all duration-200 flex items-center space-x-2 shadow-lg"
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                  >
+                    <Save className="w-4 h-4" />
+                    <span>{editingRecord ? "Actualizar" : "Guardar"}</span>
+                  </motion.button>
+                </div>
+              </motion.div>
             </motion.div>
           )}
-        </motion.div>
+        </AnimatePresence>
 
-        {/* Modales */}
-        {showCreateModal && <FormModal isEdit={false} />}
-        {showEditModal && <FormModal isEdit={true} />}
-        {showViewModal && <ViewModal />}
-      </div>
+        {/* Modal de detalles completo */}
+        <AnimatePresence>
+          {selectedRecord && (
+            <motion.div
+              className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setSelectedRecord(null)}
+            >
+              <motion.div
+                className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[90vh] overflow-y-auto"
+                initial={{ opacity: 0, scale: 0.9, y: 20 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.9, y: 20 }}
+                transition={{ duration: 0.3 }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                {/* Header del modal */}
+                <div className="bg-gradient-to-r from-[#519a7c] to-[#4e9c75] p-6 text-white">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h2 className="text-2xl font-bold">{selectedRecord.animalName}</h2>
+                      <p className="text-white/80">Arete: {selectedRecord.animalEarTag} • Gestación #{selectedRecord.pregnancyNumber}</p>
+                    </div>
+                    <button
+                      onClick={() => setSelectedRecord(null)}
+                      className="p-2 hover:bg-white/20 rounded-lg transition-colors"
+                    >
+                      <X className="w-5 h-5" />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Contenido del modal con toda la información */}
+                <div className="p-6 space-y-6">
+                  {/* Información general resumida */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div className="bg-blue-50 rounded-xl p-4">
+                      <h3 className="font-semibold text-gray-900 mb-3">Estado de Gestación</h3>
+                      <div className="space-y-2 text-sm">
+                        <p><span className="font-medium text-gray-600">Día:</span> {selectedRecord.gestationDay}</p>
+                        <p><span className="font-medium text-gray-600">Etapa:</span> {selectedRecord.currentStage}</p>
+                        <p><span className="font-medium text-gray-600">Días restantes:</span> {getDaysRemaining(selectedRecord.expectedCalvingDate)}</p>
+                        <p><span className="font-medium text-gray-600">Parto esperado:</span> {new Date(selectedRecord.expectedCalvingDate).toLocaleDateString()}</p>
+                      </div>
+                    </div>
+
+                    <div className="bg-green-50 rounded-xl p-4">
+                      <h3 className="font-semibold text-gray-900 mb-3">Estado de Salud</h3>
+                      <div className="space-y-2 text-sm">
+                        <p><span className="font-medium text-gray-600">General:</span> {selectedRecord.healthStatus.overall}</p>
+                        <p><span className="font-medium text-gray-600">Condición corporal:</span> {selectedRecord.healthStatus.bodyCondition}/5</p>
+                        <p><span className="font-medium text-gray-600">Peso:</span> {selectedRecord.healthStatus.weight} kg</p>
+                        <p><span className="font-medium text-gray-600">Temperatura:</span> {selectedRecord.healthStatus.temperature}°C</p>
+                      </div>
+                    </div>
+
+                    <div className="bg-purple-50 rounded-xl p-4">
+                      <h3 className="font-semibold text-gray-900 mb-3">Veterinario</h3>
+                      <div className="space-y-2 text-sm">
+                        <p><span className="font-medium text-gray-600">Nombre:</span> {selectedRecord.veterinarian.name}</p>
+                        <p><span className="font-medium text-gray-600">Licencia:</span> {selectedRecord.veterinarian.license}</p>
+                        {selectedRecord.veterinarian.phone && (
+                          <p><span className="font-medium text-gray-600">Teléfono:</span> {selectedRecord.veterinarian.phone}</p>
+                        )}
+                        {selectedRecord.veterinarian.email && (
+                          <p><span className="font-medium text-gray-600">Email:</span> {selectedRecord.veterinarian.email}</p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Historial de exámenes */}
+                  <div className="bg-yellow-50 rounded-xl p-4">
+                    <h3 className="font-semibold text-gray-900 mb-3">Historial de Exámenes ({selectedRecord.examinations.length})</h3>
+                    <div className="space-y-3">
+                      {selectedRecord.examinations.slice(0, 3).map((exam) => (
+                        <div key={exam.id} className="bg-white rounded-lg p-3 border">
+                          <div className="flex justify-between items-start mb-2">
+                            <div>
+                              <p className="font-medium text-gray-900">{new Date(exam.date).toLocaleDateString()} - {exam.time}</p>
+                              <p className="text-sm text-gray-600">Día {exam.gestationDay} • {exam.type}</p>
+                            </div>
+                            <span className="text-sm font-medium text-[#519a7c]">${exam.cost}</span>
+                          </div>
+                          <p className="text-sm text-gray-700">{exam.notes}</p>
+                          <div className="mt-2 flex flex-wrap gap-1">
+                            {exam.recommendations.slice(0, 2).map((rec, index) => (
+                              <span key={index} className="bg-blue-100 text-blue-800 px-2 py-1 rounded-full text-xs">
+                                {rec}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Notas */}
+                  {selectedRecord.notes && (
+                    <div className="bg-gray-50 rounded-xl p-4">
+                      <h3 className="font-semibold text-gray-900 mb-3">Notas Generales</h3>
+                      <p className="text-gray-700">{selectedRecord.notes}</p>
+                    </div>
+                  )}
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Mensaje cuando no hay registros */}
+        {filteredRecords.length === 0 && !isLoading && (
+          <motion.div
+            className="bg-white/95 backdrop-blur-sm rounded-2xl shadow-xl p-12 text-center border border-white/20"
+            variants={itemVariants}
+          >
+            <div className="max-w-md mx-auto">
+              <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Baby className="w-8 h-8 text-gray-400" />
+              </div>
+              <h3 className="text-xl font-semibold text-gray-900 mb-2">
+                No se encontraron gestaciones
+              </h3>
+              <p className="text-gray-600 mb-6">
+                No hay registros de gestación que coincidan con los filtros aplicados.
+              </p>
+              <button
+                onClick={() => {
+                  setEditingRecord(null);
+                  resetForm();
+                  setShowForm(true);
+                }}
+                className="px-6 py-3 bg-gradient-to-r from-[#519a7c] to-[#4e9c75] text-white rounded-xl hover:from-[#4e9c75] hover:to-[#519a7c] transition-all duration-200 flex items-center space-x-2 mx-auto"
+              >
+                <Plus className="w-5 h-5" />
+                <span>Registrar Primera Gestación</span>
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </motion.div>
     </div>
   );
 };
