@@ -9,7 +9,6 @@ import { motion, Variants } from "framer-motion";
 import {
   MapPin,
   Users,
-  BarChart3,
   Calendar,
   AlertTriangle,
   CheckCircle,
@@ -25,8 +24,17 @@ import {
   Eye,
   Edit3,
   Share2,
-  Bell,
   Activity,
+  Building,
+  TrendingUp,
+  Home,
+  Shield,
+  TreePine,
+  Mountain,
+  Package,
+  Heart,
+  Beef,
+  User,
 } from "lucide-react";
 
 // ============================================================================
@@ -94,6 +102,360 @@ interface RecentActivity {
   status: "completed" | "pending" | "cancelled";
 }
 
+// ============================================================================
+// DATOS SIMULADOS
+// ============================================================================
+
+const mockRanchData: RanchOverviewData = {
+  id: "ranch-001",
+  name: "Rancho Los Ceibos",
+  description: "Rancho ganadero especializado en producción de leche y carne en la región de Tabasco",
+  establishedYear: 1985,
+  totalArea: 450.5,
+  location: {
+    latitude: 17.9869,
+    longitude: -92.9303,
+    address: "Carretera Villahermosa-Frontera Km 15, Tabasco, México",
+    region: "Villahermosa, Tabasco"
+  },
+  owner: {
+    name: "Dr. Carlos Mendoza Jiménez",
+    email: "carlos.mendoza@rancholosceibos.com",
+    phone: "+52 993 123 4567"
+  },
+  statistics: {
+    totalAnimals: 285,
+    activeFacilities: 12,
+    zones: 8,
+    staff: 15
+  },
+  status: {
+    isOperational: true,
+    lastInspection: "2025-07-10",
+    nextInspection: "2025-10-10",
+    alertCount: 2
+  },
+  weather: {
+    temperature: 28,
+    humidity: 75,
+    windSpeed: 12,
+    condition: "Parcialmente nublado"
+  },
+  facilities: [
+    { id: "f1", name: "Corral Principal", type: "corral", status: "active", capacity: 50, current: 45, coordinates: { latitude: 17.9869, longitude: -92.9303 } },
+    { id: "f2", name: "Establo Norte", type: "barn", status: "active", capacity: 30, current: 28, coordinates: { latitude: 17.9875, longitude: -92.9298 } },
+    { id: "f3", name: "Área de Alimentación", type: "feed", status: "active", capacity: 100, current: 85, coordinates: { latitude: 17.9863, longitude: -92.9308 } },
+    { id: "f4", name: "Clínica Veterinaria", type: "medical", status: "active", capacity: 10, current: 3, coordinates: { latitude: 17.9871, longitude: -92.9295 } }
+  ],
+  recentActivities: [
+    { id: "a1", type: "vaccination", description: "Vacunación contra brucelosis - Lote A", timestamp: "2025-07-16T08:30:00", location: "Corral Principal", status: "completed" },
+    { id: "a2", type: "feeding", description: "Alimentación matutina - Concentrado", timestamp: "2025-07-16T06:00:00", location: "Área de Alimentación", status: "completed" },
+    { id: "a3", type: "inspection", description: "Inspección sanitaria rutinaria", timestamp: "2025-07-16T14:00:00", location: "Establo Norte", status: "pending" }
+  ]
+};
+
+// ============================================================================
+// VARIANTES DE ANIMACIÓN
+// ============================================================================
+
+const containerVariants: Variants = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: {
+      staggerChildren: 0.1,
+      delayChildren: 0.1
+    }
+  }
+};
+
+const itemVariants: Variants = {
+  hidden: { opacity: 0, y: 20 },
+  visible: {
+    opacity: 1,
+    y: 0,
+    transition: {
+      duration: 0.5,
+      ease: "easeOut"
+    }
+  }
+};
+
+const cardVariants: Variants = {
+  hidden: { opacity: 0, scale: 0.9 },
+  visible: {
+    opacity: 1,
+    scale: 1,
+    transition: {
+      duration: 0.4,
+      ease: "easeOut"
+    }
+  },
+  hover: {
+    scale: 1.02,
+    transition: {
+      duration: 0.2
+    }
+  }
+};
+
+// ============================================================================
+// COMPONENTES AUXILIARES
+// ============================================================================
+
+const StatusBadge: React.FC<{ status: string; count?: number }> = ({ status, count }) => {
+  const getStatusConfig = (status: string) => {
+    switch (status) {
+      case "operational":
+        return { color: "bg-green-100 text-green-800", icon: CheckCircle, text: "Operacional" };
+      case "maintenance":
+        return { color: "bg-yellow-100 text-yellow-800", icon: Settings, text: "Mantenimiento" };
+      case "alert":
+        return { color: "bg-red-100 text-red-800", icon: AlertTriangle, text: "Alertas" };
+      default:
+        return { color: "bg-gray-100 text-gray-800", icon: Clock, text: "Desconocido" };
+    }
+  };
+
+  const config = getStatusConfig(status);
+  const Icon = config.icon;
+
+  return (
+    <motion.div
+      whileHover={{ scale: 1.05 }}
+      className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${config.color}`}
+    >
+      <Icon className="w-4 h-4 mr-1" />
+      {config.text}
+      {count && <span className="ml-2 bg-white bg-opacity-70 px-2 py-0.5 rounded-full text-xs">{count}</span>}
+    </motion.div>
+  );
+};
+
+const WeatherCard: React.FC<{ weather: RanchOverviewData['weather'] }> = ({ weather }) => {
+  const getWeatherIcon = (condition: string) => {
+    if (condition.includes("nublado")) return Sun;
+    if (condition.includes("lluvia")) return Droplets;
+    return Sun;
+  };
+
+  const WeatherIcon = getWeatherIcon(weather.condition);
+
+  return (
+    <motion.div
+      variants={cardVariants}
+      whileHover="hover"
+      className="bg-white/90 backdrop-blur-sm rounded-xl p-6 shadow-lg border border-white/20"
+    >
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-lg font-semibold text-[#2d5a45]">Clima Actual</h3>
+        <WeatherIcon className="w-6 h-6 text-yellow-500" />
+      </div>
+      
+      <div className="grid grid-cols-2 gap-4">
+        <div className="flex items-center">
+          <Thermometer className="w-5 h-5 text-red-400 mr-2" />
+          <div>
+            <p className="text-2xl font-bold text-[#2d5a45]">{weather.temperature}°C</p>
+            <p className="text-sm text-gray-600">Temperatura</p>
+          </div>
+        </div>
+        
+        <div className="flex items-center">
+          <Droplets className="w-5 h-5 text-blue-400 mr-2" />
+          <div>
+            <p className="text-2xl font-bold text-[#2d5a45]">{weather.humidity}%</p>
+            <p className="text-sm text-gray-600">Humedad</p>
+          </div>
+        </div>
+        
+        <div className="flex items-center">
+          <Wind className="w-5 h-5 text-gray-400 mr-2" />
+          <div>
+            <p className="text-2xl font-bold text-[#2d5a45]">{weather.windSpeed} km/h</p>
+            <p className="text-sm text-gray-600">Viento</p>
+          </div>
+        </div>
+        
+        <div className="col-span-2">
+          <p className="text-sm text-gray-600 mt-2">{weather.condition}</p>
+        </div>
+      </div>
+    </motion.div>
+  );
+};
+
+const StatCard: React.FC<{ 
+  title: string; 
+  value: number; 
+  icon: React.ElementType; 
+  color: string;
+  subtitle?: string;
+}> = ({ title, value, icon: Icon, color, subtitle }) => {
+  return (
+    <motion.div
+      variants={cardVariants}
+      whileHover="hover"
+      className="bg-white/90 backdrop-blur-sm rounded-xl p-6 shadow-lg border border-white/20"
+    >
+      <div className="flex items-center justify-between mb-4">
+        <div className={`w-12 h-12 rounded-lg ${color} flex items-center justify-center`}>
+          <Icon className="w-6 h-6 text-white" />
+        </div>
+        <TrendingUp className="w-5 h-5 text-green-500" />
+      </div>
+      
+      <div>
+        <p className="text-3xl font-bold text-[#2d5a45] mb-1">{value.toLocaleString()}</p>
+        <p className="text-gray-600 font-medium">{title}</p>
+        {subtitle && <p className="text-sm text-gray-500 mt-1">{subtitle}</p>}
+      </div>
+    </motion.div>
+  );
+};
+
+const FacilityList: React.FC<{ facilities: RanchFacility[] }> = ({ facilities }) => {
+  const getFacilityIcon = (type: string) => {
+    switch (type) {
+      case "corral": return Home;
+      case "barn": return Building;
+      case "feed": return Package;
+      case "water": return Droplets;
+      case "medical": return Heart;
+      case "office": return FileText;
+      default: return Building;
+    }
+  };
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case "active": return "text-green-600 bg-green-100";
+      case "maintenance": return "text-yellow-600 bg-yellow-100";
+      case "inactive": return "text-red-600 bg-red-100";
+      default: return "text-gray-600 bg-gray-100";
+    }
+  };
+
+  return (
+    <motion.div
+      variants={cardVariants}
+      className="bg-white/90 backdrop-blur-sm rounded-xl p-6 shadow-lg border border-white/20"
+    >
+      <h3 className="text-lg font-semibold text-[#2d5a45] mb-4">Instalaciones Principales</h3>
+      
+      <div className="space-y-3">
+        {facilities.map((facility, index) => {
+          const Icon = getFacilityIcon(facility.type);
+          const occupancyPercentage = (facility.current / facility.capacity) * 100;
+          
+          return (
+            <motion.div
+              key={facility.id}
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: index * 0.1 }}
+              className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
+            >
+              <div className="flex items-center">
+                <Icon className="w-5 h-5 text-[#519a7c] mr-3" />
+                <div>
+                  <p className="font-medium text-[#2d5a45]">{facility.name}</p>
+                  <p className="text-sm text-gray-600">{facility.current}/{facility.capacity} ocupado</p>
+                </div>
+              </div>
+              
+              <div className="flex items-center space-x-2">
+                <div className="w-16 bg-gray-200 rounded-full h-2">
+                  <div 
+                    className="bg-[#519a7c] h-2 rounded-full transition-all duration-300"
+                    style={{ width: `${occupancyPercentage}%` }}
+                  />
+                </div>
+                <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(facility.status)}`}>
+                  {facility.status}
+                </span>
+              </div>
+            </motion.div>
+          );
+        })}
+      </div>
+    </motion.div>
+  );
+};
+
+const RecentActivitiesList: React.FC<{ activities: RecentActivity[] }> = ({ activities }) => {
+  const getActivityIcon = (type: string) => {
+    switch (type) {
+      case "vaccination": return Shield;
+      case "feeding": return Package;
+      case "treatment": return Heart;
+      case "inspection": return Eye;
+      case "movement": return MapPin;
+      default: return Activity;
+    }
+  };
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case "completed": return "text-green-600";
+      case "pending": return "text-yellow-600";
+      case "cancelled": return "text-red-600";
+      default: return "text-gray-600";
+    }
+  };
+
+  return (
+    <motion.div
+      variants={cardVariants}
+      className="bg-white/90 backdrop-blur-sm rounded-xl p-6 shadow-lg border border-white/20"
+    >
+      <h3 className="text-lg font-semibold text-[#2d5a45] mb-4">Actividades Recientes</h3>
+      
+      <div className="space-y-4">
+        {activities.map((activity, index) => {
+          const Icon = getActivityIcon(activity.type);
+          const timeAgo = new Date(activity.timestamp).toLocaleTimeString('es-MX', { 
+            hour: '2-digit', 
+            minute: '2-digit' 
+          });
+          
+          return (
+            <motion.div
+              key={activity.id}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: index * 0.1 }}
+              className="flex items-start space-x-3 p-3 bg-gray-50 rounded-lg"
+            >
+              <div className="w-8 h-8 bg-[#519a7c] rounded-full flex items-center justify-center flex-shrink-0">
+                <Icon className="w-4 h-4 text-white" />
+              </div>
+              
+              <div className="flex-1 min-w-0">
+                <p className="font-medium text-[#2d5a45]">{activity.description}</p>
+                <div className="flex items-center justify-between mt-1">
+                  <p className="text-sm text-gray-600">{activity.location} • {timeAgo}</p>
+                  <span className={`text-sm font-medium ${getStatusColor(activity.status)}`}>
+                    {activity.status === 'completed' ? 'Completado' : 
+                     activity.status === 'pending' ? 'Pendiente' : 'Cancelado'}
+                  </span>
+                </div>
+              </div>
+            </motion.div>
+          );
+        })}
+      </div>
+      
+      <motion.button
+        whileHover={{ scale: 1.02 }}
+        whileTap={{ scale: 0.98 }}
+        className="w-full mt-4 py-2 text-[#519a7c] border border-[#519a7c] rounded-lg hover:bg-[#519a7c] hover:text-white transition-colors"
+      >
+        Ver todas las actividades
+      </motion.button>
+    </motion.div>
+  );
+};
 
 // ============================================================================
 // COMPONENTE PRINCIPAL
@@ -101,657 +463,257 @@ interface RecentActivity {
 
 const RanchOverview: React.FC = () => {
   // Estados para manejo de datos y UI
-  const [ranchData, setRanchData] = useState<RanchOverviewData | null>(null);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
-  const [selectedFacility, setSelectedFacility] = useState<string | null>(null);
-  const [showActivities, setShowActivities] = useState<boolean>(false);
-  const [weatherExpanded, setWeatherExpanded] = useState<boolean>(false);
+  const [ranchData] = useState<RanchOverviewData>(mockRanchData);
+  const [isLoading, setIsLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
-  // Datos simulados del rancho - En producción vendrían de la API
-  const mockRanchData: RanchOverviewData = {
-    id: "ranch-001",
-    name: "Rancho San José",
-    description: "Rancho ganadero especializado en producción bovina mixta con tecnología avanzada",
-    establishedYear: 1987,
-    totalArea: 2500, // hectáreas
-    location: {
-      latitude: 17.9890,
-      longitude: -92.9476,
-      address: "Carretera Villahermosa-Frontera Km 15.5",
-      region: "Villahermosa, Tabasco, México",
-    },
-    owner: {
-      name: "José Manuel Rodríguez García",
-      email: "jm.rodriguez@ranchosanjose.com",
-      phone: "+52 993 123 4567",
-    },
-    statistics: {
-      totalAnimals: 847,
-      activeFacilities: 15,
-      zones: 8,
-      staff: 12,
-    },
-    status: {
-      isOperational: true,
-      lastInspection: "2025-01-10",
-      nextInspection: "2025-01-20",
-      alertCount: 2,
-    },
-    weather: {
-      temperature: 28,
-      humidity: 76,
-      windSpeed: 12,
-      condition: "partly cloudy",
-    },
-    facilities: [
-      {
-        id: "fac-001",
-        name: "Corral Principal",
-        type: "corral",
-        status: "active",
-        capacity: 200,
-        current: 187,
-        coordinates: { latitude: 17.9892, longitude: -92.9478 },
-      },
-      {
-        id: "fac-002",
-        name: "Establo Norte",
-        type: "barn",
-        status: "active",
-        capacity: 150,
-        current: 143,
-        coordinates: { latitude: 17.9894, longitude: -92.9475 },
-      },
-      {
-        id: "fac-003",
-        name: "Centro de Alimentación",
-        type: "feed",
-        status: "active",
-        capacity: 500,
-        current: 387,
-        coordinates: { latitude: 17.9888, longitude: -92.9480 },
-      },
-      {
-        id: "fac-004",
-        name: "Depósito de Agua",
-        type: "water",
-        status: "maintenance",
-        capacity: 1000,
-        current: 750,
-        coordinates: { latitude: 17.9891, longitude: -92.9473 },
-      },
-      {
-        id: "fac-005",
-        name: "Clínica Veterinaria",
-        type: "medical",
-        status: "active",
-        capacity: 20,
-        current: 3,
-        coordinates: { latitude: 17.9889, longitude: -92.9477 },
-      },
-    ],
-    recentActivities: [
-      {
-        id: "act-001",
-        type: "vaccination",
-        description: "Vacunación antiaftosa - Lote 15",
-        timestamp: "2025-01-15T09:30:00Z",
-        location: "Corral Principal",
-        status: "completed",
-      },
-      {
-        id: "act-002",
-        type: "feeding",
-        description: "Distribución de alimento balanceado",
-        timestamp: "2025-01-15T06:00:00Z",
-        location: "Centro de Alimentación",
-        status: "completed",
-      },
-      {
-        id: "act-003",
-        type: "inspection",
-        description: "Inspección sanitaria mensual",
-        timestamp: "2025-01-16T14:00:00Z",
-        location: "Todo el rancho",
-        status: "pending",
-      },
-    ],
-  };
-
-  // Efecto para simular carga de datos
+  // Efecto para simular carga inicial de datos
   useEffect(() => {
-    const loadData = async () => {
-      setIsLoading(true);
-      // Simular llamada a API
-      setTimeout(() => {
-        setRanchData(mockRanchData);
-        setIsLoading(false);
-      }, 1500);
-    };
-
-    loadData();
+    setIsLoading(true);
+    setTimeout(() => {
+      setIsLoading(false);
+    }, 1000);
   }, []);
 
-  // Variantes de animación para Framer Motion
-  const containerVariants: Variants = {
-    hidden: { opacity: 0 },
-    visible: {
-      opacity: 1,
-      transition: {
-        delayChildren: 0.2,
-        staggerChildren: 0.15,
-      },
-    },
+  // Función para refrescar datos
+  const handleRefresh = () => {
+    setRefreshing(true);
+    setTimeout(() => {
+      setRefreshing(false);
+    }, 2000);
   };
 
-  const itemVariants: Variants = {
-    hidden: { y: 30, opacity: 0 },
-    visible: {
-      y: 0,
-      opacity: 1,
-      transition: {
-        duration: 0.6,
-        ease: "easeOut",
-      },
-    },
+  // Función para editar información del rancho
+  const handleEdit = () => {
+    console.log("Editando información del rancho...");
   };
 
-  const cardHoverVariants: Variants = {
-    hover: {
-      scale: 1.02,
-      boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)",
-      transition: {
-        duration: 0.2,
-        ease: "easeInOut",
-      },
-    },
+  // Función para compartir información
+  const handleShare = () => {
+    console.log("Compartiendo información del rancho...");
   };
 
-  // Función para obtener icono del clima
-  const getWeatherIcon = (condition: string): React.ReactNode => {
-    switch (condition) {
-      case "sunny":
-        return <Sun className="w-6 h-6 text-yellow-500" />;
-      case "cloudy":
-        return <Sun className="w-6 h-6 text-gray-500" />;
-      case "rainy":
-        return <Droplets className="w-6 h-6 text-blue-500" />;
-      case "windy":
-        return <Wind className="w-6 h-6 text-gray-600" />;
-      default:
-        return <Sun className="w-6 h-6 text-yellow-500" />;
-    }
-  };
-
-  // Función para obtener color según el estado
-  const getStatusColor = (status: string): string => {
-    switch (status) {
-      case "active":
-      case "completed":
-        return "text-green-600 bg-green-100";
-      case "maintenance":
-      case "pending":
-        return "text-yellow-600 bg-yellow-100";
-      case "inactive":
-      case "cancelled":
-        return "text-red-600 bg-red-100";
-      default:
-        return "text-gray-600 bg-gray-100";
-    }
-  };
-
-  // Función para obtener icono de instalación
-  const getFacilityIcon = (type: string): React.ReactNode => {
-    switch (type) {
-      case "corral":
-        return <Users className="w-5 h-5" />;
-      case "barn":
-        return <FileText className="w-5 h-5" />;
-      case "feed":
-        return <BarChart3 className="w-5 h-5" />;
-      case "water":
-        return <Droplets className="w-5 h-5" />;
-      case "medical":
-        return <Activity className="w-5 h-5" />;
-      case "office":
-        return <Settings className="w-5 h-5" />;
-      default:
-        return <MapPin className="w-5 h-5" />;
-    }
-  };
-
-  // Componente de loading con fondo degradado del layout principal
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-[#519a7c] via-[#f2e9d8] to-[#f4ac3a] flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-br from-[#F5F5DC] via-[#E8E8C8] to-[#D3D3B8] flex items-center justify-center">
         <motion.div
-          initial={{ opacity: 0, scale: 0.8 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ duration: 0.5 }}
-          className="text-center"
-        >
-          <motion.div
-            animate={{ rotate: 360 }}
-            transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-            className="w-16 h-16 border-4 border-white border-t-transparent rounded-full mx-auto mb-4"
-          />
-          <motion.h2
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.2 }}
-            className="text-2xl font-semibold text-white mb-2"
-          >
-            Cargando Vista General del Rancho
-          </motion.h2>
-          <motion.p
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.4 }}
-            className="text-white/80"
-          >
-            Obteniendo información actualizada...
-          </motion.p>
-        </motion.div>
-      </div>
-    );
-  }
-
-  if (!ranchData) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-[#519a7c] via-[#f2e9d8] to-[#f4ac3a] flex items-center justify-center">
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          className="text-center text-white"
-        >
-          <AlertTriangle className="w-16 h-16 mx-auto mb-4" />
-          <h2 className="text-2xl font-semibold mb-2">Error al Cargar Datos</h2>
-          <p className="text-white/80">No se pudo obtener la información del rancho</p>
-        </motion.div>
+          animate={{ rotate: 360 }}
+          transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+          className="w-8 h-8 border-4 border-[#519a7c] border-t-transparent rounded-full"
+        />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#519a7c] via-[#f2e9d8] to-[#f4ac3a]">
-      {/* Contenedor principal con padding y espaciado */}
-      <div className="max-w-7xl mx-auto px-6 lg:px-8 py-8">
-        <motion.div
-          variants={containerVariants}
-          initial="hidden"
-          animate="visible"
-          className="space-y-8"
-        >
-          {/* Header con información básica del rancho */}
-          <motion.div variants={itemVariants}>
-            <div className="bg-white/95 backdrop-blur-sm rounded-xl shadow-lg border border-white/20 p-8">
-              <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between">
-                <div className="flex-1">
-                  <motion.h1
-                    initial={{ opacity: 0, x: -20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: 0.3 }}
-                    className="text-4xl font-bold bg-gradient-to-r from-[#519a7c] to-[#f4ac3a] bg-clip-text text-transparent mb-2"
-                  >
-                    {ranchData.name}
-                  </motion.h1>
-                  <motion.p
-                    initial={{ opacity: 0, x: -20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: 0.4 }}
-                    className="text-gray-600 text-lg mb-4"
-                  >
-                    {ranchData.description}
-                  </motion.p>
-                  <motion.div
-                    initial={{ opacity: 0, x: -20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: 0.5 }}
-                    className="flex flex-wrap items-center gap-4 text-sm text-gray-500"
-                  >
-                    <div className="flex items-center gap-2">
-                      <Calendar className="w-4 h-4" />
-                      <span>Establecido en {ranchData.establishedYear}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <MapPin className="w-4 h-4" />
-                      <span>{ranchData.totalArea} hectáreas</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <MapPin className="w-4 h-4" />
-                      <span>{ranchData.location.region}</span>
-                    </div>
-                  </motion.div>
+    <div className="min-h-screen bg-gradient-to-br from-[#F5F5DC] via-[#E8E8C8] to-[#D3D3B8] p-6">
+      <motion.div
+        variants={containerVariants}
+        initial="hidden"
+        animate="visible"
+        className="max-w-7xl mx-auto"
+      >
+        {/* Header de la página */}
+        <motion.div variants={itemVariants} className="mb-8">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-4xl font-bold text-[#2d5a45] mb-2">
+                {ranchData.name}
+              </h1>
+              <p className="text-gray-600 text-lg">{ranchData.description}</p>
+              <div className="flex items-center mt-2 space-x-4">
+                <div className="flex items-center text-gray-600">
+                  <MapPin className="w-4 h-4 mr-1" />
+                  <span className="text-sm">{ranchData.location.region}</span>
                 </div>
-
-                {/* Acciones rápidas */}
-                <motion.div
-                  initial={{ opacity: 0, x: 20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: 0.6 }}
-                  className="flex gap-3 mt-6 lg:mt-0"
-                >
-                  <motion.button
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                    className="bg-gradient-to-r from-[#2d6f51] to-[#4e9c75] text-white px-6 py-3 rounded-lg hover:from-[#265a44] hover:to-[#3d7a5c] transition-all duration-200 flex items-center gap-2"
-                  >
-                    <Edit3 className="w-4 h-4" />
-                    Editar Información
-                  </motion.button>
-                  <motion.button
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                    className="bg-white/20 text-gray-700 px-6 py-3 rounded-lg hover:bg-white/30 border border-gray-200 flex items-center gap-2"
-                  >
-                    <Share2 className="w-4 h-4" />
-                    Compartir
-                  </motion.button>
-                </motion.div>
+                <div className="flex items-center text-gray-600">
+                  <Calendar className="w-4 h-4 mr-1" />
+                  <span className="text-sm">Establecido en {ranchData.establishedYear}</span>
+                </div>
+                <div className="flex items-center text-gray-600">
+                  <Mountain className="w-4 h-4 mr-1" />
+                  <span className="text-sm">{ranchData.totalArea} hectáreas</span>
+                </div>
               </div>
+            </div>
 
-              {/* Estado operacional */}
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.7 }}
-                className="mt-6 flex flex-wrap items-center gap-4"
+            <div className="flex items-center space-x-3">
+              <StatusBadge 
+                status={ranchData.status.isOperational ? "operational" : "maintenance"} 
+              />
+              {ranchData.status.alertCount > 0 && (
+                <StatusBadge status="alert" count={ranchData.status.alertCount} />
+              )}
+              
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={handleRefresh}
+                disabled={refreshing}
+                className="p-2 bg-white/90 backdrop-blur-sm rounded-lg shadow-lg border border-white/20 hover:bg-white transition-colors"
               >
-                <div className={`flex items-center gap-2 px-3 py-1 rounded-full text-sm font-medium ${
-                  ranchData.status.isOperational 
-                    ? "text-green-600 bg-green-100" 
-                    : "text-red-600 bg-red-100"
-                }`}>
-                  {ranchData.status.isOperational ? (
-                    <CheckCircle className="w-4 h-4" />
-                  ) : (
-                    <AlertTriangle className="w-4 h-4" />
-                  )}
-                  {ranchData.status.isOperational ? "Operacional" : "Fuera de Servicio"}
-                </div>
-                
-                {ranchData.status.alertCount > 0 && (
-                  <div className="flex items-center gap-2 px-3 py-1 rounded-full text-sm font-medium text-yellow-600 bg-yellow-100">
-                    <Bell className="w-4 h-4" />
-                    {ranchData.status.alertCount} Alertas Activas
-                  </div>
-                )}
-              </motion.div>
-            </div>
-          </motion.div>
-
-          {/* Grid de estadísticas principales */}
-          <motion.div variants={itemVariants}>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-              {[
-                {
-                  title: "Total de Animales",
-                  value: ranchData.statistics.totalAnimals.toLocaleString(),
-                  icon: <Users className="w-8 h-8 text-[#519a7c]" />,
-                  color: "from-green-500 to-green-600",
-                },
-                {
-                  title: "Instalaciones Activas",
-                  value: ranchData.statistics.activeFacilities,
-                  icon: <Settings className="w-8 h-8 text-[#f4ac3a]" />,
-                  color: "from-orange-500 to-orange-600",
-                },
-                {
-                  title: "Zonas Productivas",
-                  value: ranchData.statistics.zones,
-                  icon: <MapPin className="w-8 h-8 text-blue-600" />,
-                  color: "from-blue-500 to-blue-600",
-                },
-                {
-                  title: "Personal Activo",
-                  value: ranchData.statistics.staff,
-                  icon: <Users className="w-8 h-8 text-purple-600" />,
-                  color: "from-purple-500 to-purple-600",
-                },
-              ].map((stat, index) => (
                 <motion.div
-                  key={index}
-                  variants={cardHoverVariants}
-                  whileHover="hover"
-                  className="bg-white/95 backdrop-blur-sm rounded-xl shadow-lg border border-white/20 p-6"
+                  animate={refreshing ? { rotate: 360 } : { rotate: 0 }}
+                  transition={{ duration: 1, repeat: refreshing ? Infinity : 0, ease: "linear" }}
                 >
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-gray-600 text-sm mb-1">{stat.title}</p>
-                      <p className="text-3xl font-bold text-gray-800">{stat.value}</p>
-                    </div>
-                    <div className="flex-shrink-0">
-                      {stat.icon}
-                    </div>
-                  </div>
+                  <Activity className="w-5 h-5 text-[#519a7c]" />
                 </motion.div>
-              ))}
+              </motion.button>
+
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={handleEdit}
+                className="p-2 bg-white/90 backdrop-blur-sm rounded-lg shadow-lg border border-white/20 hover:bg-white transition-colors"
+              >
+                <Edit3 className="w-5 h-5 text-[#519a7c]" />
+              </motion.button>
+
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={handleShare}
+                className="p-2 bg-white/90 backdrop-blur-sm rounded-lg shadow-lg border border-white/20 hover:bg-white transition-colors"
+              >
+                <Share2 className="w-5 h-5 text-[#519a7c]" />
+              </motion.button>
             </div>
+          </div>
+        </motion.div>
+
+        {/* Grid principal de estadísticas */}
+        <motion.div variants={itemVariants} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+          <StatCard
+            title="Total de Animales"
+            value={ranchData.statistics.totalAnimals}
+            icon={Beef}
+            color="bg-[#519a7c]"
+            subtitle="En todas las instalaciones"
+          />
+          <StatCard
+            title="Instalaciones Activas"
+            value={ranchData.statistics.activeFacilities}
+            icon={Building}
+            color="bg-blue-500"
+            subtitle="En funcionamiento"
+          />
+          <StatCard
+            title="Zonas de Pastoreo"
+            value={ranchData.statistics.zones}
+            icon={TreePine}
+            color="bg-green-500"
+            subtitle="Áreas disponibles"
+          />
+          <StatCard
+            title="Personal Activo"
+            value={ranchData.statistics.staff}
+            icon={Users}
+            color="bg-purple-500"
+            subtitle="Trabajadores en turno"
+          />
+        </motion.div>
+
+        {/* Grid de información detallada */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+          {/* Información del clima */}
+          <motion.div variants={itemVariants}>
+            <WeatherCard weather={ranchData.weather} />
           </motion.div>
 
-          {/* Sección de clima actual */}
-          <motion.div variants={itemVariants}>
-            <motion.div
-              variants={cardHoverVariants}
-              whileHover="hover"
-              className="bg-white/95 backdrop-blur-sm rounded-xl shadow-lg border border-white/20 p-6"
-            >
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-xl font-semibold text-gray-800">Condiciones Climáticas</h3>
-                <motion.button
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                  onClick={() => setWeatherExpanded(!weatherExpanded)}
-                  className="text-gray-500 hover:text-gray-700"
-                >
-                  <Eye className="w-5 h-5" />
-                </motion.button>
+          {/* Información del propietario y contacto */}
+          <motion.div
+            variants={cardVariants}
+            className="bg-white/90 backdrop-blur-sm rounded-xl p-6 shadow-lg border border-white/20"
+          >
+            <h3 className="text-lg font-semibold text-[#2d5a45] mb-4">Información de Contacto</h3>
+            
+            <div className="space-y-4">
+              <div className="flex items-center">
+                <User className="w-5 h-5 text-[#519a7c] mr-3" />
+                <div>
+                  <p className="font-medium text-[#2d5a45]">{ranchData.owner.name}</p>
+                  <p className="text-sm text-gray-600">Propietario</p>
+                </div>
               </div>
               
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <div className="flex items-center gap-3">
-                  <Thermometer className="w-6 h-6 text-red-500" />
-                  <div>
-                    <p className="text-2xl font-bold text-gray-800">{ranchData.weather.temperature}°C</p>
-                    <p className="text-sm text-gray-600">Temperatura</p>
-                  </div>
-                </div>
-                
-                <div className="flex items-center gap-3">
-                  <Droplets className="w-6 h-6 text-blue-500" />
-                  <div>
-                    <p className="text-2xl font-bold text-gray-800">{ranchData.weather.humidity}%</p>
-                    <p className="text-sm text-gray-600">Humedad</p>
-                  </div>
-                </div>
-                
-                <div className="flex items-center gap-3">
-                  <Wind className="w-6 h-6 text-gray-500" />
-                  <div>
-                    <p className="text-2xl font-bold text-gray-800">{ranchData.weather.windSpeed} km/h</p>
-                    <p className="text-sm text-gray-600">Viento</p>
-                  </div>
-                </div>
-                
-                <div className="flex items-center gap-3">
-                  {getWeatherIcon(ranchData.weather.condition)}
-                  <div>
-                    <p className="text-lg font-semibold text-gray-800 capitalize">
-                      {ranchData.weather.condition.replace("_", " ")}
-                    </p>
-                    <p className="text-sm text-gray-600">Condición</p>
-                  </div>
+              <div className="flex items-center">
+                <Mail className="w-5 h-5 text-[#519a7c] mr-3" />
+                <div>
+                  <p className="font-medium text-[#2d5a45]">{ranchData.owner.email}</p>
+                  <p className="text-sm text-gray-600">Correo electrónico</p>
                 </div>
               </div>
-            </motion.div>
-          </motion.div>
-
-          {/* Grid de instalaciones y actividades */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            {/* Instalaciones */}
-            <motion.div variants={itemVariants}>
-              <motion.div
-                variants={cardHoverVariants}
-                whileHover="hover"
-                className="bg-white/95 backdrop-blur-sm rounded-xl shadow-lg border border-white/20 p-6 h-full"
-              >
-                <div className="flex items-center justify-between mb-6">
-                  <h3 className="text-xl font-semibold text-gray-800">Instalaciones</h3>
-                  <span className="text-sm text-gray-500">
-                    {ranchData.facilities.length} instalaciones
-                  </span>
-                </div>
-                
-                <div className="space-y-4 max-h-80 overflow-y-auto">
-                  {ranchData.facilities.map((facility, index) => (
-                    <motion.div
-                      key={facility.id}
-                      initial={{ opacity: 0, x: -20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: index * 0.1 }}
-                      className={`p-4 border rounded-lg cursor-pointer transition-all duration-200 ${
-                        selectedFacility === facility.id 
-                          ? "border-[#519a7c] bg-green-50" 
-                          : "border-gray-200 hover:border-gray-300"
-                      }`}
-                      onClick={() => setSelectedFacility(
-                        selectedFacility === facility.id ? null : facility.id
-                      )}
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          {getFacilityIcon(facility.type)}
-                          <div>
-                            <h4 className="font-medium text-gray-800">{facility.name}</h4>
-                            <p className="text-sm text-gray-600">
-                              {facility.current}/{facility.capacity} - {facility.type}
-                            </p>
-                          </div>
-                        </div>
-                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(facility.status)}`}>
-                          {facility.status}
-                        </span>
-                      </div>
-                    </motion.div>
-                  ))}
-                </div>
-              </motion.div>
-            </motion.div>
-
-            {/* Actividades recientes */}
-            <motion.div variants={itemVariants}>
-              <motion.div
-                variants={cardHoverVariants}
-                whileHover="hover"
-                className="bg-white/95 backdrop-blur-sm rounded-xl shadow-lg border border-white/20 p-6 h-full"
-              >
-                <div className="flex items-center justify-between mb-6">
-                  <h3 className="text-xl font-semibold text-gray-800">Actividades Recientes</h3>
-                  <motion.button
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                    onClick={() => setShowActivities(!showActivities)}
-                    className="text-[#519a7c] hover:text-[#457e68] font-medium text-sm"
-                  >
-                    Ver todas
-                  </motion.button>
-                </div>
-                
-                <div className="space-y-4 max-h-80 overflow-y-auto">
-                  {ranchData.recentActivities.map((activity, index) => (
-                    <motion.div
-                      key={activity.id}
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: index * 0.1 }}
-                      className="p-4 border border-gray-200 rounded-lg hover:border-gray-300 transition-colors"
-                    >
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1">
-                          <h4 className="font-medium text-gray-800 mb-1">
-                            {activity.description}
-                          </h4>
-                          <div className="flex items-center gap-4 text-sm text-gray-600">
-                            <span className="flex items-center gap-1">
-                              <Clock className="w-3 h-3" />
-                              {new Date(activity.timestamp).toLocaleDateString()}
-                            </span>
-                            <span className="flex items-center gap-1">
-                              <MapPin className="w-3 h-3" />
-                              {activity.location}
-                            </span>
-                          </div>
-                        </div>
-                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(activity.status)}`}>
-                          {activity.status}
-                        </span>
-                      </div>
-                    </motion.div>
-                  ))}
-                </div>
-              </motion.div>
-            </motion.div>
-          </div>
-
-          {/* Información de contacto del propietario */}
-          <motion.div variants={itemVariants}>
-            <motion.div
-              variants={cardHoverVariants}
-              whileHover="hover"
-              className="bg-white/95 backdrop-blur-sm rounded-xl shadow-lg border border-white/20 p-6"
-            >
-              <h3 className="text-xl font-semibold text-gray-800 mb-4">Información del Propietario</h3>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div className="flex items-center gap-3">
-                  <Users className="w-6 h-6 text-[#519a7c]" />
-                  <div>
-                    <p className="font-medium text-gray-800">{ranchData.owner.name}</p>
-                    <p className="text-sm text-gray-600">Propietario</p>
-                  </div>
-                </div>
-                
-                <div className="flex items-center gap-3">
-                  <Mail className="w-6 h-6 text-[#f4ac3a]" />
-                  <div>
-                    <p className="font-medium text-gray-800">{ranchData.owner.email}</p>
-                    <p className="text-sm text-gray-600">Correo electrónico</p>
-                  </div>
-                </div>
-                
-                <div className="flex items-center gap-3">
-                  <Phone className="w-6 h-6 text-blue-600" />
-                  <div>
-                    <p className="font-medium text-gray-800">{ranchData.owner.phone}</p>
-                    <p className="text-sm text-gray-600">Teléfono</p>
-                  </div>
+              
+              <div className="flex items-center">
+                <Phone className="w-5 h-5 text-[#519a7c] mr-3" />
+                <div>
+                  <p className="font-medium text-[#2d5a45]">{ranchData.owner.phone}</p>
+                  <p className="text-sm text-gray-600">Teléfono</p>
                 </div>
               </div>
-            </motion.div>
-          </motion.div>
-
-          {/* Acciones rápidas finales */}
-          <motion.div variants={itemVariants}>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              {[
-                { label: "Ver Mapa Completo", icon: <MapPin className="w-5 h-5" />, color: "bg-green-600" },
-                { label: "Generar Reporte", icon: <FileText className="w-5 h-5" />, color: "bg-blue-600" },
-                { label: "Gestionar Alertas", icon: <Bell className="w-5 h-5" />, color: "bg-yellow-600" },
-                { label: "Ver Detalles", icon: <Eye className="w-5 h-5" />, color: "bg-purple-600" },
-              ].map((action, index) => (
-                <motion.button
-                  key={index}
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                  className={`${action.color} text-white p-4 rounded-lg hover:opacity-90 transition-opacity flex items-center gap-3`}
-                >
-                  {action.icon}
-                  <span className="font-medium">{action.label}</span>
-                </motion.button>
-              ))}
+              
+              <div className="pt-4 border-t border-gray-200">
+                <p className="text-sm text-gray-600">
+                  <strong>Dirección:</strong> {ranchData.location.address}
+                </p>
+              </div>
             </div>
           </motion.div>
-        </motion.div>
-      </div>
+
+          {/* Estado de inspecciones */}
+          <motion.div
+            variants={cardVariants}
+            className="bg-white/90 backdrop-blur-sm rounded-xl p-6 shadow-lg border border-white/20"
+          >
+            <h3 className="text-lg font-semibold text-[#2d5a45] mb-4">Estado de Inspecciones</h3>
+            
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center">
+                  <CheckCircle className="w-5 h-5 text-green-500 mr-2" />
+                  <span className="text-sm font-medium text-[#2d5a45]">Última Inspección</span>
+                </div>
+                <span className="text-sm text-gray-600">
+                  {new Date(ranchData.status.lastInspection).toLocaleDateString('es-MX')}
+                </span>
+              </div>
+              
+              <div className="flex items-center justify-between">
+                <div className="flex items-center">
+                  <Clock className="w-5 h-5 text-blue-500 mr-2" />
+                  <span className="text-sm font-medium text-[#2d5a45]">Próxima Inspección</span>
+                </div>
+                <span className="text-sm text-gray-600">
+                  {new Date(ranchData.status.nextInspection).toLocaleDateString('es-MX')}
+                </span>
+              </div>
+
+              <div className="pt-4 border-t border-gray-200">
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  className="w-full py-2 bg-[#519a7c] text-white rounded-lg hover:bg-[#2d5a45] transition-colors"
+                >
+                  Programar Inspección
+                </motion.button>
+              </div>
+            </div>
+          </motion.div>
+        </div>
+
+        {/* Grid de listas detalladas */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Lista de instalaciones */}
+          <motion.div variants={itemVariants}>
+            <FacilityList facilities={ranchData.facilities} />
+          </motion.div>
+
+          {/* Lista de actividades recientes */}
+          <motion.div variants={itemVariants}>
+            <RecentActivitiesList activities={ranchData.recentActivities} />
+          </motion.div>
+        </div>
+      </motion.div>
     </div>
   );
 };

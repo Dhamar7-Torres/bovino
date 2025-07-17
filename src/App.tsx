@@ -14,19 +14,13 @@ import AuthPage from "./pages/auth/AuthPage";
 import BovinesPage from "./pages/bovines/BovinesPage";
 import { CalendarPage } from "./pages/calendar";
 import EventPage from "./pages/events/EventsPage";
-import FeedingPage from "./pages/feeding/FeedingPage"; // ← NUEVA IMPORTACIÓN
-
-// Importar el módulo de finanzas completo
-import { FinancesPage } from "./pages/finances"; // ← IMPORTACIÓN ACTUALIZADA
-
-// ✅ IMPORTAR EL MÓDULO DE SALUD REAL
-import HealthPage from "./pages/health/HealthPage"; // ← IMPORTACIÓN DEL MÓDULO HEALTH REAL
-
-// ✅ IMPORTAR EL MÓDULO DE MAPAS REAL
-import MapsPage from "./pages/maps"; // ← NUEVA IMPORTACIÓN DEL MÓDULO MAPS REAL
-
-// ✅ IMPORTAR EL MÓDULO DE INVENTORY REAL
-import InventoryPage from "./pages/inventory/InventoryPage"; // ← NUEVA IMPORTACIÓN DEL MÓDULO INVENTORY REAL
+import FeedingPage from "./pages/feeding/FeedingPage"; 
+import { FinancesPage } from "./pages/finances"; 
+import HealthPage from "./pages/health/HealthPage"; 
+import MapsPage from "./pages/maps"; 
+import InventoryPage from "./pages/inventory/InventoryPage"; 
+import ProductionPage from "./pages/production"; 
+import RanchPage from "./pages/ranch/RanchPage"; 
 
 // Agregar las fuentes elegantes al head
 const addGoogleFonts = () => {
@@ -365,13 +359,14 @@ const ReproductionPage: React.FC = () => (
   />
 );
 
-const ProductionPage: React.FC = () => (
-  <ModulePage
-    title="Gestión de Producción"
-    description="Control y métricas de producción ganadera"
-    icon="📈"
-  />
-);
+// ✅ COMENTAMOS EL PLACEHOLDER DE PRODUCTION PORQUE YA TENEMOS EL REAL
+// const ProductionPage: React.FC = () => (
+//   <ModulePage
+//     title="Gestión de Producción"
+//     description="Control y métricas de producción ganadera"
+//     icon="📈"
+//   />
+// );
 
 // ✅ COMENTAMOS EL PLACEHOLDER DE MAPS PORQUE YA TENEMOS EL REAL
 // const MapsPage: React.FC = () => (
@@ -408,13 +403,14 @@ const ReportsPage: React.FC = () => (
   />
 );
 
-const RanchPage: React.FC = () => (
-  <ModulePage
-    title="Gestión del Rancho"
-    description="Administración de instalaciones y propiedades"
-    icon="🏡"
-  />
-);
+// ✅ COMENTAMOS EL PLACEHOLDER DE RANCH PORQUE YA TENEMOS EL REAL
+// const RanchPage: React.FC = () => (
+//   <ModulePage
+//     title="Gestión del Rancho"
+//     description="Administración de instalaciones y propiedades"
+//     icon="🏡"
+//   />
+// );
 
 const SettingsPage: React.FC = () => (
   <ModulePage
@@ -440,22 +436,17 @@ const App: React.FC = () => {
             <Route path="dashboard/*" element={<DashboardPage />} />
             <Route path="bovines/*" element={<BovinesPage />} />
             <Route path="calendar/*" element={<CalendarPage />} />
-            <Route path="feeding/*" element={<FeedingPage />} />{" "}
-            {/* ← NUEVA RUTA */}
+            <Route path="feeding/*" element={<FeedingPage />} /> {/* ← NUEVA RUTA */}
             {/* Resto de módulos (mantenemos los existentes) */}
-            <Route path="health/*" element={<HealthPage />} />{" "}
-            {/* ← RUTA ACTUALIZADA CON MÓDULO REAL */}
+            <Route path="health/*" element={<HealthPage />} /> {/* ← RUTA ACTUALIZADA CON MÓDULO REAL */}
             <Route path="reproduction/*" element={<ReproductionPage />} />
-            <Route path="production/*" element={<ProductionPage />} />
-            <Route path="maps/*" element={<MapsPage />} />{" "}
-            {/* ← RUTA ACTUALIZADA CON MÓDULO REAL */}
+            <Route path="production/*" element={<ProductionPage />} /> {/* ← RUTA ACTUALIZADA CON MÓDULO REAL */}
+            <Route path="maps/*" element={<MapsPage />} /> {/* ← RUTA ACTUALIZADA CON MÓDULO REAL */}
             <Route path="events/*" element={<EventPage />} />
-            <Route path="inventory/*" element={<InventoryPage />} />{" "}
-            {/* ← RUTA ACTUALIZADA CON MÓDULO REAL */}
-            <Route path="finances/*" element={<FinancesPage />} />{" "}
-            {/* ← RUTA ACTUALIZADA */}
+            <Route path="inventory/*" element={<InventoryPage />} /> {/* ← RUTA ACTUALIZADA CON MÓDULO REAL */}
+            <Route path="finances/*" element={<FinancesPage />} /> {/* ← RUTA ACTUALIZADA */}
             <Route path="reports/*" element={<ReportsPage />} />
-            <Route path="ranch/*" element={<RanchPage />} />
+            <Route path="ranch/*" element={<RanchPage />} /> {/* ← RUTA ACTUALIZADA CON MÓDULO RANCH REAL */}
             <Route path="settings/*" element={<SettingsPage />} />
             {/* Ruta 404 actualizada con nueva paleta */}
             <Route

@@ -81,7 +81,7 @@ interface NavSection {
   items: NavItem[];
 }
 
-// Datos de navegación organizados por secciones - ESTRUCTURA COMPLETA CON RUTAS CORREGIDAS
+// Datos de navegación organizados por secciones - ESTRUCTURA ACTUALIZADA CON RUTAS DE PRODUCCIÓN CORREGIDAS
 const navigationSections: NavSection[] = [
   {
     id: "livestock",
@@ -345,28 +345,28 @@ const navigationSections: NavSection[] = [
           {
             id: "production-dashboard",
             title: "Dashboard de Producción",
-            href: "/production/dashboard",
+            href: "/production", // ✅ CORREGIDO: Apunta a ProductionDashboard.tsx
             icon: BarChart3,
             color: "text-[#4e9c75]",
           },
           {
             id: "milk-production",
             title: "Producción de Leche",
-            href: "/production/milk",
+            href: "/production/milk", // ✅ CORREGIDO: Apunta a MilkProduction.tsx
             icon: Droplets,
             color: "text-[#4e9c75]",
           },
           {
             id: "meat-production",
             title: "Producción de Carne",
-            href: "/production/meat",
+            href: "/production/meat", // ✅ CORREGIDO: Apunta a MeatProduction.tsx
             icon: Beef,
             color: "text-[#4e9c75]",
           },
           {
             id: "breeding-production",
             title: "Producción de Cría",
-            href: "/production/breeding",
+            href: "/production/breeding", // ✅ CORREGIDO: Apunta a BreedingProduction.tsx
             icon: Baby,
             color: "text-[#4e9c75]",
           },
@@ -471,42 +471,42 @@ const navigationSections: NavSection[] = [
           {
             id: "month-view",
             title: "Vista Mensual",
-            href: "/calendar/month", // ✅ Ruta correcta del proyecto
+            href: "/calendar/month",
             icon: Calendar,
             color: "text-[#4e9c75]",
           },
           {
             id: "event-detail",
             title: "Detalle de Evento",
-            href: "/calendar/events", // ✅ Ruta correcta del proyecto
+            href: "/calendar/events",
             icon: Eye,
             color: "text-[#4e9c75]",
           },
           {
             id: "create-event",
             title: "Crear Evento",
-            href: "/calendar/create", // ✅ Ruta correcta del proyecto
+            href: "/calendar/create",
             icon: Plus,
             color: "text-[#4e9c75]",
           },
           {
             id: "edit-event",
             title: "Editar Evento",
-            href: "/calendar/edit", // ✅ Ruta correcta del proyecto
+            href: "/calendar/edit",
             icon: Edit,
             color: "text-[#4e9c75]",
           },
           {
             id: "event-reminders",
             title: "Recordatorios",
-            href: "/calendar/reminders", // ✅ Ruta correcta del proyecto
+            href: "/calendar/reminders",
             icon: Bell,
             color: "text-[#4e9c75]",
           },
           {
             id: "vaccination-schedule",
             title: "Programa de Vacunación",
-            href: "/calendar/vaccination", // ✅ Ruta correcta del proyecto
+            href: "/calendar/vaccination",
             icon: Syringe,
             color: "text-[#4e9c75]",
           },
@@ -621,28 +621,28 @@ const navigationSections: NavSection[] = [
           {
             id: "dashboard",
             title: "Dashboard Financiero",
-            href: "/finances/dashboard", // ✅ CORREGIDO: Apunta a FinancesDashboard
+            href: "/finances/dashboard",
             icon: BarChart3,
             color: "text-[#4e9c75]",
           },
           {
             id: "income-tracker",
             title: "Seguimiento de Ingresos",
-            href: "/finances/income-tracker", // ✅ CORREGIDO: Apunta a IncomeTracker
+            href: "/finances/income-tracker",
             icon: TrendingUp,
             color: "text-[#4e9c75]",
           },
           {
             id: "expense-tracker",
             title: "Seguimiento de Egresos",
-            href: "/finances/expense-tracker", // ✅ CORREGIDO: Apunta a ExpenseTracker
+            href: "/finances/expense-tracker",
             icon: TrendingDown,
             color: "text-[#4e9c75]",
           },
           {
             id: "profit-loss",
             title: "Estado de Ganancias y Pérdidas",
-            href: "/finances/profit-loss", // ✅ CORREGIDO: Apunta a ProfitLoss
+            href: "/finances/profit-loss",
             icon: PieChart,
             color: "text-[#4e9c75]",
           },
@@ -763,9 +763,11 @@ const Sidebar: React.FC<SidebarProps> = ({
 }) => {
   // Estados para controlar secciones expandidas
   const [expandedSections, setExpandedSections] = useState<Set<string>>(
-    new Set(["main", "livestock"]) // Expandir por defecto las secciones principales
+    new Set(["operations"]) // Expandir por defecto la sección de operaciones para mostrar producción
   );
-  const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
+  const [expandedItems, setExpandedItems] = useState<Set<string>>(
+    new Set(["production"]) // Expandir por defecto el módulo de producción
+  );
 
   // Hook para obtener la ubicación actual
   const location = useLocation();
