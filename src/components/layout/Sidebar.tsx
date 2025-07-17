@@ -105,6 +105,11 @@ const Sidebar: React.FC<SidebarProps> = ({
     navigate(`/production?section=${section}`);
   };
 
+  // Función para navegar a las secciones de ranch
+  const navigateToRanch = (section: string) => {
+    navigate(`/ranch?section=${section}`);
+  };
+
   // Datos de navegación organizados por secciones - ESTRUCTURA ACTUALIZADA
   const navigationSections: NavSection[] = [
     {
@@ -686,23 +691,26 @@ const Sidebar: React.FC<SidebarProps> = ({
             {
               id: "ranch-overview",
               title: "Vista General del Rancho",
-              href: "/ranch/overview",
+              href: "/ranch?section=overview",
               icon: Home,
               color: "text-[#4e9c75]",
+              navigationHandler: () => navigateToRanch('overview'),
             },
             {
               id: "property-info",
               title: "Información de la Propiedad",
-              href: "/ranch/property-info",
+              href: "/ranch?section=property",
               icon: Info,
               color: "text-[#4e9c75]",
+              navigationHandler: () => navigateToRanch('property'),
             },
             {
-              id: "ranch-documents",
+              id: "ranch-staff",
               title: "Personal",
-              href: "/ranch/documents",
+              href: "/ranch?section=staff",
               icon: Users,
               color: "text-[#4e9c75]",
+              navigationHandler: () => navigateToRanch('staff'),
             },
           ],
         },

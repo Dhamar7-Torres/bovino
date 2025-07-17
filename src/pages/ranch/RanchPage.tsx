@@ -6,6 +6,7 @@
 
 import React, { useState, useEffect } from "react";
 import { motion, Variants, AnimatePresence } from "framer-motion";
+import { useLocation } from "react-router-dom";
 import {
   Building,
   FileText,
@@ -426,26 +427,47 @@ const RanchAlerts: React.FC<{ stats: RanchStats }> = ({ stats }) => {
 // ============================================================================
 
 const RanchPage: React.FC = () => {
+  const location = useLocation();
+
   // Estados para manejo de navegación y UI
   const [currentSection, setCurrentSection] = useState<string>("overview");
   const [isLoading, setIsLoading] = useState(false);
   const [direction, setDirection] = useState(0);
   const [showSectionSelector, setShowSectionSelector] = useState(true);
 
-  // Determinar la sección inicial
+  // Leer parámetros de URL al cargar el componente
   useEffect(() => {
-    // Al cargar la página, siempre mostrar el selector de secciones
-    setShowSectionSelector(true);
-    setCurrentSection("overview");
-  }, []);
+    const searchParams = new URLSearchParams(location.search);
+    const sectionParam = searchParams.get('section');
+    
+    console.log('🔍 URL params:', { sectionParam, search: location.search });
+    
+    // Si hay un parámetro de sección válido, navegar directamente a esa sección
+    if (sectionParam && ranchSections.some(s => s.id === sectionParam)) {
+      console.log('📍 Navegando a sección:', sectionParam);
+      setCurrentSection(sectionParam);
+      setShowSectionSelector(false);
+    } else {
+      // Si no hay parámetro válido, mostrar el selector
+      console.log('🏠 Mostrando selector de secciones');
+      setCurrentSection("overview");
+      setShowSectionSelector(true);
+    }
+  }, [location.search]);
 
   // Función para navegar entre secciones
   const handleSectionChange = (sectionId: string) => {
     const section = ranchSections.find(s => s.id === sectionId);
     if (!section) return;
 
+    console.log('🚀 Cambiando a sección:', sectionId);
+
     setIsLoading(true);
     setDirection(ranchSections.findIndex(s => s.id === sectionId) > ranchSections.findIndex(s => s.id === currentSection) ? 1 : -1);
+    
+    // Actualizar URL sin navegar
+    const newUrl = `/ranch?section=${sectionId}`;
+    window.history.pushState(null, '', newUrl);
     
     // Simular tiempo de carga
     setTimeout(() => {
@@ -457,6 +479,11 @@ const RanchPage: React.FC = () => {
 
   // Función para volver al selector de secciones
   const handleBackToSelector = () => {
+    console.log('🔙 Volviendo al selector');
+    
+    // Actualizar URL para remover parámetros
+    window.history.pushState(null, '', '/ranch');
+    
     setShowSectionSelector(true);
     setCurrentSection("overview");
   };
@@ -467,6 +494,22 @@ const RanchPage: React.FC = () => {
   };
 
   const currentSectionInfo = getCurrentSection();
+
+  // Función para renderizar el contenido de la sección
+  const renderSectionContent = () => {
+    console.log('🎨 Renderizando sección:', currentSection);
+    
+    switch (currentSection) {
+      case "overview":
+        return <RanchOverview />;
+      case "property":
+        return <PropertyInfo />;
+      case "staff":
+        return <Staff />;
+      default:
+        return <RanchOverview />;
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#F5F5DC] via-[#E8E8C8] to-[#D3D3B8] p-6">
@@ -603,10 +646,8 @@ const RanchPage: React.FC = () => {
                 opacity: { duration: 0.2 }
               }}
             >
-              {/* Renderizado directo basado en la sección actual */}
-              {currentSection === "overview" && <RanchOverview />}
-              {currentSection === "property" && <PropertyInfo />}
-              {currentSection === "staff" && <Staff />}
+              {/* Renderizado del contenido específico de la sección */}
+              {renderSectionContent()}
             </motion.div>
           )}
         </AnimatePresence>
@@ -630,7 +671,7 @@ const RanchPage: React.FC = () => {
                       whileHover={{ scale: 1.05 }}
                       whileTap={{ scale: 0.95 }}
                       onClick={() => handleSectionChange(section.id)}
-                      className={`flex flex-col items-center p-2 rounded-lg transition-colors ${
+                      className={`flex flex-col items-center p-2 rounded-lg transition-colors relative ${
                         isActive 
                           ? "bg-[#519a7c] text-white" 
                           : "text-gray-600 hover:bg-gray-100"
