@@ -4,11 +4,8 @@ import {
   Settings,
   User,
   Bell,
-  Shield,
   ArrowLeft,
   ChevronRight,
-  Palette,
-  Lock,
   Clock
 } from 'lucide-react';
 import { CSS_CLASSES } from '../../components/layout';
@@ -41,34 +38,6 @@ const SettingsPage: React.FC = () => {
       icon: Bell,
       color: '#3b82f6'
     },
-    {
-      id: 'security',
-      title: 'Seguridad y Privacidad',
-      description: 'Configura la seguridad de tu cuenta y privacidad',
-      icon: Shield,
-      color: '#ef4444'
-    },
-    {
-      id: 'appearance',
-      title: 'Apariencia y Tema',
-      description: 'Personaliza la apariencia visual del sistema',
-      icon: Palette,
-      color: '#8b5cf6'
-    },
-    {
-      id: 'system',
-      title: 'Configuración del Sistema',
-      description: 'Opciones avanzadas y configuraciones generales',
-      icon: Settings,
-      color: '#6b7280'
-    },
-    {
-      id: 'privacy',
-      title: 'Políticas de Privacidad',
-      description: 'Revisa y configura tus preferencias de privacidad',
-      icon: Lock,
-      color: '#f59e0b'
-    }
   ];
 
   return (
