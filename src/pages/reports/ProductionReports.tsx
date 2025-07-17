@@ -1,1056 +1,1108 @@
-import React, { useState, useEffect } from "react";
-import { motion } from "framer-motion";
-import {
-  TrendingUp,
-  TrendingDown,
-  Activity,
-  BarChart3,
-  PieChart,
-  Beef,
-  Milk,
-  Target,
-  Award,
-  Scale,
-  Heart,
-  Zap,
-  CheckCircle,
-  RefreshCw,
+import React, { useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { 
+  Plus, 
+  Edit2, 
+  Trash2, 
+  Search, 
+  Filter, 
+  Download, 
   Eye,
-  Plus,
-  ChevronRight,
-  Calculator,
-  LineChart,
-  TrendingUpIcon,
-} from "lucide-react";
-import { useNavigate } from "react-router-dom";
+  X,
+  Save,
+  AlertCircle,
+  Calendar,
+  TrendingUp,
+  Beef,
+  Scale,
+  DollarSign,
+  BarChart3,
+  MapPin
+} from 'lucide-react';
 
-// Componentes UI básicos
-const Button: React.FC<{
-  children: React.ReactNode;
-  onClick?: () => void;
-  disabled?: boolean;
+// Función de utilidad para combinar clases CSS
+const cn = (...classes: (string | undefined | null | false)[]): string => {
+  return classes.filter(Boolean).join(' ');
+};
+
+// Interfaces para reportes de producción
+interface ProductionReport {
+  id: string;
+  title: string;
+  description: string;
+  reportType: ProductionReportType;
+  period: ReportPeriod;
+  location: string;
+  metrics: ProductionMetrics;
+  createdAt: string;
+  updatedAt: string;
+  status: ReportStatus;
+  createdBy: string;
+}
+
+interface ProductionMetrics {
+  totalAnimals: number;
+  averageWeight: number;
+  weightGain: number;
+  feedEfficiency: number;
+  mortalityRate: number;
+  reproductionRate: number;
+  milkProduction?: number;
+  profitability: number;
+  costPerKg: number;
+}
+
+interface ReportPeriod {
+  startDate: string;
+  endDate: string;
+  type: 'daily' | 'weekly' | 'monthly' | 'quarterly' | 'annual' | 'custom';
+}
+
+type ProductionReportType = 
+  | 'weight_analysis' 
+  | 'feed_efficiency' 
+  | 'reproduction' 
+  | 'milk_production' 
+  | 'profitability' 
+  | 'mortality' 
+  | 'general';
+
+type ReportStatus = 'draft' | 'active' | 'archived' | 'processing';
+
+// Props del componente principal
+interface ProductionReportsProps {
   className?: string;
-  variant?: "default" | "outline" | "destructive";
-  size?: "default" | "sm" | "lg";
-}> = ({ children, onClick, disabled, className = "", variant = "default", size = "default" }) => {
-  const baseClasses = "inline-flex items-center justify-center rounded-md font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 disabled:opacity-50 disabled:pointer-events-none";
-  const variantClasses = {
-    default: "bg-blue-600 text-white hover:bg-blue-700",
-    outline: "border border-gray-300 bg-white hover:bg-gray-50",
-    destructive: "bg-red-600 text-white hover:bg-red-700"
-  }[variant];
-  const sizeClasses = {
-    sm: "h-8 px-3 text-sm",
-    default: "h-10 px-4 py-2",
-    lg: "h-12 px-6 text-lg"
-  }[size];
-  
+}
+
+// Props del modal
+interface ModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  children: React.ReactNode;
+  title: string;
+}
+
+// Props del formulario
+interface ReportFormProps {
+  report?: ProductionReport;
+  onSave: (report: Omit<ProductionReport, 'id' | 'createdAt' | 'updatedAt'>) => void;
+  onCancel: () => void;
+  isEditing: boolean;
+}
+
+// Datos de ejemplo
+const SAMPLE_REPORTS: ProductionReport[] = [
+  {
+    id: '1',
+    title: 'Análisis de Peso - Enero 2025',
+    description: 'Reporte mensual de ganancia de peso en todas las ubicaciones',
+    reportType: 'weight_analysis',
+    period: {
+      startDate: '2025-01-01',
+      endDate: '2025-01-31',
+      type: 'monthly'
+    },
+    location: 'Todas las ubicaciones',
+    metrics: {
+      totalAnimals: 1248,
+      averageWeight: 485.5,
+      weightGain: 1.2,
+      feedEfficiency: 87.3,
+      mortalityRate: 0.8,
+      reproductionRate: 92.1,
+      profitability: 15.7,
+      costPerKg: 4.25
+    },
+    createdAt: '2025-01-15T10:30:00Z',
+    updatedAt: '2025-01-15T14:20:00Z',
+    status: 'active',
+    createdBy: 'Juan Pérez'
+  },
+  {
+    id: '2',
+    title: 'Eficiencia Alimentaria Q4 2024',
+    description: 'Análisis trimestral de conversión alimentaria por potrero',
+    reportType: 'feed_efficiency',
+    period: {
+      startDate: '2024-10-01',
+      endDate: '2024-12-31',
+      type: 'quarterly'
+    },
+    location: 'Potrero Norte',
+    metrics: {
+      totalAnimals: 324,
+      averageWeight: 512.3,
+      weightGain: 1.8,
+      feedEfficiency: 91.2,
+      mortalityRate: 0.3,
+      reproductionRate: 88.9,
+      profitability: 18.2,
+      costPerKg: 3.95
+    },
+    createdAt: '2025-01-10T09:15:00Z',
+    updatedAt: '2025-01-12T16:45:00Z',
+    status: 'active',
+    createdBy: 'María González'
+  },
+  {
+    id: '3',
+    title: 'Reporte de Reproducción - Diciembre 2024',
+    description: 'Análisis de tasas reproductivas y gestación',
+    reportType: 'reproduction',
+    period: {
+      startDate: '2024-12-01',
+      endDate: '2024-12-31',
+      type: 'monthly'
+    },
+    location: 'Potrero Sur',
+    metrics: {
+      totalAnimals: 156,
+      averageWeight: 445.8,
+      weightGain: 0.9,
+      feedEfficiency: 84.1,
+      mortalityRate: 1.2,
+      reproductionRate: 94.5,
+      profitability: 12.3,
+      costPerKg: 4.65
+    },
+    createdAt: '2025-01-05T11:20:00Z',
+    updatedAt: '2025-01-08T13:30:00Z',
+    status: 'archived',
+    createdBy: 'Carlos Rodríguez'
+  }
+];
+
+// Configuración de tipos de reporte
+const REPORT_TYPE_CONFIG = {
+  weight_analysis: {
+    label: 'Análisis de Peso',
+    icon: <Scale className="w-4 h-4" />,
+    color: '#2d6f51'
+  },
+  feed_efficiency: {
+    label: 'Eficiencia Alimentaria',
+    icon: <BarChart3 className="w-4 h-4" />,
+    color: '#4e9c75'
+  },
+  reproduction: {
+    label: 'Reproducción',
+    icon: <Beef className="w-4 h-4" />,
+    color: '#519a7c'
+  },
+  milk_production: {
+    label: 'Producción Láctea',
+    icon: <TrendingUp className="w-4 h-4" />,
+    color: '#3ca373'
+  },
+  profitability: {
+    label: 'Rentabilidad',
+    icon: <DollarSign className="w-4 h-4" />,
+    color: '#f4ac3a'
+  },
+  mortality: {
+    label: 'Mortalidad',
+    icon: <AlertCircle className="w-4 h-4" />,
+    color: '#e74c3c'
+  },
+  general: {
+    label: 'General',
+    icon: <BarChart3 className="w-4 h-4" />,
+    color: '#2e8b57'
+  }
+};
+
+// Componente Modal reutilizable
+const Modal: React.FC<ModalProps> = ({ isOpen, onClose, children, title }) => {
+  if (!isOpen) return null;
+
   return (
-    <button
-      onClick={onClick}
-      disabled={disabled}
-      className={`${baseClasses} ${variantClasses} ${sizeClasses} ${className}`}
-    >
-      {children}
-    </button>
+    <AnimatePresence>
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+        onClick={onClose}
+      >
+        <motion.div
+          initial={{ scale: 0.9, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          exit={{ scale: 0.9, opacity: 0 }}
+          onClick={(e) => e.stopPropagation()}
+          className="bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden"
+        >
+          {/* Header del modal */}
+          <div className="flex items-center justify-between p-6 border-b border-gray-200 bg-gradient-to-r from-[#2d6f51] to-[#4e9c75]">
+            <h2 className="text-xl font-semibold text-white">{title}</h2>
+            <button
+              onClick={onClose}
+              className="p-2 hover:bg-white/20 rounded-lg transition-colors"
+            >
+              <X className="w-5 h-5 text-white" />
+            </button>
+          </div>
+          
+          {/* Contenido del modal */}
+          <div className="p-6 max-h-[calc(90vh-80px)] overflow-y-auto">
+            {children}
+          </div>
+        </motion.div>
+      </motion.div>
+    </AnimatePresence>
   );
 };
 
-const Card: React.FC<{ 
-  children: React.ReactNode; 
-  className?: string;
-  onClick?: () => void;
-}> = ({ children, className = "", onClick }) => (
-  <div onClick={onClick} className={`rounded-lg border bg-white shadow-sm ${onClick ? 'cursor-pointer' : ''} ${className}`}>
-    {children}
-  </div>
-);
+// Componente Formulario de Reporte
+const ReportForm: React.FC<ReportFormProps> = ({ report, onSave, onCancel, isEditing }) => {
+  const [formData, setFormData] = useState<Partial<ProductionReport>>({
+    title: report?.title || '',
+    description: report?.description || '',
+    reportType: report?.reportType || 'general',
+    location: report?.location || '',
+    period: report?.period || {
+      startDate: '',
+      endDate: '',
+      type: 'monthly'
+    },
+    metrics: report?.metrics || {
+      totalAnimals: 0,
+      averageWeight: 0,
+      weightGain: 0,
+      feedEfficiency: 0,
+      mortalityRate: 0,
+      reproductionRate: 0,
+      profitability: 0,
+      costPerKg: 0
+    },
+    status: report?.status || 'draft'
+  });
 
-const CardHeader: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-  <div className="flex flex-col space-y-1.5 p-6">{children}</div>
-);
+  const [errors, setErrors] = useState<Record<string, string>>({});
 
-const CardTitle: React.FC<{ children: React.ReactNode; className?: string }> = ({ children, className = "" }) => (
-  <h3 className={`text-lg font-semibold leading-none tracking-tight ${className}`}>{children}</h3>
-);
+  // Validación del formulario
+  const validateForm = (): boolean => {
+    const newErrors: Record<string, string> = {};
 
-const CardDescription: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-  <p className="text-sm text-gray-600">{children}</p>
-);
+    if (!formData.title?.trim()) {
+      newErrors.title = 'El título es requerido';
+    }
+    if (!formData.description?.trim()) {
+      newErrors.description = 'La descripción es requerida';
+    }
+    if (!formData.location?.trim()) {
+      newErrors.location = 'La ubicación es requerida';
+    }
+    if (!formData.period?.startDate) {
+      newErrors.startDate = 'La fecha de inicio es requerida';
+    }
+    if (!formData.period?.endDate) {
+      newErrors.endDate = 'La fecha de fin es requerida';
+    }
+    if (formData.period?.startDate && formData.period?.endDate && 
+        new Date(formData.period.startDate) >= new Date(formData.period.endDate)) {
+      newErrors.endDate = 'La fecha de fin debe ser posterior a la fecha de inicio';
+    }
 
-const CardContent: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-  <div className="p-6 pt-0">{children}</div>
-);
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
 
-const Badge: React.FC<{ children: React.ReactNode; className?: string }> = ({ children, className = "" }) => (
-  <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${className}`}>
-    {children}
-  </span>
-);
+  // Manejar cambios en el formulario
+  const handleInputChange = (field: string, value: any) => {
+    setFormData(prev => ({
+      ...prev,
+      [field]: value
+    }));
+    
+    // Limpiar error del campo
+    if (errors[field]) {
+      setErrors(prev => ({
+        ...prev,
+        [field]: ''
+      }));
+    }
+  };
 
-// Funciones helper del layout
-const getMainBackgroundClasses = () => "bg-gradient-to-br from-[#519a7c] via-[#f2e9d8] to-[#f4ac3a]";
-const CSS_CLASSES = {
-  titlePrimary: "text-4xl font-bold text-white drop-shadow-sm",
-  card: "bg-white/95 backdrop-blur-sm rounded-xl shadow-lg border border-white/20",
-  cardHover: "hover:shadow-xl hover:scale-105 transition-all duration-300",
-  buttonPrimary: "bg-gradient-to-r from-[#2d6f51] to-[#4e9c75] text-white hover:from-[#265a44] hover:to-[#3d7a5c] transition-all duration-200"
+  // Manejar cambios en el período
+  const handlePeriodChange = (field: string, value: any) => {
+    setFormData(prev => ({
+      ...prev,
+      period: {
+        ...prev.period!,
+        [field]: value
+      }
+    }));
+  };
+
+  // Manejar cambios en las métricas
+  const handleMetricsChange = (field: string, value: number) => {
+    setFormData(prev => ({
+      ...prev,
+      metrics: {
+        ...prev.metrics!,
+        [field]: value
+      }
+    }));
+  };
+
+  // Manejar envío del formulario
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!validateForm()) {
+      return;
+    }
+
+    onSave({
+      title: formData.title!,
+      description: formData.description!,
+      reportType: formData.reportType!,
+      location: formData.location!,
+      period: formData.period!,
+      metrics: formData.metrics!,
+      status: formData.status!,
+      createdBy: 'Usuario Actual' // En una app real vendría del contexto de auth
+    });
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-6">
+      {/* Información básica */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="lg:col-span-2">
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Título del Reporte *
+          </label>
+          <input
+            type="text"
+            value={formData.title}
+            onChange={(e) => handleInputChange('title', e.target.value)}
+            className={cn(
+              "w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-[#2d6f51] focus:border-transparent transition-colors",
+              errors.title ? "border-red-500" : "border-gray-300"
+            )}
+            placeholder="Ej: Análisis de Producción - Enero 2025"
+          />
+          {errors.title && (
+            <p className="text-red-500 text-sm mt-1">{errors.title}</p>
+          )}
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Tipo de Reporte *
+          </label>
+          <select
+            value={formData.reportType}
+            onChange={(e) => handleInputChange('reportType', e.target.value as ProductionReportType)}
+            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2d6f51] focus:border-transparent transition-colors"
+          >
+            {Object.entries(REPORT_TYPE_CONFIG).map(([key, config]) => (
+              <option key={key} value={key}>
+                {config.label}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Ubicación *
+          </label>
+          <input
+            type="text"
+            value={formData.location}
+            onChange={(e) => handleInputChange('location', e.target.value)}
+            className={cn(
+              "w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-[#2d6f51] focus:border-transparent transition-colors",
+              errors.location ? "border-red-500" : "border-gray-300"
+            )}
+            placeholder="Ej: Potrero Norte, Todas las ubicaciones"
+          />
+          {errors.location && (
+            <p className="text-red-500 text-sm mt-1">{errors.location}</p>
+          )}
+        </div>
+      </div>
+
+      {/* Descripción */}
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-2">
+          Descripción *
+        </label>
+        <textarea
+          value={formData.description}
+          onChange={(e) => handleInputChange('description', e.target.value)}
+          rows={3}
+          className={cn(
+            "w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-[#2d6f51] focus:border-transparent transition-colors resize-none",
+            errors.description ? "border-red-500" : "border-gray-300"
+          )}
+          placeholder="Describe el propósito y alcance del reporte"
+        />
+        {errors.description && (
+          <p className="text-red-500 text-sm mt-1">{errors.description}</p>
+        )}
+      </div>
+
+      {/* Período del reporte */}
+      <div className="space-y-4">
+        <h3 className="text-lg font-medium text-gray-800 border-b pb-2">
+          Período del Reporte
+        </h3>
+        
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Tipo de Período
+            </label>
+            <select
+              value={formData.period?.type}
+              onChange={(e) => handlePeriodChange('type', e.target.value)}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2d6f51] focus:border-transparent transition-colors"
+            >
+              <option value="daily">Diario</option>
+              <option value="weekly">Semanal</option>
+              <option value="monthly">Mensual</option>
+              <option value="quarterly">Trimestral</option>
+              <option value="annual">Anual</option>
+              <option value="custom">Personalizado</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Fecha de Inicio *
+            </label>
+            <input
+              type="date"
+              value={formData.period?.startDate}
+              onChange={(e) => handlePeriodChange('startDate', e.target.value)}
+              className={cn(
+                "w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-[#2d6f51] focus:border-transparent transition-colors",
+                errors.startDate ? "border-red-500" : "border-gray-300"
+              )}
+            />
+            {errors.startDate && (
+              <p className="text-red-500 text-sm mt-1">{errors.startDate}</p>
+            )}
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Fecha de Fin *
+            </label>
+            <input
+              type="date"
+              value={formData.period?.endDate}
+              onChange={(e) => handlePeriodChange('endDate', e.target.value)}
+              className={cn(
+                "w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-[#2d6f51] focus:border-transparent transition-colors",
+                errors.endDate ? "border-red-500" : "border-gray-300"
+              )}
+            />
+            {errors.endDate && (
+              <p className="text-red-500 text-sm mt-1">{errors.endDate}</p>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Métricas de producción */}
+      <div className="space-y-4">
+        <h3 className="text-lg font-medium text-gray-800 border-b pb-2">
+          Métricas de Producción
+        </h3>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Total de Animales
+            </label>
+            <input
+              type="number"
+              min="0"
+              value={formData.metrics?.totalAnimals || 0}
+              onChange={(e) => handleMetricsChange('totalAnimals', parseInt(e.target.value) || 0)}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2d6f51] focus:border-transparent transition-colors"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Peso Promedio (kg)
+            </label>
+            <input
+              type="number"
+              min="0"
+              step="0.1"
+              value={formData.metrics?.averageWeight || 0}
+              onChange={(e) => handleMetricsChange('averageWeight', parseFloat(e.target.value) || 0)}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2d6f51] focus:border-transparent transition-colors"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Ganancia de Peso (kg/día)
+            </label>
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              value={formData.metrics?.weightGain || 0}
+              onChange={(e) => handleMetricsChange('weightGain', parseFloat(e.target.value) || 0)}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2d6f51] focus:border-transparent transition-colors"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Eficiencia Alimentaria (%)
+            </label>
+            <input
+              type="number"
+              min="0"
+              max="100"
+              step="0.1"
+              value={formData.metrics?.feedEfficiency || 0}
+              onChange={(e) => handleMetricsChange('feedEfficiency', parseFloat(e.target.value) || 0)}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2d6f51] focus:border-transparent transition-colors"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Tasa de Mortalidad (%)
+            </label>
+            <input
+              type="number"
+              min="0"
+              max="100"
+              step="0.01"
+              value={formData.metrics?.mortalityRate || 0}
+              onChange={(e) => handleMetricsChange('mortalityRate', parseFloat(e.target.value) || 0)}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2d6f51] focus:border-transparent transition-colors"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Tasa de Reproducción (%)
+            </label>
+            <input
+              type="number"
+              min="0"
+              max="100"
+              step="0.1"
+              value={formData.metrics?.reproductionRate || 0}
+              onChange={(e) => handleMetricsChange('reproductionRate', parseFloat(e.target.value) || 0)}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2d6f51] focus:border-transparent transition-colors"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Rentabilidad (%)
+            </label>
+            <input
+              type="number"
+              step="0.1"
+              value={formData.metrics?.profitability || 0}
+              onChange={(e) => handleMetricsChange('profitability', parseFloat(e.target.value) || 0)}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2d6f51] focus:border-transparent transition-colors"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Costo por Kg ($)
+            </label>
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              value={formData.metrics?.costPerKg || 0}
+              onChange={(e) => handleMetricsChange('costPerKg', parseFloat(e.target.value) || 0)}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2d6f51] focus:border-transparent transition-colors"
+            />
+          </div>
+        </div>
+
+        {/* Campo opcional para producción láctea */}
+        {formData.reportType === 'milk_production' && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 border-t">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Producción de Leche (litros/día)
+              </label>
+              <input
+                type="number"
+                min="0"
+                step="0.1"
+                value={formData.metrics?.milkProduction || 0}
+                onChange={(e) => handleMetricsChange('milkProduction', parseFloat(e.target.value) || 0)}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2d6f51] focus:border-transparent transition-colors"
+              />
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Estado del reporte */}
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-2">
+          Estado del Reporte
+        </label>
+        <select
+          value={formData.status}
+          onChange={(e) => handleInputChange('status', e.target.value as ReportStatus)}
+          className="w-full max-w-xs px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2d6f51] focus:border-transparent transition-colors"
+        >
+          <option value="draft">Borrador</option>
+          <option value="active">Activo</option>
+          <option value="archived">Archivado</option>
+          <option value="processing">Procesando</option>
+        </select>
+      </div>
+
+      {/* Botones de acción */}
+      <div className="flex items-center justify-end gap-4 pt-6 border-t">
+        <button
+          type="button"
+          onClick={onCancel}
+          className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+        >
+          Cancelar
+        </button>
+        <button
+          type="submit"
+          className="flex items-center gap-2 px-6 py-2 bg-gradient-to-r from-[#2d6f51] to-[#4e9c75] text-white rounded-lg hover:from-[#265a44] hover:to-[#3d7a5c] transition-all duration-200"
+        >
+          <Save className="w-4 h-4" />
+          {isEditing ? 'Actualizar Reporte' : 'Crear Reporte'}
+        </button>
+      </div>
+    </form>
+  );
 };
 
-// Interfaces para los datos de producción
-interface ProductionMetric {
-  id: string;
-  title: string;
-  value: string;
-  change: number;
-  trend: "up" | "down" | "stable";
-  icon: React.ComponentType<any>;
-  color: string;
-  description: string;
-  target?: string;
-  critical?: boolean;
-}
+// Componente principal
+export const ProductionReports: React.FC<ProductionReportsProps> = ({ className }) => {
+  const [reports, setReports] = useState<ProductionReport[]>(SAMPLE_REPORTS);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [selectedReport, setSelectedReport] = useState<ProductionReport | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filterType, setFilterType] = useState<string>('all');
+  const [filterStatus, setFilterStatus] = useState<string>('all');
+  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
 
-interface ProductionRecord {
-  id: string;
-  animalId: string;
-  animalTag: string;
-  type: "milk" | "weight" | "breeding" | "feed_efficiency";
-  value: number;
-  unit: string;
-  date: Date;
-  location: {
-    sector: string;
-    coordinates: {
-      lat: number;
-      lng: number;
-    };
+  // Filtrar reportes
+  const filteredReports = reports.filter(report => {
+    const matchesSearch = report.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         report.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         report.location.toLowerCase().includes(searchTerm.toLowerCase());
+    
+    const matchesType = filterType === 'all' || report.reportType === filterType;
+    const matchesStatus = filterStatus === 'all' || report.status === filterStatus;
+    
+    return matchesSearch && matchesType && matchesStatus;
+  });
+
+  // Abrir modal para crear reporte
+  const handleCreateReport = () => {
+    setSelectedReport(null);
+    setIsEditing(false);
+    setIsModalOpen(true);
   };
-  measuredBy: string;
-  notes?: string;
-  quality?: "excellent" | "good" | "average" | "poor";
-}
 
-interface AnimalProductivity {
-  id: string;
-  animalTag: string;
-  breed: string;
-  age: number;
-  gender: "male" | "female";
-  category: "dairy" | "beef" | "breeding";
-  productivity: {
-    milkPerDay?: number;
-    weightGain?: number;
-    feedConversion?: number;
-    reproductiveEfficiency?: number;
+  // Abrir modal para editar reporte
+  const handleEditReport = (report: ProductionReport) => {
+    setSelectedReport(report);
+    setIsEditing(true);
+    setIsModalOpen(true);
   };
-  location: {
-    currentSector: string;
-    coordinates: {
-      lat: number;
-      lng: number;
-    };
-  };
-  lastUpdate: Date;
-  status: "active" | "dry" | "pregnant" | "sick" | "sold";
-  performance: "excellent" | "good" | "average" | "poor";
-}
 
-interface ProductionAlert {
-  id: string;
-  type: "low_production" | "weight_loss" | "feed_efficiency" | "breeding_issue";
-  priority: "low" | "medium" | "high" | "critical";
-  title: string;
-  description: string;
-  animalIds: string[];
-  affectedMetric: string;
-  threshold: number;
-  currentValue: number;
-  location: {
-    sector: string;
-    coordinates: {
-      lat: number;
-      lng: number;
-    };
-  };
-  createdAt: Date;
-  resolvedAt?: Date;
-  status: "active" | "resolved" | "dismissed";
-}
-
-interface BreedingRecord {
-  id: string;
-  femaleId: string;
-  femaleTag: string;
-  maleId?: string;
-  maleTag?: string;
-  breedingDate: Date;
-  expectedCalvingDate: Date;
-  actualCalvingDate?: Date;
-  breedingMethod: "natural" | "artificial";
-  success: boolean;
-  location: {
-    sector: string;
-    coordinates: {
-      lat: number;
-      lng: number;
-    };
-  };
-  veterinarian: string;
-  notes?: string;
-}
-
-// Datos de ejemplo (fuera del componente para evitar recreación)
-const sampleProductionRecords: ProductionRecord[] = [
-  {
-    id: "prod-001",
-    animalId: "cattle-001",
-    animalTag: "L-1247",
-    type: "milk",
-    value: 28.5,
-    unit: "litros",
-    date: new Date(2025, 5, 16),
-    location: {
-      sector: "Sector de Ordeño A",
-      coordinates: {
-        lat: 14.6349,
-        lng: -90.5069
-      }
-    },
-    measuredBy: "Juan Pérez - Ordeñador",
-    quality: "excellent",
-    notes: "Producción excepcional para la época"
-  },
-  {
-    id: "prod-002",
-    animalId: "cattle-002",
-    animalTag: "C-1248",
-    type: "weight",
-    value: 485,
-    unit: "kg",
-    date: new Date(2025, 5, 15),
-    location: {
-      sector: "Potrero Principal",
-      coordinates: {
-        lat: 14.6355,
-        lng: -90.5075
-      }
-    },
-    measuredBy: "Dr. Carlos Mendoza",
-    quality: "good",
-    notes: "Ganancia de peso satisfactoria"
-  }
-];
-
-const sampleAnimalProductivity: AnimalProductivity[] = [
-  {
-    id: "anim-001",
-    animalTag: "L-1247",
-    breed: "Holstein",
-    age: 4,
-    gender: "female",
-    category: "dairy",
-    productivity: {
-      milkPerDay: 28.5,
-      feedConversion: 1.8,
-      reproductiveEfficiency: 92
-    },
-    location: {
-      currentSector: "Sector de Ordeño A",
-      coordinates: {
-        lat: 14.6349,
-        lng: -90.5069
-      }
-    },
-    lastUpdate: new Date(2025, 5, 16),
-    status: "active",
-    performance: "excellent"
-  },
-  {
-    id: "anim-002",
-    animalTag: "C-1248",
-    breed: "Angus",
-    age: 2,
-    gender: "male",
-    category: "beef",
-    productivity: {
-      weightGain: 1.2,
-      feedConversion: 2.1
-    },
-    location: {
-      currentSector: "Potrero Principal",
-      coordinates: {
-        lat: 14.6355,
-        lng: -90.5075
-      }
-    },
-    lastUpdate: new Date(2025, 5, 15),
-    status: "active",
-    performance: "good"
-  }
-];
-
-const sampleProductionAlerts: ProductionAlert[] = [
-  {
-    id: "alert-001",
-    type: "low_production",
-    priority: "high",
-    title: "Baja Producción Lechera",
-    description: "3 vacas con producción por debajo del promedio en los últimos 7 días",
-    animalIds: ["cattle-003", "cattle-004", "cattle-005"],
-    affectedMetric: "Producción de leche",
-    threshold: 25.0,
-    currentValue: 18.2,
-    location: {
-      sector: "Sector de Ordeño B",
-      coordinates: {
-        lat: 14.6340,
-        lng: -90.5080
-      }
-    },
-    createdAt: new Date(2025, 5, 14),
-    status: "active"
-  },
-  {
-    id: "alert-002",
-    type: "feed_efficiency",
-    priority: "medium",
-    title: "Eficiencia Alimentaria Baja",
-    description: "Conversión alimenticia por encima del objetivo en el Sector Norte",
-    animalIds: ["cattle-006", "cattle-007"],
-    affectedMetric: "Conversión alimenticia",
-    threshold: 2.0,
-    currentValue: 2.8,
-    location: {
-      sector: "Sector Norte",
-      coordinates: {
-        lat: 14.6350,
-        lng: -90.5065
-      }
-    },
-    createdAt: new Date(2025, 5, 15),
-    status: "active"
-  }
-];
-
-const sampleBreedingRecords: BreedingRecord[] = [
-  {
-    id: "breed-001",
-    femaleId: "cattle-008",
-    femaleTag: "R-1249",
-    maleId: "cattle-009",
-    maleTag: "T-1250",
-    breedingDate: new Date(2025, 2, 15),
-    expectedCalvingDate: new Date(2025, 11, 22),
-    breedingMethod: "natural",
-    success: true,
-    location: {
-      sector: "Potrero de Reproducción",
-      coordinates: {
-        lat: 14.6360,
-        lng: -90.5055
-      }
-    },
-    veterinarian: "Dr. Ana Rodríguez",
-    notes: "Monta confirmada, gestación en progreso"
-  }
-];
-
-const ProductionReports: React.FC = () => {
-  const navigate = useNavigate();
-
-  // Estados del componente
-  const [selectedTab, setSelectedTab] = useState("overview");
-  const [isLoading, setIsLoading] = useState(false);
-  const [productionRecords, setProductionRecords] = useState<ProductionRecord[]>([]);
-  const [animalProductivity, setAnimalProductivity] = useState<AnimalProductivity[]>([]);
-  const [productionAlerts, setProductionAlerts] = useState<ProductionAlert[]>([]);
-  const [, setBreedingRecords] = useState<BreedingRecord[]>([]);
-
-  // Métricas de producción
-  const productionMetrics: ProductionMetric[] = [
-    {
-      id: "milk-production",
-      title: "Producción Lechera",
-      value: "24.8 L",
-      change: 5.2,
-      trend: "up",
-      icon: Milk,
-      color: "text-blue-600",
-      description: "Promedio diario por vaca",
-      target: "25.0 L"
-    },
-    {
-      id: "weight-gain",
-      title: "Ganancia de Peso",
-      value: "1.15 kg",
-      change: 8.3,
-      trend: "up",
-      icon: Scale,
-      color: "text-green-600",
-      description: "Promedio diario del hato",
-      target: "1.2 kg"
-    },
-    {
-      id: "feed-conversion",
-      title: "Conversión Alimenticia",
-      value: "2.1:1",
-      change: -3.8,
-      trend: "down",
-      icon: Calculator,
-      color: "text-purple-600",
-      description: "Ratio alimento/ganancia",
-      target: "2.0:1"
-    },
-    {
-      id: "reproductive-rate",
-      title: "Tasa Reproductiva",
-      value: "89.2%",
-      change: 2.1,
-      trend: "up",
-      icon: Heart,
-      color: "text-pink-600",
-      description: "Éxito en servicios",
-      target: "90.0%"
-    },
-    {
-      id: "mortality-rate",
-      title: "Tasa de Mortalidad",
-      value: "0.6%",
-      change: -25.0,
-      trend: "down",
-      icon: Activity,
-      color: "text-red-600",
-      description: "Mortalidad mensual",
-      target: "< 1.0%"
-    },
-    {
-      id: "efficiency-index",
-      title: "Índice de Eficiencia",
-      value: "87.4",
-      change: 4.7,
-      trend: "up",
-      icon: Target,
-      color: "text-indigo-600",
-      description: "Índice compuesto de productividad",
-      target: "90.0"
+  // Guardar reporte (crear o editar)
+  const handleSaveReport = (reportData: Omit<ProductionReport, 'id' | 'createdAt' | 'updatedAt'>) => {
+    if (isEditing && selectedReport) {
+      // Editar reporte existente
+      setReports(prev => prev.map(report => 
+        report.id === selectedReport.id 
+          ? {
+              ...reportData,
+              id: selectedReport.id,
+              createdAt: selectedReport.createdAt,
+              updatedAt: new Date().toISOString()
+            }
+          : report
+      ));
+    } else {
+      // Crear nuevo reporte
+      const newReport: ProductionReport = {
+        ...reportData,
+        id: Date.now().toString(),
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+      setReports(prev => [newReport, ...prev]);
     }
-  ];
-
-  // Efectos y funciones
-  useEffect(() => {
-    // Inicializar con datos de ejemplo
-    setProductionRecords(sampleProductionRecords);
-    setAnimalProductivity(sampleAnimalProductivity);
-    setProductionAlerts(sampleProductionAlerts);
-    setBreedingRecords(sampleBreedingRecords);
-  }, []);
-
-  const handleRefreshData = () => {
-    setIsLoading(true);
-    // Simular carga de datos
-    setTimeout(() => {
-      setIsLoading(false);
-    }, 2000);
+    
+    setIsModalOpen(false);
+    setSelectedReport(null);
   };
 
+  // Eliminar reporte
+  const handleDeleteReport = (reportId: string) => {
+    setReports(prev => prev.filter(report => report.id !== reportId));
+    setDeleteConfirm(null);
+  };
 
-  const getPerformanceBadgeColor = (performance: string) => {
-    switch (performance) {
-      case "excellent":
-        return "bg-green-100 text-green-800";
-      case "good":
-        return "bg-blue-100 text-blue-800";
-      case "average":
-        return "bg-yellow-100 text-yellow-800";
-      case "poor":
-        return "bg-red-100 text-red-800";
-      default:
-        return "bg-gray-100 text-gray-800";
+  // Obtener color del estado
+  const getStatusColor = (status: ReportStatus) => {
+    switch (status) {
+      case 'active': return 'bg-green-100 text-green-800';
+      case 'draft': return 'bg-gray-100 text-gray-800';
+      case 'archived': return 'bg-blue-100 text-blue-800';
+      case 'processing': return 'bg-yellow-100 text-yellow-800';
+      default: return 'bg-gray-100 text-gray-800';
     }
   };
 
-  const getPriorityColor = (priority: string) => {
-    switch (priority) {
-      case "low":
-        return "bg-blue-100 text-blue-800";
-      case "medium":
-        return "bg-yellow-100 text-yellow-800";
-      case "high":
-        return "bg-orange-100 text-orange-800";
-      case "critical":
-        return "bg-red-100 text-red-800";
-      default:
-        return "bg-gray-100 text-gray-800";
-    }
-  };
-
-  const getCategoryIcon = (category: string) => {
-    switch (category) {
-      case "dairy":
-        return <Milk className="w-4 h-4 text-blue-500" />;
-      case "beef":
-        return <Beef className="w-4 h-4 text-red-500" />;
-      case "breeding":
-        return <Heart className="w-4 h-4 text-pink-500" />;
-      default:
-        return <Activity className="w-4 h-4 text-gray-500" />;
+  // Obtener etiqueta del estado
+  const getStatusLabel = (status: ReportStatus) => {
+    switch (status) {
+      case 'active': return 'Activo';
+      case 'draft': return 'Borrador';
+      case 'archived': return 'Archivado';
+      case 'processing': return 'Procesando';
+      default: return status;
     }
   };
 
   return (
-    <div className={`min-h-screen ${getMainBackgroundClasses()}`}>
-      {/* Contenedor principal */}
-      <div className="p-6 space-y-6">
-        
-        {/* Header del módulo */}
-        <motion.div
-          initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6 }}
-          className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4"
-        >
-          <div>
-            <h1 className={`${CSS_CLASSES.titlePrimary} mb-2`}>
-              Reportes de Producción y Rendimiento
-            </h1>
-            <p className="text-white/90 text-lg">
-              Análisis integral de productividad, crecimiento y eficiencia del hato ganadero
-            </p>
-          </div>
-          
-          <div className="flex flex-wrap gap-3">
-            <Button 
-              onClick={handleRefreshData}
-              disabled={isLoading}
-              className={`${CSS_CLASSES.buttonPrimary} shadow-lg`}
-            >
-              <RefreshCw className={`w-4 h-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
-              Actualizar
-            </Button>
-            
-            <Button 
-              onClick={() => navigate('/production/record/add')}
-              className="bg-white/20 text-white hover:bg-white/30 backdrop-blur-sm shadow-lg border border-white/20"
-            >
-              <Plus className="w-4 h-4 mr-2" />
-              Nuevo Registro
-            </Button>
-            
-            <Button 
-              onClick={() => navigate('/production/analysis')}
-              className="bg-purple-500/80 text-white hover:bg-purple-500/90 backdrop-blur-sm shadow-lg"
-            >
-              <BarChart3 className="w-4 h-4 mr-2" />
-              Análisis Avanzado
-            </Button>
-          </div>
-        </motion.div>
+    <div
+      className={cn(
+        "min-h-screen",
+        // Fondo degradado principal del layout
+        "bg-gradient-to-br from-[#519a7c] via-[#f2e9d8] to-[#f4ac3a]",
+        className
+      )}
+    >
+      <div className="p-6">
+        <div className="max-w-7xl mx-auto">
+          {/* Header */}
+          <motion.div
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="flex items-center justify-between mb-8"
+          >
+            <div>
+              <h1 className="text-3xl font-bold text-white drop-shadow-sm mb-2">
+                Reportes de Producción
+              </h1>
+              <p className="text-white/90">
+                Gestiona y analiza los reportes de productividad ganadera
+              </p>
+            </div>
 
-        {/* Métricas de producción */}
-        <motion.div 
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 0.8, delay: 0.2 }}
-          className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4"
-        >
-          {productionMetrics.map((metric, index) => (
-            <motion.div
-              key={metric.id}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, delay: index * 0.1 }}
-              whileHover={{ scale: 1.05 }}
-              className={`${CSS_CLASSES.card} p-4 ${CSS_CLASSES.cardHover} ${
-                metric.critical ? 'ring-2 ring-red-400 ring-opacity-50' : ''
-              }`}
+            <button
+              onClick={handleCreateReport}
+              className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-[#2d6f51] to-[#4e9c75] text-white rounded-lg hover:from-[#265a44] hover:to-[#3d7a5c] transition-all duration-200 shadow-lg"
             >
-              <div className="flex items-center justify-between mb-3">
-                <div className={`p-2 rounded-lg bg-gray-50`}>
-                  <metric.icon className={`w-5 h-5 ${metric.color}`} />
+              <Plus className="w-5 h-5" />
+              Nuevo Reporte
+            </button>
+          </motion.div>
+
+          {/* Filtros y búsqueda */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.1 }}
+            className="bg-white/95 backdrop-blur-sm rounded-xl p-6 shadow-lg border border-white/20 mb-6"
+          >
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              {/* Búsqueda */}
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                <input
+                  type="text"
+                  placeholder="Buscar reportes..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2d6f51] focus:border-transparent transition-colors"
+                />
+              </div>
+
+              {/* Filtro por tipo */}
+              <div>
+                <select
+                  value={filterType}
+                  onChange={(e) => setFilterType(e.target.value)}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2d6f51] focus:border-transparent transition-colors"
+                >
+                  <option value="all">Todos los tipos</option>
+                  {Object.entries(REPORT_TYPE_CONFIG).map(([key, config]) => (
+                    <option key={key} value={key}>
+                      {config.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Filtro por estado */}
+              <div>
+                <select
+                  value={filterStatus}
+                  onChange={(e) => setFilterStatus(e.target.value)}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2d6f51] focus:border-transparent transition-colors"
+                >
+                  <option value="all">Todos los estados</option>
+                  <option value="active">Activo</option>
+                  <option value="draft">Borrador</option>
+                  <option value="archived">Archivado</option>
+                  <option value="processing">Procesando</option>
+                </select>
+              </div>
+
+              {/* Contador de resultados */}
+              <div className="flex items-center text-gray-600">
+                <Filter className="w-4 h-4 mr-2" />
+                <span className="text-sm">
+                  {filteredReports.length} de {reports.length} reportes
+                </span>
+              </div>
+            </div>
+          </motion.div>
+
+          {/* Lista de reportes */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.2 }}
+            className="bg-white/95 backdrop-blur-sm rounded-xl shadow-lg border border-white/20 overflow-hidden"
+          >
+            {filteredReports.length === 0 ? (
+              <div className="p-12 text-center">
+                <BarChart3 className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+                <h3 className="text-lg font-medium text-gray-800 mb-2">
+                  No se encontraron reportes
+                </h3>
+                <p className="text-gray-600 mb-6">
+                  {reports.length === 0 
+                    ? 'Crea tu primer reporte de producción'
+                    : 'Ajusta los filtros o términos de búsqueda'
+                  }
+                </p>
+                {reports.length === 0 && (
+                  <button
+                    onClick={handleCreateReport}
+                    className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-[#2d6f51] to-[#4e9c75] text-white rounded-lg hover:from-[#265a44] hover:to-[#3d7a5c] transition-all duration-200"
+                  >
+                    <Plus className="w-5 h-5" />
+                    Crear Primer Reporte
+                  </button>
+                )}
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="bg-gradient-to-r from-[#2d6f51] to-[#4e9c75] text-white">
+                    <tr>
+                      <th className="px-6 py-4 text-left text-sm font-medium">Título</th>
+                      <th className="px-6 py-4 text-left text-sm font-medium">Tipo</th>
+                      <th className="px-6 py-4 text-left text-sm font-medium">Ubicación</th>
+                      <th className="px-6 py-4 text-left text-sm font-medium">Período</th>
+                      <th className="px-6 py-4 text-left text-sm font-medium">Estado</th>
+                      <th className="px-6 py-4 text-left text-sm font-medium">Métricas Clave</th>
+                      <th className="px-6 py-4 text-left text-sm font-medium">Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200">
+                    {filteredReports.map((report, index) => (
+                      <motion.tr
+                        key={report.id}
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: index * 0.05 }}
+                        className="hover:bg-gray-50/50 transition-colors"
+                      >
+                        <td className="px-6 py-4">
+                          <div>
+                            <h4 className="font-medium text-gray-800">{report.title}</h4>
+                            <p className="text-sm text-gray-600 mt-1 line-clamp-2">
+                              {report.description}
+                            </p>
+                            <p className="text-xs text-gray-400 mt-1">
+                              Por {report.createdBy} • {new Date(report.createdAt).toLocaleDateString()}
+                            </p>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-2">
+                            <div 
+                              className="p-2 rounded-lg"
+                              style={{ 
+                                backgroundColor: `${REPORT_TYPE_CONFIG[report.reportType].color}20`,
+                                color: REPORT_TYPE_CONFIG[report.reportType].color
+                              }}
+                            >
+                              {REPORT_TYPE_CONFIG[report.reportType].icon}
+                            </div>
+                            <span className="text-sm font-medium">
+                              {REPORT_TYPE_CONFIG[report.reportType].label}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-2 text-gray-700">
+                            <MapPin className="w-4 h-4 text-gray-400" />
+                            <span className="text-sm">{report.location}</span>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="text-sm text-gray-700">
+                            <div className="flex items-center gap-1 mb-1">
+                              <Calendar className="w-3 h-3 text-gray-400" />
+                              <span className="capitalize">{report.period.type}</span>
+                            </div>
+                            <div className="text-xs text-gray-500">
+                              {new Date(report.period.startDate).toLocaleDateString()} - {new Date(report.period.endDate).toLocaleDateString()}
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <span className={cn(
+                            "inline-flex px-2 py-1 text-xs font-medium rounded-full",
+                            getStatusColor(report.status)
+                          )}>
+                            {getStatusLabel(report.status)}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="text-sm space-y-1">
+                            <div className="flex justify-between">
+                              <span className="text-gray-600">Animales:</span>
+                              <span className="font-medium">{report.metrics.totalAnimals}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-gray-600">Peso prom:</span>
+                              <span className="font-medium">{report.metrics.averageWeight} kg</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-gray-600">Eficiencia:</span>
+                              <span className="font-medium">{report.metrics.feedEfficiency}%</span>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => handleEditReport(report)}
+                              className="p-2 text-blue-600 hover:bg-blue-100 rounded-lg transition-colors"
+                              title="Editar reporte"
+                            >
+                              <Edit2 className="w-4 h-4" />
+                            </button>
+                            <button
+                              className="p-2 text-green-600 hover:bg-green-100 rounded-lg transition-colors"
+                              title="Ver reporte"
+                            >
+                              <Eye className="w-4 h-4" />
+                            </button>
+                            <button
+                              className="p-2 text-[#2d6f51] hover:bg-green-100 rounded-lg transition-colors"
+                              title="Descargar reporte"
+                            >
+                              <Download className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => setDeleteConfirm(report.id)}
+                              className="p-2 text-red-600 hover:bg-red-100 rounded-lg transition-colors"
+                              title="Eliminar reporte"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </td>
+                      </motion.tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </motion.div>
+        </div>
+      </div>
+
+      {/* Modal de formulario */}
+      <Modal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        title={isEditing ? 'Editar Reporte de Producción' : 'Crear Nuevo Reporte de Producción'}
+      >
+        <ReportForm
+          report={selectedReport || undefined}
+          onSave={handleSaveReport}
+          onCancel={() => setIsModalOpen(false)}
+          isEditing={isEditing}
+        />
+      </Modal>
+
+      {/* Modal de confirmación de eliminación */}
+      <AnimatePresence>
+        {deleteConfirm && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6"
+            >
+              <div className="flex items-center gap-4 mb-4">
+                <div className="p-3 bg-red-100 rounded-full">
+                  <AlertCircle className="w-6 h-6 text-red-600" />
                 </div>
-                <div className={`flex items-center text-xs ${
-                  metric.trend === 'up' ? 'text-green-600' : 
-                  metric.trend === 'down' ? 'text-red-600' : 'text-gray-600'
-                }`}>
-                  {metric.trend === 'up' ? (
-                    <TrendingUp className="w-3 h-3 mr-1" />
-                  ) : metric.trend === 'down' ? (
-                    <TrendingDown className="w-3 h-3 mr-1" />
-                  ) : (
-                    <Activity className="w-3 h-3 mr-1" />
-                  )}
-                  {metric.change > 0 ? '+' : ''}{metric.change}%
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-800">
+                    Confirmar Eliminación
+                  </h3>
+                  <p className="text-gray-600">
+                    Esta acción no se puede deshacer.
+                  </p>
                 </div>
               </div>
               
-              <div>
-                <h3 className="text-xl font-bold text-gray-900 mb-1">
-                  {metric.value}
-                </h3>
-                <p className="text-gray-600 font-medium text-sm mb-1">
-                  {metric.title}
-                </p>
-                <p className="text-xs text-gray-500 mb-1">
-                  {metric.description}
-                </p>
-                {metric.target && (
-                  <p className="text-xs text-blue-600 font-medium">
-                    Meta: {metric.target}
-                  </p>
-                )}
+              <p className="text-gray-700 mb-6">
+                ¿Estás seguro de que deseas eliminar este reporte de producción? 
+                Se perderán todos los datos asociados.
+              </p>
+              
+              <div className="flex items-center justify-end gap-3">
+                <button
+                  onClick={() => setDeleteConfirm(null)}
+                  className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={() => handleDeleteReport(deleteConfirm)}
+                  className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+                >
+                  Eliminar
+                </button>
               </div>
             </motion.div>
-          ))}
-        </motion.div>
-
-        {/* Sistema de pestañas */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, delay: 0.4 }}
-        >
-          <div className="space-y-6">
-            {/* Navegación de pestañas */}
-            <div className="bg-white/20 backdrop-blur-sm p-1 rounded-lg flex flex-wrap gap-1">
-              {[
-                { id: "overview", label: "Vista General", icon: BarChart3 },
-                { id: "milk", label: "Producción Lechera", icon: Milk },
-                { id: "weight", label: "Ganancia de Peso", icon: Scale },
-                { id: "breeding", label: "Reproducción", icon: Heart },
-                { id: "efficiency", label: "Eficiencia", icon: Target },
-                { id: "analytics", label: "Análisis", icon: PieChart }
-              ].map((tab) => (
-                <button
-                  key={tab.id}
-                  onClick={() => setSelectedTab(tab.id)}
-                  className={`flex items-center px-3 py-2 rounded-md text-sm font-medium transition-all duration-200 ${
-                    selectedTab === tab.id
-                      ? "bg-white text-gray-900 shadow-sm"
-                      : "text-white hover:bg-white/10"
-                  }`}
-                >
-                  <tab.icon className="w-4 h-4 mr-2" />
-                  {tab.label}
-                </button>
-              ))}
-            </div>
-
-            {/* Contenido de las pestañas */}
-            <div>
-              {selectedTab === "overview" && (
-                <div className="space-y-6">
-                  {/* Resumen general de producción */}
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    {/* Animales de alto rendimiento */}
-                    <Card className={`${CSS_CLASSES.card}`}>
-                      <CardHeader>
-                        <CardTitle className="flex items-center gap-2">
-                          <Award className="w-5 h-5 text-yellow-600" />
-                          Animales de Alto Rendimiento
-                        </CardTitle>
-                        <CardDescription>
-                          Top performers del hato por categoría
-                        </CardDescription>
-                      </CardHeader>
-                      <CardContent>
-                        <div className="space-y-3">
-                          {animalProductivity.filter(animal => animal.performance === 'excellent').map((animal) => (
-                            <div key={animal.id} className="flex items-start justify-between p-3 bg-gray-50 rounded-lg">
-                              <div className="flex-1">
-                                <div className="flex items-center gap-2 mb-1">
-                                  {getCategoryIcon(animal.category)}
-                                  <span className="font-medium text-gray-900">
-                                    {animal.animalTag} - {animal.breed}
-                                  </span>
-                                  <Badge className={getPerformanceBadgeColor(animal.performance)}>
-                                    Excelente
-                                  </Badge>
-                                </div>
-                                <div className="text-sm text-gray-600 space-y-1">
-                                  {animal.productivity.milkPerDay && (
-                                    <p>Leche: {animal.productivity.milkPerDay} L/día</p>
-                                  )}
-                                  {animal.productivity.weightGain && (
-                                    <p>Ganancia: {animal.productivity.weightGain} kg/día</p>
-                                  )}
-                                  {animal.productivity.feedConversion && (
-                                    <p>Conversión: {animal.productivity.feedConversion}:1</p>
-                                  )}
-                                </div>
-                                <p className="text-xs text-gray-500">
-                                  {animal.location.currentSector}
-                                </p>
-                              </div>
-                              <Button variant="outline" size="sm">
-                                <Eye className="w-4 h-4" />
-                              </Button>
-                            </div>
-                          ))}
-                        </div>
-                        <div className="mt-4">
-                          <Button 
-                            onClick={() => setSelectedTab("efficiency")}
-                            variant="outline" 
-                            className="w-full"
-                          >
-                            Ver Análisis de Eficiencia
-                            <ChevronRight className="w-4 h-4 ml-2" />
-                          </Button>
-                        </div>
-                      </CardContent>
-                    </Card>
-
-                    {/* Registros de producción recientes */}
-                    <Card className={`${CSS_CLASSES.card}`}>
-                      <CardHeader>
-                        <CardTitle className="flex items-center gap-2">
-                          <LineChart className="w-5 h-5 text-green-600" />
-                          Registros Recientes
-                        </CardTitle>
-                        <CardDescription>
-                          Últimas mediciones de producción registradas
-                        </CardDescription>
-                      </CardHeader>
-                      <CardContent>
-                        <div className="space-y-3">
-                          {productionRecords.slice(0, 5).map((record) => (
-                            <div key={record.id} className="flex items-start justify-between p-3 bg-gray-50 rounded-lg">
-                              <div className="flex-1">
-                                <div className="flex items-center gap-2 mb-1">
-                                  {record.type === 'milk' ? <Milk className="w-4 h-4 text-blue-500" /> :
-                                   record.type === 'weight' ? <Scale className="w-4 h-4 text-green-500" /> :
-                                   record.type === 'breeding' ? <Heart className="w-4 h-4 text-pink-500" /> :
-                                   <Calculator className="w-4 h-4 text-purple-500" />}
-                                  <span className="font-medium text-gray-900">
-                                    {record.animalTag}
-                                  </span>
-                                  {record.quality && (
-                                    <Badge className={
-                                      record.quality === 'excellent' ? 'bg-green-100 text-green-800' :
-                                      record.quality === 'good' ? 'bg-blue-100 text-blue-800' :
-                                      record.quality === 'average' ? 'bg-yellow-100 text-yellow-800' :
-                                      'bg-red-100 text-red-800'
-                                    }>
-                                      {record.quality === 'excellent' ? 'Excelente' :
-                                       record.quality === 'good' ? 'Bueno' :
-                                       record.quality === 'average' ? 'Promedio' : 'Pobre'}
-                                    </Badge>
-                                  )}
-                                </div>
-                                <p className="text-sm text-gray-600">
-                                  {record.type === 'milk' ? 'Producción' :
-                                   record.type === 'weight' ? 'Peso' :
-                                   record.type === 'breeding' ? 'Reproducción' : 'Eficiencia'}: 
-                                  {' '}{record.value} {record.unit}
-                                </p>
-                                <p className="text-xs text-gray-500">
-                                  {record.date.toLocaleDateString()} - {record.location.sector}
-                                </p>
-                              </div>
-                              <Button variant="outline" size="sm">
-                                <Eye className="w-4 h-4" />
-                              </Button>
-                            </div>
-                          ))}
-                        </div>
-                        <div className="mt-4">
-                          <Button 
-                            variant="outline" 
-                            className="w-full"
-                          >
-                            Ver Todos los Registros
-                            <ChevronRight className="w-4 h-4 ml-2" />
-                          </Button>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  </div>
-
-                  {/* Alertas de producción activas */}
-                  <Card className={`${CSS_CLASSES.card}`}>
-                    <CardHeader>
-                      <CardTitle className="flex items-center gap-2">
-                        <Zap className="w-5 h-5 text-yellow-600" />
-                        Alertas de Producción Activas
-                      </CardTitle>
-                      <CardDescription>
-                        Notificaciones sobre rendimiento y eficiencia
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="space-y-3">
-                        {productionAlerts.filter(alert => alert.status === 'active').map((alert) => (
-                          <div key={alert.id} className="flex items-start justify-between p-4 border border-gray-200 rounded-lg">
-                            <div className="flex-1">
-                              <div className="flex items-center gap-2 mb-2">
-                                <Badge className={getPriorityColor(alert.priority)}>
-                                  {alert.priority === 'low' ? 'Baja' :
-                                   alert.priority === 'medium' ? 'Media' :
-                                   alert.priority === 'high' ? 'Alta' : 'Crítica'}
-                                </Badge>
-                                <span className="font-medium text-gray-900">
-                                  {alert.title}
-                                </span>
-                              </div>
-                              <p className="text-sm text-gray-600 mb-2">
-                                {alert.description}
-                              </p>
-                              <div className="grid grid-cols-2 gap-4 text-xs text-gray-500">
-                                <div>
-                                  <span className="font-medium">Umbral:</span> {alert.threshold}
-                                </div>
-                                <div>
-                                  <span className="font-medium">Actual:</span> {alert.currentValue}
-                                </div>
-                                <div>
-                                  <span className="font-medium">Animales:</span> {alert.animalIds.length}
-                                </div>
-                                <div>
-                                  <span className="font-medium">Ubicación:</span> {alert.location.sector}
-                                </div>
-                              </div>
-                            </div>
-                            <div className="flex gap-2 ml-4">
-                              <Button variant="outline" size="sm">
-                                <Eye className="w-4 h-4" />
-                              </Button>
-                              <Button variant="outline" size="sm">
-                                <CheckCircle className="w-4 h-4" />
-                              </Button>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </CardContent>
-                  </Card>
-                </div>
-              )}
-
-              {selectedTab === "milk" && (
-                <Card className={`${CSS_CLASSES.card}`}>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <Milk className="w-5 h-5 text-blue-600" />
-                      Análisis de Producción Lechera
-                    </CardTitle>
-                    <CardDescription>
-                      Seguimiento detallado de producción láctea por animal y sector
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-4">
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <div className="bg-blue-50 p-4 rounded-lg">
-                          <h4 className="font-medium text-blue-900 mb-2">Producción Diaria</h4>
-                          <p className="text-2xl font-bold text-blue-600">1,892 L</p>
-                          <p className="text-sm text-blue-600">+5.2% vs ayer</p>
-                        </div>
-                        <div className="bg-green-50 p-4 rounded-lg">
-                          <h4 className="font-medium text-green-900 mb-2">Promedio por Vaca</h4>
-                          <p className="text-2xl font-bold text-green-600">24.8 L</p>
-                          <p className="text-sm text-green-600">Meta: 25.0 L</p>
-                        </div>
-                        <div className="bg-purple-50 p-4 rounded-lg">
-                          <h4 className="font-medium text-purple-900 mb-2">Calidad Promedio</h4>
-                          <p className="text-2xl font-bold text-purple-600">A+</p>
-                          <p className="text-sm text-purple-600">Excelente</p>
-                        </div>
-                      </div>
-                      
-                      <div className="bg-gray-50 p-4 rounded-lg">
-                        <h4 className="font-medium text-gray-900 mb-2">Distribución por Sector</h4>
-                        <div className="space-y-2">
-                          <div className="flex justify-between items-center">
-                            <span className="text-sm text-gray-600">Ordeño A</span>
-                            <div className="flex items-center gap-2">
-                              <div className="w-32 bg-gray-200 rounded-full h-2">
-                                <div className="bg-blue-500 h-2 rounded-full" style={{ width: '85%' }}></div>
-                              </div>
-                              <span className="text-sm font-medium">856 L</span>
-                            </div>
-                          </div>
-                          <div className="flex justify-between items-center">
-                            <span className="text-sm text-gray-600">Ordeño B</span>
-                            <div className="flex items-center gap-2">
-                              <div className="w-32 bg-gray-200 rounded-full h-2">
-                                <div className="bg-blue-500 h-2 rounded-full" style={{ width: '68%' }}></div>
-                              </div>
-                              <span className="text-sm font-medium">642 L</span>
-                            </div>
-                          </div>
-                          <div className="flex justify-between items-center">
-                            <span className="text-sm text-gray-600">Ordeño C</span>
-                            <div className="flex items-center gap-2">
-                              <div className="w-32 bg-gray-200 rounded-full h-2">
-                                <div className="bg-blue-500 h-2 rounded-full" style={{ width: '42%' }}></div>
-                              </div>
-                              <span className="text-sm font-medium">394 L</span>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
-
-              {selectedTab === "weight" && (
-                <Card className={`${CSS_CLASSES.card}`}>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <Scale className="w-5 h-5 text-green-600" />
-                      Control de Ganancia de Peso
-                    </CardTitle>
-                    <CardDescription>
-                      Monitoreo de crecimiento y desarrollo del ganado
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <p className="text-gray-600">
-                      Módulo de control de peso con gráficas de crecimiento, comparativas por edad y raza...
-                    </p>
-                  </CardContent>
-                </Card>
-              )}
-
-              {selectedTab === "breeding" && (
-                <Card className={`${CSS_CLASSES.card}`}>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <Heart className="w-5 h-5 text-pink-600" />
-                      Rendimiento Reproductivo
-                    </CardTitle>
-                    <CardDescription>
-                      Análisis de eficiencia reproductiva y genealogía
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <p className="text-gray-600">
-                      Módulo reproductivo con seguimiento de gestaciones, tasas de concepción y genealogía...
-                    </p>
-                  </CardContent>
-                </Card>
-              )}
-
-              {selectedTab === "efficiency" && (
-                <Card className={`${CSS_CLASSES.card}`}>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <Target className="w-5 h-5 text-indigo-600" />
-                      Análisis de Eficiencia
-                    </CardTitle>
-                    <CardDescription>
-                      Índices de productividad y optimización del hato
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <p className="text-gray-600">
-                      Módulo de eficiencia con KPIs, benchmarking y recomendaciones de mejora...
-                    </p>
-                  </CardContent>
-                </Card>
-              )}
-
-              {selectedTab === "analytics" && (
-                <Card className={`${CSS_CLASSES.card}`}>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <PieChart className="w-5 h-5 text-purple-600" />
-                      Análisis y Proyecciones
-                    </CardTitle>
-                    <CardDescription>
-                      Reportes avanzados y predicciones de producción
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-4">
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className="bg-gray-50 p-4 rounded-lg">
-                          <h4 className="font-medium text-gray-900 mb-2">Proyección Anual</h4>
-                          <div className="space-y-2">
-                            <div className="flex justify-between">
-                              <span className="text-sm text-gray-600">Producción Leche</span>
-                              <span className="text-sm font-medium">690,180 L</span>
-                            </div>
-                            <div className="flex justify-between">
-                              <span className="text-sm text-gray-600">Ganancia de Peso</span>
-                              <span className="text-sm font-medium">125,400 kg</span>
-                            </div>
-                            <div className="flex justify-between">
-                              <span className="text-sm text-gray-600">Nuevos Nacimientos</span>
-                              <span className="text-sm font-medium">89 animales</span>
-                            </div>
-                          </div>
-                        </div>
-                        
-                        <div className="bg-gray-50 p-4 rounded-lg">
-                          <h4 className="font-medium text-gray-900 mb-2">Eficiencia vs Objetivo</h4>
-                          <div className="space-y-2">
-                            <div className="flex justify-between">
-                              <span className="text-sm text-gray-600">Producción Lechera</span>
-                              <div className="flex items-center gap-2">
-                                <div className="w-16 bg-gray-200 rounded-full h-2">
-                                  <div className="bg-blue-500 h-2 rounded-full" style={{ width: '99.2%' }}></div>
-                                </div>
-                                <span className="text-sm font-medium">99.2%</span>
-                              </div>
-                            </div>
-                            <div className="flex justify-between">
-                              <span className="text-sm text-gray-600">Ganancia de Peso</span>
-                              <div className="flex items-center gap-2">
-                                <div className="w-16 bg-gray-200 rounded-full h-2">
-                                  <div className="bg-green-500 h-2 rounded-full" style={{ width: '95.8%' }}></div>
-                                </div>
-                                <span className="text-sm font-medium">95.8%</span>
-                              </div>
-                            </div>
-                            <div className="flex justify-between">
-                              <span className="text-sm text-gray-600">Reproducción</span>
-                              <div className="flex items-center gap-2">
-                                <div className="w-16 bg-gray-200 rounded-full h-2">
-                                  <div className="bg-pink-500 h-2 rounded-full" style={{ width: '89.2%' }}></div>
-                                </div>
-                                <span className="text-sm font-medium">89.2%</span>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                      
-                      <div className="bg-gradient-to-r from-blue-50 to-green-50 p-4 rounded-lg">
-                        <h4 className="font-medium text-gray-900 mb-2">Recomendaciones de IA</h4>
-                        <div className="space-y-2">
-                          <div className="flex items-start gap-2">
-                            <TrendingUpIcon className="w-4 h-4 text-green-500 mt-0.5" />
-                            <span className="text-sm text-gray-700">
-                              Incrementar concentrado en Sector B para mejorar producción lechera
-                            </span>
-                          </div>
-                          <div className="flex items-start gap-2">
-                            <Target className="w-4 h-4 text-blue-500 mt-0.5" />
-                            <span className="text-sm text-gray-700">
-                              Optimizar horarios de ordeño para maximizar eficiencia
-                            </span>
-                          </div>
-                          <div className="flex items-start gap-2">
-                            <Heart className="w-4 h-4 text-pink-500 mt-0.5" />
-                            <span className="text-sm text-gray-700">
-                              Revisar protocolo reproductivo en vacas de baja eficiencia
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
-            </div>
-          </div>
-        </motion.div>
-      </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };
-
-export default ProductionReports;

@@ -1,19 +1,15 @@
 import React from "react";
-
 import {
   BrowserRouter as Router,
   Routes,
   Route,
   Navigate,
 } from "react-router-dom";
-
 import { motion } from "framer-motion";
-
 import { Plus, Beef, Syringe, Calendar, Bell } from "lucide-react";
 
 // Importar el Layout completo
 import { Layout } from "./components/layout";
-
 import AuthPage from "./pages/auth/AuthPage";
 import BovinesPage from "./pages/bovines/BovinesPage";
 import { CalendarPage } from "./pages/calendar";
@@ -26,6 +22,7 @@ import InventoryPage from "./pages/inventory/InventoryPage";
 import ProductionPage from "./pages/production";
 import RanchPage from "./pages/ranch/RanchPage";
 import { ReportsPage } from "./pages/reports";
+import { ReproductionPage } from "./pages/reproduction";
 
 // Agregar las fuentes elegantes al head
 const addGoogleFonts = () => {
@@ -78,7 +75,6 @@ const DashboardPage: React.FC = () => {
           Nuevo Registro
         </motion.button>
       </div>
-
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {/* Widgets de estadísticas con diseño exacto a la imagen */}
         {[
@@ -158,7 +154,6 @@ const DashboardPage: React.FC = () => {
           >
             {/* Efecto de brillo sutil al hover */}
             <div className="absolute inset-0 bg-gradient-to-r from-white/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-
             <div className="relative">
               {/* Header con título e ícono */}
               <div className="flex items-start justify-between mb-4">
@@ -181,7 +176,6 @@ const DashboardPage: React.FC = () => {
                   <stat.icon size={32} style={{ color: stat.iconColor }} />
                 </div>
               </div>
-
               {/* Valor principal y cambio */}
               <div className="mb-3">
                 <div className="flex items-baseline gap-3">
@@ -203,12 +197,10 @@ const DashboardPage: React.FC = () => {
                   )}
                 </div>
               </div>
-
               {/* Descripción */}
               <p className="text-xs text-black font-medium mb-4">
                 {stat.description}
               </p>
-
               {/* Barra de progreso */}
               <div className="w-full bg-gray-200 rounded-full h-1.5">
                 <motion.div
@@ -223,7 +215,6 @@ const DashboardPage: React.FC = () => {
           </motion.div>
         ))}
       </div>
-
       {/* Sección adicional simplificada */}
       <motion.div
         initial={{ opacity: 0, y: 40 }}
@@ -265,7 +256,6 @@ const DashboardPage: React.FC = () => {
             </div>
           </div>
         </div>
-
         <div className="space-y-6">
           <div className="bg-[#f5f5dc]/90 backdrop-blur-sm rounded-2xl p-6 border border-gray-200/30">
             <h4 className="font-semibold text-black mb-4">Enlaces Útiles</h4>
@@ -288,7 +278,6 @@ const DashboardPage: React.FC = () => {
               ))}
             </ul>
           </div>
-
           <div className="bg-[#f5f5dc]/90 backdrop-blur-sm rounded-2xl p-6 border border-gray-200/30">
             <h4 className="font-semibold text-black mb-4">Funcionalidades</h4>
             <ul className="space-y-3">
@@ -364,13 +353,14 @@ const ModulePage: React.FC<{
 //   />
 // );
 
-const ReproductionPage: React.FC = () => (
-  <ModulePage
-    title="Gestión de Reproducción"
-    description="Control reproductivo y genético del ganado"
-    icon="🍼"
-  />
-);
+// ✅ COMENTAMOS EL PLACEHOLDER DE REPRODUCTION PORQUE YA TENEMOS EL REAL
+// const ReproductionPage: React.FC = () => (
+//   <ModulePage
+//     title="Gestión de Reproducción"
+//     description="Control reproductivo y genético del ganado"
+//     icon="🍼"
+//   />
+// );
 
 // ✅ COMENTAMOS EL PLACEHOLDER DE PRODUCTION PORQUE YA TENEMOS EL REAL
 // const ProductionPage: React.FC = () => (
@@ -442,21 +432,18 @@ const App: React.FC = () => {
         <Routes>
           {/* Ruta raíz - redirige al dashboard */}
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
-
           {/* Rutas de autenticación - FUERA del Layout */}
           <Route path="/auth" element={<AuthPage />} />
           <Route path="/auth/*" element={<AuthPage />} />
-
           {/* Layout principal con rutas anidadas */}
           <Route path="/*" element={<Layout />}>
             <Route path="dashboard/*" element={<DashboardPage />} />
             <Route path="bovines/*" element={<BovinesPage />} />
             <Route path="calendar/*" element={<CalendarPage />} />
             <Route path="feeding/*" element={<FeedingPage />} /> {/* ← NUEVA RUTA */}
-
             {/* Resto de módulos (mantenemos los existentes) */}
             <Route path="health/*" element={<HealthPage />} /> {/* ← RUTA ACTUALIZADA CON MÓDULO REAL */}
-            <Route path="reproduction/*" element={<ReproductionPage />} />
+            <Route path="reproduction/*" element={<ReproductionPage />} /> {/* ← RUTA ACTUALIZADA CON MÓDULO REAL */}
             <Route path="production/*" element={<ProductionPage />} /> {/* ← RUTA ACTUALIZADA CON MÓDULO REAL */}
             <Route path="maps/*" element={<MapsPage />} /> {/* ← RUTA ACTUALIZADA CON MÓDULO REAL */}
             <Route path="events/*" element={<EventPage />} />
@@ -465,7 +452,6 @@ const App: React.FC = () => {
             <Route path="reports/*" element={<ReportsPage />} /> {/* ← RUTA ACTUALIZADA CON MÓDULO REAL */}
             <Route path="ranch/*" element={<RanchPage />} /> {/* ← RUTA ACTUALIZADA CON MÓDULO RANCH REAL */}
             <Route path="settings/*" element={<SettingsPage />} />
-
             {/* Ruta 404 actualizada con nueva paleta */}
             <Route
               path="*"

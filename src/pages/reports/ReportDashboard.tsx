@@ -1,839 +1,556 @@
-import React, { useState, useEffect } from "react";
-import { motion } from "framer-motion";
-import {
-  BarChart3,
-  TrendingUp,
-  FileText,
-  Download,
-  Calendar,
-  Filter,
-  PieChart,
+import React, { useState } from 'react';
+import { motion } from 'framer-motion';
+import { useNavigate, useLocation, Outlet } from 'react-router-dom';
+import { 
+  BarChart3, 
+  FileText, 
+  Download, 
+  Calendar, 
+  TrendingUp, 
   Activity,
-  AlertCircle,
-  CheckCircle,
-  Clock,
-  MapPin,
-  Beef,
-  Heart,
-  Package,
-  DollarSign,
-  Plus,
-  RefreshCw,
+  Map,
+  Syringe,
+  AlertTriangle,
   Eye,
-  Edit,
-  Search,
-  ChevronRight,
-  X,
-} from "lucide-react";
-import { useNavigate } from "react-router-dom";
+  Filter,
+  RefreshCw,
+  Plus
+} from 'lucide-react';
 
-// Componentes UI básicos (reemplazando ShadCN)
-const Button: React.FC<{
-  children: React.ReactNode;
-  onClick?: () => void;
-  disabled?: boolean;
-  className?: string;
-  variant?: "default" | "outline";
-  size?: "default" | "sm";
-}> = ({ children, onClick, disabled, className = "", variant = "default", size = "default" }) => {
-  const baseClasses = "inline-flex items-center justify-center rounded-md font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 disabled:opacity-50 disabled:pointer-events-none";
-  const variantClasses = variant === "outline" 
-    ? "border border-gray-300 bg-white hover:bg-gray-50" 
-    : "bg-blue-600 text-white hover:bg-blue-700";
-  const sizeClasses = size === "sm" ? "h-8 px-3 text-sm" : "h-10 px-4 py-2";
-  
-  return (
-    <button
-      onClick={onClick}
-      disabled={disabled}
-      className={`${baseClasses} ${variantClasses} ${sizeClasses} ${className}`}
-    >
-      {children}
-    </button>
-  );
+// Función de utilidad para combinar clases CSS
+const cn = (...classes: (string | undefined | null | false)[]): string => {
+  return classes.filter(Boolean).join(' ');
 };
 
-const Card: React.FC<{ 
-  children: React.ReactNode; 
-  className?: string;
-  onClick?: () => void;
-}> = ({ children, className = "", onClick }) => (
-  <div onClick={onClick} className={`rounded-lg border bg-white shadow-sm ${onClick ? 'cursor-pointer' : ''} ${className}`}>
-    {children}
-  </div>
-);
-
-const CardHeader: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-  <div className="flex flex-col space-y-1.5 p-6">{children}</div>
-);
-
-const CardTitle: React.FC<{ children: React.ReactNode; className?: string }> = ({ children, className = "" }) => (
-  <h3 className={`text-lg font-semibold leading-none tracking-tight ${className}`}>{children}</h3>
-);
-
-const CardDescription: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-  <p className="text-sm text-gray-600">{children}</p>
-);
-
-const CardContent: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-  <div className="p-6 pt-0">{children}</div>
-);
-
-const Badge: React.FC<{ children: React.ReactNode; className?: string }> = ({ children, className = "" }) => (
-  <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${className}`}>
-    {children}
-  </span>
-);
-
-const Input: React.FC<{
-  type?: string;
-  placeholder?: string;
-  value: string;
-  onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
-  className?: string;
-}> = ({ type = "text", placeholder, value, onChange, className = "" }) => (
-  <input
-    type={type}
-    placeholder={placeholder}
-    value={value}
-    onChange={onChange}
-    className={`flex h-10 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-50 ${className}`}
-  />
-);
-
-const Select: React.FC<{
-  value: string;
-  onValueChange: (value: string, label: string) => void;
-  children: React.ReactNode;
-  placeholder?: string;
-}> = ({ value, onValueChange, children, placeholder = "Seleccionar..." }) => {
-  const [isOpen, setIsOpen] = useState(false);
-  
-  const handleSelect = (newValue: string, label: string) => {
-    onValueChange(newValue, label);
-    setIsOpen(false);
-  };
-  
-  return (
-    <div className="relative">
-      <button
-        onClick={() => setIsOpen(!isOpen)}
-        className="flex h-10 w-full items-center justify-between rounded-md border border-gray-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-      >
-        {value || placeholder}
-        <ChevronRight className={`h-4 w-4 transition-transform ${isOpen ? 'rotate-90' : ''}`} />
-      </button>
-      {isOpen && (
-        <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-auto">
-          {React.Children.map(children, (child, index) => {
-            if (React.isValidElement(child)) {
-              return React.cloneElement(child as React.ReactElement<{
-                value: string;
-                children: React.ReactNode;
-                onSelect?: (value: string, label: string) => void;
-              }>, { 
-                onSelect: handleSelect,
-                key: (child.props as any).value || index
-              });
-            }
-            return child;
-          })}
-        </div>
-      )}
-    </div>
-  );
-};
-
-const SelectItem: React.FC<{
-  value: string;
-  children: React.ReactNode;
-  onSelect?: (value: string, label: string) => void;
-}> = ({ value, children, onSelect }) => (
-  <div
-    onClick={() => onSelect?.(value, String(children))}
-    className="px-3 py-2 text-sm cursor-pointer hover:bg-gray-100"
-  >
-    {children}
-  </div>
-);
-
-// Funciones helper del layout
-const getMainBackgroundClasses = () => "bg-gradient-to-br from-[#519a7c] via-[#f2e9d8] to-[#f4ac3a]";
-const CSS_CLASSES = {
-  titlePrimary: "text-4xl font-bold text-white drop-shadow-sm",
-  card: "bg-white/95 backdrop-blur-sm rounded-xl shadow-lg border border-white/20",
-  cardHover: "hover:shadow-xl hover:scale-105 transition-all duration-300",
-  buttonPrimary: "bg-gradient-to-r from-[#2d6f51] to-[#4e9c75] text-white hover:from-[#265a44] hover:to-[#3d7a5c] transition-all duration-200"
-};
-
-// Tipos para los reportes
-interface ReportSummary {
+// Interfaces del módulo de reportes
+interface ReportCard {
   id: string;
   title: string;
-  type: string;
-  category: string;
-  status: "completed" | "pending" | "error" | "scheduled";
-  lastGenerated: Date;
-  nextScheduled?: Date;
-  size: string;
-  format: string;
   description: string;
-  coveragePercentage: number;
-  totalRecords: number;
+  icon: React.ReactNode;
+  path: string;
+  color: string;
+  stats: {
+    total: number;
+    trend: number;
+    label: string;
+  };
+  lastUpdated: string;
+  isNew?: boolean;
 }
 
-interface QuickMetric {
+interface QuickStat {
   id: string;
-  title: string;
+  label: string;
   value: string;
   change: number;
-  trend: "up" | "down" | "stable";
-  icon: React.ComponentType<any>;
+  icon: React.ReactNode;
   color: string;
-  description: string;
 }
 
-interface ReportCategory {
+interface RecentReport {
   id: string;
-  title: string;
-  description: string;
-  icon: React.ComponentType<any>;
-  count: number;
-  color: string;
+  name: string;
+  type: string;
+  createdAt: string;
+  status: 'completed' | 'processing' | 'failed';
+  downloadUrl?: string;
 }
 
-// Reportes de ejemplo (fuera del componente para evitar recreación)
-const sampleReports: ReportSummary[] = [
+// Props del componente principal
+interface ReportDashboardProps {
+  className?: string;
+}
+
+// Datos de ejemplo para reportes disponibles
+const REPORT_CARDS: ReportCard[] = [
   {
-    id: "rep-001",
-    title: "Resumen Mensual de Vacunación",
-    type: "health",
-    category: "Salud",
-    status: "completed",
-    lastGenerated: new Date(2025, 5, 15), // Mes en JavaScript es 0-indexed
-    size: "2.4 MB",
-    format: "PDF",
-    description: "Análisis completo de cobertura de vacunación y cumplimiento de cronogramas",
-    coveragePercentage: 96.8,
-    totalRecords: 1247
+    id: 'health-overview',
+    title: 'Resumen de Salud',
+    description: 'Estado general de salud del ganado',
+    icon: <Activity className="w-6 h-6" />,
+    path: '/reports/health',
+    color: '#2d6f51',
+    stats: {
+      total: 1248,
+      trend: 5.2,
+      label: 'animales registrados'
+    },
+    lastUpdated: '2 horas'
   },
   {
-    id: "rep-002",
-    title: "Análisis de Rendimiento Reproductivo",
-    type: "breeding",
-    category: "Reproducción",
-    status: "pending",
-    lastGenerated: new Date(2025, 5, 12),
-    nextScheduled: new Date(2025, 5, 18),
-    size: "1.8 MB",
-    format: "Excel",
-    description: "Evaluación de tasas de concepción, partos y eficiencia reproductiva",
-    coveragePercentage: 88.2,
-    totalRecords: 892
+    id: 'vaccination-coverage',
+    title: 'Cobertura de Vacunación',
+    description: 'Análisis de vacunas aplicadas',
+    icon: <Syringe className="w-6 h-6" />,
+    path: '/reports/vaccinations',
+    color: '#4e9c75',
+    stats: {
+      total: 95.6,
+      trend: 2.1,
+      label: '% de cobertura'
+    },
+    lastUpdated: '1 hora',
+    isNew: true
   },
   {
-    id: "rep-003",
-    title: "Estado Financiero Trimestral",
-    type: "financial",
-    category: "Finanzas",
-    status: "completed",
-    lastGenerated: new Date(2025, 5, 10),
-    size: "3.1 MB",
-    format: "PDF",
-    description: "Análisis de costos operativos, ingresos y márgenes de rentabilidad",
-    coveragePercentage: 99.1,
-    totalRecords: 2341
+    id: 'geographic-distribution',
+    title: 'Distribución Geográfica',
+    description: 'Ubicación y movimiento del ganado',
+    icon: <Map className="w-6 h-6" />,
+    path: '/reports/geographic',
+    color: '#519a7c',
+    stats: {
+      total: 24,
+      trend: -1.2,
+      label: 'ubicaciones activas'
+    },
+    lastUpdated: '30 min'
   },
   {
-    id: "rep-004",
-    title: "Distribución Geográfica de Enfermedades",
-    type: "geographic",
-    category: "Geografía",
-    status: "error",
-    lastGenerated: new Date(2025, 5, 8),
-    size: "0 KB",
-    format: "PDF",
-    description: "Mapeo de incidencias por ubicación y análisis de patrones espaciales",
-    coveragePercentage: 0,
-    totalRecords: 0
+    id: 'production-metrics',
+    title: 'Métricas de Producción',
+    description: 'Rendimiento y productividad',
+    icon: <TrendingUp className="w-6 h-6" />,
+    path: '/reports/production',
+    color: '#3ca373',
+    stats: {
+      total: 87.3,
+      trend: 4.7,
+      label: '% eficiencia'
+    },
+    lastUpdated: '3 horas'
+  },
+  {
+    id: 'disease-analysis',
+    title: 'Análisis de Enfermedades',
+    description: 'Seguimiento de patologías',
+    icon: <AlertTriangle className="w-6 h-6" />,
+    path: '/reports/diseases',
+    color: '#f4ac3a',
+    stats: {
+      total: 12,
+      trend: -8.5,
+      label: 'casos activos'
+    },
+    lastUpdated: '1 hora'
+  },
+  {
+    id: 'financial-summary',
+    title: 'Resumen Financiero',
+    description: 'Costos y rentabilidad',
+    icon: <BarChart3 className="w-6 h-6" />,
+    path: '/reports/financial',
+    color: '#2e8b57',
+    stats: {
+      total: 156780,
+      trend: 12.3,
+      label: 'valor del ganado'
+    },
+    lastUpdated: '6 horas'
   }
 ];
 
-const ReportDashboard: React.FC = () => {
+// Estadísticas rápidas
+const QUICK_STATS: QuickStat[] = [
+  {
+    id: 'total-reports',
+    label: 'Reportes Generados',
+    value: '1,247',
+    change: 8.2,
+    icon: <FileText className="w-5 h-5" />,
+    color: '#2d6f51'
+  },
+  {
+    id: 'active-alerts',
+    label: 'Alertas Activas',
+    value: '23',
+    change: -15.3,
+    icon: <AlertTriangle className="w-5 h-5" />,
+    color: '#f4ac3a'
+  },
+  {
+    id: 'data-sources',
+    label: 'Fuentes de Datos',
+    value: '8',
+    change: 0,
+    icon: <Activity className="w-5 h-5" />,
+    color: '#4e9c75'
+  },
+  {
+    id: 'export-rate',
+    label: 'Tasa de Exportación',
+    value: '94.5%',
+    change: 2.1,
+    icon: <Download className="w-5 h-5" />,
+    color: '#519a7c'
+  }
+];
+
+// Reportes recientes
+const RECENT_REPORTS: RecentReport[] = [
+  {
+    id: '1',
+    name: 'Resumen Mensual de Vacunación - Enero 2025',
+    type: 'Vacunación',
+    createdAt: '2025-01-15 14:30',
+    status: 'completed',
+    downloadUrl: '/downloads/vaccination-jan-2025.pdf'
+  },
+  {
+    id: '2',
+    name: 'Análisis de Salud por Potrero',
+    type: 'Salud',
+    createdAt: '2025-01-15 12:15',
+    status: 'completed',
+    downloadUrl: '/downloads/health-analysis.xlsx'
+  },
+  {
+    id: '3',
+    name: 'Reporte de Productividad Q4 2024',
+    type: 'Producción',
+    createdAt: '2025-01-15 09:45',
+    status: 'processing'
+  },
+  {
+    id: '4',
+    name: 'Distribución Geográfica Actualizada',
+    type: 'Geográfico',
+    createdAt: '2025-01-14 16:20',
+    status: 'failed'
+  }
+];
+
+// Componente para tarjeta de estadística rápida
+const QuickStatCard: React.FC<{ stat: QuickStat }> = ({ stat }) => {
+  return (
+    <motion.div
+      initial={{ opacity: 0, scale: 0.9 }}
+      animate={{ opacity: 1, scale: 1 }}
+      className="bg-white/95 backdrop-blur-sm rounded-xl p-6 shadow-lg border border-white/20 hover:shadow-xl transition-all duration-300"
+    >
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-sm text-gray-600 mb-1">{stat.label}</p>
+          <p className="text-2xl font-bold text-gray-800">{stat.value}</p>
+          <div className={cn(
+            "flex items-center text-sm mt-2",
+            stat.change > 0 ? "text-green-600" : stat.change < 0 ? "text-red-600" : "text-gray-500"
+          )}>
+            <span className={cn(
+              "mr-1",
+              stat.change > 0 ? "↗" : stat.change < 0 ? "↘" : "→"
+            )}>
+              {stat.change !== 0 && `${Math.abs(stat.change)}%`}
+            </span>
+            {stat.change > 0 ? "Incremento" : stat.change < 0 ? "Decremento" : "Sin cambios"}
+          </div>
+        </div>
+        <div 
+          className="p-3 rounded-lg"
+          style={{ backgroundColor: `${stat.color}20` }}
+        >
+          <div style={{ color: stat.color }}>
+            {stat.icon}
+          </div>
+        </div>
+      </div>
+    </motion.div>
+  );
+};
+
+// Componente para tarjeta de reporte
+const ReportCard: React.FC<{ report: ReportCard; index: number }> = ({ report, index }) => {
   const navigate = useNavigate();
-  
-  // Estados del componente
-  const [selectedTab, setSelectedTab] = useState("overview");
-  const [searchQuery, setSearchQuery] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState("all");
-  const [selectedDateRange, setSelectedDateRange] = useState("30d");
-  const [reports, setReports] = useState<ReportSummary[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
 
-  // Estados para los valores mostrados en los Select
-  const [categoryDisplayValue, setCategoryDisplayValue] = useState("Todas las categorías");
-  const [dateRangeDisplayValue, setDateRangeDisplayValue] = useState("Últimos 30 días");
-
-  // Datos de ejemplo para métricas rápidas
-  const quickMetrics: QuickMetric[] = [
-    {
-      id: "total-reports",
-      title: "Total de Reportes",
-      value: "247",
-      change: 12.5,
-      trend: "up",
-      icon: FileText,
-      color: "text-blue-600",
-      description: "Reportes generados este mes"
-    },
-    {
-      id: "pending-reports",
-      title: "Reportes Pendientes",
-      value: "8",
-      change: -5.2,
-      trend: "down",
-      icon: Clock,
-      color: "text-orange-600",
-      description: "Reportes en cola de procesamiento"
-    },
-    {
-      id: "completed-today",
-      title: "Completados Hoy",
-      value: "23",
-      change: 18.3,
-      trend: "up",
-      icon: CheckCircle,
-      color: "text-green-600",
-      description: "Reportes finalizados en las últimas 24h"
-    },
-    {
-      id: "data-coverage",
-      title: "Cobertura de Datos",
-      value: "94.2%",
-      change: 2.1,
-      trend: "up",
-      icon: Activity,
-      color: "text-purple-600",
-      description: "Porcentaje de datos válidos procesados"
-    }
-  ];
-
-  // Categorías de reportes
-  const reportCategories: ReportCategory[] = [
-    {
-      id: "health",
-      title: "Reportes de Salud",
-      description: "Análisis de vacunación, enfermedades y estado sanitario",
-      icon: Heart,
-      count: 45,
-      color: "text-red-500"
-    },
-    {
-      id: "production",
-      title: "Reportes de Producción",
-      description: "Métricas de rendimiento, crecimiento y productividad",
-      icon: TrendingUp,
-      count: 38,
-      color: "text-green-500"
-    },
-    {
-      id: "financial",
-      title: "Reportes Financieros",
-      description: "Análisis de costos, ingresos y rentabilidad",
-      icon: DollarSign,
-      count: 29,
-      color: "text-blue-500"
-    },
-    {
-      id: "inventory",
-      title: "Reportes de Inventario",
-      description: "Control de stock, medicamentos y suministros",
-      icon: Package,
-      count: 22,
-      color: "text-orange-500"
-    },
-    {
-      id: "geographic",
-      title: "Reportes Geográficos",
-      description: "Análisis por ubicación y distribución espacial",
-      icon: MapPin,
-      count: 18,
-      color: "text-purple-500"
-    },
-    {
-      id: "breeding",
-      title: "Reportes de Cría",
-      description: "Análisis reproductivo y genealógico",
-      icon: Beef,
-      count: 31,
-      color: "text-amber-500"
-    }
-  ];
-
-  // Efectos y funciones
-  useEffect(() => {
-    // Inicializar con datos de ejemplo
-    setReports(sampleReports);
-  }, []);
-
-  const handleGenerateReport = (type: string) => {
-    console.log(`Generando reporte de tipo: ${type}`);
-    // Aquí iría la lógica para generar un nuevo reporte
+  const handleCardClick = () => {
+    navigate(report.path);
   };
-
-  const handleCategoryChange = (value: string, label: string) => {
-    setSelectedCategory(value);
-    setCategoryDisplayValue(label);
-  };
-
-  const handleDateRangeChange = (value: string, label: string) => {
-    setSelectedDateRange(value);
-    setDateRangeDisplayValue(label);
-  };
-
-  const handleRefreshReports = () => {
-    setIsLoading(true);
-    // Simular carga
-    setTimeout(() => {
-      setIsLoading(false);
-    }, 2000);
-  };
-
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case "completed":
-        return <CheckCircle className="w-4 h-4 text-green-500" />;
-      case "pending":
-        return <Clock className="w-4 h-4 text-orange-500" />;
-      case "error":
-        return <AlertCircle className="w-4 h-4 text-red-500" />;
-      case "scheduled":
-        return <Calendar className="w-4 h-4 text-blue-500" />;
-      default:
-        return <FileText className="w-4 h-4 text-gray-500" />;
-    }
-  };
-
-  const getStatusBadgeColor = (status: string) => {
-    switch (status) {
-      case "completed":
-        return "bg-green-100 text-green-800";
-      case "pending":
-        return "bg-orange-100 text-orange-800";
-      case "error":
-        return "bg-red-100 text-red-800";
-      case "scheduled":
-        return "bg-blue-100 text-blue-800";
-      default:
-        return "bg-gray-100 text-gray-800";
-    }
-  };
-
-  const filteredReports = reports.filter(report => {
-    const matchesSearch = report.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         report.description.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesCategory = selectedCategory === "all" || report.type === selectedCategory;
-    
-    // Usar selectedDateRange para filtrar por período si es necesario
-    let matchesDateRange = true;
-    if (selectedDateRange !== "all") {
-      const now = new Date();
-      const reportDate = report.lastGenerated;
-      
-      switch (selectedDateRange) {
-        case "7d":
-          matchesDateRange = (now.getTime() - reportDate.getTime()) <= (7 * 24 * 60 * 60 * 1000);
-          break;
-        case "30d":
-          matchesDateRange = (now.getTime() - reportDate.getTime()) <= (30 * 24 * 60 * 60 * 1000);
-          break;
-        case "90d":
-          matchesDateRange = (now.getTime() - reportDate.getTime()) <= (90 * 24 * 60 * 60 * 1000);
-          break;
-        case "1y":
-          matchesDateRange = (now.getTime() - reportDate.getTime()) <= (365 * 24 * 60 * 60 * 1000);
-          break;
-        default:
-          matchesDateRange = true;
-      }
-    }
-    
-    return matchesSearch && matchesCategory && matchesDateRange;
-  });
 
   return (
-    <div className={`min-h-screen ${getMainBackgroundClasses()}`}>
-      {/* Contenedor principal con padding y espaciado */}
-      <div className="p-6 space-y-6">
-        
-        {/* Header del dashboard con animación de entrada */}
-        <motion.div
-          initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6 }}
-          className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4"
-        >
-          <div>
-            <h1 className={`${CSS_CLASSES.titlePrimary} mb-2`}>
-              Dashboard de Reportes
-            </h1>
-            <p className="text-white/90 text-lg">
-              Gestión y análisis integral de reportes del sistema ganadero
-            </p>
-          </div>
-          
-          <div className="flex flex-wrap gap-3">
-            <Button 
-              onClick={handleRefreshReports}
-              disabled={isLoading}
-              className={`${CSS_CLASSES.buttonPrimary} shadow-lg`}
-            >
-              <RefreshCw className={`w-4 h-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
-              Actualizar
-            </Button>
-            
-            <Button 
-              onClick={() => navigate('/reports/create')}
-              className="bg-white/20 text-white hover:bg-white/30 backdrop-blur-sm shadow-lg border border-white/20"
-            >
-              <Plus className="w-4 h-4 mr-2" />
-              Nuevo Reporte
-            </Button>
-          </div>
-        </motion.div>
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: index * 0.1 }}
+      onClick={handleCardClick}
+      className="group bg-white/95 backdrop-blur-sm rounded-xl p-6 shadow-lg border border-white/20 hover:shadow-xl hover:scale-105 transition-all duration-300 cursor-pointer relative overflow-hidden"
+    >
+      {/* Badge de nuevo si aplica */}
+      {report.isNew && (
+        <div className="absolute top-4 right-4 bg-gradient-to-r from-[#f4ac3a] to-[#ff8c42] text-white text-xs px-2 py-1 rounded-full font-medium">
+          Nuevo
+        </div>
+      )}
 
-        {/* Métricas rápidas con animación escalonada */}
-        <motion.div 
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 0.8, delay: 0.2 }}
-          className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6"
+      {/* Header con icono y título */}
+      <div className="flex items-start justify-between mb-4">
+        <div 
+          className="p-3 rounded-lg group-hover:scale-110 transition-transform duration-300"
+          style={{ backgroundColor: `${report.color}20` }}
         >
-          {quickMetrics.map((metric, index) => (
+          <div style={{ color: report.color }}>
+            {report.icon}
+          </div>
+        </div>
+        <Eye className="w-5 h-5 text-gray-400 group-hover:text-gray-600 transition-colors" />
+      </div>
+
+      {/* Contenido */}
+      <div className="mb-4">
+        <h3 className="text-lg font-semibold text-gray-800 mb-2 group-hover:text-[#2d6f51] transition-colors">
+          {report.title}
+        </h3>
+        <p className="text-gray-600 text-sm">
+          {report.description}
+        </p>
+      </div>
+
+      {/* Estadísticas */}
+      <div className="mb-4">
+        <div className="flex items-baseline justify-between">
+          <span className="text-2xl font-bold" style={{ color: report.color }}>
+            {typeof report.stats.total === 'number' && report.stats.total > 1000 
+              ? (report.stats.total / 1000).toFixed(1) + 'K'
+              : report.stats.total}
+          </span>
+          <span className={cn(
+            "text-sm font-medium",
+            report.stats.trend > 0 ? "text-green-600" : "text-red-600"
+          )}>
+            {report.stats.trend > 0 ? '+' : ''}{report.stats.trend}%
+          </span>
+        </div>
+        <p className="text-xs text-gray-500 mt-1">{report.stats.label}</p>
+      </div>
+
+      {/* Footer */}
+      <div className="text-xs text-gray-400 border-t border-gray-100 pt-3">
+        Actualizado hace {report.lastUpdated}
+      </div>
+
+      {/* Efecto de hover */}
+      <div 
+        className="absolute inset-0 opacity-0 group-hover:opacity-10 transition-opacity duration-300 rounded-xl"
+        style={{ background: `linear-gradient(135deg, ${report.color}, transparent)` }}
+      />
+    </motion.div>
+  );
+};
+
+// Componente para reporte reciente
+const RecentReportItem: React.FC<{ report: RecentReport }> = ({ report }) => {
+  const getStatusColor = (status: RecentReport['status']) => {
+    switch (status) {
+      case 'completed': return 'text-green-600 bg-green-100';
+      case 'processing': return 'text-yellow-600 bg-yellow-100';
+      case 'failed': return 'text-red-600 bg-red-100';
+    }
+  };
+
+  const getStatusLabel = (status: RecentReport['status']) => {
+    switch (status) {
+      case 'completed': return 'Completado';
+      case 'processing': return 'Procesando';
+      case 'failed': return 'Fallido';
+    }
+  };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, x: -20 }}
+      animate={{ opacity: 1, x: 0 }}
+      className="flex items-center justify-between p-4 bg-gray-50/50 rounded-lg hover:bg-gray-100/50 transition-colors"
+    >
+      <div className="flex-1">
+        <h4 className="font-medium text-gray-800 text-sm">{report.name}</h4>
+        <div className="flex items-center gap-3 mt-1">
+          <span className="text-xs text-gray-500">{report.type}</span>
+          <span className="text-xs text-gray-400">•</span>
+          <span className="text-xs text-gray-500">{report.createdAt}</span>
+        </div>
+      </div>
+      
+      <div className="flex items-center gap-3">
+        <span className={cn(
+          "px-2 py-1 rounded-full text-xs font-medium",
+          getStatusColor(report.status)
+        )}>
+          {getStatusLabel(report.status)}
+        </span>
+        
+        {report.status === 'completed' && report.downloadUrl && (
+          <button className="p-1 text-gray-400 hover:text-[#2d6f51] transition-colors">
+            <Download className="w-4 h-4" />
+          </button>
+        )}
+      </div>
+    </motion.div>
+  );
+};
+
+// Componente principal del dashboard de reportes
+export const ReportDashboard: React.FC<ReportDashboardProps> = ({ className }) => {
+  const navigate = useNavigate();
+  const location = useLocation();
+  
+  const [isLoading, setIsLoading] = useState(false);
+  const [selectedFilter, setSelectedFilter] = useState<string>('all');
+
+  // Función para refrescar datos
+  const handleRefresh = async () => {
+    setIsLoading(true);
+    // Simular llamada a API
+    await new Promise(resolve => setTimeout(resolve, 1500));
+    setIsLoading(false);
+  };
+
+  // Función para crear nuevo reporte
+  const handleCreateReport = () => {
+    navigate('/reports/create');
+  };
+
+  // Verificar si estamos en la ruta padre
+  const isMainDashboard = location.pathname === '/reports';
+
+  return (
+    <div
+      className={cn(
+        "min-h-screen",
+        // Fondo degradado principal del layout
+        "bg-gradient-to-br from-[#519a7c] via-[#f2e9d8] to-[#f4ac3a]",
+        className
+      )}
+    >
+      <div className="p-6">
+        {isMainDashboard ? (
+          <div className="max-w-7xl mx-auto">
+            {/* Header del dashboard */}
             <motion.div
-              key={metric.id}
-              initial={{ opacity: 0, y: 20 }}
+              initial={{ opacity: 0, y: -20 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, delay: index * 0.1 }}
-              whileHover={{ scale: 1.05 }}
-              className={`${CSS_CLASSES.card} p-6 ${CSS_CLASSES.cardHover}`}
+              className="flex items-center justify-between mb-8"
             >
-              <div className="flex items-center justify-between mb-4">
-                <div className={`p-2 rounded-lg bg-gray-50`}>
-                  <metric.icon className={`w-6 h-6 ${metric.color}`} />
-                </div>
-                <div className={`flex items-center text-sm ${
-                  metric.trend === 'up' ? 'text-green-600' : 
-                  metric.trend === 'down' ? 'text-red-600' : 'text-gray-600'
-                }`}>
-                  <TrendingUp className={`w-4 h-4 mr-1 ${
-                    metric.trend === 'down' ? 'rotate-180' : ''
-                  }`} />
-                  {metric.change > 0 ? '+' : ''}{metric.change}%
-                </div>
-              </div>
-              
               <div>
-                <h3 className="text-2xl font-bold text-gray-900 mb-1">
-                  {metric.value}
-                </h3>
-                <p className="text-gray-600 font-medium mb-1">
-                  {metric.title}
+                <h1 className="text-3xl font-bold text-white drop-shadow-sm mb-2">
+                  Centro de Reportes y Análisis
+                </h1>
+                <p className="text-white/90">
+                  Genera, visualiza y exporta reportes personalizados del sistema ganadero
                 </p>
-                <p className="text-sm text-gray-500">
-                  {metric.description}
-                </p>
+              </div>
+
+              <div className="flex items-center gap-4">
+                <button
+                  onClick={handleRefresh}
+                  disabled={isLoading}
+                  className={cn(
+                    "flex items-center gap-2 px-4 py-2 bg-white/20 text-white rounded-lg hover:bg-white/30 transition-all duration-200",
+                    isLoading && "opacity-50 cursor-not-allowed"
+                  )}
+                >
+                  <RefreshCw className={cn("w-4 h-4", isLoading && "animate-spin")} />
+                  Actualizar
+                </button>
+
+                <button
+                  onClick={handleCreateReport}
+                  className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-[#2d6f51] to-[#4e9c75] text-white rounded-lg hover:from-[#265a44] hover:to-[#3d7a5c] transition-all duration-200 shadow-lg"
+                >
+                  <Plus className="w-4 h-4" />
+                  Crear Reporte
+                </button>
               </div>
             </motion.div>
-          ))}
-        </motion.div>
 
-        {/* Pestañas principales */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, delay: 0.4 }}
-        >
-          {/* Custom Tabs Implementation */}
-          <div className="space-y-6">
-            {/* Tab Navigation */}
-            <div className="bg-white/20 backdrop-blur-sm p-1 rounded-lg flex space-x-1">
-              {[
-                { id: "overview", label: "Vista General", icon: BarChart3 },
-                { id: "categories", label: "Categorías", icon: PieChart },
-                { id: "recent", label: "Recientes", icon: Clock },
-                { id: "scheduled", label: "Programados", icon: Calendar }
-              ].map((tab) => (
-                <button
-                  key={tab.id}
-                  onClick={() => setSelectedTab(tab.id)}
-                  className={`flex items-center px-4 py-2 rounded-md text-sm font-medium transition-all duration-200 ${
-                    selectedTab === tab.id
-                      ? "bg-white text-gray-900 shadow-sm"
-                      : "text-white hover:bg-white/10"
-                  }`}
-                >
-                  <tab.icon className="w-4 h-4 mr-2" />
-                  {tab.label}
-                </button>
+            {/* Estadísticas rápidas */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.1 }}
+              className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8"
+            >
+              {QUICK_STATS.map((stat) => (
+                <QuickStatCard key={stat.id} stat={stat} />
               ))}
-            </div>
+            </motion.div>
 
-            {/* Tab Content */}
-            <div>
-              {selectedTab === "overview" && (
-                <div className="space-y-6">
-                  {/* Controles de filtro y búsqueda */}
-                  <Card className={`${CSS_CLASSES.card}`}>
-                    <CardHeader>
-                      <CardTitle className="flex items-center gap-2">
-                        <Filter className="w-5 h-5" />
-                        Filtros de Búsqueda
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                        <div className="space-y-2">
-                          <label className="text-sm font-medium text-gray-700">
-                            Buscar Reportes
-                          </label>
-                          <div className="relative">
-                            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
-                            <Input
-                              type="text"
-                              placeholder="Nombre o descripción..."
-                              value={searchQuery}
-                              onChange={(e) => setSearchQuery(e.target.value)}
-                              className="pl-10"
-                            />
-                          </div>
-                        </div>
-                        
-                        <div className="space-y-2">
-                          <label className="text-sm font-medium text-gray-700">
-                            Categoría
-                          </label>
-                          <Select 
-                            value={categoryDisplayValue} 
-                            onValueChange={handleCategoryChange}
-                            placeholder="Seleccionar categoría"
-                          >
-                            <SelectItem value="all">Todas las categorías</SelectItem>
-                            {reportCategories.map((category) => (
-                              <SelectItem key={category.id} value={category.id}>
-                                {category.title}
-                              </SelectItem>
-                            ))}
-                          </Select>
-                        </div>
-                        
-                        <div className="space-y-2">
-                          <label className="text-sm font-medium text-gray-700">
-                            Período
-                          </label>
-                          <Select 
-                            value={dateRangeDisplayValue} 
-                            onValueChange={handleDateRangeChange}
-                            placeholder="Seleccionar período"
-                          >
-                            <SelectItem value="7d">Últimos 7 días</SelectItem>
-                            <SelectItem value="30d">Últimos 30 días</SelectItem>
-                            <SelectItem value="90d">Últimos 3 meses</SelectItem>
-                            <SelectItem value="1y">Último año</SelectItem>
-                          </Select>
-                        </div>
-                        
-                        <div className="space-y-2">
-                          <label className="text-sm font-medium text-gray-700">
-                            Acciones
-                          </label>
-                          <div className="flex gap-2">
-                            <Button 
-                              variant="outline" 
-                              size="sm"
-                              onClick={() => {
-                                setSearchQuery("");
-                                setSelectedCategory("all");
-                                setSelectedDateRange("30d");
-                                setCategoryDisplayValue("Todas las categorías");
-                                setDateRangeDisplayValue("Últimos 30 días");
-                              }}
-                            >
-                              <X className="w-4 h-4 mr-1" />
-                              Limpiar
-                            </Button>
-                          </div>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-
-                  {/* Lista de reportes filtrados */}
-                  <Card className={`${CSS_CLASSES.card}`}>
-                    <CardHeader>
-                      <div className="flex items-center justify-between">
-                        <CardTitle className="flex items-center gap-2">
-                          <FileText className="w-5 h-5" />
-                          Reportes Disponibles ({filteredReports.length})
-                        </CardTitle>
-                        <div className="flex gap-2">
-                          <Button variant="outline" size="sm">
-                            <Download className="w-4 h-4 mr-2" />
-                            Exportar Lista
-                          </Button>
-                        </div>
-                      </div>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="space-y-4">
-                        {filteredReports.map((report, index) => (
-                          <motion.div
-                            key={report.id}
-                            initial={{ opacity: 0, x: -20 }}
-                            animate={{ opacity: 1, x: 0 }}
-                            transition={{ duration: 0.3, delay: index * 0.05 }}
-                            className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-all duration-200"
-                          >
-                            <div className="flex items-start justify-between">
-                              <div className="flex-1">
-                                <div className="flex items-center gap-3 mb-2">
-                                  {getStatusIcon(report.status)}
-                                  <h3 className="font-semibold text-gray-900">
-                                    {report.title}
-                                  </h3>
-                                  <Badge className={getStatusBadgeColor(report.status)}>
-                                    {report.status === 'completed' ? 'Completado' :
-                                     report.status === 'pending' ? 'Pendiente' :
-                                     report.status === 'error' ? 'Error' : 'Programado'}
-                                  </Badge>
-                                </div>
-                                
-                                <p className="text-gray-600 text-sm mb-3">
-                                  {report.description}
-                                </p>
-                                
-                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs text-gray-500">
-                                  <div>
-                                    <span className="font-medium">Última generación:</span><br />
-                                    {report.lastGenerated.toLocaleDateString()}
-                                  </div>
-                                  <div>
-                                    <span className="font-medium">Tamaño:</span><br />
-                                    {report.size}
-                                  </div>
-                                  <div>
-                                    <span className="font-medium">Formato:</span><br />
-                                    {report.format}
-                                  </div>
-                                  <div>
-                                    <span className="font-medium">Cobertura:</span><br />
-                                    {report.coveragePercentage}% ({report.totalRecords} registros)
-                                  </div>
-                                </div>
-                              </div>
-                              
-                              <div className="flex gap-2 ml-4">
-                                <Button variant="outline" size="sm">
-                                  <Eye className="w-4 h-4" />
-                                </Button>
-                                <Button variant="outline" size="sm">
-                                  <Download className="w-4 h-4" />
-                                </Button>
-                                <Button variant="outline" size="sm">
-                                  <Edit className="w-4 h-4" />
-                                </Button>
-                                {report.status === 'error' && (
-                                  <Button variant="outline" size="sm">
-                                    <RefreshCw className="w-4 h-4" />
-                                  </Button>
-                                )}
-                              </div>
-                            </div>
-                          </motion.div>
-                        ))}
-                      </div>
-                    </CardContent>
-                  </Card>
+            {/* Filtros y controles */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.2 }}
+              className="flex items-center justify-between mb-6"
+            >
+              <div className="flex items-center gap-4">
+                <h2 className="text-xl font-semibold text-white">
+                  Reportes Disponibles
+                </h2>
+                <div className="flex items-center gap-2">
+                  <Filter className="w-4 h-4 text-white/70" />
+                  <select
+                    value={selectedFilter}
+                    onChange={(e) => setSelectedFilter(e.target.value)}
+                    className="bg-white/20 text-white border border-white/30 rounded-lg px-3 py-1 text-sm backdrop-blur-sm focus:outline-none focus:ring-2 focus:ring-white/50"
+                  >
+                    <option value="all">Todos los Reportes</option>
+                    <option value="health">Salud</option>
+                    <option value="vaccination">Vacunación</option>
+                    <option value="production">Producción</option>
+                    <option value="financial">Financiero</option>
+                  </select>
                 </div>
-              )}
+              </div>
 
-              {selectedTab === "categories" && (
-                <div className="space-y-6">
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {reportCategories.map((category, index) => (
-                      <motion.div
-                        key={category.id}
-                        initial={{ opacity: 0, scale: 0.9 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        transition={{ duration: 0.3, delay: index * 0.1 }}
-                      >
-                        <Card 
-                          className={`${CSS_CLASSES.card} ${CSS_CLASSES.cardHover}`}
-                          onClick={() => handleGenerateReport(category.id)}
-                        >
-                          <CardHeader>
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-3">
-                                <div className="p-2 rounded-lg bg-gray-50">
-                                  <category.icon className={`w-6 h-6 ${category.color}`} />
-                                </div>
-                                <div>
-                                  <CardTitle className="text-lg">{category.title}</CardTitle>
-                                  <p className="text-sm text-gray-500">{category.count} reportes</p>
-                                </div>
-                              </div>
-                              <ChevronRight className="w-5 h-5 text-gray-400" />
-                            </div>
-                          </CardHeader>
-                          <CardContent>
-                            <p className="text-gray-600 text-sm mb-4">
-                              {category.description}
-                            </p>
-                            <Button className="w-full" variant="outline">
-                              <Plus className="w-4 h-4 mr-2" />
-                              Generar Reporte
-                            </Button>
-                          </CardContent>
-                        </Card>
-                      </motion.div>
-                    ))}
-                  </div>
-                </div>
-              )}
+              <div className="flex items-center gap-2 text-white/80 text-sm">
+                <Calendar className="w-4 h-4" />
+                Última actualización: Hace 2 horas
+              </div>
+            </motion.div>
 
-              {selectedTab === "recent" && (
-                <Card className={`${CSS_CLASSES.card}`}>
-                  <CardHeader>
-                    <CardTitle>Reportes Recientes</CardTitle>
-                    <CardDescription>
-                      Últimos reportes generados en el sistema
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <p className="text-gray-600">Contenido de reportes recientes...</p>
-                  </CardContent>
-                </Card>
-              )}
+            {/* Grid de tarjetas de reportes */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.3 }}
+              className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8"
+            >
+              {REPORT_CARDS.map((report, index) => (
+                <ReportCard key={report.id} report={report} index={index} />
+              ))}
+            </motion.div>
 
-              {selectedTab === "scheduled" && (
-                <Card className={`${CSS_CLASSES.card}`}>
-                  <CardHeader>
-                    <CardTitle>Reportes Programados</CardTitle>
-                    <CardDescription>
-                      Reportes configurados para generación automática
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <p className="text-gray-600">Contenido de reportes programados...</p>
-                  </CardContent>
-                </Card>
-              )}
-            </div>
+            {/* Reportes recientes */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.4 }}
+              className="bg-white/95 backdrop-blur-sm rounded-xl p-6 shadow-lg border border-white/20"
+            >
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
+                  <FileText className="w-5 h-5 text-[#2d6f51]" />
+                  Reportes Recientes
+                </h3>
+                <button
+                  onClick={() => navigate('/reports/history')}
+                  className="text-[#2d6f51] hover:text-[#265a44] text-sm font-medium transition-colors"
+                >
+                  Ver todos
+                </button>
+              </div>
+
+              <div className="space-y-3">
+                {RECENT_REPORTS.map((report) => (
+                  <RecentReportItem key={report.id} report={report} />
+                ))}
+              </div>
+            </motion.div>
           </div>
-        </motion.div>
+        ) : (
+          // Renderizar rutas hijas
+          <Outlet />
+        )}
       </div>
     </div>
   );
 };
-
-export default ReportDashboard;

@@ -1,699 +1,349 @@
 // =================================================================
-// MÓDULO DE REPORTES - EXPORTACIONES PRINCIPALES
+// IMPORTS DE COMPONENTES
 // =================================================================
-// Archivo principal de exportación para el sistema de reportes
-// Facilita la importación de componentes desde otras partes de la aplicación
+import React from 'react';
 
-import HealthReports from './HealthReports';
-import InventoryReports from './InventoryReports';
-import ProductionReports from './ProductionReports';
-import ReportDashboard from './ReportDashboard';
-import ReportsPage from './ReportsPage';
+// Importar componentes principales
+import { ReportsPage } from './ReportsPage';
+import { ReportDashboard } from './ReportDashboard';
 
-// Componentes principales de reportes (implementados)
-export { default as ReportsPage } from './ReportsPage';
-export { default as ReportDashboard } from './ReportDashboard';
-export { default as HealthReports } from './HealthReports';
-export { default as InventoryReports } from './InventoryReports';
-export { default as ProductionReports } from './ProductionReports';
+// Importar componentes CRUD específicos
+import { HealthReports } from './HealthReports';
+import { ProductionReports } from './ProductionReports';
+import { InventoryReports } from './InventoryReports';
 
 // =================================================================
-// TIPOS Y INTERFACES BÁSICAS (implementación futura)
+// EXPORTS DEL MÓDULO DE REPORTES
+// =================================================================
+// Este archivo centraliza todas las exportaciones del módulo de reportes
+// para facilitar las importaciones desde otras partes de la aplicación
+
+// =================================================================
+// COMPONENTES PRINCIPALES
 // =================================================================
 
-// Tipos generales de reportes
-export interface ReportSummary {
-  id: string;
-  title: string;
-  type: string;
-  category: string;
-  status: "completed" | "pending" | "error" | "scheduled";
-  lastGenerated: Date;
-  nextScheduled?: Date;
-  size: string;
-  format: string;
-  description: string;
-  coveragePercentage: number;
-  totalRecords: number;
-}
+// Página principal del módulo de reportes
+export { ReportsPage };
 
-export interface QuickMetric {
-  id: string;
-  title: string;
-  value: string;
-  change: number;
-  trend: "up" | "down" | "stable";
-  icon: React.ComponentType<any>;
-  color: string;
-  description: string;
-}
+// Dashboard central de reportes
+export { ReportDashboard };
 
-export interface ReportCategory {
-  id: string;
-  title: string;
-  description: string;
-  icon: React.ComponentType<any>;
-  count: number;
-  color: string;
-}
+// =================================================================
+// COMPONENTES CRUD DE REPORTES ESPECÍFICOS
+// =================================================================
 
-// Tipos específicos de salud
-export interface VaccinationRecord {
-  id: string;
-  animalId: string;
-  animalTag: string;
-  vaccineType: string;
-  date: Date;
-  nextDue?: Date;
-  location: {
-    lat: number;
-    lng: number;
-    address: string;
-  };
-  veterinarian: string;
-  status: "completed" | "pending" | "overdue";
-  notes?: string;
-}
+// Reportes de salud ganadera
+export { HealthReports };
 
-export interface DiseaseCase {
-  id: string;
-  animalId: string;
-  animalTag: string;
-  diseaseType: string;
-  severity: "mild" | "moderate" | "severe" | "critical";
-  diagnosisDate: Date;
-  location: {
-    lat: number;
-    lng: number;
-    address: string;
-  };
-  symptoms: string[];
-  treatment: string;
-  status: "active" | "recovering" | "recovered" | "deceased";
-  veterinarian: string;
-}
+// Reportes de producción y rendimiento
+export { ProductionReports };
 
-export interface HealthAlert {
-  id: string;
-  type: "vaccination_due" | "disease_outbreak" | "temperature_anomaly" | "behavior_change";
-  priority: "low" | "medium" | "high" | "critical";
-  title: string;
-  description: string;
-  animalIds: string[];
-  location?: {
-    lat: number;
-    lng: number;
-    address: string;
-  };
-  createdAt: Date;
-  resolvedAt?: Date;
-  status: "active" | "resolved" | "dismissed";
-}
+// Reportes de inventario y valuación
+export { InventoryReports };
 
-export interface HealthMetric {
-  id: string;
-  title: string;
-  value: string;
-  change: number;
-  trend: "up" | "down" | "stable";
-  icon: React.ComponentType<any>;
-  color: string;
-  description: string;
-  critical?: boolean;
-}
+// =================================================================
+// COMPONENTES ADICIONALES (Para futura implementación)
+// =================================================================
 
-// Tipos específicos de inventario
-export interface InventoryItem {
-  id: string;
-  name: string;
-  category: "medicine" | "supplement" | "equipment" | "feed";
-  currentStock: number;
-  minStock: number;
-  maxStock: number;
-  unit: string;
-  unitPrice: number;
-  totalValue: number;
-  expirationDate?: Date;
-  supplier: string;
-  location: {
-    warehouse: string;
-    section: string;
-    coordinates: {
-      lat: number;
-      lng: number;
-    };
-  };
-  lastMovement: Date;
-  status: "in_stock" | "low_stock" | "out_of_stock" | "expired" | "near_expiry";
-}
+// Reportes de vacunación (pendiente de implementación)
+// export { VaccinationReports } from './VaccinationReports';
 
-export interface InventoryMovement {
-  id: string;
-  itemId: string;
-  itemName: string;
-  type: "in" | "out" | "transfer" | "adjustment";
-  quantity: number;
-  unit: string;
-  reason: string;
-  date: Date;
-  responsible: string;
-  location: {
-    from?: string;
-    to: string;
-    coordinates: {
-      lat: number;
-      lng: number;
-    };
-  };
-  cost?: number;
-  notes?: string;
-}
+// Reportes geográficos (pendiente de implementación)
+// export { GeographicReports } from './GeographicReports';
 
-export interface InventoryAlert {
-  id: string;
-  type: "low_stock" | "out_of_stock" | "expiry_warning" | "expired" | "overstock";
-  priority: "low" | "medium" | "high" | "critical";
-  title: string;
-  description: string;
-  itemIds: string[];
-  location: {
-    warehouse: string;
-    coordinates: {
-      lat: number;
-      lng: number;
-    };
-  };
-  createdAt: Date;
-  resolvedAt?: Date;
-  status: "active" | "resolved" | "dismissed";
-}
+// Reportes financieros (pendiente de implementación)
+// export { FinancialReports } from './FinancialReports';
 
-export interface InventoryMetric {
-  id: string;
-  title: string;
-  value: string;
-  change: number;
-  trend: "up" | "down" | "stable";
-  icon: React.ComponentType<any>;
-  color: string;
-  description: string;
-  critical?: boolean;
-}
+// Reportes de cumplimiento (pendiente de implementación)
+// export { ComplianceReports } from './ComplianceReports';
 
-// Tipos específicos de producción
-export interface ProductionRecord {
-  id: string;
-  animalId: string;
-  animalTag: string;
-  type: "milk" | "weight" | "breeding" | "feed_efficiency";
-  value: number;
-  unit: string;
-  date: Date;
-  location: {
-    sector: string;
-    coordinates: {
-      lat: number;
-      lng: number;
-    };
-  };
-  measuredBy: string;
-  notes?: string;
-  quality?: "excellent" | "good" | "average" | "poor";
-}
+// Visualizador de reportes (pendiente de implementación)
+// export { ReportViewer } from './ReportViewer';
 
-export interface AnimalProductivity {
-  id: string;
-  animalTag: string;
-  breed: string;
-  age: number;
-  gender: "male" | "female";
-  category: "dairy" | "beef" | "breeding";
-  productivity: {
-    milkPerDay?: number;
-    weightGain?: number;
-    feedConversion?: number;
-    reproductiveEfficiency?: number;
-  };
-  location: {
-    currentSector: string;
-    coordinates: {
-      lat: number;
-      lng: number;
-    };
-  };
-  lastUpdate: Date;
-  status: "active" | "dry" | "pregnant" | "sick" | "sold";
-  performance: "excellent" | "good" | "average" | "poor";
-}
+// Programador de reportes (pendiente de implementación)
+// export { ReportScheduler } from './ReportScheduler';
 
-export interface ProductionAlert {
-  id: string;
-  type: "low_production" | "weight_loss" | "feed_efficiency" | "breeding_issue";
-  priority: "low" | "medium" | "high" | "critical";
-  title: string;
-  description: string;
-  animalIds: string[];
-  affectedMetric: string;
-  threshold: number;
-  currentValue: number;
-  location: {
-    sector: string;
-    coordinates: {
-      lat: number;
-      lng: number;
-    };
-  };
-  createdAt: Date;
-  resolvedAt?: Date;
-  status: "active" | "resolved" | "dismissed";
-}
+// =================================================================
+// TYPES E INTERFACES COMPARTIDAS
+// =================================================================
 
-export interface BreedingRecord {
-  id: string;
-  femaleId: string;
-  femaleTag: string;
-  maleId?: string;
-  maleTag?: string;
-  breedingDate: Date;
-  expectedCalvingDate: Date;
-  actualCalvingDate?: Date;
-  breedingMethod: "natural" | "artificial";
-  success: boolean;
-  location: {
-    sector: string;
-    coordinates: {
-      lat: number;
-      lng: number;
-    };
-  };
-  veterinarian: string;
-  notes?: string;
-}
-
-export interface ProductionMetric {
-  id: string;
-  title: string;
-  value: string;
-  change: number;
-  trend: "up" | "down" | "stable";
-  icon: React.ComponentType<any>;
-  color: string;
-  description: string;
-  target?: string;
-  critical?: boolean;
-}
-
-// Tipos del sistema principal
-export interface ReportModule {
+// Interfaces base para reportes
+export interface BaseReport {
   id: string;
   title: string;
   description: string;
-  icon: React.ComponentType<any>;
-  path: string;
-  color: string;
-  bgColor: string;
-  stats: {
-    totalReports: number;
-    lastUpdate: string;
-    status: "active" | "pending" | "error";
-  };
-  quickActions?: QuickAction[];
+  createdAt: string;
+  updatedAt: string;
+  status: ReportStatus;
+  createdBy: string;
 }
 
-export interface QuickAction {
-  id: string;
-  title: string;
-  icon: React.ComponentType<any>;
-  path: string;
-  color: string;
+// Estados posibles de un reporte
+export type ReportStatus = 'draft' | 'active' | 'archived' | 'processing';
+
+// Período de reporte estándar
+export interface ReportPeriod {
+  startDate: string;
+  endDate: string;
+  type: 'daily' | 'weekly' | 'monthly' | 'quarterly' | 'annual' | 'custom';
 }
 
-export interface RecentActivity {
-  id: string;
-  type: "report_generated" | "alert_created" | "data_updated" | "export_completed";
-  title: string;
-  description: string;
-  timestamp: Date;
-  module: string;
-  user: string;
-  status: "success" | "warning" | "error";
+// Props comunes para formularios de reportes
+export interface ReportFormProps<T = any> {
+  report?: T;
+  onSave: (report: Omit<T, 'id' | 'createdAt' | 'updatedAt'>) => void;
+  onCancel: () => void;
+  isEditing: boolean;
 }
 
-export interface SystemMetric {
-  id: string;
+// Props comunes para modales
+export interface ModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  children: React.ReactNode;
   title: string;
-  value: string;
-  change: number;
-  trend: "up" | "down" | "stable";
-  icon: React.ComponentType<any>;
-  color: string;
-  description: string;
 }
 
 // =================================================================
 // CONSTANTES Y CONFIGURACIONES
 // =================================================================
 
-// Tipos de reportes disponibles
-export const REPORT_TYPES = {
-  HEALTH_OVERVIEW: "health_overview",
-  VACCINATION_COVERAGE: "vaccination_coverage", 
-  DISEASE_ANALYSIS: "disease_analysis",
-  PRODUCTION_METRICS: "production_metrics",
-  FINANCIAL_SUMMARY: "financial_summary",
-  BREEDING_PERFORMANCE: "breeding_performance",
-  INVENTORY_STATUS: "inventory_status",
-  GEOGRAPHIC_DISTRIBUTION: "geographic_distribution"
+// Rutas del módulo de reportes
+export const REPORT_ROUTES = {
+  // Ruta principal
+  MAIN: '/reports',
+  
+  // Dashboard central
+  DASHBOARD: '/reports/dashboard',
+  
+  // Reportes específicos
+  HEALTH: '/reports/health',
+  PRODUCTION: '/reports/production',
+  INVENTORY: '/reports/inventory',
+  VACCINATION: '/reports/vaccination',
+  GEOGRAPHIC: '/reports/geographic',
+  FINANCIAL: '/reports/financial',
+  COMPLIANCE: '/reports/compliance',
+  
+  // Utilidades
+  VIEWER: '/reports/viewer',
+  SCHEDULER: '/reports/scheduler',
+  SETTINGS: '/reports/settings'
 } as const;
 
-// Categorías de reportes
-export const REPORT_CATEGORIES = {
-  HEALTH: "health",
-  PRODUCTION: "production",
-  FINANCIAL: "financial", 
-  INVENTORY: "inventory",
-  GEOGRAPHIC: "geographic",
-  BREEDING: "breeding"
+// Configuración de colores por tipo de reporte
+export const REPORT_COLORS = {
+  health: '#4e9c75',
+  production: '#519a7c',
+  inventory: '#3ca373',
+  vaccination: '#2e8b57',
+  geographic: '#e67e22',
+  financial: '#f4ac3a',
+  compliance: '#9b59b6',
+  general: '#2d6f51'
 } as const;
 
-// Formatos de exportación
+// Etiquetas en español para tipos de reporte
+export const REPORT_TYPE_LABELS = {
+  health: 'Salud',
+  production: 'Producción',
+  inventory: 'Inventario',
+  vaccination: 'Vacunación',
+  geographic: 'Geográfico',
+  financial: 'Financiero',
+  compliance: 'Cumplimiento',
+  general: 'General'
+} as const;
+
+// Estados de reporte con etiquetas en español
+export const REPORT_STATUS_LABELS = {
+  draft: 'Borrador',
+  active: 'Activo',
+  archived: 'Archivado',
+  processing: 'Procesando'
+} as const;
+
+// Colores para estados de reporte
+export const REPORT_STATUS_COLORS = {
+  draft: 'bg-gray-100 text-gray-800',
+  active: 'bg-green-100 text-green-800',
+  archived: 'bg-blue-100 text-blue-800',
+  processing: 'bg-yellow-100 text-yellow-800'
+} as const;
+
+// =================================================================
+// UTILIDADES HELPERS
+// =================================================================
+
+// Función para obtener el color de un tipo de reporte
+export const getReportColor = (type: keyof typeof REPORT_COLORS): string => {
+  return REPORT_COLORS[type] || REPORT_COLORS.general;
+};
+
+// Función para obtener la etiqueta de un tipo de reporte
+export const getReportTypeLabel = (type: keyof typeof REPORT_TYPE_LABELS): string => {
+  return REPORT_TYPE_LABELS[type] || 'Desconocido';
+};
+
+// Función para obtener la etiqueta de un estado de reporte
+export const getReportStatusLabel = (status: ReportStatus): string => {
+  return REPORT_STATUS_LABELS[status] || 'Desconocido';
+};
+
+// Función para obtener las clases CSS de un estado de reporte
+export const getReportStatusClasses = (status: ReportStatus): string => {
+  return REPORT_STATUS_COLORS[status] || REPORT_STATUS_COLORS.draft;
+};
+
+// Función para formatear fechas de manera consistente
+export const formatReportDate = (date: string | Date): string => {
+  const dateObj = typeof date === 'string' ? new Date(date) : date;
+  return dateObj.toLocaleDateString('es-ES', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric'
+  });
+};
+
+// Función para formatear fechas de manera compacta
+export const formatReportDateShort = (date: string | Date): string => {
+  const dateObj = typeof date === 'string' ? new Date(date) : date;
+  return dateObj.toLocaleDateString('es-ES', {
+    year: '2-digit',
+    month: '2-digit',
+    day: '2-digit'
+  });
+};
+
+// Función para calcular la diferencia en días entre dos fechas
+export const calculateDaysDifference = (startDate: string, endDate: string): number => {
+  const start = new Date(startDate);
+  const end = new Date(endDate);
+  const diffTime = Math.abs(end.getTime() - start.getTime());
+  return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+};
+
+// Función para validar si una fecha está dentro de un rango
+export const isDateInRange = (date: string, startDate: string, endDate: string): boolean => {
+  const checkDate = new Date(date);
+  const start = new Date(startDate);
+  const end = new Date(endDate);
+  return checkDate >= start && checkDate <= end;
+};
+
+// =================================================================
+// CONFIGURACIÓN DE VALIDACIONES
+// =================================================================
+
+// Reglas de validación comunes para formularios de reportes
+export const VALIDATION_RULES = {
+  title: {
+    required: true,
+    minLength: 3,
+    maxLength: 100
+  },
+  description: {
+    required: true,
+    minLength: 10,
+    maxLength: 500
+  },
+  location: {
+    required: true,
+    minLength: 2,
+    maxLength: 50
+  },
+  dateRange: {
+    required: true,
+    maxRangeInDays: 365
+  }
+} as const;
+
+// Mensajes de error estándar
+export const VALIDATION_MESSAGES = {
+  required: 'Este campo es requerido',
+  minLength: (min: number) => `Debe tener al menos ${min} caracteres`,
+  maxLength: (max: number) => `No puede exceder ${max} caracteres`,
+  invalidDate: 'Fecha inválida',
+  invalidDateRange: 'La fecha de fin debe ser posterior a la fecha de inicio',
+  maxDateRange: (days: number) => `El rango no puede exceder ${days} días`
+} as const;
+
+// =================================================================
+// CONFIGURACIÓN DE EXPORTACIÓN
+// =================================================================
+
+// Formatos de exportación disponibles
 export const EXPORT_FORMATS = {
-  PDF: "pdf",
-  EXCEL: "excel",
-  CSV: "csv",
-  JSON: "json"
+  PDF: 'pdf',
+  EXCEL: 'xlsx',
+  CSV: 'csv',
+  JSON: 'json'
 } as const;
 
-// Estados de reportes
-export const REPORT_STATUSES = {
-  COMPLETED: "completed",
-  PENDING: "pending", 
-  ERROR: "error",
-  SCHEDULED: "scheduled"
-} as const;
-
-// Prioridades de alertas
-export const ALERT_PRIORITIES = {
-  LOW: "low",
-  MEDIUM: "medium",
-  HIGH: "high", 
-  CRITICAL: "critical"
-} as const;
-
-// Tipos de actividad
-export const ACTIVITY_TYPES = {
-  REPORT_GENERATED: "report_generated",
-  ALERT_CREATED: "alert_created",
-  DATA_UPDATED: "data_updated",
-  EXPORT_COMPLETED: "export_completed"
-} as const;
-
-// Unidades de métricas
-export const METRIC_UNITS = {
-  LITERS: "litros",
-  KILOGRAMS: "kg",
-  PERCENTAGE: "%",
-  UNITS: "unidades",
-  DAYS: "días"
-} as const;
-
-// Niveles de rendimiento
-export const PERFORMANCE_LEVELS = {
-  EXCELLENT: "excellent",
-  GOOD: "good", 
-  AVERAGE: "average",
-  POOR: "poor"
-} as const;
-
-// Categorías de inventario
-export const INVENTORY_CATEGORIES = {
-  MEDICINE: "medicine",
-  SUPPLEMENT: "supplement",
-  EQUIPMENT: "equipment", 
-  FEED: "feed"
+// Etiquetas para formatos de exportación
+export const EXPORT_FORMAT_LABELS = {
+  [EXPORT_FORMATS.PDF]: 'PDF',
+  [EXPORT_FORMATS.EXCEL]: 'Excel',
+  [EXPORT_FORMATS.CSV]: 'CSV',
+  [EXPORT_FORMATS.JSON]: 'JSON'
 } as const;
 
 // =================================================================
-// FUNCIONES BÁSICAS DE UTILIDAD
+// CONFIGURACIÓN DE PAGINACIÓN Y FILTROS
 // =================================================================
 
-// Funciones de formateo básicas
-export const formatReportData = (data: any) => {
-  // Implementación básica de formateo
-  return data;
-};
-
-export const formatMetricValue = (value: number, unit: string) => {
-  return `${value} ${unit}`;
-};
-
-export const formatDateRange = (startDate: Date, endDate: Date) => {
-  return `${startDate.toLocaleDateString()} - ${endDate.toLocaleDateString()}`;
-};
-
-// =================================================================
-// CONFIGURACIÓN DEL MÓDULO
-// =================================================================
-
-// Configuración por defecto del módulo de reportes
-export const REPORTS_MODULE_CONFIG = {
-  // Identificador del módulo
-  moduleId: 'reports',
-  
-  // Nombre del módulo
-  moduleName: 'Sistema de Reportes',
-  
-  // Versión del módulo
-  version: '1.0.0',
-  
-  // Rutas principales del módulo
-  routes: {
-    main: '/reports',
-    dashboard: '/reports/dashboard',
-    health: '/reports/health',
-    production: '/reports/production',
-    inventory: '/reports/inventory',
-    financial: '/reports/financial',
-    geographic: '/reports/geographic'
-  },
-  
-  // Configuraciones por defecto
-  defaults: {
-    // Configuración de paginación
-    pagination: {
-      pageSize: 20,
-      maxPages: 100
-    },
-    
-    // Configuración de filtros
-    filters: {
-      dateRange: '30d',
-      category: 'all',
-      status: 'all'
-    },
-    
-    // Configuración de exportación
-    export: {
-      format: 'pdf',
-      includeCharts: true,
-      includeRawData: false
-    },
-    
-    // Configuración de actualización automática
-    autoRefresh: {
-      enabled: true,
-      interval: 300000 // 5 minutos
-    }
-  },
-  
-  // Permisos requeridos
-  permissions: {
-    read: ['reports:read'],
-    write: ['reports:write'],
-    export: ['reports:export'],
-    admin: ['reports:admin']
+// Configuración por defecto para listas de reportes
+export const DEFAULT_LIST_CONFIG = {
+  pageSize: 10,
+  sortBy: 'updatedAt',
+  sortOrder: 'desc' as 'asc' | 'desc',
+  filters: {
+    status: 'all',
+    type: 'all',
+    dateRange: 'all'
   }
 } as const;
 
-// =================================================================
-// METADATA DEL MÓDULO
-// =================================================================
-
-// Información del módulo para el sistema
-export const REPORTS_MODULE_METADATA = {
-  // Información básica
-  info: {
-    name: 'Sistema de Reportes y Análisis',
-    description: 'Módulo integral para generación, gestión y análisis de reportes del sistema ganadero',
-    author: 'Sistema Ganadero',
-    category: 'analytics',
-    tags: ['reportes', 'análisis', 'métricas', 'dashboard']
-  },
-  
-  // Características del módulo
-  features: [
-    'Dashboard centralizado de reportes',
-    'Reportes de salud y vacunación',
-    'Reportes de producción y rendimiento',
-    'Reportes de inventario y suministros',
-    'Análisis geográfico y mapas',
-    'Reportes financieros y costos',
-    'Exportación múltiple (PDF, Excel, CSV)',
-    'Alertas automáticas y notificaciones',
-    'Métricas en tiempo real',
-    'Análisis predictivo con IA'
-  ],
-  
-  // Dependencias del módulo
-  dependencies: {
-    // Bibliotecas principales
-    react: '^18.0.0',
-    'react-router-dom': '^6.0.0',
-    'framer-motion': '^10.0.0',
-    
-    // Bibliotecas de gráficos
-    recharts: '^2.0.0',
-    
-    // Bibliotecas de mapas
-    leaflet: '^1.9.0',
-    
-    // Bibliotecas de fechas
-    'date-fns': '^2.29.0'
-  }
-} as const;
+// Opciones de tamaño de página
+export const PAGE_SIZE_OPTIONS = [5, 10, 20, 50, 100] as const;
 
 // =================================================================
-// SERVICIOS BÁSICOS (IMPLEMENTACIÓN FUTURA)
+// DEFAULT EXPORT
 // =================================================================
 
-// Placeholder para servicios que se implementarán más adelante
-export const ReportService = {
-  initialize: async () => {
-    console.log('ReportService initialized');
-  },
-  cleanup: async () => {
-    console.log('ReportService cleaned up');
-  }
-};
-
-export const MetricService = {
-  initialize: async () => {
-    console.log('MetricService initialized');
-  },
-  cleanup: async () => {
-    console.log('MetricService cleaned up');
-  }
-};
-
-export const AlertService = {
-  initialize: async () => {
-    console.log('AlertService initialized');
-  },
-  cleanup: async () => {
-    console.log('AlertService cleaned up');
-  }
-};
-
-export const ExportService = {
-  initialize: async () => {
-    console.log('ExportService initialized');
-  },
-  cleanup: async () => {
-    console.log('ExportService cleaned up');
-  }
-};
-
-// =================================================================
-// INICIALIZACIÓN DEL MÓDULO
-// =================================================================
-
-// Función de inicialización del módulo de reportes
-export const initializeReportsModule = async (config?: Partial<typeof REPORTS_MODULE_CONFIG>) => {
-  try {
-    // Combinar configuración personalizada con la por defecto
-    const moduleConfig = {
-      ...REPORTS_MODULE_CONFIG,
-      ...config
-    };
-    
-    console.log(`[Reports Module] Inicializando módulo de reportes v${moduleConfig.version}`);
-    
-    // Inicializar servicios
-    await Promise.all([
-      ReportService.initialize(),
-      MetricService.initialize(),
-      AlertService.initialize(),
-      ExportService.initialize()
-    ]);
-    
-    console.log('[Reports Module] Servicios inicializados correctamente');
-    
-    return {
-      success: true,
-      config: moduleConfig,
-      message: 'Módulo de reportes inicializado correctamente'
-    };
-    
-  } catch (error) {
-    console.error('[Reports Module] Error al inicializar módulo:', error);
-    
-    return {
-      success: false,
-      error,
-      message: 'Error al inicializar el módulo de reportes'
-    };
-  }
-};
-
-// Función de limpieza del módulo
-export const cleanupReportsModule = async () => {
-  try {
-    console.log('[Reports Module] Limpiando recursos del módulo');
-    
-    // Limpiar servicios
-    await Promise.all([
-      ReportService.cleanup(),
-      MetricService.cleanup(),
-      AlertService.cleanup(),
-      ExportService.cleanup()
-    ]);
-    
-    console.log('[Reports Module] Módulo limpiado correctamente');
-    
-    return {
-      success: true,
-      message: 'Módulo de reportes limpiado correctamente'
-    };
-    
-  } catch (error) {
-    console.error('[Reports Module] Error al limpiar módulo:', error);
-    
-    return {
-      success: false,
-      error,
-      message: 'Error al limpiar el módulo de reportes'
-    };
-  }
-};
-
-// =================================================================
-// EXPORTACIÓN POR DEFECTO
-// =================================================================
-
-// Exportación por defecto del módulo completo
-export default {
+// Exportación por defecto del módulo
+const ReportsModule = {
   // Componentes principales
   ReportsPage,
   ReportDashboard,
   HealthReports,
-  InventoryReports,
   ProductionReports,
+  InventoryReports,
   
-  // Configuración del módulo
-  config: REPORTS_MODULE_CONFIG,
-  metadata: REPORTS_MODULE_METADATA,
+  // Utilidades
+  REPORT_ROUTES,
+  REPORT_COLORS,
+  REPORT_TYPE_LABELS,
+  REPORT_STATUS_LABELS,
+  REPORT_STATUS_COLORS,
   
-  // Funciones de gestión del módulo
-  initialize: initializeReportsModule,
-  cleanup: cleanupReportsModule
-} as const;
+  // Funciones helpers
+  getReportColor,
+  getReportTypeLabel,
+  getReportStatusLabel,
+  getReportStatusClasses,
+  formatReportDate,
+  formatReportDateShort,
+  calculateDaysDifference,
+  isDateInRange,
+  
+  // Configuraciones
+  VALIDATION_RULES,
+  VALIDATION_MESSAGES,
+  EXPORT_FORMATS,
+  EXPORT_FORMAT_LABELS,
+  DEFAULT_LIST_CONFIG,
+  PAGE_SIZE_OPTIONS
+};
+
+export default ReportsModule;
