@@ -6,13 +6,6 @@
 
 import React, { useState, useEffect } from "react";
 import { motion, Variants, AnimatePresence } from "framer-motion";
-import { 
-  useLocation, 
-  useNavigate, 
-  Routes, 
-  Route,
-  Navigate 
-} from "react-router-dom";
 import {
   Building,
   FileText,
@@ -72,7 +65,7 @@ const ranchSections: RanchSection[] = [
   {
     id: "overview",
     name: "Vista General",
-    path: "/ranch/overview",
+    path: "#overview",
     icon: Home,
     description: "Información general del rancho, estadísticas y clima",
     color: "bg-[#519a7c]",
@@ -81,7 +74,7 @@ const ranchSections: RanchSection[] = [
   {
     id: "property",
     name: "Información de Propiedad", 
-    path: "/ranch/property",
+    path: "#property",
     icon: FileText,
     description: "Datos de la propiedad, documentos legales y fotografías",
     color: "bg-blue-500",
@@ -90,7 +83,7 @@ const ranchSections: RanchSection[] = [
   {
     id: "staff",
     name: "Personal",
-    path: "/ranch/staff", 
+    path: "#staff", 
     icon: Users,
     description: "Gestión completa del personal del rancho",
     color: "bg-purple-500",
@@ -439,22 +432,12 @@ const RanchPage: React.FC = () => {
   const [direction, setDirection] = useState(0);
   const [showSectionSelector, setShowSectionSelector] = useState(true);
 
-  // Hooks de React Router
-  const location = useLocation();
-  const navigate = useNavigate();
-
-  // Determinar la sección actual basada en la ruta
+  // Determinar la sección inicial
   useEffect(() => {
-    const pathSegments = location.pathname.split('/');
-    const sectionName = pathSegments[pathSegments.length - 1];
-    
-    if (sectionName && sectionName !== 'ranch') {
-      setCurrentSection(sectionName);
-      setShowSectionSelector(false);
-    } else {
-      setShowSectionSelector(true);
-    }
-  }, [location.pathname]);
+    // Al cargar la página, siempre mostrar el selector de secciones
+    setShowSectionSelector(true);
+    setCurrentSection("overview");
+  }, []);
 
   // Función para navegar entre secciones
   const handleSectionChange = (sectionId: string) => {
@@ -468,7 +451,6 @@ const RanchPage: React.FC = () => {
     setTimeout(() => {
       setCurrentSection(sectionId);
       setShowSectionSelector(false);
-      navigate(section.path);
       setIsLoading(false);
     }, 300);
   };
@@ -476,7 +458,7 @@ const RanchPage: React.FC = () => {
   // Función para volver al selector de secciones
   const handleBackToSelector = () => {
     setShowSectionSelector(true);
-    navigate('/ranch');
+    setCurrentSection("overview");
   };
 
   // Obtener información de la sección actual
@@ -621,12 +603,10 @@ const RanchPage: React.FC = () => {
                 opacity: { duration: 0.2 }
               }}
             >
-              <Routes>
-                <Route path="/" element={<Navigate to="/ranch" replace />} />
-                <Route path="/overview" element={<RanchOverview />} />
-                <Route path="/property" element={<PropertyInfo />} />
-                <Route path="/staff" element={<Staff />} />
-              </Routes>
+              {/* Renderizado directo basado en la sección actual */}
+              {currentSection === "overview" && <RanchOverview />}
+              {currentSection === "property" && <PropertyInfo />}
+              {currentSection === "staff" && <Staff />}
             </motion.div>
           )}
         </AnimatePresence>

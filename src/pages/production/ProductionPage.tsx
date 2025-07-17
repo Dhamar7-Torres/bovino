@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, Variants, AnimatePresence } from 'framer-motion';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { 
   BarChart3, 
   Droplets, 
@@ -148,9 +149,34 @@ interface QuickStat {
 }
 
 const ProductionPage: React.FC = () => {
-  // Estado para controlar la sección actual
+  const location = useLocation();
+  const navigate = useNavigate();
+  
+  // Estados
   const [currentSection, setCurrentSection] = useState<ProductionSection>('overview');
   const [isLoading, setIsLoading] = useState<boolean>(true);
+
+  // Efecto para leer parámetros de URL y establecer la sección actual
+  useEffect(() => {
+    const searchParams = new URLSearchParams(location.search);
+    const section = searchParams.get('section') as ProductionSection;
+    
+    if (section && ['dashboard', 'milk', 'meat', 'breeding'].includes(section)) {
+      setCurrentSection(section);
+    } else {
+      setCurrentSection('overview');
+    }
+  }, [location.search]);
+
+  // Función para navegar entre secciones
+  const navigateToSection = (section: ProductionSection) => {
+    if (section === 'overview') {
+      navigate('/production');
+    } else {
+      navigate(`/production?section=${section}`);
+    }
+    setCurrentSection(section);
+  };
 
   // Datos de navegación para las diferentes secciones
   const navigationItems: NavigationItem[] = [
@@ -302,7 +328,7 @@ const ProductionPage: React.FC = () => {
         transition={{ duration: 0.5 }}
       >
         <button
-          onClick={() => setCurrentSection('overview')}
+          onClick={() => navigateToSection('overview')}
           className="flex items-center gap-1 hover:text-white transition-colors"
         >
           <Home className="h-4 w-4" />
@@ -391,7 +417,7 @@ const ProductionPage: React.FC = () => {
             whileHover={{ scale: 1.02, y: -5 }}
             whileTap={{ scale: 0.98 }}
             className="cursor-pointer"
-            onClick={() => setCurrentSection(item.id)}
+            onClick={() => navigateToSection(item.id)}
           >
             <Card className="bg-white/95 backdrop-blur-sm border border-white/20 hover:shadow-xl transition-all duration-300 group">
               <CardHeader>
@@ -541,7 +567,7 @@ const ProductionPage: React.FC = () => {
           >
             <Button
               variant="ghost"
-              onClick={() => setCurrentSection('overview')}
+              onClick={() => navigateToSection('overview')}
               className="text-white hover:bg-white/10 border border-white/20"
             >
               <ArrowLeft className="h-4 w-4 mr-2" />
