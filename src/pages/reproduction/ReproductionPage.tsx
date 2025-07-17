@@ -1,5 +1,5 @@
 // ReproductionPage.tsx
-// Página principal del módulo de reproducción con enrutamiento interno
+// Página principal del módulo de reproducción con enrutamiento interno y dashboard
 import React, { useState, useEffect } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence, Variants } from "framer-motion";
@@ -19,6 +19,14 @@ import {
   TrendingUp,
   AlertTriangle,
   ArrowLeft,
+  Plus,
+  Users,
+  Zap,
+  CheckCircle,
+  Droplets,
+  Scale,
+  TrendingDown,
+  Layers,
 } from "lucide-react";
 
 // Tipos para navegación y módulos
@@ -40,6 +48,10 @@ interface ModuleStats {
   birthsThisMonth: number;
   alerts: number;
   successRate: number;
+  bulls: number;
+  cows: number;
+  lactatingCows: number;
+  avgMilkProduction: number;
 }
 
 interface QuickStats {
@@ -51,6 +63,55 @@ interface QuickStats {
   trendValue?: string;
 }
 
+interface RecentActivity {
+  id: string;
+  type: "breeding" | "birth" | "pregnancy_test" | "vaccination";
+  title: string;
+  description: string;
+  time: string;
+  icon: React.ReactNode;
+  color: string;
+}
+
+// Componente AnimatedText para animaciones de texto
+const AnimatedText: React.FC<{ children: React.ReactNode; className?: string }> = ({ 
+  children, 
+  className = "" 
+}) => (
+  <motion.span
+    className={className}
+    initial={{ opacity: 0, y: 20 }}
+    animate={{ opacity: 1, y: 0 }}
+    transition={{ duration: 0.6, ease: "easeOut" }}
+  >
+    {children}
+  </motion.span>
+);
+
+// Variantes de animación
+const containerVariants: Variants = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: {
+      delayChildren: 0.1,
+      staggerChildren: 0.1,
+    },
+  },
+};
+
+const itemVariants: Variants = {
+  hidden: { y: 20, opacity: 0 },
+  visible: {
+    y: 0,
+    opacity: 1,
+    transition: {
+      type: "spring",
+      stiffness: 100,
+    },
+  },
+};
+
 // Componente principal de la página de reproducción
 const ReproductionPage: React.FC = () => {
   const location = useLocation();
@@ -58,9 +119,9 @@ const ReproductionPage: React.FC = () => {
   
   // Estados principales
   const [isLoading, setIsLoading] = useState<boolean>(true);
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(false);
   const [moduleStats, setModuleStats] = useState<ModuleStats | null>(null);
   const [activeAlerts, setActiveAlerts] = useState<number>(0);
+  const [recentActivities, setRecentActivities] = useState<RecentActivity[]>([]);
 
   // Verificar si estamos en la ruta raíz del módulo
   const isRootPath = location.pathname === "/reproduction" || location.pathname === "/reproduction/";
@@ -181,7 +242,7 @@ const ReproductionPage: React.FC = () => {
       setIsLoading(true);
       try {
         // Simular carga de datos del módulo
-        await new Promise(resolve => setTimeout(resolve, 800));
+        await new Promise(resolve => setTimeout(resolve, 1200));
         setModuleStats({
           totalAnimals: 153,
           activeBreedings: 89,
@@ -189,8 +250,50 @@ const ReproductionPage: React.FC = () => {
           birthsThisMonth: 8,
           alerts: 5,
           successRate: 85.4,
+          bulls: 8,
+          cows: 145,
+          lactatingCows: 78,
+          avgMilkProduction: 28.5,
         });
         setActiveAlerts(5);
+        setRecentActivities([
+          {
+            id: "1",
+            type: "birth",
+            title: "Nuevo nacimiento registrado",
+            description: "Vaca Luna dio a luz a un becerro macho",
+            time: "Hace 2 horas",
+            icon: <Baby className="w-5 h-5" />,
+            color: "text-green-600 bg-green-100"
+          },
+          {
+            id: "2", 
+            type: "breeding",
+            title: "Servicio completado",
+            description: "Vaca Estrella x Toro Campeón",
+            time: "Hace 4 horas",
+            icon: <Heart className="w-5 h-5" />,
+            color: "text-red-600 bg-red-100"
+          },
+          {
+            id: "3",
+            type: "pregnancy_test",
+            title: "Confirmación de preñez",
+            description: "Vaca Princesa confirmada gestante",
+            time: "Hace 1 día",
+            icon: <CheckCircle className="w-5 h-5" />,
+            color: "text-purple-600 bg-purple-100"
+          },
+          {
+            id: "4",
+            type: "vaccination",
+            title: "Vacunación reproductiva",
+            description: "5 vacas vacunadas contra brucelosis",
+            time: "Hace 2 días",
+            icon: <Syringe className="w-5 h-5" />,
+            color: "text-blue-600 bg-blue-100"
+          }
+        ]);
       } catch (error) {
         console.error("Error al cargar datos del módulo:", error);
       } finally {
@@ -203,266 +306,144 @@ const ReproductionPage: React.FC = () => {
 
   // Función para obtener el breadcrumb actual
   const getCurrentBreadcrumb = () => {
-    const currentItem = navigationItems.find(item => item.isActive);
+    const currentItem = navigationItems.find(item => 
+      item.route === location.pathname || location.pathname.includes(item.id)
+    );
     return currentItem ? currentItem.title : "Dashboard Principal";
   };
 
   // Función para obtener el ícono de tendencia
-  const getTrendIcon = (trend?: string) => {
+  const getTrendIcon = (trend?: "up" | "down" | "stable") => {
     switch (trend) {
       case "up":
         return <TrendingUp className="w-4 h-4 text-green-500" />;
       case "down":
-        return <TrendingUp className="w-4 h-4 text-red-500 rotate-180" />;
+        return <TrendingDown className="w-4 h-4 text-red-500" />;
       default:
-        return <Activity className="w-4 h-4 text-gray-500" />;
+        return <Layers className="w-4 h-4 text-gray-500" />;
     }
   };
 
-  // Animaciones de Framer Motion
-  const containerVariants: Variants = {
-    hidden: { opacity: 0 },
-    visible: {
-      opacity: 1,
-      transition: {
-        delayChildren: 0.1,
-        staggerChildren: 0.1,
-      },
-    },
-  };
-
-  const itemVariants: Variants = {
-    hidden: { y: 20, opacity: 0 },
-    visible: {
-      y: 0,
-      opacity: 1,
-      transition: {
-        duration: 0.5,
-        ease: "easeOut",
-      },
-    },
-  };
-
-  const sidebarVariants: Variants = {
-    expanded: {
-      width: "280px",
-      transition: { duration: 0.3, ease: "easeInOut" }
-    },
-    collapsed: {
-      width: "80px",
-      transition: { duration: 0.3, ease: "easeInOut" }
-    }
-  };
-
-  // Componente de elemento de navegación
-  const NavigationItem: React.FC<{ item: NavigationItem }> = ({ item }) => (
-    <motion.button
-      variants={itemVariants}
-      onClick={() => navigate(item.route)}
-      className={`w-full text-left p-4 rounded-xl transition-all duration-200 group ${
-        item.isActive
-          ? "bg-white shadow-lg border border-gray-200"
-          : "bg-white/50 hover:bg-white/80 hover:shadow-md"
-      }`}
-    >
-      <div className="flex items-center space-x-4">
-        <div className={`p-3 rounded-lg ${item.color} ${item.isActive ? 'scale-110' : 'group-hover:scale-105'} transition-transform duration-200`}>
-          {item.icon}
-        </div>
-        <AnimatePresence>
-          {!isSidebarCollapsed && (
-            <motion.div
-              initial={{ opacity: 0, width: 0 }}
-              animate={{ opacity: 1, width: "auto" }}
-              exit={{ opacity: 0, width: 0 }}
-              className="flex-1 min-w-0"
-            >
-              <div className="flex items-center justify-between">
-                <h3 className={`font-semibold ${item.isActive ? 'text-gray-900' : 'text-gray-700'}`}>
-                  {item.title}
-                </h3>
-                {item.badge && (
-                  <span className="bg-red-100 text-red-800 text-xs font-medium px-2 py-1 rounded-full">
-                    {item.badge}
-                  </span>
-                )}
-              </div>
-              <p className="text-sm text-gray-500 mt-1 line-clamp-2">
-                {item.description}
-              </p>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </div>
-    </motion.button>
-  );
-
-  // Componente de estadística rápida
+  // Componente de tarjeta de estadística rápida
   const QuickStatCard: React.FC<{ stat: QuickStats }> = ({ stat }) => (
     <motion.div
       variants={itemVariants}
-      className="bg-white/95 backdrop-blur-sm rounded-xl p-4 shadow-lg border border-white/20 hover:shadow-xl transition-all duration-300"
+      className="bg-white/20 backdrop-blur-sm rounded-xl p-4 border border-white/30"
     >
       <div className="flex items-center justify-between">
-        <div className="flex items-center space-x-3">
-          <div className={`p-2 rounded-lg ${stat.color.replace('text-', 'bg-').replace('-600', '-100')}`}>
-            <div className={stat.color}>{stat.icon}</div>
-          </div>
-          <div>
-            <p className="text-sm text-gray-600">{stat.label}</p>
-            <p className="text-2xl font-bold text-gray-900">{stat.value}</p>
-          </div>
+        <div>
+          <p className="text-sm text-white/80">{stat.label}</p>
+          <p className="text-2xl font-bold text-white mt-1">{stat.value}</p>
+          {stat.trend && (
+            <div className="flex items-center space-x-1 mt-1">
+              {getTrendIcon(stat.trend)}
+              <span className="text-xs text-white/70">{stat.trendValue}</span>
+            </div>
+          )}
         </div>
-        {stat.trend && stat.trendValue && (
-          <div className="flex items-center space-x-1">
-            {getTrendIcon(stat.trend)}
-            <span className={`text-sm font-medium ${
-              stat.trend === "up" ? "text-green-600" :
-              stat.trend === "down" ? "text-red-600" : "text-gray-600"
-            }`}>
-              {stat.trendValue}
-            </span>
-          </div>
-        )}
+        <div className={`${stat.color} opacity-80`}>{stat.icon}</div>
       </div>
     </motion.div>
   );
 
-  // Componente de carga
-  const LoadingSpinner: React.FC = () => (
-    <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-[#519a7c] via-[#f2e9d8] to-[#f4ac3a]">
-      <motion.div
-        animate={{ rotate: 360 }}
-        transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-        className="w-16 h-16 border-4 border-white/30 border-t-white rounded-full"
-      />
-    </div>
+  // Componente de tarjeta de navegación del módulo
+  const ModuleCard: React.FC<{ item: NavigationItem }> = ({ item }) => (
+    <motion.div
+      variants={itemVariants}
+      whileHover={{ scale: 1.02, y: -5 }}
+      whileTap={{ scale: 0.98 }}
+      onClick={() => navigate(item.route)}
+      className="bg-white/95 backdrop-blur-sm rounded-xl p-6 shadow-lg border border-white/20 cursor-pointer hover:shadow-xl transition-all duration-300"
+    >
+      <div className="flex items-start justify-between mb-4">
+        <div className={`p-3 rounded-xl ${item.color}`}>
+          {item.icon}
+        </div>
+        {item.badge && (
+          <span className="bg-red-500 text-white text-xs font-medium px-2 py-1 rounded-full">
+            {item.badge}
+          </span>
+        )}
+      </div>
+      
+      <h3 className="text-lg font-semibold text-gray-900 mb-2">{item.title}</h3>
+      <p className="text-gray-600 text-sm mb-4">{item.description}</p>
+      
+      <div className="flex items-center text-[#519a7c] font-medium text-sm">
+        <span>Ir al módulo</span>
+        <ChevronRight className="w-4 h-4 ml-1" />
+      </div>
+    </motion.div>
   );
 
+  // Componente de tarjeta de actividad reciente
+  const ActivityCard: React.FC<{ activity: RecentActivity }> = ({ activity }) => (
+    <motion.div
+      variants={itemVariants}
+      className="flex items-start space-x-3 p-4 bg-white/50 rounded-lg hover:bg-white/70 transition-colors"
+    >
+      <div className={`p-2 rounded-lg ${activity.color}`}>
+        {activity.icon}
+      </div>
+      <div className="flex-1 min-w-0">
+        <h4 className="text-sm font-medium text-gray-900">{activity.title}</h4>
+        <p className="text-xs text-gray-600 mt-1">{activity.description}</p>
+        <p className="text-xs text-gray-500 mt-1">{activity.time}</p>
+      </div>
+    </motion.div>
+  );
+
+  // Componente de tarjeta de estadística del dashboard
+  const DashboardStatCard: React.FC<{
+    title: string;
+    value: string | number;
+    icon: React.ReactNode;
+    color?: string;
+    subtitle?: string;
+  }> = ({ title, value, icon, color = "", subtitle }) => (
+    <motion.div
+      variants={itemVariants}
+      className={`bg-white/95 backdrop-blur-sm rounded-xl p-6 shadow-lg border border-white/20 ${color}`}
+    >
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-sm font-medium text-gray-600">{title}</p>
+          <p className="text-3xl font-bold text-gray-900 mt-1">{value}</p>
+          {subtitle && (
+            <p className="text-sm text-gray-500 mt-1">{subtitle}</p>
+          )}
+        </div>
+        <div className="text-gray-400">{icon}</div>
+      </div>
+    </motion.div>
+  );
+
+  // Pantalla de carga
   if (isLoading) {
-    return <LoadingSpinner />;
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-[#519a7c] via-[#f2e9d8] to-[#f4ac3a] flex items-center justify-center">
+        <motion.div
+          className="bg-white/90 backdrop-blur-sm rounded-2xl p-8 shadow-xl"
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.5 }}
+        >
+          <div className="flex flex-col items-center space-y-4">
+            <motion.div
+              className="w-12 h-12 border-4 border-[#519a7c] border-t-transparent rounded-full"
+              animate={{ rotate: 360 }}
+              transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+            />
+            <p className="text-gray-600 font-medium">Cargando módulo de reproducción...</p>
+          </div>
+        </motion.div>
+      </div>
+    );
   }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#519a7c] via-[#f2e9d8] to-[#f4ac3a]">
       <div className="flex">
-        {/* Sidebar de Navegación */}
-        <motion.div
-          variants={sidebarVariants}
-          animate={isSidebarCollapsed ? "collapsed" : "expanded"}
-          className="bg-white/10 backdrop-blur-md border-r border-white/20 min-h-screen sticky top-0"
-        >
-          <div className="p-6">
-            {/* Header del módulo */}
-            <div className="flex items-center justify-between mb-8">
-              <AnimatePresence>
-                {!isSidebarCollapsed && (
-                  <motion.div
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                  >
-                    <h1 className="text-2xl font-bold text-white">Reproducción</h1>
-                    <p className="text-white/80 text-sm">Gestión reproductiva integral</p>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-              <button
-                onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-                className="p-2 text-white/80 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
-              >
-                <motion.div
-                  animate={{ rotate: isSidebarCollapsed ? 180 : 0 }}
-                  transition={{ duration: 0.3 }}
-                >
-                  <ChevronRight className="w-5 h-5" />
-                </motion.div>
-              </button>
-            </div>
-
-            {/* Navegación principal */}
-            <motion.nav
-              variants={containerVariants}
-              initial="hidden"
-              animate="visible"
-              className="space-y-3"
-            >
-              {navigationItems.map((item) => (
-                <NavigationItem key={item.id} item={item} />
-              ))}
-            </motion.nav>
-
-            {/* Estadísticas rápidas en sidebar */}
-            <AnimatePresence>
-              {!isSidebarCollapsed && moduleStats && (
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -20 }}
-                  className="mt-8 p-4 bg-white/20 rounded-xl backdrop-blur-sm"
-                >
-                  <h3 className="text-white font-semibold mb-3">Resumen Rápido</h3>
-                  <div className="space-y-2 text-sm">
-                    <div className="flex justify-between text-white/90">
-                      <span>Total Animales:</span>
-                      <span className="font-medium">{moduleStats.totalAnimals}</span>
-                    </div>
-                    <div className="flex justify-between text-white/90">
-                      <span>Apareamientos:</span>
-                      <span className="font-medium">{moduleStats.activeBreedings}</span>
-                    </div>
-                    <div className="flex justify-between text-white/90">
-                      <span>Embarazos:</span>
-                      <span className="font-medium">{moduleStats.pregnancies}</span>
-                    </div>
-                    <div className="flex justify-between text-white/90">
-                      <span>Tasa de Éxito:</span>
-                      <span className="font-medium text-green-300">{moduleStats.successRate}%</span>
-                    </div>
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-
-            {/* Acciones rápidas */}
-            <AnimatePresence>
-              {!isSidebarCollapsed && (
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -20 }}
-                  className="mt-6"
-                >
-                  <h3 className="text-white font-semibold mb-3">Acciones Rápidas</h3>
-                  <div className="space-y-2">
-                    <button
-                      onClick={() => navigate("/reproduction/mating-records")}
-                      className="w-full text-left p-3 bg-red-500/20 hover:bg-red-500/30 text-white rounded-lg transition-colors flex items-center space-x-2"
-                    >
-                      <Heart className="w-4 h-4" />
-                      <span className="text-sm">Nuevo Apareamiento</span>
-                    </button>
-                    <button
-                      onClick={() => navigate("/reproduction/artificial-insemination")}
-                      className="w-full text-left p-3 bg-blue-500/20 hover:bg-blue-500/30 text-white rounded-lg transition-colors flex items-center space-x-2"
-                    >
-                      <Syringe className="w-4 h-4" />
-                      <span className="text-sm">Programar IA</span>
-                    </button>
-                    <button
-                      onClick={() => navigate("/reproduction/birth-records")}
-                      className="w-full text-left p-3 bg-green-500/20 hover:bg-green-500/30 text-white rounded-lg transition-colors flex items-center space-x-2"
-                    >
-                      <Baby className="w-4 h-4" />
-                      <span className="text-sm">Registrar Nacimiento</span>
-                    </button>
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
-        </motion.div>
-
         {/* Contenido Principal */}
         <div className="flex-1 min-h-screen">
           {/* Header del contenido cuando no estamos en el dashboard principal */}
@@ -478,6 +459,7 @@ const ReproductionPage: React.FC = () => {
                   <button
                     onClick={() => navigate("/reproduction")}
                     className="p-2 text-white/80 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
+                    title="Volver al dashboard"
                   >
                     <ArrowLeft className="w-5 h-5" />
                   </button>
@@ -540,18 +522,191 @@ const ReproductionPage: React.FC = () => {
             </div>
           )}
 
-          {/* Contenido de las rutas hijas */}
+          {/* Contenido de las rutas hijas o dashboard principal */}
           <div className={isSubModule ? "" : "p-6"}>
             <AnimatePresence mode="wait">
-              <motion.div
-                key={location.pathname}
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -20 }}
-                transition={{ duration: 0.3 }}
-              >
-                <Outlet />
-              </motion.div>
+              {isRootPath ? (
+                // Dashboard Principal del Módulo
+                <motion.div
+                  key="dashboard"
+                  variants={containerVariants}
+                  initial="hidden"
+                  animate="visible"
+                  className="max-w-7xl mx-auto space-y-8"
+                >
+                  {/* Header del Dashboard */}
+                  <motion.div variants={itemVariants} className="text-center mb-8">
+                    <h1 className="text-4xl font-bold text-white mb-4">
+                      <AnimatedText>Dashboard de Reproducción</AnimatedText>
+                    </h1>
+                    <p className="text-white/80 text-lg max-w-2xl mx-auto">
+                      Control integral del programa reproductivo del ganado
+                    </p>
+                  </motion.div>
+
+                  {/* Estadísticas Principales */}
+                  <motion.div variants={itemVariants} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                    <DashboardStatCard
+                      title="Total Animales"
+                      value={moduleStats?.totalAnimals || 0}
+                      icon={<Users className="w-8 h-8" />}
+                      color="hover:bg-blue-50"
+                    />
+                    <DashboardStatCard
+                      title="Toros Activos"
+                      value={moduleStats?.bulls || 0}
+                      icon={<Crown className="w-8 h-8" />}
+                      color="hover:bg-yellow-50"
+                    />
+                    <DashboardStatCard
+                      title="Vacas Reproductoras"
+                      value={moduleStats?.cows || 0}
+                      icon={<Flower2 className="w-8 h-8" />}
+                      color="hover:bg-pink-50"
+                    />
+                    <DashboardStatCard
+                      title="Tasa de Éxito"
+                      value={`${moduleStats?.successRate || 0}%`}
+                      icon={<Target className="w-8 h-8" />}
+                      color="hover:bg-green-50"
+                    />
+                  </motion.div>
+
+                  {/* Estadísticas Detalladas */}
+                  <motion.div variants={itemVariants} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                    <DashboardStatCard
+                      title="Apareamientos Activos"
+                      value={moduleStats?.activeBreedings || 0}
+                      icon={<Heart className="w-8 h-8" />}
+                      color="hover:bg-red-50"
+                    />
+                    <DashboardStatCard
+                      title="Embarazos Confirmados"
+                      value={moduleStats?.pregnancies || 0}
+                      icon={<Baby className="w-8 h-8" />}
+                      color="hover:bg-purple-50"
+                    />
+                    <DashboardStatCard
+                      title="Partos Este Mes"
+                      value={moduleStats?.birthsThisMonth || 0}
+                      icon={<CheckCircle className="w-8 h-8" />}
+                      color="hover:bg-green-50"
+                    />
+                    <DashboardStatCard
+                      title="Alertas Pendientes"
+                      value={moduleStats?.alerts || 0}
+                      icon={<AlertTriangle className="w-8 h-8" />}
+                      color="hover:bg-orange-50"
+                    />
+                  </motion.div>
+
+                  {/* Sección de Producción Láctea */}
+                  <motion.div variants={itemVariants} className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                    <DashboardStatCard
+                      title="Vacas Lactando"
+                      value={moduleStats?.lactatingCows || 0}
+                      icon={<Droplets className="w-8 h-8" />}
+                      color="hover:bg-blue-50"
+                    />
+                    <DashboardStatCard
+                      title="Producción Promedio"
+                      value={`${moduleStats?.avgMilkProduction || 0}L`}
+                      icon={<Scale className="w-8 h-8" />}
+                      color="hover:bg-indigo-50"
+                    />
+                    <DashboardStatCard
+                      title="Eficiencia Reproductiva"
+                      value={`${Math.round(((moduleStats?.pregnancies || 0) / (moduleStats?.cows || 1)) * 100)}%`}
+                      icon={<TrendingUp className="w-8 h-8" />}
+                      color="hover:bg-emerald-50"
+                    />
+                  </motion.div>
+
+                  {/* Grid de Módulos */}
+                  <motion.div variants={itemVariants}>
+                    <h2 className="text-2xl font-bold text-white mb-6 text-center">Módulos de Gestión</h2>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+                      {navigationItems.slice(1).map((item) => (
+                        <ModuleCard key={item.id} item={item} />
+                      ))}
+                    </div>
+                  </motion.div>
+
+                  {/* Actividades Recientes y Acciones Rápidas */}
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                    {/* Actividades Recientes */}
+                    <motion.div variants={itemVariants} className="lg:col-span-2">
+                      <div className="bg-white/95 backdrop-blur-sm rounded-xl p-6 shadow-lg border border-white/20">
+                        <div className="flex items-center justify-between mb-6">
+                          <h3 className="text-xl font-semibold text-gray-900 flex items-center">
+                            <Activity className="w-5 h-5 mr-2 text-[#519a7c]" />
+                            Actividades Recientes
+                          </h3>
+                          <button className="text-[#519a7c] hover:text-[#4a8970] font-medium text-sm">
+                            Ver todas
+                          </button>
+                        </div>
+                        <div className="space-y-3">
+                          {recentActivities.map((activity) => (
+                            <ActivityCard key={activity.id} activity={activity} />
+                          ))}
+                        </div>
+                      </div>
+                    </motion.div>
+
+                    {/* Acciones Rápidas */}
+                    <motion.div variants={itemVariants}>
+                      <div className="bg-white/95 backdrop-blur-sm rounded-xl p-6 shadow-lg border border-white/20">
+                        <h3 className="text-xl font-semibold text-gray-900 mb-6 flex items-center">
+                          <Zap className="w-5 h-5 mr-2 text-[#519a7c]" />
+                          Acciones Rápidas
+                        </h3>
+                        <div className="space-y-3">
+                          <button
+                            onClick={() => navigate("/reproduction/mating-records")}
+                            className="w-full flex items-center justify-center px-4 py-3 bg-[#519a7c] text-white rounded-lg hover:bg-[#4a8970] transition-colors"
+                          >
+                            <Plus className="w-4 h-4 mr-2" />
+                            <span className="text-sm">Registrar Apareamiento</span>
+                          </button>
+                          <button
+                            onClick={() => navigate("/reproduction/artificial-insemination")}
+                            className="w-full flex items-center justify-center px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                          >
+                            <Syringe className="w-4 h-4 mr-2" />
+                            <span className="text-sm">Nueva Inseminación</span>
+                          </button>
+                          <button
+                            onClick={() => navigate("/reproduction/pregnancy-tracking")}
+                            className="w-full flex items-center justify-center px-4 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
+                          >
+                            <Timer className="w-4 h-4 mr-2" />
+                            <span className="text-sm">Revisar Embarazos</span>
+                          </button>
+                          <button
+                            onClick={() => navigate("/reproduction/birth-records")}
+                            className="w-full flex items-center justify-center px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                          >
+                            <Baby className="w-4 h-4 mr-2" />
+                            <span className="text-sm">Registrar Nacimiento</span>
+                          </button>
+                        </div>
+                      </div>
+                    </motion.div>
+                  </div>
+                </motion.div>
+              ) : (
+                // Contenido de submódulos
+                <motion.div
+                  key={location.pathname}
+                  initial={{ opacity: 0, x: 20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -20 }}
+                  transition={{ duration: 0.3 }}
+                >
+                  <Outlet />
+                </motion.div>
+              )}
             </AnimatePresence>
           </div>
         </div>
