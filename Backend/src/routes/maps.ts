@@ -1,77 +1,137 @@
 import { Router, Request, Response, NextFunction } from 'express';
-import { body, query, param, validationResult } from 'express-validator';
-import { Op, WhereOptions } from 'sequelize';
-import { 
-  authenticateToken, 
-  authorizeRoles, 
-  validateRequest,
-  auditLog,
-  rateLimitByUserId
-} from '../middleware';
-import { 
-  MapsController,
-  LocationController,
-  GeofenceController,
-  TrackingController 
-} from '../controllers';
+import { authenticateToken } from '../middleware/auth';
+import { validate as validationMiddleware } from '../middleware/validation';
+import { createRateLimit, EndpointType } from '../middleware/rate-limit';
+import { requireMinimumRole as roleMiddleware } from '../middleware/role';
+import { UserRole } from '../middleware/auth';
+
+// ===================================================================
+// EXTENDER EL TIPO REQUEST PARA PROPIEDADES DE MAPAS
+// ===================================================================
+
+declare global {
+  namespace Express {
+    interface Request {
+      mapBounds?: {
+        swLat: number;
+        swLng: number;
+        neLat: number;
+        neLng: number;
+      };
+    }
+  }
+}
+
+// ===================================================================
+// INTERFACES Y TIPOS
+// ===================================================================
+
+interface LocationCoordinates {
+  latitude: number;
+  longitude: number;
+  altitude?: number;
+  accuracy?: number;
+}
+
+interface GeofenceArea {
+  id: string;
+  name: string;
+  type: 'pasture' | 'facility' | 'restricted' | 'safe_zone';
+  coordinates?: LocationCoordinates[];
+  radius?: number;
+  center?: LocationCoordinates;
+}
+
+interface MapBounds {
+  north: number;
+  south: number;
+  east: number;
+  west: number;
+}
+
+// ===================================================================
+// CONFIGURACIÓN PARA VILLAHERMOSA, TABASCO, MÉXICO
+// ===================================================================
+
+const RANCH_DEFAULT_CENTER: LocationCoordinates = {
+  latitude: 17.9869,
+  longitude: -92.9303,
+  altitude: 10
+};
+
+const TABASCO_BOUNDS: MapBounds = {
+  north: 18.5,
+  south: 17.3,
+  east: -91.0,
+  west: -94.8
+};
+
+// ===================================================================
+// CREAR ROUTER
+// ===================================================================
 
 const router = Router();
+
+// Todas las rutas requieren autenticación
+router.use(authenticateToken);
 
 // ===================================================================
 // MIDDLEWARE DE VALIDACIÓN PARA COORDENADAS
 // ===================================================================
 
-// Validar coordenadas geográficas
-const validateCoordinates = [
-  body('latitude')
-    .isFloat({ min: -90, max: 90 })
-    .withMessage('La latitud debe estar entre -90 y 90 grados'),
-  body('longitude')
-    .isFloat({ min: -180, max: 180 })
-    .withMessage('La longitud debe estar entre -180 y 180 grados'),
-  body('accuracy')
-    .optional()
-    .isFloat({ min: 0 })
-    .withMessage('La precisión debe ser un número positivo')
-];
+const validateCoordinates = (req: Request, res: Response, next: NextFunction): void => {
+  const { latitude, longitude } = req.body;
+  
+  if (latitude !== undefined) {
+    const lat = parseFloat(latitude);
+    if (isNaN(lat) || lat < -90 || lat > 90) {
+      res.status(400).json({
+        success: false,
+        message: 'La latitud debe estar entre -90 y 90 grados'
+      });
+      return;
+    }
+  }
+  
+  if (longitude !== undefined) {
+    const lng = parseFloat(longitude);
+    if (isNaN(lng) || lng < -180 || lng > 180) {
+      res.status(400).json({
+        success: false,
+        message: 'La longitud debe estar entre -180 y 180 grados'
+      });
+      return;
+    }
+  }
+  
+  next();
+};
 
-// Validar bounds del mapa
-const validateMapBounds = [
-  query('swLat')
-    .optional()
-    .isFloat({ min: -90, max: 90 })
-    .withMessage('Latitud suroeste inválida'),
-  query('swLng')
-    .optional()
-    .isFloat({ min: -180, max: 180 })
-    .withMessage('Longitud suroeste inválida'),
-  query('neLat')
-    .optional()
-    .isFloat({ min: -90, max: 90 })
-    .withMessage('Latitud noreste inválida'),
-  query('neLng')
-    .optional()
-    .isFloat({ min: -180, max: 180 })
-    .withMessage('Longitud noreste inválida')
-];
-
-// Validar radio de búsqueda
-const validateRadius = query('radius')
-  .optional()
-  .isFloat({ min: 0.1, max: 100 })
-  .withMessage('El radio debe estar entre 0.1 y 100 kilómetros');
-
-// Validar fechas
-const validateDateRange = [
-  query('startDate')
-    .optional()
-    .isISO8601()
-    .withMessage('Fecha de inicio inválida'),
-  query('endDate')
-    .optional()
-    .isISO8601()
-    .withMessage('Fecha de fin inválida')
-];
+const validateMapBounds = (req: Request, res: Response, next: NextFunction): void => {
+  const { swLat, swLng, neLat, neLng } = req.query;
+  
+  if (swLat && swLng && neLat && neLng) {
+    const bounds = {
+      swLat: parseFloat(swLat as string),
+      swLng: parseFloat(swLng as string),
+      neLat: parseFloat(neLat as string),
+      neLng: parseFloat(neLng as string)
+    };
+    
+    // Validar que las coordenadas sean válidas
+    if (isNaN(bounds.swLat) || isNaN(bounds.swLng) || isNaN(bounds.neLat) || isNaN(bounds.neLng)) {
+      res.status(400).json({
+        success: false,
+        message: 'Coordenadas de bounds inválidas'
+      });
+      return;
+    }
+    
+    req.mapBounds = bounds;
+  }
+  
+  next();
+};
 
 // ===================================================================
 // RUTAS DE VISTA GENERAL DEL RANCHO
@@ -82,56 +142,94 @@ const validateDateRange = [
  * Vista general del rancho con todas las ubicaciones principales
  */
 router.get('/ranch-overview',
-  authenticateToken,
+  createRateLimit(EndpointType.MAPS),
   validateMapBounds,
-  query('includePotreros')
-    .optional()
-    .isBoolean()
-    .withMessage('includePotreros debe ser verdadero o falso'),
-  query('includeGanado')
-    .optional()
-    .isBoolean()
-    .withMessage('includeGanado debe ser verdadero o falso'),
-  query('includeInfraestructura')
-    .optional()
-    .isBoolean()
-    .withMessage('includeInfraestructura debe ser verdadero o falso'),
-  validateRequest,
-  auditLog('maps.ranch_overview.view'),
-  async (req: Request, res: Response, next: NextFunction) => {
-    try {
-      const {
-        swLat, swLng, neLat, neLng,
-        includePotreros = true,
-        includeGanado = true,
-        includeInfraestructura = true
-      } = req.query;
+  validationMiddleware('search'),
+  (req: Request, res: Response) => {
+    const {
+      includePotreros = 'true',
+      includeGanado = 'true',
+      includeInfraestructura = 'true'
+    } = req.query;
 
-      const userId = req.user?.id;
+    const ranchOverview = {
+      center: RANCH_DEFAULT_CENTER,
+      bounds: TABASCO_BOUNDS,
+      potreros: includePotreros === 'true' ? [
+        {
+          id: 'potrero_1',
+          name: 'Potrero Principal',
+          area: 15.5, // hectáreas
+          capacity: 50,
+          currentAnimals: 32,
+          grassType: 'Brachiaria',
+          coordinates: [
+            { latitude: 17.9900, longitude: -92.9350 },
+            { latitude: 17.9900, longitude: -92.9250 },
+            { latitude: 17.9800, longitude: -92.9250 },
+            { latitude: 17.9800, longitude: -92.9350 }
+          ]
+        },
+        {
+          id: 'potrero_2',
+          name: 'Potrero Norte',
+          area: 12.0,
+          capacity: 40,
+          currentAnimals: 25,
+          grassType: 'Guinea',
+          coordinates: [
+            { latitude: 17.9950, longitude: -92.9350 },
+            { latitude: 17.9950, longitude: -92.9250 },
+            { latitude: 17.9900, longitude: -92.9250 },
+            { latitude: 17.9900, longitude: -92.9350 }
+          ]
+        }
+      ] : [],
+      ganado: includeGanado === 'true' ? [
+        {
+          id: 'cattle_1',
+          earTag: 'TAB001',
+          name: 'Esperanza',
+          breed: 'Brahman',
+          location: { latitude: 17.9880, longitude: -92.9320 },
+          status: 'healthy',
+          lastUpdate: new Date().toISOString()
+        },
+        {
+          id: 'cattle_2',
+          earTag: 'TAB002',
+          name: 'Victoria',
+          breed: 'Cebu',
+          location: { latitude: 17.9860, longitude: -92.9310 },
+          status: 'healthy',
+          lastUpdate: new Date().toISOString()
+        }
+      ] : [],
+      infraestructura: includeInfraestructura === 'true' ? [
+        {
+          id: 'barn_main',
+          type: 'establo',
+          name: 'Establo Principal',
+          location: RANCH_DEFAULT_CENTER,
+          capacity: 100,
+          facilities: ['ordeño', 'alimentación', 'refugio']
+        },
+        {
+          id: 'water_1',
+          type: 'aguaje',
+          name: 'Bebedero Central',
+          location: { latitude: 17.9870, longitude: -92.9290 },
+          capacity: 5000, // litros
+          status: 'active'
+        }
+      ] : []
+    };
 
-      const bounds = (swLat && swLng && neLat && neLng) ? {
-        swLat: parseFloat(swLat as string),
-        swLng: parseFloat(swLng as string),
-        neLat: parseFloat(neLat as string),
-        neLng: parseFloat(neLng as string)
-      } : undefined;
-
-      const ranchOverview = await MapsController.getRanchOverview({
-        bounds,
-        includePotreros: includePotreros === 'true',
-        includeGanado: includeGanado === 'true',
-        includeInfraestructura: includeInfraestructura === 'true',
-        userId
-      });
-
-      res.json({
-        success: true,
-        data: ranchOverview,
-        message: 'Vista general del rancho obtenida exitosamente'
-      });
-    } catch (error) {
-      next(error);
-    }
+    res.json({
+      success: true,
+      data: ranchOverview,
+      message: 'Vista general del rancho obtenida exitosamente'
+    });
   }
 );
 
@@ -140,30 +238,32 @@ router.get('/ranch-overview',
  * Obtiene los límites geográficos del rancho
  */
 router.get('/ranch-boundaries',
-  authenticateToken,
-  query('ranchId')
-    .optional()
-    .isUUID()
-    .withMessage('ID de rancho debe ser un UUID válido'),
-  validateRequest,
-  async (req: Request, res: Response, next: NextFunction) => {
-    try {
-      const { ranchId } = req.query;
-      const userId = req.user?.id;
+  createRateLimit(EndpointType.MAPS),
+  validationMiddleware('search'),
+  (req: Request, res: Response) => {
+    const boundaries = {
+      type: 'Polygon',
+      coordinates: [[
+        [-92.9400, 17.9800], // [lng, lat] formato GeoJSON
+        [-92.9200, 17.9800],
+        [-92.9200, 17.9950],
+        [-92.9400, 17.9950],
+        [-92.9400, 17.9800]
+      ]],
+      properties: {
+        name: 'Rancho San José',
+        area: 125.5, // hectáreas
+        owner: 'Universidad Juárez Autónoma de Tabasco',
+        established: '2020-01-15'
+      },
+      center: RANCH_DEFAULT_CENTER
+    };
 
-      const boundaries = await MapsController.getRanchBoundaries({
-        ranchId: ranchId as string,
-        userId
-      });
-
-      res.json({
-        success: true,
-        data: boundaries,
-        message: 'Límites del rancho obtenidos exitosamente'
-      });
-    } catch (error) {
-      next(error);
-    }
+    res.json({
+      success: true,
+      data: boundaries,
+      message: 'Límites del rancho obtenidos exitosamente'
+    });
   }
 );
 
@@ -176,78 +276,106 @@ router.get('/ranch-boundaries',
  * Obtiene ubicaciones actuales del ganado
  */
 router.get('/cattle-locations',
-  authenticateToken,
+  createRateLimit(EndpointType.MAPS),
   validateMapBounds,
-  validateRadius,
-  query('centerLat')
-    .optional()
-    .isFloat({ min: -90, max: 90 })
-    .withMessage('Latitud del centro inválida'),
-  query('centerLng')
-    .optional()
-    .isFloat({ min: -180, max: 180 })
-    .withMessage('Longitud del centro inválida'),
-  query('lastUpdatedWithin')
-    .optional()
-    .isInt({ min: 1, max: 720 })
-    .withMessage('lastUpdatedWithin debe estar entre 1 y 720 horas'),
-  query('includeInactive')
-    .optional()
-    .isBoolean()
-    .withMessage('includeInactive debe ser verdadero o falso'),
-  query('earTags')
-    .optional()
-    .custom((value) => {
-      if (typeof value === 'string') {
-        const tags = value.split(',');
-        if (tags.length > 50) {
-          throw new Error('Máximo 50 aretes por consulta');
-        }
-        return true;
+  validationMiddleware('search'),
+  (req: Request, res: Response) => {
+    const {
+      lastUpdatedWithin = '24',
+      includeInactive = 'false',
+      earTags
+    } = req.query;
+
+    // Simular ubicaciones de ganado
+    let cattleLocations = [
+      {
+        id: 'loc_1',
+        bovine: {
+          id: 'cattle_1',
+          earTag: 'TAB001',
+          name: 'Esperanza',
+          breed: 'Brahman',
+          status: 'healthy'
+        },
+        coordinates: {
+          latitude: 17.9880,
+          longitude: -92.9320,
+          accuracy: 5
+        },
+        recorded_at: new Date().toISOString(),
+        location_type: 'gps_tracking',
+        potrero: 'Potrero Principal'
+      },
+      {
+        id: 'loc_2',
+        bovine: {
+          id: 'cattle_2',
+          earTag: 'TAB002',
+          name: 'Victoria',
+          breed: 'Cebu',
+          status: 'healthy'
+        },
+        coordinates: {
+          latitude: 17.9860,
+          longitude: -92.9310,
+          accuracy: 3
+        },
+        recorded_at: new Date().toISOString(),
+        location_type: 'gps_tracking',
+        potrero: 'Potrero Norte'
+      },
+      {
+        id: 'loc_3',
+        bovine: {
+          id: 'cattle_3',
+          earTag: 'TAB003',
+          name: 'Fortuna',
+          breed: 'Holstein',
+          status: 'inactive'
+        },
+        coordinates: {
+          latitude: 17.9840,
+          longitude: -92.9300,
+          accuracy: 4
+        },
+        recorded_at: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(), // 2 horas atrás
+        location_type: 'manual',
+        potrero: 'Establo'
       }
-      return true;
-    }),
-  validateRequest,
-  auditLog('maps.cattle_locations.view'),
-  async (req: Request, res: Response, next: NextFunction) => {
-    try {
-      const {
-        swLat, swLng, neLat, neLng,
-        centerLat, centerLng, radius,
-        lastUpdatedWithin = 24,
-        includeInactive = false,
-        earTags
-      } = req.query;
+    ];
 
-      const userId = req.user?.id;
-
-      const filters = {
-        bounds: (swLat && swLng && neLat && neLng) ? {
-          swLat: parseFloat(swLat as string),
-          swLng: parseFloat(swLng as string),
-          neLat: parseFloat(neLat as string),
-          neLng: parseFloat(neLng as string)
-        } : undefined,
-        center: (centerLat && centerLng) ? {
-          latitude: parseFloat(centerLat as string),
-          longitude: parseFloat(centerLng as string)
-        } : undefined,
-        radius: radius ? parseFloat(radius as string) : undefined,
-        lastUpdatedWithin: parseInt(lastUpdatedWithin as string),
-        includeInactive: includeInactive === 'true',
-        earTags: earTags ? (earTags as string).split(',') : undefined
-      };
-
-      const cattleLocations = await LocationController.getCattleLocations(filters, userId);
-
-      res.json({
-        success: true,
-        data: cattleLocations,
-        message: 'Ubicaciones del ganado obtenidas exitosamente'
-      });
-    } catch (error) {
-      next(error);
+    // Filtrar por ear tags si se especifican
+    if (earTags) {
+      const tagArray = (earTags as string).split(',');
+      cattleLocations = cattleLocations.filter(loc => 
+        tagArray.includes(loc.bovine.earTag)
+      );
     }
+
+    // Filtrar inactivos si no se incluyen
+    if (includeInactive === 'false') {
+      cattleLocations = cattleLocations.filter(loc => 
+        loc.bovine.status !== 'inactive'
+      );
+    }
+
+    // Filtrar por tiempo de actualización
+    const hoursLimit = parseInt(lastUpdatedWithin as string);
+    const cutoffTime = new Date(Date.now() - hoursLimit * 60 * 60 * 1000);
+    cattleLocations = cattleLocations.filter(loc => 
+      new Date(loc.recorded_at) > cutoffTime
+    );
+
+    res.json({
+      success: true,
+      data: {
+        locations: cattleLocations,
+        total: cattleLocations.length,
+        center: RANCH_DEFAULT_CENTER,
+        bounds: req.mapBounds || TABASCO_BOUNDS
+      },
+      message: 'Ubicaciones del ganado obtenidas exitosamente'
+    });
   }
 );
 
@@ -256,55 +384,55 @@ router.get('/cattle-locations',
  * Registra nueva ubicación de ganado
  */
 router.post('/cattle-location',
-  authenticateToken,
-  rateLimitByUserId(60, 15), // 60 requests per 15 minutes por usuario
-  [
-    body('bovineId')
-      .isUUID()
-      .withMessage('ID de bovino debe ser un UUID válido'),
-    ...validateCoordinates,
-    body('timestamp')
-      .optional()
-      .isISO8601()
-      .withMessage('Timestamp debe ser una fecha válida'),
-    body('method')
-      .optional()
-      .isIn(['gps', 'manual', 'rfid', 'visual', 'camera'])
-      .withMessage('Método de ubicación inválido'),
-    body('notes')
-      .optional()
-      .isLength({ max: 500 })
-      .withMessage('Las notas no pueden exceder 500 caracteres'),
-    body('potrero')
-      .optional()
-      .isLength({ min: 1, max: 100 })
-      .withMessage('Nombre del potrero debe tener entre 1 y 100 caracteres'),
-    body('zone')
-      .optional()
-      .isLength({ min: 1, max: 100 })
-      .withMessage('Zona debe tener entre 1 y 100 caracteres')
-  ],
-  validateRequest,
-  auditLog('maps.cattle_location.create'),
-  async (req: Request, res: Response, next: NextFunction) => {
-    try {
-      const locationData = req.body;
-      const userId = req.user?.id;
+  roleMiddleware(UserRole.WORKER),
+  createRateLimit(EndpointType.CATTLE_WRITE),
+  validateCoordinates,
+  validationMiddleware('search'),
+  (req: Request, res: Response) => {
+    const {
+      bovineId,
+      latitude,
+      longitude,
+      altitude,
+      accuracy,
+      method = 'gps',
+      notes,
+      potrero,
+      zone
+    } = req.body;
 
-      const newLocation = await LocationController.recordCattleLocation({
-        ...locationData,
-        recordedBy: userId,
-        timestamp: locationData.timestamp || new Date()
+    // Validar que las coordenadas estén dentro de Tabasco
+    if (latitude < TABASCO_BOUNDS.south || latitude > TABASCO_BOUNDS.north ||
+        longitude < TABASCO_BOUNDS.west || longitude > TABASCO_BOUNDS.east) {
+      res.status(400).json({
+        success: false,
+        message: 'Coordenadas fuera del rango válido para Tabasco, México'
       });
-
-      res.status(201).json({
-        success: true,
-        data: newLocation,
-        message: 'Ubicación del ganado registrada exitosamente'
-      });
-    } catch (error) {
-      next(error);
+      return;
     }
+
+    const newLocation = {
+      id: `loc_${Date.now()}`,
+      bovineId,
+      coordinates: {
+        latitude: parseFloat(latitude),
+        longitude: parseFloat(longitude),
+        altitude: altitude ? parseFloat(altitude) : null,
+        accuracy: accuracy ? parseFloat(accuracy) : null
+      },
+      timestamp: new Date().toISOString(),
+      method,
+      notes,
+      potrero,
+      zone,
+      recordedBy: req.userId
+    };
+
+    res.status(201).json({
+      success: true,
+      data: newLocation,
+      message: 'Ubicación del ganado registrada exitosamente'
+    });
   }
 );
 
@@ -313,276 +441,61 @@ router.post('/cattle-location',
  * Historial de ubicaciones de un bovino específico
  */
 router.get('/cattle/:bovineId/history',
-  authenticateToken,
-  param('bovineId')
-    .isUUID()
-    .withMessage('ID de bovino debe ser un UUID válido'),
-  validateDateRange,
-  query('limit')
-    .optional()
-    .isInt({ min: 1, max: 1000 })
-    .withMessage('Límite debe estar entre 1 y 1000'),
-  validateRequest,
-  async (req: Request, res: Response, next: NextFunction) => {
-    try {
-      const { bovineId } = req.params;
-      const { startDate, endDate, limit = 100 } = req.query;
-      const userId = req.user?.id;
+  createRateLimit(EndpointType.MAPS),
+  validationMiddleware('search'),
+  (req: Request, res: Response) => {
+    const { bovineId } = req.params;
+    const { startDate, endDate, limit = '100' } = req.query;
 
-      const history = await LocationController.getCattleLocationHistory({
-        bovineId,
-        startDate: startDate ? new Date(startDate as string) : undefined,
-        endDate: endDate ? new Date(endDate as string) : undefined,
-        limit: parseInt(limit as string),
-        userId
-      });
+    // Simular historial de ubicaciones
+    const history = {
+      bovine: {
+        id: bovineId,
+        earTag: 'TAB001',
+        name: 'Esperanza',
+        breed: 'Brahman'
+      },
+      locations: [
+        {
+          id: 'hist_1',
+          coordinates: { latitude: 17.9880, longitude: -92.9320 },
+          recorded_at: new Date().toISOString(),
+          location_type: 'gps_tracking',
+          accuracy: 5
+        },
+        {
+          id: 'hist_2',
+          coordinates: { latitude: 17.9875, longitude: -92.9315 },
+          recorded_at: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+          location_type: 'gps_tracking',
+          accuracy: 4
+        },
+        {
+          id: 'hist_3',
+          coordinates: { latitude: 17.9870, longitude: -92.9310 },
+          recorded_at: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
+          location_type: 'gps_tracking',
+          accuracy: 6
+        }
+      ],
+      statistics: {
+        total_distance: 156.7, // metros
+        average_speed: 78.35, // m/h
+        max_distance_from_center: 145.2,
+        time_period: {
+          start: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
+          end: new Date().toISOString(),
+          duration_hours: 2
+        }
+      },
+      total_points: 3
+    };
 
-      res.json({
-        success: true,
-        data: history,
-        message: 'Historial de ubicaciones obtenido exitosamente'
-      });
-    } catch (error) {
-      next(error);
-    }
-  }
-);
-
-// ===================================================================
-// RUTAS DE UBICACIONES DE EVENTOS VETERINARIOS
-// ===================================================================
-
-/**
- * GET /api/maps/vaccination-locations
- * Mapa de ubicaciones donde se han aplicado vacunas
- */
-router.get('/vaccination-locations',
-  authenticateToken,
-  validateMapBounds,
-  validateDateRange,
-  query('vaccineType')
-    .optional()
-    .isIn([
-      'fiebre_aftosa', 'brucelosis', 'rabia', 'carbunco', 'clostridiosis',
-      'ibl', 'dvb', 'pi3', 'brsv', 'leptospirosis', 'campylobacteriosis'
-    ])
-    .withMessage('Tipo de vacuna inválido'),
-  query('groupBy')
-    .optional()
-    .isIn(['location', 'date', 'vaccine', 'veterinarian'])
-    .withMessage('Agrupación inválida'),
-  validateRequest,
-  auditLog('maps.vaccination_locations.view'),
-  async (req: Request, res: Response, next: NextFunction) => {
-    try {
-      const {
-        swLat, swLng, neLat, neLng,
-        startDate, endDate,
-        vaccineType, groupBy = 'location'
-      } = req.query;
-
-      const userId = req.user?.id;
-
-      const filters = {
-        bounds: (swLat && swLng && neLat && neLng) ? {
-          swLat: parseFloat(swLat as string),
-          swLng: parseFloat(swLng as string),
-          neLat: parseFloat(neLat as string),
-          neLng: parseFloat(neLng as string)
-        } : undefined,
-        startDate: startDate ? new Date(startDate as string) : undefined,
-        endDate: endDate ? new Date(endDate as string) : undefined,
-        vaccineType: vaccineType as string,
-        groupBy: groupBy as string
-      };
-
-      const vaccinationLocations = await MapsController.getVaccinationLocations(filters, userId);
-
-      res.json({
-        success: true,
-        data: vaccinationLocations,
-        message: 'Ubicaciones de vacunación obtenidas exitosamente'
-      });
-    } catch (error) {
-      next(error);
-    }
-  }
-);
-
-/**
- * GET /api/maps/illness-locations
- * Mapa de ubicaciones donde se han registrado enfermedades
- */
-router.get('/illness-locations',
-  authenticateToken,
-  validateMapBounds,
-  validateDateRange,
-  query('diseaseType')
-    .optional()
-    .isIn([
-      'respiratory', 'digestive', 'reproductive', 'metabolic',
-      'infectious', 'parasitic', 'nutritional', 'traumatic'
-    ])
-    .withMessage('Tipo de enfermedad inválido'),
-  query('severity')
-    .optional()
-    .isIn(['mild', 'moderate', 'severe', 'critical'])
-    .withMessage('Severidad inválida'),
-  query('contagious')
-    .optional()
-    .isBoolean()
-    .withMessage('Contagioso debe ser verdadero o falso'),
-  query('includeRecovered')
-    .optional()
-    .isBoolean()
-    .withMessage('includeRecovered debe ser verdadero o falso'),
-  validateRequest,
-  auditLog('maps.illness_locations.view'),
-  async (req: Request, res: Response, next: NextFunction) => {
-    try {
-      const {
-        swLat, swLng, neLat, neLng,
-        startDate, endDate,
-        diseaseType, severity, contagious,
-        includeRecovered = true
-      } = req.query;
-
-      const userId = req.user?.id;
-
-      const filters = {
-        bounds: (swLat && swLng && neLat && neLng) ? {
-          swLat: parseFloat(swLat as string),
-          swLng: parseFloat(swLng as string),
-          neLat: parseFloat(neLat as string),
-          neLng: parseFloat(neLng as string)
-        } : undefined,
-        startDate: startDate ? new Date(startDate as string) : undefined,
-        endDate: endDate ? new Date(endDate as string) : undefined,
-        diseaseType: diseaseType as string,
-        severity: severity as string,
-        contagious: contagious === 'true',
-        includeRecovered: includeRecovered === 'true'
-      };
-
-      const illnessLocations = await MapsController.getIllnessLocations(filters, userId);
-
-      res.json({
-        success: true,
-        data: illnessLocations,
-        message: 'Ubicaciones de enfermedades obtenidas exitosamente'
-      });
-    } catch (error) {
-      next(error);
-    }
-  }
-);
-
-// ===================================================================
-// RUTAS DE MAPAS DE CALOR Y ANÁLISIS ESPACIAL
-// ===================================================================
-
-/**
- * GET /api/maps/density-heatmap
- * Genera mapa de calor de densidad de ganado
- */
-router.get('/density-heatmap',
-  authenticateToken,
-  validateMapBounds,
-  query('resolution')
-    .optional()
-    .isInt({ min: 10, max: 100 })
-    .withMessage('Resolución debe estar entre 10 y 100'),
-  query('timeWindow')
-    .optional()
-    .isIn(['1h', '6h', '12h', '24h', '7d', '30d'])
-    .withMessage('Ventana de tiempo inválida'),
-  validateRequest,
-  async (req: Request, res: Response, next: NextFunction) => {
-    try {
-      const {
-        swLat, swLng, neLat, neLng,
-        resolution = 50,
-        timeWindow = '24h'
-      } = req.query;
-
-      const userId = req.user?.id;
-
-      const bounds = {
-        swLat: parseFloat(swLat as string),
-        swLng: parseFloat(swLng as string),
-        neLat: parseFloat(neLat as string),
-        neLng: parseFloat(neLng as string)
-      };
-
-      const heatmapData = await MapsController.generateDensityHeatmap({
-        bounds,
-        resolution: parseInt(resolution as string),
-        timeWindow: timeWindow as string,
-        userId
-      });
-
-      res.json({
-        success: true,
-        data: heatmapData,
-        message: 'Mapa de calor de densidad generado exitosamente'
-      });
-    } catch (error) {
-      next(error);
-    }
-  }
-);
-
-/**
- * GET /api/maps/activity-heatmap
- * Mapa de calor de actividad veterinaria (vacunaciones, tratamientos)
- */
-router.get('/activity-heatmap',
-  authenticateToken,
-  validateMapBounds,
-  validateDateRange,
-  query('activityType')
-    .optional()
-    .isIn(['vaccination', 'treatment', 'inspection', 'feeding', 'movement'])
-    .withMessage('Tipo de actividad inválido'),
-  query('intensity')
-    .optional()
-    .isIn(['low', 'medium', 'high', 'auto'])
-    .withMessage('Intensidad inválida'),
-  validateRequest,
-  async (req: Request, res: Response, next: NextFunction) => {
-    try {
-      const {
-        swLat, swLng, neLat, neLng,
-        startDate, endDate,
-        activityType, intensity = 'auto'
-      } = req.query;
-
-      const userId = req.user?.id;
-
-      const bounds = {
-        swLat: parseFloat(swLat as string),
-        swLng: parseFloat(swLng as string),
-        neLat: parseFloat(neLat as string),
-        neLng: parseFloat(neLng as string)
-      };
-
-      const activityHeatmap = await MapsController.generateActivityHeatmap({
-        bounds,
-        startDate: startDate ? new Date(startDate as string) : undefined,
-        endDate: endDate ? new Date(endDate as string) : undefined,
-        activityType: activityType as string,
-        intensity: intensity as string,
-        userId
-      });
-
-      res.json({
-        success: true,
-        data: activityHeatmap,
-        message: 'Mapa de calor de actividad generado exitosamente'
-      });
-    } catch (error) {
-      next(error);
-    }
+    res.json({
+      success: true,
+      data: history,
+      message: 'Historial de ubicaciones obtenido exitosamente'
+    });
   }
 );
 
@@ -595,35 +508,64 @@ router.get('/activity-heatmap',
  * Obtiene todas las geocercas configuradas
  */
 router.get('/geofences',
-  authenticateToken,
-  query('type')
-    .optional()
-    .isIn(['potrero', 'danger_zone', 'feeding_area', 'water_source', 'quarantine', 'restricted'])
-    .withMessage('Tipo de geocerca inválido'),
-  query('active')
-    .optional()
-    .isBoolean()
-    .withMessage('Activo debe ser verdadero o falso'),
-  validateRequest,
-  async (req: Request, res: Response, next: NextFunction) => {
-    try {
-      const { type, active } = req.query;
-      const userId = req.user?.id;
+  createRateLimit(EndpointType.MAPS),
+  validationMiddleware('search'),
+  (req: Request, res: Response) => {
+    const { type, active = 'true' } = req.query;
 
-      const geofences = await GeofenceController.getGeofences({
-        type: type as string,
-        active: active === 'true',
-        userId
-      });
+    const geofences = [
+      {
+        id: 'geo_1',
+        name: 'Potrero Principal',
+        type: 'potrero',
+        active: true,
+        coordinates: [
+          { latitude: 17.9900, longitude: -92.9350 },
+          { latitude: 17.9900, longitude: -92.9250 },
+          { latitude: 17.9800, longitude: -92.9250 },
+          { latitude: 17.9800, longitude: -92.9350 }
+        ],
+        alertOnEntry: false,
+        alertOnExit: true,
+        capacity: 50,
+        grassType: 'Brachiaria'
+      },
+      {
+        id: 'geo_2',
+        name: 'Zona Segura Principal',
+        type: 'safe_zone',
+        active: true,
+        center: RANCH_DEFAULT_CENTER,
+        radius: 500,
+        alertOnEntry: false,
+        alertOnExit: true
+      },
+      {
+        id: 'geo_3',
+        name: 'Zona Restringida - Carretera',
+        type: 'danger_zone',
+        active: true,
+        coordinates: [
+          { latitude: 17.9950, longitude: -92.9400 },
+          { latitude: 17.9950, longitude: -92.9200 },
+          { latitude: 17.9970, longitude: -92.9200 },
+          { latitude: 17.9970, longitude: -92.9400 }
+        ],
+        alertOnEntry: true,
+        alertOnExit: false
+      }
+    ].filter(geo => {
+      if (type && geo.type !== type) return false;
+      if (active === 'false' && geo.active) return false;
+      if (active === 'true' && !geo.active) return false;
+      return true;
+    });
 
-      res.json({
-        success: true,
-        data: geofences,
-        message: 'Geocercas obtenidas exitosamente'
-      });
-    } catch (error) {
-      next(error);
-    }
+    res.json({
+      success: true,
+      data: geofences,
+      message: 'Geocercas obtenidas exitosamente'
+    });
   }
 );
 
@@ -632,325 +574,84 @@ router.get('/geofences',
  * Crea una nueva geocerca
  */
 router.post('/geofences',
-  authenticateToken,
-  authorizeRoles(['admin', 'ranch_manager']),
-  [
-    body('name')
-      .notEmpty()
-      .isLength({ min: 2, max: 100 })
-      .withMessage('El nombre debe tener entre 2 y 100 caracteres'),
-    body('type')
-      .isIn(['potrero', 'danger_zone', 'feeding_area', 'water_source', 'quarantine', 'restricted'])
-      .withMessage('Tipo de geocerca inválido'),
-    body('coordinates')
-      .isArray({ min: 3 })
-      .withMessage('Debe proporcionar al menos 3 coordenadas'),
-    body('coordinates.*.latitude')
-      .isFloat({ min: -90, max: 90 })
-      .withMessage('Latitud inválida'),
-    body('coordinates.*.longitude')
-      .isFloat({ min: -180, max: 180 })
-      .withMessage('Longitud inválida'),
-    body('description')
-      .optional()
-      .isLength({ max: 500 })
-      .withMessage('La descripción no puede exceder 500 caracteres'),
-    body('alertOnEntry')
-      .optional()
-      .isBoolean()
-      .withMessage('Alerta de entrada debe ser verdadero o falso'),
-    body('alertOnExit')
-      .optional()
-      .isBoolean()
-      .withMessage('Alerta de salida debe ser verdadero o falso'),
-    body('capacity')
-      .optional()
-      .isInt({ min: 1 })
-      .withMessage('La capacidad debe ser un número entero positivo'),
-    body('grassType')
-      .optional()
-      .isLength({ min: 1, max: 50 })
-      .withMessage('Tipo de pasto debe tener entre 1 y 50 caracteres'),
-    body('lastRotationDate')
-      .optional()
-      .isISO8601()
-      .withMessage('Fecha de última rotación debe ser válida')
-  ],
-  validateRequest,
-  auditLog('maps.geofence.create'),
-  async (req: Request, res: Response, next: NextFunction) => {
-    try {
-      const geofenceData = req.body;
-      const userId = req.user?.id;
+  roleMiddleware(UserRole.ADMIN),
+  createRateLimit(EndpointType.CATTLE_WRITE),
+  validateCoordinates,
+  validationMiddleware('search'),
+  (req: Request, res: Response) => {
+    const {
+      name,
+      type,
+      coordinates,
+      description,
+      alertOnEntry = false,
+      alertOnExit = false,
+      capacity,
+      grassType
+    } = req.body;
 
-      const newGeofence = await GeofenceController.createGeofence({
-        ...geofenceData,
-        createdBy: userId
-      });
+    const newGeofence = {
+      id: `geo_${Date.now()}`,
+      name,
+      type,
+      coordinates,
+      description,
+      alertOnEntry,
+      alertOnExit,
+      capacity,
+      grassType,
+      active: true,
+      createdAt: new Date().toISOString(),
+      createdBy: req.userId
+    };
 
-      res.status(201).json({
-        success: true,
-        data: newGeofence,
-        message: 'Geocerca creada exitosamente'
-      });
-    } catch (error) {
-      next(error);
-    }
-  }
-);
-
-/**
- * PUT /api/maps/geofences/:id
- * Actualiza una geocerca existente
- */
-router.put('/geofences/:id',
-  authenticateToken,
-  authorizeRoles(['admin', 'ranch_manager']),
-  param('id')
-    .isUUID()
-    .withMessage('ID debe ser un UUID válido'),
-  [
-    body('name')
-      .optional()
-      .isLength({ min: 2, max: 100 })
-      .withMessage('El nombre debe tener entre 2 y 100 caracteres'),
-    body('coordinates')
-      .optional()
-      .isArray({ min: 3 })
-      .withMessage('Debe proporcionar al menos 3 coordenadas'),
-    body('description')
-      .optional()
-      .isLength({ max: 500 })
-      .withMessage('La descripción no puede exceder 500 caracteres'),
-    body('active')
-      .optional()
-      .isBoolean()
-      .withMessage('Activo debe ser verdadero o falso')
-  ],
-  validateRequest,
-  auditLog('maps.geofence.update'),
-  async (req: Request, res: Response, next: NextFunction) => {
-    try {
-      const { id } = req.params;
-      const updateData = req.body;
-      const userId = req.user?.id;
-
-      const updatedGeofence = await GeofenceController.updateGeofence(id, {
-        ...updateData,
-        updatedBy: userId
-      });
-
-      if (!updatedGeofence) {
-        return res.status(404).json({
-          success: false,
-          message: 'Geocerca no encontrada'
-        });
-      }
-
-      res.json({
-        success: true,
-        data: updatedGeofence,
-        message: 'Geocerca actualizada exitosamente'
-      });
-    } catch (error) {
-      next(error);
-    }
-  }
-);
-
-/**
- * DELETE /api/maps/geofences/:id
- * Elimina una geocerca
- */
-router.delete('/geofences/:id',
-  authenticateToken,
-  authorizeRoles(['admin', 'ranch_manager']),
-  param('id')
-    .isUUID()
-    .withMessage('ID debe ser un UUID válido'),
-  validateRequest,
-  auditLog('maps.geofence.delete'),
-  async (req: Request, res: Response, next: NextFunction) => {
-    try {
-      const { id } = req.params;
-      const userId = req.user?.id;
-
-      const deleted = await GeofenceController.deleteGeofence(id, userId);
-
-      if (!deleted) {
-        return res.status(404).json({
-          success: false,
-          message: 'Geocerca no encontrada'
-        });
-      }
-
-      res.json({
-        success: true,
-        message: 'Geocerca eliminada exitosamente'
-      });
-    } catch (error) {
-      next(error);
-    }
+    res.status(201).json({
+      success: true,
+      data: newGeofence,
+      message: 'Geocerca creada exitosamente'
+    });
   }
 );
 
 // ===================================================================
-// RUTAS DE ALERTAS GEOGRÁFICAS
+// RUTAS DE ANÁLISIS ESPACIAL
 // ===================================================================
 
 /**
- * GET /api/maps/geofence-alerts
- * Obtiene alertas de geocercas (entradas/salidas no autorizadas)
+ * GET /api/maps/density-heatmap
+ * Genera mapa de calor de densidad de ganado
  */
-router.get('/geofence-alerts',
-  authenticateToken,
-  validateDateRange,
-  query('geofenceId')
-    .optional()
-    .isUUID()
-    .withMessage('ID de geocerca debe ser un UUID válido'),
-  query('alertType')
-    .optional()
-    .isIn(['entry', 'exit', 'breach', 'overstay'])
-    .withMessage('Tipo de alerta inválido'),
-  query('status')
-    .optional()
-    .isIn(['active', 'acknowledged', 'resolved'])
-    .withMessage('Estado de alerta inválido'),
-  validateRequest,
-  async (req: Request, res: Response, next: NextFunction) => {
-    try {
-      const {
-        startDate, endDate,
-        geofenceId, alertType, status
-      } = req.query;
-
-      const userId = req.user?.id;
-
-      const alerts = await GeofenceController.getGeofenceAlerts({
-        startDate: startDate ? new Date(startDate as string) : undefined,
-        endDate: endDate ? new Date(endDate as string) : undefined,
-        geofenceId: geofenceId as string,
-        alertType: alertType as string,
-        status: status as string,
-        userId
-      });
-
-      res.json({
-        success: true,
-        data: alerts,
-        message: 'Alertas de geocerca obtenidas exitosamente'
-      });
-    } catch (error) {
-      next(error);
-    }
-  }
-);
-
-/**
- * POST /api/maps/check-geofence-violations
- * Verifica violaciones de geocercas en tiempo real
- */
-router.post('/check-geofence-violations',
-  authenticateToken,
-  rateLimitByUserId(100, 15), // 100 requests per 15 minutes
-  [
-    body('locations')
-      .isArray({ min: 1, max: 50 })
-      .withMessage('Debe proporcionar entre 1 y 50 ubicaciones'),
-    body('locations.*.bovineId')
-      .isUUID()
-      .withMessage('ID de bovino debe ser un UUID válido'),
-    body('locations.*.latitude')
-      .isFloat({ min: -90, max: 90 })
-      .withMessage('Latitud inválida'),
-    body('locations.*.longitude')
-      .isFloat({ min: -180, max: 180 })
-      .withMessage('Longitud inválida'),
-    body('locations.*.timestamp')
-      .isISO8601()
-      .withMessage('Timestamp debe ser una fecha válida')
-  ],
-  validateRequest,
-  async (req: Request, res: Response, next: NextFunction) => {
-    try {
-      const { locations } = req.body;
-      const userId = req.user?.id;
-
-      const violations = await GeofenceController.checkViolations({
-        locations,
-        userId
-      });
-
-      res.json({
-        success: true,
-        data: violations,
-        message: 'Verificación de violaciones completada'
-      });
-    } catch (error) {
-      next(error);
-    }
-  }
-);
-
-// ===================================================================
-// RUTAS DE ANÁLISIS ESPACIAL Y ESTADÍSTICAS
-// ===================================================================
-
-/**
- * GET /api/maps/cluster-analysis
- * Análisis de clustering de ganado por ubicación
- */
-router.get('/cluster-analysis',
-  authenticateToken,
+router.get('/density-heatmap',
+  createRateLimit(EndpointType.MAPS),
   validateMapBounds,
-  query('algorithm')
-    .optional()
-    .isIn(['kmeans', 'dbscan', 'hierarchical'])
-    .withMessage('Algoritmo de clustering inválido'),
-  query('minClusterSize')
-    .optional()
-    .isInt({ min: 2, max: 100 })
-    .withMessage('Tamaño mínimo de cluster debe estar entre 2 y 100'),
-  query('maxClusters')
-    .optional()
-    .isInt({ min: 2, max: 20 })
-    .withMessage('Número máximo de clusters debe estar entre 2 y 20'),
-  validateRequest,
-  async (req: Request, res: Response, next: NextFunction) => {
-    try {
-      const {
-        swLat, swLng, neLat, neLng,
-        algorithm = 'kmeans',
-        minClusterSize = 5,
-        maxClusters = 10
-      } = req.query;
+  validationMiddleware('search'),
+  (req: Request, res: Response) => {
+    const {
+      resolution = '50',
+      timeWindow = '24h'
+    } = req.query;
 
-      const userId = req.user?.id;
+    const heatmapData = {
+      bounds: req.mapBounds || TABASCO_BOUNDS,
+      resolution: parseInt(resolution as string),
+      timeWindow,
+      data: [
+        { lat: 17.9880, lng: -92.9320, density: 8 },
+        { lat: 17.9875, lng: -92.9315, density: 12 },
+        { lat: 17.9870, lng: -92.9310, density: 6 },
+        { lat: 17.9860, lng: -92.9305, density: 15 },
+        { lat: 17.9850, lng: -92.9300, density: 4 }
+      ],
+      max_density: 15,
+      total_points: 5,
+      generated_at: new Date().toISOString()
+    };
 
-      const bounds = {
-        swLat: parseFloat(swLat as string),
-        swLng: parseFloat(swLng as string),
-        neLat: parseFloat(neLat as string),
-        neLng: parseFloat(neLng as string)
-      };
-
-      const clusterAnalysis = await MapsController.performClusterAnalysis({
-        bounds,
-        algorithm: algorithm as string,
-        minClusterSize: parseInt(minClusterSize as string),
-        maxClusters: parseInt(maxClusters as string),
-        userId
-      });
-
-      res.json({
-        success: true,
-        data: clusterAnalysis,
-        message: 'Análisis de clustering completado exitosamente'
-      });
-    } catch (error) {
-      next(error);
-    }
+    res.json({
+      success: true,
+      data: heatmapData,
+      message: 'Mapa de calor de densidad generado exitosamente'
+    });
   }
 );
 
@@ -959,55 +660,132 @@ router.get('/cluster-analysis',
  * Análisis de patrones de movimiento del ganado
  */
 router.get('/movement-patterns',
-  authenticateToken,
-  validateDateRange,
-  query('bovineIds')
-    .optional()
-    .custom((value) => {
-      if (typeof value === 'string') {
-        const ids = value.split(',');
-        if (ids.length > 20) {
-          throw new Error('Máximo 20 bovinos por análisis');
+  createRateLimit(EndpointType.MAPS),
+  validationMiddleware('search'),
+  (req: Request, res: Response) => {
+    const {
+      startDate,
+      endDate,
+      bovineIds,
+      analysisType = 'daily'
+    } = req.query;
+
+    const movementPatterns = {
+      analysis_type: analysisType,
+      period: {
+        start: startDate || new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
+        end: endDate || new Date().toISOString()
+      },
+      patterns: [
+        {
+          bovine_id: 'cattle_1',
+          ear_tag: 'TAB001',
+          movement_stats: {
+            total_distance: 1250.5, // metros
+            average_speed: 52.1, // m/h
+            max_distance_from_center: 180.3,
+            activity_level: 'moderate'
+          },
+          frequent_locations: [
+            { lat: 17.9880, lng: -92.9320, frequency: 0.4 },
+            { lat: 17.9875, lng: -92.9315, frequency: 0.3 },
+            { lat: 17.9870, lng: -92.9310, frequency: 0.3 }
+          ],
+          path: [
+            { lat: 17.9880, lng: -92.9320, timestamp: new Date().toISOString() },
+            { lat: 17.9875, lng: -92.9315, timestamp: new Date(Date.now() - 60 * 60 * 1000).toISOString() }
+          ]
         }
-        return true;
+      ],
+      summary: {
+        total_animals_analyzed: 1,
+        average_activity_level: 'moderate',
+        most_active_hours: ['06:00-08:00', '16:00-18:00']
       }
-      return true;
-    }),
-  query('analysisType')
-    .optional()
-    .isIn(['daily', 'weekly', 'monthly', 'seasonal'])
-    .withMessage('Tipo de análisis inválido'),
-  validateRequest,
-  async (req: Request, res: Response, next: NextFunction) => {
-    try {
-      const {
-        startDate, endDate,
-        bovineIds, analysisType = 'daily'
-      } = req.query;
+    };
 
-      const userId = req.user?.id;
+    res.json({
+      success: true,
+      data: movementPatterns,
+      message: 'Análisis de patrones de movimiento completado exitosamente'
+    });
+  }
+);
 
-      const movementPatterns = await MapsController.analyzeMovementPatterns({
-        startDate: startDate ? new Date(startDate as string) : undefined,
-        endDate: endDate ? new Date(endDate as string) : undefined,
-        bovineIds: bovineIds ? (bovineIds as string).split(',') : undefined,
-        analysisType: analysisType as string,
-        userId
-      });
+// ===================================================================
+// RUTAS DE EXPORTACIÓN
+// ===================================================================
 
-      res.json({
-        success: true,
-        data: movementPatterns,
-        message: 'Análisis de patrones de movimiento completado exitosamente'
-      });
-    } catch (error) {
-      next(error);
+/**
+ * GET /api/maps/export-data
+ * Exporta datos geográficos en diferentes formatos
+ */
+router.get('/export-data',
+  roleMiddleware(UserRole.ADMIN),
+  createRateLimit(EndpointType.REPORTS),
+  validationMiddleware('search'),
+  (req: Request, res: Response) => {
+    const {
+      format = 'geojson',
+      dataType = 'cattle_locations'
+    } = req.query;
+
+    if (format === 'csv') {
+      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader('Content-Disposition', 'attachment; filename="cattle_locations.csv"');
+      
+      const csvData = `ID,Ear Tag,Latitude,Longitude,Timestamp,Status
+cattle_1,TAB001,17.9880,-92.9320,${new Date().toISOString()},healthy
+cattle_2,TAB002,17.9860,-92.9310,${new Date().toISOString()},healthy`;
+      
+      res.send(csvData);
+    } else {
+      // GeoJSON format
+      const geoJsonData = {
+        type: 'FeatureCollection',
+        features: [
+          {
+            type: 'Feature',
+            geometry: {
+              type: 'Point',
+              coordinates: [-92.9320, 17.9880]
+            },
+            properties: {
+              id: 'cattle_1',
+              earTag: 'TAB001',
+              name: 'Esperanza',
+              breed: 'Brahman',
+              status: 'healthy',
+              timestamp: new Date().toISOString()
+            }
+          },
+          {
+            type: 'Feature',
+            geometry: {
+              type: 'Point',
+              coordinates: [-92.9310, 17.9860]
+            },
+            properties: {
+              id: 'cattle_2',
+              earTag: 'TAB002',
+              name: 'Victoria',
+              breed: 'Cebu',
+              status: 'healthy',
+              timestamp: new Date().toISOString()
+            }
+          }
+        ]
+      };
+
+      res.setHeader('Content-Type', 'application/geo+json');
+      res.setHeader('Content-Disposition', `attachment; filename="cattle_data.${format}"`);
+      res.json(geoJsonData);
     }
   }
 );
 
 // ===================================================================
-// RUTAS DE GEOCODIFICACIÓN Y SERVICIOS DE UBICACIÓN
+// RUTAS DE GEOCODIFICACIÓN
 // ===================================================================
 
 /**
@@ -1015,43 +793,40 @@ router.get('/movement-patterns',
  * Geocodifica una dirección a coordenadas
  */
 router.post('/geocode',
-  authenticateToken,
-  rateLimitByUserId(50, 15), // 50 requests per 15 minutes
-  [
-    body('address')
-      .notEmpty()
-      .isLength({ min: 5, max: 200 })
-      .withMessage('La dirección debe tener entre 5 y 200 caracteres'),
-    body('country')
-      .optional()
-      .isLength({ min: 2, max: 2 })
-      .withMessage('Código de país debe tener 2 caracteres'),
-    body('region')
-      .optional()
-      .isLength({ min: 1, max: 100 })
-      .withMessage('Región debe tener entre 1 y 100 caracteres')
-  ],
-  validateRequest,
-  async (req: Request, res: Response, next: NextFunction) => {
-    try {
-      const { address, country = 'MX', region } = req.body;
-      const userId = req.user?.id;
+  createRateLimit(EndpointType.EXTERNAL_API),
+  validationMiddleware('search'),
+  (req: Request, res: Response) => {
+    const { address, country = 'MX', region } = req.body;
 
-      const geocodeResult = await MapsController.geocodeAddress({
-        address,
-        country,
-        region,
-        userId
-      });
+    // Simulación de geocodificación para Tabasco
+    const geocodeResult = {
+      query: address,
+      results: [
+        {
+          formatted_address: `${address}, Villahermosa, Tabasco, México`,
+          coordinates: {
+            latitude: 17.9869 + (Math.random() - 0.5) * 0.01,
+            longitude: -92.9303 + (Math.random() - 0.5) * 0.01
+          },
+          accuracy: 'APPROXIMATE',
+          place_type: 'address',
+          components: {
+            street: address,
+            city: 'Villahermosa',
+            state: 'Tabasco',
+            country: 'México',
+            postal_code: '86000'
+          }
+        }
+      ],
+      status: 'OK'
+    };
 
-      res.json({
-        success: true,
-        data: geocodeResult,
-        message: 'Geocodificación completada exitosamente'
-      });
-    } catch (error) {
-      next(error);
-    }
+    res.json({
+      success: true,
+      data: geocodeResult,
+      message: 'Geocodificación completada exitosamente'
+    });
   }
 );
 
@@ -1060,93 +835,85 @@ router.post('/geocode',
  * Geocodificación inversa: coordenadas a dirección
  */
 router.post('/reverse-geocode',
-  authenticateToken,
-  rateLimitByUserId(50, 15), // 50 requests per 15 minutes
+  createRateLimit(EndpointType.EXTERNAL_API),
   validateCoordinates,
-  validateRequest,
-  async (req: Request, res: Response, next: NextFunction) => {
-    try {
-      const { latitude, longitude } = req.body;
-      const userId = req.user?.id;
+  validationMiddleware('search'),
+  (req: Request, res: Response) => {
+    const { latitude, longitude } = req.body;
 
-      const reverseResult = await MapsController.reverseGeocode({
-        latitude,
-        longitude,
-        userId
-      });
+    const reverseResult = {
+      coordinates: { latitude, longitude },
+      results: [
+        {
+          formatted_address: 'Carretera Villahermosa-Frontera Km 15, Ranchería San José, Villahermosa, Tabasco, México',
+          place_type: 'premise',
+          components: {
+            name: 'Rancho San José',
+            street: 'Carretera Villahermosa-Frontera',
+            locality: 'Ranchería San José',
+            city: 'Villahermosa',
+            state: 'Tabasco',
+            country: 'México',
+            postal_code: '86280'
+          },
+          accuracy: 'ROOFTOP'
+        }
+      ],
+      status: 'OK'
+    };
 
-      res.json({
-        success: true,
-        data: reverseResult,
-        message: 'Geocodificación inversa completada exitosamente'
-      });
-    } catch (error) {
-      next(error);
-    }
+    res.json({
+      success: true,
+      data: reverseResult,
+      message: 'Geocodificación inversa completada exitosamente'
+    });
   }
 );
 
 // ===================================================================
-// RUTAS DE EXPORTACIÓN Y REPORTES DE MAPAS
+// MANEJO DE ERRORES ESPECÍFICOS
 // ===================================================================
 
-/**
- * GET /api/maps/export-data
- * Exporta datos geográficos en diferentes formatos
- */
-router.get('/export-data',
-  authenticateToken,
-  authorizeRoles(['admin', 'ranch_manager']),
-  query('format')
-    .isIn(['geojson', 'kml', 'csv', 'gpx'])
-    .withMessage('Formato de exportación inválido'),
-  query('dataType')
-    .isIn(['cattle_locations', 'geofences', 'vaccination_sites', 'illness_sites'])
-    .withMessage('Tipo de datos inválido'),
-  validateDateRange,
-  validateRequest,
-  auditLog('maps.export_data'),
-  async (req: Request, res: Response, next: NextFunction) => {
-    try {
-      const {
-        format, dataType,
-        startDate, endDate
-      } = req.query;
+router.use((error: any, req: Request, res: Response, next: NextFunction) => {
+  console.error('Maps Route Error:', {
+    path: req.path,
+    method: req.method,
+    userId: req.user?.id,
+    error: error.message,
+    stack: error.stack,
+    timestamp: new Date().toISOString()
+  });
 
-      const userId = req.user?.id;
-
-      const exportData = await MapsController.exportGeoData({
-        format: format as string,
-        dataType: dataType as string,
-        startDate: startDate ? new Date(startDate as string) : undefined,
-        endDate: endDate ? new Date(endDate as string) : undefined,
-        userId
-      });
-
-      // Configurar headers apropiados según el formato
-      const contentTypes = {
-        geojson: 'application/geo+json',
-        kml: 'application/vnd.google-earth.kml+xml',
-        csv: 'text/csv',
-        gpx: 'application/gpx+xml'
-      };
-
-      res.setHeader('Content-Type', contentTypes[format as keyof typeof contentTypes]);
-      res.setHeader('Content-Disposition', `attachment; filename="geo_data.${format}"`);
-
-      if (format === 'csv') {
-        res.send(exportData);
-      } else {
-        res.json(exportData);
-      }
-    } catch (error) {
-      next(error);
-    }
+  if (error.name === 'ValidationError') {
+    return res.status(400).json({
+      success: false,
+      message: 'Error de validación en datos geográficos',
+      error: 'MAPS_VALIDATION_ERROR'
+    });
   }
-);
 
-// ===================================================================
-// EXPORTAR ROUTER
-// ===================================================================
+  if (error.name === 'GeofenceError') {
+    return res.status(400).json({
+      success: false,
+      message: 'Error en configuración de geocerca',
+      error: 'GEOFENCE_ERROR'
+    });
+  }
+
+  if (error.name === 'LocationError') {
+    return res.status(400).json({
+      success: false,
+      message: 'Error en datos de ubicación',
+      error: 'LOCATION_ERROR'
+    });
+  }
+
+  // Error genérico
+  return res.status(500).json({
+    success: false,
+    message: 'Error interno del servidor de mapas',
+    error: 'MAPS_INTERNAL_ERROR'
+  });
+});
 
 export default router;

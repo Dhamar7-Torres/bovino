@@ -1,1336 +1,1523 @@
-import { Router, Request, Response } from 'express';
-import { FinancesController } from '../controllers/finances.controller';
-import { authMiddleware } from '../middleware/auth.middleware';
-import { validationMiddleware } from '../middleware/validation.middleware';
-import { rateLimitMiddleware } from '../middleware/rateLimit.middleware';
-import { roleMiddleware } from '../middleware/role.middleware';
-import { uploadMiddleware } from '../middleware/upload.middleware';
-import { accountingMiddleware } from '../middleware/accounting.middleware';
-import { taxCalculationMiddleware } from '../middleware/taxCalculation.middleware';
-import { auditTrailMiddleware } from '../middleware/auditTrail.middleware';
-import { budgetControlMiddleware } from '../middleware/budgetControl.middleware';
-import { exchangeRateMiddleware } from '../middleware/exchangeRate.middleware';
-import {
-  createTransactionValidationRules,
-  updateTransactionValidationRules,
-  transactionSearchValidationRules,
-  financialReportValidationRules,
-  budgetValidationRules,
-  invoiceValidationRules,
-  paymentValidationRules,
-  assetValidationRules,
-  depreciationValidationRules,
-  cashFlowValidationRules,
-  profitLossValidationRules,
-  roiAnalysisValidationRules,
-  costCenterValidationRules,
-  bankReconciliationValidationRules,
-  taxReportValidationRules
-} from '../validators/finances.validators';
+import { Router, Request, Response, NextFunction } from 'express';
+import { 
+  authenticateToken, 
+  authorizeRoles, 
+  checkPermission, 
+  requireActiveSubscription,
+  UserRole 
+} from '../middleware/auth';
+import { validate, sanitizeInput, validateId } from '../middleware/validation';
+import { createRateLimit, EndpointType } from '../middleware/rate-limit';
+import { 
+  requireMinimumRole, 
+  requireExactRoles, 
+  requireModulePermission,
+  requireVeterinaryAccess,
+  requireFinancialAccess,
+  requireUserManagementAccess 
+} from '../middleware/role';
+import { createUploadMiddleware, processUploadedFiles, handleUploadErrors, FileCategory } from '../middleware/upload';
 
 // Crear instancia del router
 const router = Router();
 
-// Crear instancia del controlador de finanzas
+// Upload middleware específico para documentos financieros
+const financialUpload = createUploadMiddleware(FileCategory.FINANCIAL_DOCS);
+
+// Simulación del controlador de finanzas (reemplazar con implementación real)
+class FinancesController {
+  async getTransactions(req: Request, res: Response): Promise<void> {
+    try {
+      res.json({
+        success: true,
+        data: {
+          message: 'Transacciones financieras',
+          page: req.query.page || '1',
+          limit: req.query.limit || '50',
+          type: req.query.type,
+          category: req.query.category,
+          status: req.query.status,
+          dateFrom: req.query.dateFrom,
+          dateTo: req.query.dateTo,
+          bovineId: req.query.bovineId,
+          vendorId: req.query.vendorId,
+          sortBy: req.query.sortBy || 'date',
+          sortOrder: req.query.sortOrder || 'desc',
+          includeAttachments: req.query.includeAttachments === 'true'
+        }
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        error: 'Error al obtener transacciones'
+      });
+    }
+  }
+
+  async createTransaction(req: Request, res: Response): Promise<void> {
+    try {
+      res.json({
+        success: true,
+        data: {
+          message: 'Transacción creada',
+          type: req.body.type,
+          category: req.body.category,
+          amount: req.body.amount,
+          description: req.body.description,
+          date: req.body.date,
+          bovineIds: req.body.bovineIds,
+          vendorId: req.body.vendorId,
+          paymentMethod: req.body.paymentMethod,
+          reference: req.body.reference,
+          files: (req as any).processedFiles?.length || 0
+        }
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        error: 'Error al crear transacción'
+      });
+    }
+  }
+
+  async getTransactionById(req: Request, res: Response): Promise<void> {
+    try {
+      res.json({
+        success: true,
+        data: {
+          message: 'Detalles de transacción',
+          id: req.params.id,
+          includeAttachments: req.query.includeAttachments === 'true',
+          includeAuditTrail: req.query.includeAuditTrail === 'true',
+          includeRelatedTransactions: req.query.includeRelatedTransactions === 'true'
+        }
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        error: 'Error al obtener detalles de transacción'
+      });
+    }
+  }
+
+  async updateTransaction(req: Request, res: Response): Promise<void> {
+    try {
+      res.json({
+        success: true,
+        data: {
+          message: 'Transacción actualizada',
+          id: req.params.id,
+          updates: req.body,
+          files: (req as any).processedFiles?.length || 0
+        }
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        error: 'Error al actualizar transacción'
+      });
+    }
+  }
+
+  async deleteTransaction(req: Request, res: Response): Promise<void> {
+    try {
+      res.json({
+        success: true,
+        data: {
+          message: 'Transacción eliminada',
+          id: req.params.id,
+          reason: req.body.reason,
+          approvedBy: req.body.approvedBy,
+          requiresAudit: req.body.requiresAudit
+        }
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        error: 'Error al eliminar transacción'
+      });
+    }
+  }
+
+  async getIncomeOverview(req: Request, res: Response): Promise<void> {
+    try {
+      res.json({
+        success: true,
+        data: {
+          message: 'Resumen de ingresos',
+          period: req.query.period || 'month',
+          groupBy: req.query.groupBy,
+          includeProjections: req.query.includeProjections === 'true',
+          compareWithPrevious: req.query.compareWithPrevious === 'true'
+        }
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        error: 'Error al obtener resumen de ingresos'
+      });
+    }
+  }
+
+  async recordSale(req: Request, res: Response): Promise<void> {
+    try {
+      res.json({
+        success: true,
+        data: {
+          message: 'Venta registrada',
+          bovineIds: req.body.bovineIds,
+          saleType: req.body.saleType,
+          buyer: req.body.buyer,
+          unitPrice: req.body.unitPrice,
+          totalAmount: req.body.totalAmount,
+          saleDate: req.body.saleDate,
+          paymentTerms: req.body.paymentTerms,
+          deliveryInfo: req.body.deliveryInfo,
+          files: (req as any).processedFiles?.length || 0
+        }
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        error: 'Error al registrar venta'
+      });
+    }
+  }
+
+  async getIncomeProjections(req: Request, res: Response): Promise<void> {
+    try {
+      res.json({
+        success: true,
+        data: {
+          message: 'Proyecciones de ingresos',
+          horizon: req.query.horizon || '12m',
+          includeSeasonality: req.query.includeSeasonality === 'true',
+          confidenceLevel: req.query.confidenceLevel || '0.95',
+          scenarios: req.query.scenarios
+        }
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        error: 'Error al obtener proyecciones de ingresos'
+      });
+    }
+  }
+
+  async getIncomeByAnimal(req: Request, res: Response): Promise<void> {
+    try {
+      res.json({
+        success: true,
+        data: {
+          message: 'Ingresos por animal',
+          includeOperatingCosts: req.query.includeOperatingCosts === 'true',
+          includeProfitability: req.query.includeProfitability === 'true',
+          period: req.query.period || 'lifetime',
+          sortBy: req.query.sortBy || 'roi'
+        }
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        error: 'Error al obtener ingresos por animal'
+      });
+    }
+  }
+
+  async getExpenseOverview(req: Request, res: Response): Promise<void> {
+    try {
+      res.json({
+        success: true,
+        data: {
+          message: 'Resumen de gastos',
+          period: req.query.period || 'month',
+          category: req.query.category || 'all',
+          includeRecurring: req.query.includeRecurring === 'true',
+          includeBudgetComparison: req.query.includeBudgetComparison === 'true',
+          sortBy: req.query.sortBy || 'amount'
+        }
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        error: 'Error al obtener resumen de gastos'
+      });
+    }
+  }
+
+  async recordPurchase(req: Request, res: Response): Promise<void> {
+    try {
+      res.json({
+        success: true,
+        data: {
+          message: 'Compra registrada',
+          category: req.body.category,
+          items: req.body.items,
+          vendor: req.body.vendor,
+          totalAmount: req.body.totalAmount,
+          purchaseDate: req.body.purchaseDate,
+          paymentMethod: req.body.paymentMethod,
+          deliveryDate: req.body.deliveryDate,
+          warrantyInfo: req.body.warrantyInfo,
+          files: (req as any).processedFiles?.length || 0
+        }
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        error: 'Error al registrar compra'
+      });
+    }
+  }
+
+  async getRecurringExpenses(req: Request, res: Response): Promise<void> {
+    try {
+      res.json({
+        success: true,
+        data: {
+          message: 'Gastos recurrentes',
+          status: req.query.status || 'active',
+          category: req.query.category || 'all',
+          includeUpcoming: req.query.includeUpcoming === 'true',
+          daysAhead: req.query.daysAhead || '30'
+        }
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        error: 'Error al obtener gastos recurrentes'
+      });
+    }
+  }
+
+  async createRecurringExpense(req: Request, res: Response): Promise<void> {
+    try {
+      res.json({
+        success: true,
+        data: {
+          message: 'Gasto recurrente creado',
+          category: req.body.category,
+          amount: req.body.amount,
+          frequency: req.body.frequency,
+          startDate: req.body.startDate,
+          endDate: req.body.endDate,
+          vendor: req.body.vendor,
+          autoProcess: req.body.autoProcess,
+          alertDays: req.body.alertDays
+        }
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        error: 'Error al crear gasto recurrente'
+      });
+    }
+  }
+
+  async analyzeExpensePatterns(req: Request, res: Response): Promise<void> {
+    try {
+      res.json({
+        success: true,
+        data: {
+          message: 'Análisis de patrones de gastos',
+          analysisType: req.query.analysisType || 'variance',
+          period: req.query.period || 'quarter',
+          includeRecommendations: req.query.includeRecommendations === 'true',
+          compareWithBudget: req.query.compareWithBudget === 'true'
+        }
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        error: 'Error al analizar patrones de gastos'
+      });
+    }
+  }
+
+  async getCashFlow(req: Request, res: Response): Promise<void> {
+    try {
+      res.json({
+        success: true,
+        data: {
+          message: 'Flujo de caja',
+          period: req.query.period || 'month',
+          includeProjections: req.query.includeProjections === 'true',
+          includeOperatingActivities: req.query.includeOperatingActivities === 'true',
+          includeInvestingActivities: req.query.includeInvestingActivities === 'true',
+          includeFinancingActivities: req.query.includeFinancingActivities === 'true'
+        }
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        error: 'Error al obtener flujo de caja'
+      });
+    }
+  }
+
+  async generateCashFlowProjection(req: Request, res: Response): Promise<void> {
+    try {
+      res.json({
+        success: true,
+        data: {
+          message: 'Proyección de flujo de caja generada',
+          projectionPeriod: req.body.projectionPeriod,
+          scenarios: req.body.scenarios,
+          includeSeasonality: req.body.includeSeasonality,
+          assumptions: req.body.assumptions,
+          sensitivityAnalysis: req.body.sensitivityAnalysis
+        }
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        error: 'Error al generar proyección de flujo de caja'
+      });
+    }
+  }
+
+  async getCashFlowAlerts(req: Request, res: Response): Promise<void> {
+    try {
+      res.json({
+        success: true,
+        data: {
+          message: 'Alertas de flujo de caja',
+          severity: req.query.severity || 'all',
+          includeRecommendations: req.query.includeRecommendations === 'true',
+          lookaheadDays: req.query.lookaheadDays || '30'
+        }
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        error: 'Error al obtener alertas de flujo de caja'
+      });
+    }
+  }
+
+  async optimizeCashFlow(req: Request, res: Response): Promise<void> {
+    try {
+      res.json({
+        success: true,
+        data: {
+          message: 'Optimización de flujo de caja',
+          optimizationGoals: req.body.optimizationGoals,
+          constraints: req.body.constraints,
+          timeHorizon: req.body.timeHorizon,
+          riskTolerance: req.body.riskTolerance
+        }
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        error: 'Error al optimizar flujo de caja'
+      });
+    }
+  }
+
+  async getProfitLoss(req: Request, res: Response): Promise<void> {
+    try {
+      res.json({
+        success: true,
+        data: {
+          message: 'Estado de resultados (P&L)',
+          period: req.query.period || 'quarter',
+          includeComparisons: req.query.includeComparisons === 'true',
+          includeMargins: req.query.includeMargins === 'true',
+          includeSegmentation: req.query.includeSegmentation === 'true',
+          format: req.query.format || 'detailed'
+        }
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        error: 'Error al generar estado de resultados'
+      });
+    }
+  }
+
+  async getSegmentedProfitLoss(req: Request, res: Response): Promise<void> {
+    try {
+      res.json({
+        success: true,
+        data: {
+          message: 'P&L segmentado',
+          segmentBy: req.query.segmentBy || 'cattle_type',
+          period: req.query.period || 'year',
+          includeAllocations: req.query.includeAllocations === 'true',
+          allocationMethod: req.query.allocationMethod || 'activity_based'
+        }
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        error: 'Error al generar P&L segmentado'
+      });
+    }
+  }
+
+  async analyzeProfitLossVariance(req: Request, res: Response): Promise<void> {
+    try {
+      res.json({
+        success: true,
+        data: {
+          message: 'Análisis de variaciones en P&L',
+          comparisonType: req.body.comparisonType,
+          baselinePeriod: req.body.baselinePeriod,
+          analysisLevel: req.body.analysisLevel,
+          includeExplanations: req.body.includeExplanations
+        }
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        error: 'Error al analizar variaciones de P&L'
+      });
+    }
+  }
+
+  async getROIAnalysis(req: Request, res: Response): Promise<void> {
+    try {
+      res.json({
+        success: true,
+        data: {
+          message: 'Análisis de ROI',
+          analysisType: req.query.analysisType || 'by_animal',
+          period: req.query.period || 'lifetime',
+          includeIRR: req.query.includeIRR === 'true',
+          includeNPV: req.query.includeNPV === 'true',
+          discountRate: req.query.discountRate || '0.08'
+        }
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        error: 'Error al obtener análisis de ROI'
+      });
+    }
+  }
+
+  async evaluateInvestment(req: Request, res: Response): Promise<void> {
+    try {
+      res.json({
+        success: true,
+        data: {
+          message: 'Evaluación de inversión',
+          investmentType: req.body.investmentType,
+          initialCost: req.body.initialCost,
+          projectedReturns: req.body.projectedReturns,
+          riskAssessment: req.body.riskAssessment,
+          paybackPeriod: req.body.paybackPeriod,
+          scenarioAnalysis: req.body.scenarioAnalysis
+        }
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        error: 'Error al evaluar inversión'
+      });
+    }
+  }
+
+  async getProfitabilityBenchmarks(req: Request, res: Response): Promise<void> {
+    try {
+      res.json({
+        success: true,
+        data: {
+          message: 'Benchmarks de rentabilidad',
+          region: req.query.region || 'mexico',
+          herdSize: req.query.herdSize || 'similar',
+          productionType: req.query.productionType || 'mixed',
+          includePercentiles: req.query.includePercentiles === 'true'
+        }
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        error: 'Error al obtener benchmarks de rentabilidad'
+      });
+    }
+  }
+
+  async analyzeProfitabilityTrends(req: Request, res: Response): Promise<void> {
+    try {
+      res.json({
+        success: true,
+        data: {
+          message: 'Análisis de tendencias de rentabilidad',
+          period: req.query.period || '5y',
+          includeDrivers: req.query.includeDrivers === 'true',
+          includePredictions: req.query.includePredictions === 'true',
+          confidence: req.query.confidence || '0.95'
+        }
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        error: 'Error al analizar tendencias de rentabilidad'
+      });
+    }
+  }
+
+  async getBudgets(req: Request, res: Response): Promise<void> {
+    try {
+      res.json({
+        success: true,
+        data: {
+          message: 'Presupuestos',
+          period: req.query.period || 'year',
+          includeVariances: req.query.includeVariances === 'true',
+          includeRevisedBudgets: req.query.includeRevisedBudgets === 'true',
+          detailLevel: req.query.detailLevel || 'category'
+        }
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        error: 'Error al obtener presupuestos'
+      });
+    }
+  }
+
+  async createBudget(req: Request, res: Response): Promise<void> {
+    try {
+      res.json({
+        success: true,
+        data: {
+          message: 'Presupuesto creado',
+          name: req.body.name,
+          period: req.body.period,
+          categories: req.body.categories,
+          assumptions: req.body.assumptions,
+          approvalWorkflow: req.body.approvalWorkflow,
+          basedOnHistorical: req.body.basedOnHistorical
+        }
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        error: 'Error al crear presupuesto'
+      });
+    }
+  }
+
+  async updateBudget(req: Request, res: Response): Promise<void> {
+    try {
+      res.json({
+        success: true,
+        data: {
+          message: 'Presupuesto actualizado',
+          id: req.params.id,
+          updates: req.body
+        }
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        error: 'Error al actualizar presupuesto'
+      });
+    }
+  }
+
+  async getBudgetVarianceAnalysis(req: Request, res: Response): Promise<void> {
+    try {
+      res.json({
+        success: true,
+        data: {
+          message: 'Análisis de variaciones presupuestarias',
+          id: req.params.id,
+          period: req.query.period || 'current',
+          includeRecommendations: req.query.includeRecommendations === 'true',
+          varianceThreshold: req.query.varianceThreshold || '5'
+        }
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        error: 'Error al obtener análisis de variaciones presupuestarias'
+      });
+    }
+  }
+
+  async reviseBudget(req: Request, res: Response): Promise<void> {
+    try {
+      res.json({
+        success: true,
+        data: {
+          message: 'Revisión de presupuesto creada',
+          id: req.params.id,
+          revisionReason: req.body.revisionReason,
+          adjustments: req.body.adjustments,
+          effectiveDate: req.body.effectiveDate,
+          approvalRequired: req.body.approvalRequired
+        }
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        error: 'Error al crear revisión de presupuesto'
+      });
+    }
+  }
+
+  async getAssets(req: Request, res: Response): Promise<void> {
+    try {
+      res.json({
+        success: true,
+        data: {
+          message: 'Activos fijos',
+          category: req.query.category || 'equipment',
+          includeDepreciation: req.query.includeDepreciation === 'true',
+          status: req.query.status || 'active',
+          sortBy: req.query.sortBy || 'purchase_date'
+        }
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        error: 'Error al obtener activos'
+      });
+    }
+  }
+
+  async registerAsset(req: Request, res: Response): Promise<void> {
+    try {
+      res.json({
+        success: true,
+        data: {
+          message: 'Activo registrado',
+          name: req.body.name,
+          category: req.body.category,
+          purchasePrice: req.body.purchasePrice,
+          purchaseDate: req.body.purchaseDate,
+          usefulLife: req.body.usefulLife,
+          depreciationMethod: req.body.depreciationMethod,
+          location: req.body.location,
+          serialNumber: req.body.serialNumber,
+          files: (req as any).processedFiles?.length || 0
+        }
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        error: 'Error al registrar activo'
+      });
+    }
+  }
+
+  async updateAsset(req: Request, res: Response): Promise<void> {
+    try {
+      res.json({
+        success: true,
+        data: {
+          message: 'Activo actualizado',
+          id: req.params.id,
+          updates: req.body
+        }
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        error: 'Error al actualizar activo'
+      });
+    }
+  }
+
+  async calculateDepreciation(req: Request, res: Response): Promise<void> {
+    try {
+      res.json({
+        success: true,
+        data: {
+          message: 'Depreciación calculada',
+          calculationDate: req.body.calculationDate,
+          method: req.body.method,
+          includeDisposals: req.body.includeDisposals,
+          generateEntries: req.body.generateEntries
+        }
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        error: 'Error al calcular depreciación'
+      });
+    }
+  }
+
+  async getAssetDepreciationSchedule(req: Request, res: Response): Promise<void> {
+    try {
+      res.json({
+        success: true,
+        data: {
+          message: 'Calendario de depreciación',
+          id: req.params.id
+        }
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        error: 'Error al obtener calendario de depreciación'
+      });
+    }
+  }
+
+  async disposeAsset(req: Request, res: Response): Promise<void> {
+    try {
+      res.json({
+        success: true,
+        data: {
+          message: 'Activo dado de baja',
+          id: req.params.id,
+          disposalType: req.body.disposalType,
+          disposalDate: req.body.disposalDate,
+          disposalAmount: req.body.disposalAmount,
+          reason: req.body.reason,
+          buyer: req.body.buyer
+        }
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        error: 'Error al dar de baja activo'
+      });
+    }
+  }
+
+  async getInvoices(req: Request, res: Response): Promise<void> {
+    try {
+      res.json({
+        success: true,
+        data: {
+          message: 'Facturas',
+          type: req.query.type || 'issued',
+          status: req.query.status || 'pending',
+          dateFrom: req.query.dateFrom,
+          includePayments: req.query.includePayments === 'true'
+        }
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        error: 'Error al obtener facturas'
+      });
+    }
+  }
+
+  async createInvoice(req: Request, res: Response): Promise<void> {
+    try {
+      res.json({
+        success: true,
+        data: {
+          message: 'Factura creada',
+          customer: req.body.customer,
+          items: req.body.items,
+          dueDate: req.body.dueDate,
+          paymentTerms: req.body.paymentTerms,
+          taxCalculation: req.body.taxCalculation,
+          invoiceNumber: req.body.invoiceNumber
+        }
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        error: 'Error al crear factura'
+      });
+    }
+  }
+
+  async updateInvoice(req: Request, res: Response): Promise<void> {
+    try {
+      res.json({
+        success: true,
+        data: {
+          message: 'Factura actualizada',
+          id: req.params.id,
+          updates: req.body
+        }
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        error: 'Error al actualizar factura'
+      });
+    }
+  }
+
+  async recordInvoicePayment(req: Request, res: Response): Promise<void> {
+    try {
+      res.json({
+        success: true,
+        data: {
+          message: 'Pago de factura registrado',
+          id: req.params.id,
+          amount: req.body.amount,
+          paymentDate: req.body.paymentDate,
+          paymentMethod: req.body.paymentMethod,
+          reference: req.body.reference,
+          bankAccount: req.body.bankAccount,
+          files: (req as any).processedFiles?.length || 0
+        }
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        error: 'Error al registrar pago de factura'
+      });
+    }
+  }
+
+  async generateInvoicePDF(req: Request, res: Response): Promise<void> {
+    try {
+      res.json({
+        success: true,
+        data: {
+          message: 'PDF de factura generado',
+          id: req.params.id,
+          template: req.query.template || 'standard',
+          language: req.query.language || 'es',
+          includeQR: req.query.includeQR === 'true'
+        }
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        error: 'Error al generar PDF de factura'
+      });
+    }
+  }
+
+  async sendInvoice(req: Request, res: Response): Promise<void> {
+    try {
+      res.json({
+        success: true,
+        data: {
+          message: 'Factura enviada',
+          id: req.params.id,
+          recipients: req.body.recipients,
+          subject: req.body.subject,
+          emailMessage: req.body.message,
+          includeAttachments: req.body.includeAttachments
+        }
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        error: 'Error al enviar factura'
+      });
+    }
+  }
+
+  async getCostCenters(req: Request, res: Response): Promise<void> {
+    try {
+      res.json({
+        success: true,
+        data: {
+          message: 'Centros de costos',
+          includeAllocations: req.query.includeAllocations === 'true',
+          period: req.query.period || 'month',
+          activeOnly: req.query.activeOnly === 'true'
+        }
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        error: 'Error al obtener centros de costos'
+      });
+    }
+  }
+
+  async createCostCenter(req: Request, res: Response): Promise<void> {
+    try {
+      res.json({
+        success: true,
+        data: {
+          message: 'Centro de costos creado',
+          name: req.body.name,
+          code: req.body.code,
+          description: req.body.description,
+          manager: req.body.manager,
+          allocationMethod: req.body.allocationMethod,
+          budgetAmount: req.body.budgetAmount
+        }
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        error: 'Error al crear centro de costos'
+      });
+    }
+  }
+
+  async allocateCosts(req: Request, res: Response): Promise<void> {
+    try {
+      res.json({
+        success: true,
+        data: {
+          message: 'Costos asignados',
+          period: req.body.period,
+          allocations: req.body.allocations,
+          allocationMethod: req.body.allocationMethod,
+          basis: req.body.basis
+        }
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        error: 'Error al asignar costos'
+      });
+    }
+  }
+
+  async analyzeCostCenter(req: Request, res: Response): Promise<void> {
+    try {
+      res.json({
+        success: true,
+        data: {
+          message: 'Análisis de centro de costos',
+          id: req.params.id,
+          period: req.query.period || 'quarter',
+          includeVariances: req.query.includeVariances === 'true',
+          includeDrivers: req.query.includeDrivers === 'true'
+        }
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        error: 'Error al analizar centro de costos'
+      });
+    }
+  }
+
+  async getBankReconciliations(req: Request, res: Response): Promise<void> {
+    try {
+      res.json({
+        success: true,
+        data: {
+          message: 'Conciliaciones bancarias',
+          account: req.query.account || 'all',
+          status: req.query.status || 'pending',
+          period: req.query.period || 'month',
+          includeUnmatched: req.query.includeUnmatched === 'true'
+        }
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        error: 'Error al obtener conciliaciones bancarias'
+      });
+    }
+  }
+
+  async startBankReconciliation(req: Request, res: Response): Promise<void> {
+    try {
+      res.json({
+        success: true,
+        data: {
+          message: 'Conciliación bancaria iniciada',
+          bankAccount: req.body.bankAccount,
+          statementDate: req.body.statementDate,
+          endingBalance: req.body.endingBalance,
+          autoMatch: req.body.autoMatch,
+          files: req.file ? 1 : 0
+        }
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        error: 'Error al iniciar conciliación bancaria'
+      });
+    }
+  }
+
+  async matchBankTransactions(req: Request, res: Response): Promise<void> {
+    try {
+      res.json({
+        success: true,
+        data: {
+          message: 'Transacciones bancarias emparejadas',
+          id: req.params.id,
+          matches: req.body.matches,
+          unmatchedItems: req.body.unmatchedItems,
+          adjustments: req.body.adjustments
+        }
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        error: 'Error al emparejar transacciones bancarias'
+      });
+    }
+  }
+
+  async finalizeReconciliation(req: Request, res: Response): Promise<void> {
+    try {
+      res.json({
+        success: true,
+        data: {
+          message: 'Conciliación bancaria finalizada',
+          id: req.params.id,
+          finalBalance: req.body.finalBalance,
+          adjustmentEntries: req.body.adjustmentEntries,
+          approvedBy: req.body.approvedBy
+        }
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        error: 'Error al finalizar conciliación'
+      });
+    }
+  }
+
+  async generateFinancialReport(req: Request, res: Response): Promise<void> {
+    try {
+      res.json({
+        success: true,
+        data: {
+          message: 'Reporte financiero generado',
+          reportType: req.body.reportType,
+          period: req.body.period,
+          parameters: req.body.parameters,
+          format: req.body.format,
+          includeCharts: req.body.includeCharts,
+          emailTo: req.body.emailTo
+        }
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        error: 'Error al generar reporte financiero'
+      });
+    }
+  }
+
+  async downloadFinancialReport(req: Request, res: Response): Promise<void> {
+    try {
+      res.json({
+        success: true,
+        data: {
+          message: 'Descarga de reporte financiero',
+          id: req.params.id
+        }
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        error: 'Error al descargar reporte financiero'
+      });
+    }
+  }
+
+  async generateTaxReport(req: Request, res: Response): Promise<void> {
+    try {
+      res.json({
+        success: true,
+        data: {
+          message: 'Reporte fiscal generado',
+          taxPeriod: req.body.taxPeriod,
+          reportType: req.body.reportType,
+          taxAuthority: req.body.taxAuthority,
+          includeSupporting: req.body.includeSupporting
+        }
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        error: 'Error al generar reporte fiscal'
+      });
+    }
+  }
+
+  async getScheduledReports(req: Request, res: Response): Promise<void> {
+    try {
+      res.json({
+        success: true,
+        data: {
+          message: 'Reportes programados',
+          status: req.query.status || 'active',
+          frequency: req.query.frequency || 'monthly',
+          includeNext: req.query.includeNext === 'true'
+        }
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        error: 'Error al obtener reportes programados'
+      });
+    }
+  }
+
+  async scheduleReport(req: Request, res: Response): Promise<void> {
+    try {
+      res.json({
+        success: true,
+        data: {
+          message: 'Reporte programado',
+          reportConfig: req.body.reportConfig,
+          frequency: req.body.frequency,
+          recipients: req.body.recipients,
+          startDate: req.body.startDate,
+          endDate: req.body.endDate
+        }
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        error: 'Error al programar reporte'
+      });
+    }
+  }
+
+  async getFinancialDashboard(req: Request, res: Response): Promise<void> {
+    try {
+      res.json({
+        success: true,
+        data: {
+          message: 'Dashboard financiero',
+          period: req.query.period || 'month',
+          includeComparisons: req.query.includeComparisons === 'true',
+          includeProjections: req.query.includeProjections === 'true',
+          kpis: req.query.kpis || 'revenue,profit,cashflow,roi'
+        }
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        error: 'Error al cargar dashboard financiero'
+      });
+    }
+  }
+
+  async getFinancialKPIs(req: Request, res: Response): Promise<void> {
+    try {
+      res.json({
+        success: true,
+        data: {
+          message: 'KPIs financieros',
+          period: req.query.period || 'quarter',
+          includeTargets: req.query.includeTargets === 'true',
+          includeBenchmarks: req.query.includeBenchmarks === 'true',
+          format: req.query.format || 'detailed'
+        }
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        error: 'Error al obtener KPIs financieros'
+      });
+    }
+  }
+
+  async getFinancialAlerts(req: Request, res: Response): Promise<void> {
+    try {
+      res.json({
+        success: true,
+        data: {
+          message: 'Alertas financieras',
+          severity: req.query.severity || 'high',
+          category: req.query.category || 'all',
+          includeRecommendations: req.query.includeRecommendations === 'true',
+          activeOnly: req.query.activeOnly === 'true'
+        }
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        error: 'Error al obtener alertas financieras'
+      });
+    }
+  }
+
+  async getFinancialSettings(req: Request, res: Response): Promise<void> {
+    try {
+      res.json({
+        success: true,
+        data: {
+          message: 'Configuración del sistema financiero',
+          userId: (req as any).userId
+        }
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        error: 'Error al obtener configuración financiera'
+      });
+    }
+  }
+
+  async updateFinancialSettings(req: Request, res: Response): Promise<void> {
+    try {
+      res.json({
+        success: true,
+        data: {
+          message: 'Configuración financiera actualizada',
+          currency: req.body.currency,
+          fiscalYearStart: req.body.fiscalYearStart,
+          taxSettings: req.body.taxSettings,
+          accountingMethod: req.body.accountingMethod,
+          depreciationDefaults: req.body.depreciationDefaults
+        }
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        error: 'Error al actualizar configuración financiera'
+      });
+    }
+  }
+
+  async exportFinancialData(req: Request, res: Response): Promise<void> {
+    try {
+      res.json({
+        success: true,
+        data: {
+          message: 'Datos financieros exportados',
+          exportType: req.body.exportType,
+          format: req.body.format,
+          period: req.body.period,
+          categories: req.body.categories,
+          includeTransactions: req.body.includeTransactions
+        }
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        error: 'Error al exportar datos financieros'
+      });
+    }
+  }
+
+  async downloadFinancialExport(req: Request, res: Response): Promise<void> {
+    try {
+      res.json({
+        success: true,
+        data: {
+          message: 'Descarga de exportación financiera',
+          exportId: req.params.exportId
+        }
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        error: 'Error al descargar exportación financiera'
+      });
+    }
+  }
+}
+
 const financesController = new FinancesController();
 
-// ============================================================================
-// MIDDLEWARE GLOBAL PARA TODAS LAS RUTAS FINANCIERAS
-// ============================================================================
-
-// Todas las rutas financieras requieren autenticación
-router.use(authMiddleware);
-
-// Middleware de auditoría para todas las transacciones financieras
-router.use(auditTrailMiddleware);
-
-// ============================================================================
-// TRANSACCIONES FINANCIERAS - CRUD BÁSICO
-// ============================================================================
-
-/**
- * @route   GET /finances/transactions
- * @desc    Obtener transacciones financieras con filtros avanzados
- * @access  Private (Roles: RANCH_OWNER, ADMIN, ACCOUNTANT)
- * @query   ?page=1&limit=50&type=expense&category=veterinary&status=paid&dateFrom=2025-01-01&dateTo=2025-07-31&bovineId=123&vendorId=456&sortBy=date&sortOrder=desc&includeAttachments=true
- */
-router.get(
-  '/transactions',
-  roleMiddleware(['RANCH_OWNER', 'ADMIN', 'ACCOUNTANT']),
-  rateLimitMiddleware({ 
-    windowMs: 5 * 60 * 1000, // 5 minutos
-    max: 100, // máximo 100 consultas por usuario cada 5 minutos
-    message: 'Too many transaction requests'
-  }),
-  transactionSearchValidationRules(),
-  validationMiddleware,
-  financesController.getTransactions
-);
-
-/**
- * @route   POST /finances/transactions
- * @desc    Crear nueva transacción financiera
- * @access  Private (Roles: RANCH_OWNER, ADMIN, ACCOUNTANT, WORKER)
- * @body    { type: string, category: string, amount: number, description: string, date: string, bovineIds?: string[], vendorId?: string, paymentMethod: string, reference?: string }
- */
-router.post(
-  '/transactions',
-  roleMiddleware(['RANCH_OWNER', 'ADMIN', 'ACCOUNTANT', 'WORKER']),
-  rateLimitMiddleware({ 
-    windowMs: 10 * 60 * 1000, // 10 minutos
-    max: 50, // máximo 50 transacciones por usuario cada 10 minutos
-    message: 'Too many transaction creations'
-  }),
-  uploadMiddleware.array('receipts', 10), // recibos y facturas
-  accountingMiddleware, // aplicar reglas contables automáticamente
-  taxCalculationMiddleware, // calcular impuestos aplicables
-  budgetControlMiddleware, // verificar límites presupuestarios
-  exchangeRateMiddleware, // aplicar tipos de cambio si es necesario
-  createTransactionValidationRules(),
-  validationMiddleware,
-  financesController.createTransaction
-);
-
-/**
- * @route   GET /finances/transactions/:id
- * @desc    Obtener detalles específicos de una transacción
- * @access  Private (Roles: RANCH_OWNER, ADMIN, ACCOUNTANT)
- * @params  id: string (UUID de la transacción)
- * @query   ?includeAttachments=true&includeAuditTrail=true&includeRelatedTransactions=true
- */
-router.get(
-  '/transactions/:id',
-  roleMiddleware(['RANCH_OWNER', 'ADMIN', 'ACCOUNTANT']),
-  rateLimitMiddleware({ 
-    windowMs: 5 * 60 * 1000, // 5 minutos
-    max: 200, // máximo 200 consultas por usuario cada 5 minutos
-    message: 'Too many transaction detail requests'
-  }),
-  financesController.getTransactionById
-);
-
-/**
- * @route   PUT /finances/transactions/:id
- * @desc    Actualizar transacción existente
- * @access  Private (Roles: RANCH_OWNER, ADMIN, ACCOUNTANT)
- * @params  id: string (UUID de la transacción)
- * @body    Campos a actualizar de la transacción
- */
-router.put(
-  '/transactions/:id',
-  roleMiddleware(['RANCH_OWNER', 'ADMIN', 'ACCOUNTANT']),
-  rateLimitMiddleware({ 
-    windowMs: 15 * 60 * 1000, // 15 minutos
-    max: 30, // máximo 30 actualizaciones por usuario cada 15 minutos
-    message: 'Too many transaction update attempts'
-  }),
-  uploadMiddleware.array('receipts', 10),
-  accountingMiddleware,
-  taxCalculationMiddleware,
-  updateTransactionValidationRules(),
-  validationMiddleware,
-  financesController.updateTransaction
-);
-
-/**
- * @route   DELETE /finances/transactions/:id
- * @desc    Eliminar transacción (soft delete con justificación)
- * @access  Private (Roles: RANCH_OWNER, ADMIN)
- * @params  id: string (UUID de la transacción)
- * @body    { reason: string, approvedBy: string, requiresAudit: boolean }
- */
-router.delete(
-  '/transactions/:id',
-  roleMiddleware(['RANCH_OWNER', 'ADMIN']),
-  rateLimitMiddleware({ 
-    windowMs: 30 * 60 * 1000, // 30 minutos
-    max: 10, // máximo 10 eliminaciones por usuario cada 30 minutos
-    message: 'Too many transaction deletion attempts'
-  }),
-  financesController.deleteTransaction
-);
-
-// ============================================================================
-// INGRESOS Y VENTAS
-// ============================================================================
-
-/**
- * @route   GET /finances/income
- * @desc    Obtener resumen de ingresos por categorías
- * @access  Private (Roles: RANCH_OWNER, ADMIN, ACCOUNTANT)
- * @query   ?period=month&groupBy=category&includeProjections=true&compareWithPrevious=true
- */
-router.get(
-  '/income',
-  roleMiddleware(['RANCH_OWNER', 'ADMIN', 'ACCOUNTANT']),
-  rateLimitMiddleware({ 
-    windowMs: 10 * 60 * 1000, // 10 minutos
-    max: 40, // máximo 40 consultas de ingresos por usuario cada 10 minutos
-    message: 'Too many income requests'
-  }),
-  financesController.getIncomeOverview
-);
-
-/**
- * @route   POST /finances/income/sale
- * @desc    Registrar venta de ganado o productos
- * @access  Private (Roles: RANCH_OWNER, ADMIN, ACCOUNTANT)
- * @body    { bovineIds?: string[], saleType: string, buyer: object, unitPrice: number, totalAmount: number, saleDate: string, paymentTerms: object, deliveryInfo: object }
- */
-router.post(
-  '/income/sale',
-  roleMiddleware(['RANCH_OWNER', 'ADMIN', 'ACCOUNTANT']),
-  rateLimitMiddleware({ 
-    windowMs: 15 * 60 * 1000, // 15 minutos
-    max: 20, // máximo 20 ventas por usuario cada 15 minutos
-    message: 'Too many sale recordings'
-  }),
-  uploadMiddleware.array('saleDocuments', 15), // contratos, facturas, etc.
-  accountingMiddleware,
-  taxCalculationMiddleware,
-  financesController.recordSale
-);
-
-/**
- * @route   GET /finances/income/projections
- * @desc    Obtener proyecciones de ingresos basadas en tendencias
- * @access  Private (Roles: RANCH_OWNER, ADMIN, ACCOUNTANT)
- * @query   ?horizon=12m&includeSeasonality=true&confidenceLevel=0.95&scenarios=optimistic,realistic,pessimistic
- */
-router.get(
-  '/income/projections',
-  roleMiddleware(['RANCH_OWNER', 'ADMIN', 'ACCOUNTANT']),
-  rateLimitMiddleware({ 
-    windowMs: 20 * 60 * 1000, // 20 minutos
-    max: 15, // máximo 15 proyecciones por usuario cada 20 minutos
-    message: 'Too many projection requests'
-  }),
-  financesController.getIncomeProjections
-);
-
-/**
- * @route   GET /finances/income/by-animal
- * @desc    Análisis de ingresos por animal individual
- * @access  Private (Roles: RANCH_OWNER, ADMIN, ACCOUNTANT)
- * @query   ?includeOperatingCosts=true&includeProfitability=true&period=lifetime&sortBy=roi
- */
-router.get(
-  '/income/by-animal',
-  roleMiddleware(['RANCH_OWNER', 'ADMIN', 'ACCOUNTANT']),
-  rateLimitMiddleware({ 
-    windowMs: 15 * 60 * 1000, // 15 minutos
-    max: 25, // máximo 25 análisis por animal cada 15 minutos
-    message: 'Too many animal income analysis requests'
-  }),
-  financesController.getIncomeByAnimal
-);
-
-// ============================================================================
-// GASTOS Y COMPRAS
-// ============================================================================
-
-/**
- * @route   GET /finances/expenses
- * @desc    Obtener resumen de gastos por categorías
- * @access  Private (Roles: RANCH_OWNER, ADMIN, ACCOUNTANT)
- * @query   ?period=month&category=all&includeRecurring=true&includeBudgetComparison=true&sortBy=amount
- */
-router.get(
-  '/expenses',
-  roleMiddleware(['RANCH_OWNER', 'ADMIN', 'ACCOUNTANT']),
-  rateLimitMiddleware({ 
-    windowMs: 10 * 60 * 1000, // 10 minutos
-    max: 40, // máximo 40 consultas de gastos por usuario cada 10 minutos
-    message: 'Too many expense requests'
-  }),
-  financesController.getExpenseOverview
-);
-
-/**
- * @route   POST /finances/expenses/purchase
- * @desc    Registrar compra de ganado, alimentos, equipos, etc.
- * @access  Private (Roles: RANCH_OWNER, ADMIN, ACCOUNTANT, WORKER)
- * @body    { category: string, items: array, vendor: object, totalAmount: number, purchaseDate: string, paymentMethod: string, deliveryDate?: string, warrantyInfo?: object }
- */
-router.post(
-  '/expenses/purchase',
-  roleMiddleware(['RANCH_OWNER', 'ADMIN', 'ACCOUNTANT', 'WORKER']),
-  rateLimitMiddleware({ 
-    windowMs: 15 * 60 * 1000, // 15 minutos
-    max: 25, // máximo 25 compras por usuario cada 15 minutos
-    message: 'Too many purchase recordings'
-  }),
-  uploadMiddleware.array('purchaseDocuments', 15),
-  accountingMiddleware,
-  budgetControlMiddleware,
-  financesController.recordPurchase
-);
-
-/**
- * @route   GET /finances/expenses/recurring
- * @desc    Gestión de gastos recurrentes (alimentación, servicios, etc.)
- * @access  Private (Roles: RANCH_OWNER, ADMIN, ACCOUNTANT)
- * @query   ?status=active&category=all&includeUpcoming=true&daysAhead=30
- */
-router.get(
-  '/expenses/recurring',
-  roleMiddleware(['RANCH_OWNER', 'ADMIN', 'ACCOUNTANT']),
-  rateLimitMiddleware({ 
-    windowMs: 10 * 60 * 1000, // 10 minutos
-    max: 30, // máximo 30 consultas de gastos recurrentes cada 10 minutos
-    message: 'Too many recurring expense requests'
-  }),
-  financesController.getRecurringExpenses
-);
-
-/**
- * @route   POST /finances/expenses/recurring
- * @desc    Crear gasto recurrente automatizado
- * @access  Private (Roles: RANCH_OWNER, ADMIN, ACCOUNTANT)
- * @body    { category: string, amount: number, frequency: string, startDate: string, endDate?: string, vendor: object, autoProcess: boolean, alertDays: number }
- */
-router.post(
-  '/expenses/recurring',
-  roleMiddleware(['RANCH_OWNER', 'ADMIN', 'ACCOUNTANT']),
-  rateLimitMiddleware({ 
-    windowMs: 20 * 60 * 1000, // 20 minutos
-    max: 10, // máximo 10 gastos recurrentes por usuario cada 20 minutos
-    message: 'Too many recurring expense creations'
-  }),
-  financesController.createRecurringExpense
-);
-
-/**
- * @route   GET /finances/expenses/analysis
- * @desc    Análisis detallado de patrones de gastos
- * @access  Private (Roles: RANCH_OWNER, ADMIN, ACCOUNTANT)
- * @query   ?analysisType=variance&period=quarter&includeRecommendations=true&compareWithBudget=true
- */
-router.get(
-  '/expenses/analysis',
-  roleMiddleware(['RANCH_OWNER', 'ADMIN', 'ACCOUNTANT']),
-  rateLimitMiddleware({ 
-    windowMs: 20 * 60 * 1000, // 20 minutos
-    max: 15, // máximo 15 análisis por usuario cada 20 minutos
-    message: 'Too many expense analysis requests'
-  }),
-  financesController.analyzeExpensePatterns
-);
-
-// ============================================================================
-// FLUJO DE CAJA (CASH FLOW)
-// ============================================================================
-
-/**
- * @route   GET /finances/cashflow
- * @desc    Obtener estado actual del flujo de caja
- * @access  Private (Roles: RANCH_OWNER, ADMIN, ACCOUNTANT)
- * @query   ?period=month&includeProjections=true&includeOperatingActivities=true&includeInvestingActivities=true&includeFinancingActivities=true
- */
-router.get(
-  '/cashflow',
-  roleMiddleware(['RANCH_OWNER', 'ADMIN', 'ACCOUNTANT']),
-  rateLimitMiddleware({ 
-    windowMs: 10 * 60 * 1000, // 10 minutos
-    max: 30, // máximo 30 consultas de flujo de caja cada 10 minutos
-    message: 'Too many cashflow requests'
-  }),
-  cashFlowValidationRules(),
-  validationMiddleware,
-  financesController.getCashFlow
-);
-
-/**
- * @route   POST /finances/cashflow/projection
- * @desc    Generar proyección de flujo de caja
- * @access  Private (Roles: RANCH_OWNER, ADMIN, ACCOUNTANT)
- * @body    { projectionPeriod: string, scenarios: string[], includeSeasonality: boolean, assumptions: object, sensitivityAnalysis: boolean }
- */
-router.post(
-  '/cashflow/projection',
-  roleMiddleware(['RANCH_OWNER', 'ADMIN', 'ACCOUNTANT']),
-  rateLimitMiddleware({ 
-    windowMs: 30 * 60 * 1000, // 30 minutos
-    max: 10, // máximo 10 proyecciones por usuario cada 30 minutos
-    message: 'Too many cashflow projections'
-  }),
-  financesController.generateCashFlowProjection
-);
-
-/**
- * @route   GET /finances/cashflow/alerts
- * @desc    Obtener alertas de flujo de caja (liquidez baja, etc.)
- * @access  Private (Roles: RANCH_OWNER, ADMIN, ACCOUNTANT)
- * @query   ?severity=all&includeRecommendations=true&lookaheadDays=30
- */
-router.get(
-  '/cashflow/alerts',
-  roleMiddleware(['RANCH_OWNER', 'ADMIN', 'ACCOUNTANT']),
-  rateLimitMiddleware({ 
-    windowMs: 5 * 60 * 1000, // 5 minutos
-    max: 50, // máximo 50 consultas de alertas cada 5 minutos
-    message: 'Too many cashflow alert requests'
-  }),
-  financesController.getCashFlowAlerts
-);
-
-/**
- * @route   POST /finances/cashflow/optimize
- * @desc    Optimizar flujo de caja con recomendaciones automáticas
- * @access  Private (Roles: RANCH_OWNER, ADMIN, ACCOUNTANT)
- * @body    { optimizationGoals: string[], constraints: object, timeHorizon: string, riskTolerance: string }
- */
-router.post(
-  '/cashflow/optimize',
-  roleMiddleware(['RANCH_OWNER', 'ADMIN', 'ACCOUNTANT']),
-  rateLimitMiddleware({ 
-    windowMs: 30 * 60 * 1000, // 30 minutos
-    max: 8, // máximo 8 optimizaciones por usuario cada 30 minutos
-    message: 'Too many cashflow optimizations'
-  }),
-  financesController.optimizeCashFlow
-);
-
-// ============================================================================
-// ESTADO DE RESULTADOS (PROFIT & LOSS)
-// ============================================================================
-
-/**
- * @route   GET /finances/profit-loss
- * @desc    Generar estado de resultados (P&L)
- * @access  Private (Roles: RANCH_OWNER, ADMIN, ACCOUNTANT)
- * @query   ?period=quarter&includeComparisons=true&includeMargins=true&includeSegmentation=true&format=detailed
- */
-router.get(
-  '/profit-loss',
-  roleMiddleware(['RANCH_OWNER', 'ADMIN', 'ACCOUNTANT']),
-  rateLimitMiddleware({ 
-    windowMs: 15 * 60 * 1000, // 15 minutos
-    max: 20, // máximo 20 consultas P&L por usuario cada 15 minutos
-    message: 'Too many profit loss requests'
-  }),
-  profitLossValidationRules(),
-  validationMiddleware,
-  financesController.getProfitLoss
-);
-
-/**
- * @route   GET /finances/profit-loss/by-segment
- * @desc    P&L segmentado por tipo de ganado, categoría, etc.
- * @access  Private (Roles: RANCH_OWNER, ADMIN, ACCOUNTANT)
- * @query   ?segmentBy=cattle_type&period=year&includeAllocations=true&allocationMethod=activity_based
- */
-router.get(
-  '/profit-loss/by-segment',
-  roleMiddleware(['RANCH_OWNER', 'ADMIN', 'ACCOUNTANT']),
-  rateLimitMiddleware({ 
-    windowMs: 20 * 60 * 1000, // 20 minutos
-    max: 15, // máximo 15 análisis segmentados cada 20 minutos
-    message: 'Too many segmented P&L requests'
-  }),
-  financesController.getSegmentedProfitLoss
-);
-
-/**
- * @route   POST /finances/profit-loss/variance-analysis
- * @desc    Análisis de variaciones en P&L vs presupuesto/períodos anteriores
- * @access  Private (Roles: RANCH_OWNER, ADMIN, ACCOUNTANT)
- * @body    { comparisonType: string, baselinePeriod: string, analysisLevel: string, includeExplanations: boolean }
- */
-router.post(
-  '/profit-loss/variance-analysis',
-  roleMiddleware(['RANCH_OWNER', 'ADMIN', 'ACCOUNTANT']),
-  rateLimitMiddleware({ 
-    windowMs: 30 * 60 * 1000, // 30 minutos
-    max: 10, // máximo 10 análisis de variación cada 30 minutos
-    message: 'Too many variance analysis requests'
-  }),
-  financesController.analyzeProfitLossVariance
-);
-
-// ============================================================================
-// ANÁLISIS DE ROI Y RENTABILIDAD
-// ============================================================================
-
-/**
- * @route   GET /finances/roi-analysis
- * @desc    Análisis de retorno sobre inversión (ROI)
- * @access  Private (Roles: RANCH_OWNER, ADMIN, ACCOUNTANT)
- * @query   ?analysisType=by_animal&period=lifetime&includeIRR=true&includeNPV=true&discountRate=0.08
- */
-router.get(
-  '/roi-analysis',
-  roleMiddleware(['RANCH_OWNER', 'ADMIN', 'ACCOUNTANT']),
-  rateLimitMiddleware({ 
-    windowMs: 20 * 60 * 1000, // 20 minutos
-    max: 15, // máximo 15 análisis ROI cada 20 minutos
-    message: 'Too many ROI analysis requests'
-  }),
-  roiAnalysisValidationRules(),
-  validationMiddleware,
-  financesController.getROIAnalysis
-);
-
-/**
- * @route   POST /finances/roi-analysis/investment-evaluation
- * @desc    Evaluación de nuevas inversiones o proyectos
- * @access  Private (Roles: RANCH_OWNER, ADMIN, ACCOUNTANT)
- * @body    { investmentType: string, initialCost: number, projectedReturns: array, riskAssessment: object, paybackPeriod: number, scenarioAnalysis: boolean }
- */
-router.post(
-  '/roi-analysis/investment-evaluation',
-  roleMiddleware(['RANCH_OWNER', 'ADMIN', 'ACCOUNTANT']),
-  rateLimitMiddleware({ 
-    windowMs: 30 * 60 * 1000, // 30 minutos
-    max: 10, // máximo 10 evaluaciones de inversión cada 30 minutos
-    message: 'Too many investment evaluations'
-  }),
-  financesController.evaluateInvestment
-);
-
-/**
- * @route   GET /finances/profitability/benchmarks
- * @desc    Comparación de rentabilidad con benchmarks de la industria
- * @access  Private (Roles: RANCH_OWNER, ADMIN, ACCOUNTANT)
- * @query   ?region=mexico&herdSize=similar&productionType=mixed&includePercentiles=true
- */
-router.get(
-  '/profitability/benchmarks',
-  roleMiddleware(['RANCH_OWNER', 'ADMIN', 'ACCOUNTANT']),
-  rateLimitMiddleware({ 
-    windowMs: 30 * 60 * 1000, // 30 minutos
-    max: 10, // máximo 10 comparaciones con benchmarks cada 30 minutos
-    message: 'Too many benchmark requests'
-  }),
-  financesController.getProfitabilityBenchmarks
-);
-
-/**
- * @route   GET /finances/profitability/trends
- * @desc    Análisis de tendencias de rentabilidad con proyecciones
- * @access  Private (Roles: RANCH_OWNER, ADMIN, ACCOUNTANT)
- * @query   ?period=5y&includeDrivers=true&includePredictions=true&confidence=0.95
- */
-router.get(
-  '/profitability/trends',
-  roleMiddleware(['RANCH_OWNER', 'ADMIN', 'ACCOUNTANT']),
-  rateLimitMiddleware({ 
-    windowMs: 20 * 60 * 1000, // 20 minutos
-    max: 12, // máximo 12 análisis de tendencias cada 20 minutos
-    message: 'Too many trend analysis requests'
-  }),
-  financesController.analyzeProfitabilityTrends
-);
-
-// ============================================================================
-// PRESUPUESTOS Y PLANIFICACIÓN FINANCIERA
-// ============================================================================
-
-/**
- * @route   GET /finances/budgets
- * @desc    Obtener presupuestos activos y comparaciones
- * @access  Private (Roles: RANCH_OWNER, ADMIN, ACCOUNTANT)
- * @query   ?period=year&includeVariances=true&includeRevisedBudgets=true&detailLevel=category
- */
-router.get(
-  '/budgets',
-  roleMiddleware(['RANCH_OWNER', 'ADMIN', 'ACCOUNTANT']),
-  rateLimitMiddleware({ 
-    windowMs: 10 * 60 * 1000, // 10 minutos
-    max: 30, // máximo 30 consultas de presupuesto cada 10 minutos
-    message: 'Too many budget requests'
-  }),
-  financesController.getBudgets
-);
-
-/**
- * @route   POST /finances/budgets
- * @desc    Crear nuevo presupuesto anual o por período
- * @access  Private (Roles: RANCH_OWNER, ADMIN, ACCOUNTANT)
- * @body    { name: string, period: object, categories: array, assumptions: object, approvalWorkflow: boolean, basedOnHistorical: boolean }
- */
-router.post(
-  '/budgets',
-  roleMiddleware(['RANCH_OWNER', 'ADMIN', 'ACCOUNTANT']),
-  rateLimitMiddleware({ 
-    windowMs: 30 * 60 * 1000, // 30 minutos
-    max: 8, // máximo 8 presupuestos por usuario cada 30 minutos
-    message: 'Too many budget creations'
-  }),
-  budgetValidationRules(),
-  validationMiddleware,
-  financesController.createBudget
-);
-
-/**
- * @route   PUT /finances/budgets/:id
- * @desc    Actualizar presupuesto existente
- * @access  Private (Roles: RANCH_OWNER, ADMIN, ACCOUNTANT)
- * @params  id: string (UUID del presupuesto)
- * @body    Campos a actualizar del presupuesto
- */
-router.put(
-  '/budgets/:id',
-  roleMiddleware(['RANCH_OWNER', 'ADMIN', 'ACCOUNTANT']),
-  rateLimitMiddleware({ 
-    windowMs: 20 * 60 * 1000, // 20 minutos
-    max: 15, // máximo 15 actualizaciones de presupuesto cada 20 minutos
-    message: 'Too many budget updates'
-  }),
-  budgetValidationRules(),
-  validationMiddleware,
-  financesController.updateBudget
-);
-
-/**
- * @route   GET /finances/budgets/:id/variance
- * @desc    Análisis de variaciones presupuestarias
- * @access  Private (Roles: RANCH_OWNER, ADMIN, ACCOUNTANT)
- * @params  id: string (UUID del presupuesto)
- * @query   ?period=current&includeRecommendations=true&varianceThreshold=5
- */
-router.get(
-  '/budgets/:id/variance',
-  roleMiddleware(['RANCH_OWNER', 'ADMIN', 'ACCOUNTANT']),
-  financesController.getBudgetVarianceAnalysis
-);
-
-/**
- * @route   POST /finances/budgets/:id/revise
- * @desc    Crear revisión de presupuesto
- * @access  Private (Roles: RANCH_OWNER, ADMIN, ACCOUNTANT)
- * @params  id: string (UUID del presupuesto)
- * @body    { revisionReason: string, adjustments: array, effectiveDate: string, approvalRequired: boolean }
- */
-router.post(
-  '/budgets/:id/revise',
-  roleMiddleware(['RANCH_OWNER', 'ADMIN', 'ACCOUNTANT']),
-  rateLimitMiddleware({ 
-    windowMs: 30 * 60 * 1000, // 30 minutos
-    max: 10, // máximo 10 revisiones por usuario cada 30 minutos
-    message: 'Too many budget revisions'
-  }),
-  financesController.reviseBudget
-);
-
-// ============================================================================
-// GESTIÓN DE ACTIVOS Y DEPRECIACIÓN
-// ============================================================================
-
-/**
- * @route   GET /finances/assets
- * @desc    Obtener registro de activos fijos
- * @access  Private (Roles: RANCH_OWNER, ADMIN, ACCOUNTANT)
- * @query   ?category=equipment&includeDepreciation=true&status=active&sortBy=purchase_date
- */
-router.get(
-  '/assets',
-  roleMiddleware(['RANCH_OWNER', 'ADMIN', 'ACCOUNTANT']),
-  rateLimitMiddleware({ 
-    windowMs: 10 * 60 * 1000, // 10 minutos
-    max: 40, // máximo 40 consultas de activos cada 10 minutos
-    message: 'Too many asset requests'
-  }),
-  financesController.getAssets
-);
-
-/**
- * @route   POST /finances/assets
- * @desc    Registrar nuevo activo fijo
- * @access  Private (Roles: RANCH_OWNER, ADMIN, ACCOUNTANT)
- * @body    { name: string, category: string, purchasePrice: number, purchaseDate: string, usefulLife: number, depreciationMethod: string, location: object, serialNumber?: string }
- */
-router.post(
-  '/assets',
-  roleMiddleware(['RANCH_OWNER', 'ADMIN', 'ACCOUNTANT']),
-  rateLimitMiddleware({ 
-    windowMs: 20 * 60 * 1000, // 20 minutos
-    max: 15, // máximo 15 registros de activos cada 20 minutos
-    message: 'Too many asset registrations'
-  }),
-  uploadMiddleware.array('assetDocuments', 10), // facturas, warranties, etc.
-  assetValidationRules(),
-  validationMiddleware,
-  financesController.registerAsset
-);
-
-/**
- * @route   PUT /finances/assets/:id
- * @desc    Actualizar información de activo
- * @access  Private (Roles: RANCH_OWNER, ADMIN, ACCOUNTANT)
- * @params  id: string (UUID del activo)
- * @body    Campos a actualizar del activo
- */
-router.put(
-  '/assets/:id',
-  roleMiddleware(['RANCH_OWNER', 'ADMIN', 'ACCOUNTANT']),
-  rateLimitMiddleware({ 
-    windowMs: 15 * 60 * 1000, // 15 minutos
-    max: 25, // máximo 25 actualizaciones de activos cada 15 minutos
-    message: 'Too many asset updates'
-  }),
-  assetValidationRules(),
-  validationMiddleware,
-  financesController.updateAsset
-);
-
-/**
- * @route   POST /finances/assets/depreciation/calculate
- * @desc    Calcular depreciación automática para todos los activos
- * @access  Private (Roles: RANCH_OWNER, ADMIN, ACCOUNTANT)
- * @body    { calculationDate: string, method?: string, includeDisposals: boolean, generateEntries: boolean }
- */
-router.post(
-  '/assets/depreciation/calculate',
-  roleMiddleware(['RANCH_OWNER', 'ADMIN', 'ACCOUNTANT']),
-  rateLimitMiddleware({ 
-    windowMs: 60 * 60 * 1000, // 1 hora
-    max: 5, // máximo 5 cálculos de depreciación por usuario cada hora
-    message: 'Too many depreciation calculations'
-  }),
-  depreciationValidationRules(),
-  validationMiddleware,
-  financesController.calculateDepreciation
-);
-
-/**
- * @route   GET /finances/assets/:id/depreciation-schedule
- * @desc    Obtener calendario de depreciación de un activo específico
- * @access  Private (Roles: RANCH_OWNER, ADMIN, ACCOUNTANT)
- * @params  id: string (UUID del activo)
- */
-router.get(
-  '/assets/:id/depreciation-schedule',
-  roleMiddleware(['RANCH_OWNER', 'ADMIN', 'ACCOUNTANT']),
-  financesController.getAssetDepreciationSchedule
-);
-
-/**
- * @route   POST /finances/assets/:id/dispose
- * @desc    Registrar disposición de activo (venta, desecho, etc.)
- * @access  Private (Roles: RANCH_OWNER, ADMIN, ACCOUNTANT)
- * @params  id: string (UUID del activo)
- * @body    { disposalType: string, disposalDate: string, disposalAmount?: number, reason: string, buyer?: object }
- */
-router.post(
-  '/assets/:id/dispose',
-  roleMiddleware(['RANCH_OWNER', 'ADMIN', 'ACCOUNTANT']),
-  rateLimitMiddleware({ 
-    windowMs: 30 * 60 * 1000, // 30 minutos
-    max: 10, // máximo 10 disposiciones por usuario cada 30 minutos
-    message: 'Too many asset disposals'
-  }),
-  financesController.disposeAsset
-);
-
-// ============================================================================
-// FACTURACIÓN Y PAGOS
-// ============================================================================
-
-/**
- * @route   GET /finances/invoices
- * @desc    Obtener facturas emitidas y recibidas
- * @access  Private (Roles: RANCH_OWNER, ADMIN, ACCOUNTANT)
- * @query   ?type=issued&status=pending&dateFrom=2025-01-01&includePayments=true
- */
-router.get(
-  '/invoices',
-  roleMiddleware(['RANCH_OWNER', 'ADMIN', 'ACCOUNTANT']),
-  rateLimitMiddleware({ 
-    windowMs: 10 * 60 * 1000, // 10 minutos
-    max: 50, // máximo 50 consultas de facturas cada 10 minutos
-    message: 'Too many invoice requests'
-  }),
-  financesController.getInvoices
-);
-
-/**
- * @route   POST /finances/invoices
- * @desc    Crear nueva factura
- * @access  Private (Roles: RANCH_OWNER, ADMIN, ACCOUNTANT)
- * @body    { customer: object, items: array, dueDate: string, paymentTerms: object, taxCalculation: boolean, invoiceNumber?: string }
- */
-router.post(
-  '/invoices',
-  roleMiddleware(['RANCH_OWNER', 'ADMIN', 'ACCOUNTANT']),
-  rateLimitMiddleware({ 
-    windowMs: 15 * 60 * 1000, // 15 minutos
-    max: 20, // máximo 20 facturas por usuario cada 15 minutos
-    message: 'Too many invoice creations'
-  }),
-  taxCalculationMiddleware, // calcular impuestos automáticamente
-  invoiceValidationRules(),
-  validationMiddleware,
-  financesController.createInvoice
-);
-
-/**
- * @route   PUT /finances/invoices/:id
- * @desc    Actualizar factura existente
- * @access  Private (Roles: RANCH_OWNER, ADMIN, ACCOUNTANT)
- * @params  id: string (UUID de la factura)
- * @body    Campos a actualizar de la factura
- */
-router.put(
-  '/invoices/:id',
-  roleMiddleware(['RANCH_OWNER', 'ADMIN', 'ACCOUNTANT']),
-  rateLimitMiddleware({ 
-    windowMs: 15 * 60 * 1000, // 15 minutos
-    max: 30, // máximo 30 actualizaciones de facturas cada 15 minutos
-    message: 'Too many invoice updates'
-  }),
-  taxCalculationMiddleware,
-  invoiceValidationRules(),
-  validationMiddleware,
-  financesController.updateInvoice
-);
-
-/**
- * @route   POST /finances/invoices/:id/payment
- * @desc    Registrar pago de factura
- * @access  Private (Roles: RANCH_OWNER, ADMIN, ACCOUNTANT)
- * @params  id: string (UUID de la factura)
- * @body    { amount: number, paymentDate: string, paymentMethod: string, reference?: string, bankAccount?: string }
- */
-router.post(
-  '/invoices/:id/payment',
-  roleMiddleware(['RANCH_OWNER', 'ADMIN', 'ACCOUNTANT']),
-  rateLimitMiddleware({ 
-    windowMs: 10 * 60 * 1000, // 10 minutos
-    max: 40, // máximo 40 pagos por usuario cada 10 minutos
-    message: 'Too many payment registrations'
-  }),
-  uploadMiddleware.array('paymentProofs', 5), // comprobantes de pago
-  paymentValidationRules(),
-  validationMiddleware,
-  financesController.recordInvoicePayment
-);
-
-/**
- * @route   GET /finances/invoices/:id/pdf
- * @desc    Generar factura en formato PDF
- * @access  Private (Roles: RANCH_OWNER, ADMIN, ACCOUNTANT)
- * @params  id: string (UUID de la factura)
- * @query   ?template=standard&language=es&includeQR=true
- */
-router.get(
-  '/invoices/:id/pdf',
-  roleMiddleware(['RANCH_OWNER', 'ADMIN', 'ACCOUNTANT']),
-  rateLimitMiddleware({ 
-    windowMs: 10 * 60 * 1000, // 10 minutos
-    max: 30, // máximo 30 generaciones PDF cada 10 minutos
-    message: 'Too many PDF generations'
-  }),
-  financesController.generateInvoicePDF
-);
-
-/**
- * @route   POST /finances/invoices/:id/send
- * @desc    Enviar factura por email al cliente
- * @access  Private (Roles: RANCH_OWNER, ADMIN, ACCOUNTANT)
- * @params  id: string (UUID de la factura)
- * @body    { recipients: string[], subject?: string, message?: string, includeAttachments: boolean }
- */
-router.post(
-  '/invoices/:id/send',
-  roleMiddleware(['RANCH_OWNER', 'ADMIN', 'ACCOUNTANT']),
-  rateLimitMiddleware({ 
-    windowMs: 15 * 60 * 1000, // 15 minutos
-    max: 25, // máximo 25 envíos por usuario cada 15 minutos
-    message: 'Too many invoice sends'
-  }),
-  financesController.sendInvoice
-);
-
-// ============================================================================
-// CENTROS DE COSTOS Y ANÁLISIS DETALLADO
-// ============================================================================
-
-/**
- * @route   GET /finances/cost-centers
- * @desc    Obtener centros de costos configurados
- * @access  Private (Roles: RANCH_OWNER, ADMIN, ACCOUNTANT)
- * @query   ?includeAllocations=true&period=month&activeOnly=true
- */
-router.get(
-  '/cost-centers',
-  roleMiddleware(['RANCH_OWNER', 'ADMIN', 'ACCOUNTANT']),
-  rateLimitMiddleware({ 
-    windowMs: 10 * 60 * 1000, // 10 minutos
-    max: 30, // máximo 30 consultas de centros de costos cada 10 minutos
-    message: 'Too many cost center requests'
-  }),
-  financesController.getCostCenters
-);
-
-/**
- * @route   POST /finances/cost-centers
- * @desc    Crear nuevo centro de costos
- * @access  Private (Roles: RANCH_OWNER, ADMIN, ACCOUNTANT)
- * @body    { name: string, code: string, description: string, manager: string, allocationMethod: string, budgetAmount?: number }
- */
-router.post(
-  '/cost-centers',
-  roleMiddleware(['RANCH_OWNER', 'ADMIN', 'ACCOUNTANT']),
-  rateLimitMiddleware({ 
-    windowMs: 30 * 60 * 1000, // 30 minutos
-    max: 10, // máximo 10 centros de costos por usuario cada 30 minutos
-    message: 'Too many cost center creations'
-  }),
-  costCenterValidationRules(),
-  validationMiddleware,
-  financesController.createCostCenter
-);
-
-/**
- * @route   POST /finances/cost-centers/allocate
- * @desc    Asignar costos a centros de costos
- * @access  Private (Roles: RANCH_OWNER, ADMIN, ACCOUNTANT)
- * @body    { period: string, allocations: array, allocationMethod: string, basis: object }
- */
-router.post(
-  '/cost-centers/allocate',
-  roleMiddleware(['RANCH_OWNER', 'ADMIN', 'ACCOUNTANT']),
-  rateLimitMiddleware({ 
-    windowMs: 30 * 60 * 1000, // 30 minutos
-    max: 8, // máximo 8 asignaciones por usuario cada 30 minutos
-    message: 'Too many cost allocations'
-  }),
-  financesController.allocateCosts
-);
-
-/**
- * @route   GET /finances/cost-centers/:id/analysis
- * @desc    Análisis detallado de un centro de costos específico
- * @access  Private (Roles: RANCH_OWNER, ADMIN, ACCOUNTANT)
- * @params  id: string (UUID del centro de costos)
- * @query   ?period=quarter&includeVariances=true&includeDrivers=true
- */
-router.get(
-  '/cost-centers/:id/analysis',
-  roleMiddleware(['RANCH_OWNER', 'ADMIN', 'ACCOUNTANT']),
-  financesController.analyzeCostCenter
-);
-
-// ============================================================================
-// CONCILIACIÓN BANCARIA
-// ============================================================================
-
-/**
- * @route   GET /finances/bank-reconciliation
- * @desc    Obtener estado de conciliaciones bancarias
- * @access  Private (Roles: RANCH_OWNER, ADMIN, ACCOUNTANT)
- * @query   ?account=all&status=pending&period=month&includeUnmatched=true
- */
-router.get(
-  '/bank-reconciliation',
-  roleMiddleware(['RANCH_OWNER', 'ADMIN', 'ACCOUNTANT']),
-  rateLimitMiddleware({ 
-    windowMs: 10 * 60 * 1000, // 10 minutos
-    max: 30, // máximo 30 consultas de conciliación cada 10 minutos
-    message: 'Too many reconciliation requests'
-  }),
-  financesController.getBankReconciliations
-);
-
-/**
- * @route   POST /finances/bank-reconciliation
- * @desc    Iniciar nueva conciliación bancaria
- * @access  Private (Roles: RANCH_OWNER, ADMIN, ACCOUNTANT)
- * @body    { bankAccount: string, statementDate: string, endingBalance: number, autoMatch: boolean }
- */
-router.post(
-  '/bank-reconciliation',
-  roleMiddleware(['RANCH_OWNER', 'ADMIN', 'ACCOUNTANT']),
-  rateLimitMiddleware({ 
-    windowMs: 30 * 60 * 1000, // 30 minutos
-    max: 10, // máximo 10 conciliaciones por usuario cada 30 minutos
-    message: 'Too many reconciliation starts'
-  }),
-  uploadMiddleware.single('bankStatement'), // estado de cuenta bancario
-  bankReconciliationValidationRules(),
-  validationMiddleware,
-  financesController.startBankReconciliation
-);
-
-/**
- * @route   PUT /finances/bank-reconciliation/:id/match
- * @desc    Emparejar transacciones bancarias con registros contables
- * @access  Private (Roles: RANCH_OWNER, ADMIN, ACCOUNTANT)
- * @params  id: string (UUID de la conciliación)
- * @body    { matches: array, unmatchedItems: array, adjustments: array }
- */
-router.put(
-  '/bank-reconciliation/:id/match',
-  roleMiddleware(['RANCH_OWNER', 'ADMIN', 'ACCOUNTANT']),
-  rateLimitMiddleware({ 
-    windowMs: 20 * 60 * 1000, // 20 minutos
-    max: 15, // máximo 15 operaciones de matching cada 20 minutos
-    message: 'Too many matching operations'
-  }),
-  financesController.matchBankTransactions
-);
-
-/**
- * @route   POST /finances/bank-reconciliation/:id/finalize
- * @desc    Finalizar conciliación bancaria
- * @access  Private (Roles: RANCH_OWNER, ADMIN, ACCOUNTANT)
- * @params  id: string (UUID de la conciliación)
- * @body    { finalBalance: number, adjustmentEntries: array, approvedBy: string }
- */
-router.post(
-  '/bank-reconciliation/:id/finalize',
-  roleMiddleware(['RANCH_OWNER', 'ADMIN', 'ACCOUNTANT']),
-  rateLimitMiddleware({ 
-    windowMs: 30 * 60 * 1000, // 30 minutos
-    max: 10, // máximo 10 finalizaciones por usuario cada 30 minutos
-    message: 'Too many reconciliation finalizations'
-  }),
-  financesController.finalizeReconciliation
-);
-
-// ============================================================================
-// REPORTES FINANCIEROS AVANZADOS
-// ============================================================================
-
-/**
- * @route   POST /finances/reports/generate
- * @desc    Generar reportes financieros personalizados
- * @access  Private (Roles: RANCH_OWNER, ADMIN, ACCOUNTANT)
- * @body    { reportType: string, period: object, parameters: object, format: string, includeCharts: boolean, emailTo?: string[] }
- */
-router.post(
-  '/reports/generate',
-  roleMiddleware(['RANCH_OWNER', 'ADMIN', 'ACCOUNTANT']),
-  rateLimitMiddleware({ 
-    windowMs: 30 * 60 * 1000, // 30 minutos
-    max: 10, // máximo 10 reportes por usuario cada 30 minutos
-    message: 'Too many report generations'
-  }),
-  financialReportValidationRules(),
-  validationMiddleware,
-  financesController.generateFinancialReport
-);
-
-/**
- * @route   GET /finances/reports/:id/download
- * @desc    Descargar reporte financiero generado
- * @access  Private (Roles: RANCH_OWNER, ADMIN, ACCOUNTANT)
- * @params  id: string (UUID del reporte)
- */
-router.get(
-  '/reports/:id/download',
-  roleMiddleware(['RANCH_OWNER', 'ADMIN', 'ACCOUNTANT']),
-  rateLimitMiddleware({ 
-    windowMs: 10 * 60 * 1000, // 10 minutos
-    max: 30, // máximo 30 descargas cada 10 minutos
-    message: 'Too many report downloads'
-  }),
-  financesController.downloadFinancialReport
-);
-
-/**
- * @route   POST /finances/reports/tax-report
- * @desc    Generar reporte fiscal/tributario
- * @access  Private (Roles: RANCH_OWNER, ADMIN, ACCOUNTANT)
- * @body    { taxPeriod: object, reportType: string, taxAuthority: string, includeSupporting: boolean }
- */
-router.post(
-  '/reports/tax-report',
-  roleMiddleware(['RANCH_OWNER', 'ADMIN', 'ACCOUNTANT']),
-  rateLimitMiddleware({ 
-    windowMs: 60 * 60 * 1000, // 1 hora
-    max: 5, // máximo 5 reportes fiscales por usuario cada hora
-    message: 'Too many tax report generations'
-  }),
-  taxReportValidationRules(),
-  validationMiddleware,
-  financesController.generateTaxReport
-);
-
-/**
- * @route   GET /finances/reports/scheduled
- * @desc    Obtener reportes programados
- * @access  Private (Roles: RANCH_OWNER, ADMIN, ACCOUNTANT)
- * @query   ?status=active&frequency=monthly&includeNext=true
- */
-router.get(
-  '/reports/scheduled',
-  roleMiddleware(['RANCH_OWNER', 'ADMIN', 'ACCOUNTANT']),
-  financesController.getScheduledReports
-);
-
-/**
- * @route   POST /finances/reports/schedule
- * @desc    Programar reporte automático recurrente
- * @access  Private (Roles: RANCH_OWNER, ADMIN, ACCOUNTANT)
- * @body    { reportConfig: object, frequency: string, recipients: string[], startDate: string, endDate?: string }
- */
-router.post(
-  '/reports/schedule',
-  roleMiddleware(['RANCH_OWNER', 'ADMIN', 'ACCOUNTANT']),
-  rateLimitMiddleware({ 
-    windowMs: 60 * 60 * 1000, // 1 hora
-    max: 5, // máximo 5 programaciones por usuario cada hora
-    message: 'Too many report scheduling attempts'
-  }),
-  financesController.scheduleReport
-);
-
-// ============================================================================
-// DASHBOARD FINANCIERO Y MÉTRICAS KPI
-// ============================================================================
-
-/**
- * @route   GET /finances/dashboard
- * @desc    Obtener dashboard financiero con métricas principales
- * @access  Private (Roles: RANCH_OWNER, ADMIN, ACCOUNTANT)
- * @query   ?period=month&includeComparisons=true&includeProjections=true&kpis=revenue,profit,cashflow,roi
- */
-router.get(
-  '/dashboard',
-  roleMiddleware(['RANCH_OWNER', 'ADMIN', 'ACCOUNTANT']),
-  rateLimitMiddleware({ 
-    windowMs: 5 * 60 * 1000, // 5 minutos
-    max: 60, // máximo 60 consultas de dashboard cada 5 minutos
-    message: 'Too many dashboard requests'
-  }),
-  financesController.getFinancialDashboard
-);
-
-/**
- * @route   GET /finances/kpis
- * @desc    Obtener indicadores clave de rendimiento financiero
- * @access  Private (Roles: RANCH_OWNER, ADMIN, ACCOUNTANT)
- * @query   ?period=quarter&includeTargets=true&includeBenchmarks=true&format=detailed
- */
-router.get(
-  '/kpis',
-  roleMiddleware(['RANCH_OWNER', 'ADMIN', 'ACCOUNTANT']),
-  rateLimitMiddleware({ 
-    windowMs: 10 * 60 * 1000, // 10 minutos
-    max: 40, // máximo 40 consultas de KPIs cada 10 minutos
-    message: 'Too many KPI requests'
-  }),
-  financesController.getFinancialKPIs
-);
-
-/**
- * @route   GET /finances/alerts
- * @desc    Obtener alertas financieras críticas
- * @access  Private (Roles: RANCH_OWNER, ADMIN, ACCOUNTANT)
- * @query   ?severity=high&category=all&includeRecommendations=true&activeOnly=true
- */
-router.get(
-  '/alerts',
-  roleMiddleware(['RANCH_OWNER', 'ADMIN', 'ACCOUNTANT']),
-  rateLimitMiddleware({ 
-    windowMs: 5 * 60 * 1000, // 5 minutos
-    max: 100, // máximo 100 consultas de alertas cada 5 minutos
-    message: 'Too many alert requests'
-  }),
-  financesController.getFinancialAlerts
-);
-
-// ============================================================================
-// CONFIGURACIÓN Y PARÁMETROS FINANCIEROS
-// ============================================================================
-
-/**
- * @route   GET /finances/settings
- * @desc    Obtener configuración del sistema financiero
- * @access  Private (Roles: RANCH_OWNER, ADMIN, ACCOUNTANT)
- */
-router.get(
-  '/settings',
-  roleMiddleware(['RANCH_OWNER', 'ADMIN', 'ACCOUNTANT']),
-  financesController.getFinancialSettings
-);
-
-/**
- * @route   PUT /finances/settings
- * @desc    Actualizar configuración del sistema financiero
- * @access  Private (Roles: RANCH_OWNER, ADMIN)
- * @body    { currency: string, fiscalYearStart: string, taxSettings: object, accountingMethod: string, depreciationDefaults: object }
- */
-router.put(
-  '/settings',
-  roleMiddleware(['RANCH_OWNER', 'ADMIN']),
-  rateLimitMiddleware({ 
-    windowMs: 60 * 60 * 1000, // 1 hora
-    max: 5, // máximo 5 actualizaciones por usuario cada hora
-    message: 'Too many settings updates'
-  }),
-  financesController.updateFinancialSettings
-);
-
-/**
- * @route   POST /finances/export
- * @desc    Exportar datos financieros en diferentes formatos
- * @access  Private (Roles: RANCH_OWNER, ADMIN, ACCOUNTANT)
- * @body    { exportType: string, format: string, period: object, categories: string[], includeTransactions: boolean }
- */
-router.post(
-  '/export',
-  roleMiddleware(['RANCH_OWNER', 'ADMIN', 'ACCOUNTANT']),
-  rateLimitMiddleware({ 
-    windowMs: 30 * 60 * 1000, // 30 minutos
-    max: 8, // máximo 8 exportaciones por usuario cada 30 minutos
-    message: 'Too many export requests'
-  }),
-  financesController.exportFinancialData
-);
-
-/**
- * @route   GET /finances/export/:exportId/download
- * @desc    Descargar archivo de datos financieros exportado
- * @access  Private (Roles: RANCH_OWNER, ADMIN, ACCOUNTANT)
- * @params  exportId: string (ID del proceso de exportación)
- */
-router.get(
-  '/export/:exportId/download',
-  roleMiddleware(['RANCH_OWNER', 'ADMIN', 'ACCOUNTANT']),
-  rateLimitMiddleware({ 
-    windowMs: 10 * 60 * 1000, // 10 minutos
-    max: 20, // máximo 20 descargas cada 10 minutos
-    message: 'Too many download requests'
-  }),
-  financesController.downloadFinancialExport
-);
-
-// ============================================================================
-// MANEJO DE ERRORES ESPECÍFICOS PARA RUTAS FINANCIERAS
-// ============================================================================
-
-/**
- * Middleware de manejo de errores específico para finanzas
- */
-router.use((error: any, req: Request, res: Response, next: any) => {
-  // Log del error para debugging y auditoría
+const simulateMiddleware = (middlewareName: string) => {
+  return (req: Request, res: Response, next: NextFunction) => {
+    console.log(`Middleware simulado: ${middlewareName}`);
+    next();
+  };
+};
+
+router.use(authenticateToken);
+router.use(sanitizeInput);
+router.use(simulateMiddleware('auditTrail'));
+
+router.get('/transactions', requireFinancialAccess, createRateLimit(EndpointType.CATTLE_READ), validate('search'), financesController.getTransactions);
+router.post('/transactions', requireModulePermission('finances', 'create'), createRateLimit(EndpointType.CATTLE_WRITE), financialUpload.multiple('receipts', 10), processUploadedFiles(FileCategory.FINANCIAL_DOCS), simulateMiddleware('accounting'), simulateMiddleware('taxCalculation'), simulateMiddleware('budgetControl'), simulateMiddleware('exchangeRate'), validate('search'), financesController.createTransaction);
+router.get('/transactions/:id', validateId('id'), requireFinancialAccess, createRateLimit(EndpointType.CATTLE_READ), financesController.getTransactionById);
+router.put('/transactions/:id', validateId('id'), requireFinancialAccess, createRateLimit(EndpointType.CATTLE_WRITE), financialUpload.multiple('receipts', 10), processUploadedFiles(FileCategory.FINANCIAL_DOCS), simulateMiddleware('accounting'), simulateMiddleware('taxCalculation'), validate('search'), financesController.updateTransaction);
+router.delete('/transactions/:id', validateId('id'), requireExactRoles(UserRole.OWNER, UserRole.ADMIN), createRateLimit(EndpointType.CATTLE_WRITE), financesController.deleteTransaction);
+
+router.get('/income', requireFinancialAccess, createRateLimit(EndpointType.REPORTS), financesController.getIncomeOverview);
+router.post('/income/sale', requireFinancialAccess, createRateLimit(EndpointType.CATTLE_WRITE), financialUpload.multiple('saleDocuments', 15), processUploadedFiles(FileCategory.FINANCIAL_DOCS), simulateMiddleware('accounting'), simulateMiddleware('taxCalculation'), financesController.recordSale);
+router.get('/income/projections', requireFinancialAccess, createRateLimit(EndpointType.REPORTS), financesController.getIncomeProjections);
+router.get('/income/by-animal', requireFinancialAccess, createRateLimit(EndpointType.REPORTS), financesController.getIncomeByAnimal);
+
+router.get('/expenses', requireFinancialAccess, createRateLimit(EndpointType.CATTLE_READ), financesController.getExpenseOverview);
+router.post('/expenses/purchase', requireModulePermission('finances', 'create'), createRateLimit(EndpointType.CATTLE_WRITE), financialUpload.multiple('purchaseDocuments', 15), processUploadedFiles(FileCategory.FINANCIAL_DOCS), simulateMiddleware('accounting'), simulateMiddleware('budgetControl'), financesController.recordPurchase);
+router.get('/expenses/recurring', requireFinancialAccess, createRateLimit(EndpointType.CATTLE_READ), financesController.getRecurringExpenses);
+router.post('/expenses/recurring', requireFinancialAccess, createRateLimit(EndpointType.CATTLE_WRITE), financesController.createRecurringExpense);
+router.get('/expenses/analysis', requireFinancialAccess, createRateLimit(EndpointType.REPORTS), financesController.analyzeExpensePatterns);
+
+router.get('/cashflow', requireFinancialAccess, createRateLimit(EndpointType.REPORTS), validate('search'), financesController.getCashFlow);
+router.post('/cashflow/projection', requireFinancialAccess, createRateLimit(EndpointType.REPORTS), financesController.generateCashFlowProjection);
+router.get('/cashflow/alerts', requireFinancialAccess, createRateLimit(EndpointType.CATTLE_READ), financesController.getCashFlowAlerts);
+router.post('/cashflow/optimize', requireFinancialAccess, createRateLimit(EndpointType.REPORTS), financesController.optimizeCashFlow);
+
+router.get('/profit-loss', requireFinancialAccess, createRateLimit(EndpointType.REPORTS), validate('search'), financesController.getProfitLoss);
+router.get('/profit-loss/by-segment', requireFinancialAccess, createRateLimit(EndpointType.REPORTS), financesController.getSegmentedProfitLoss);
+router.post('/profit-loss/variance-analysis', requireFinancialAccess, createRateLimit(EndpointType.REPORTS), financesController.analyzeProfitLossVariance);
+
+router.get('/roi-analysis', requireFinancialAccess, createRateLimit(EndpointType.REPORTS), validate('search'), financesController.getROIAnalysis);
+router.post('/roi-analysis/investment-evaluation', requireFinancialAccess, createRateLimit(EndpointType.REPORTS), financesController.evaluateInvestment);
+router.get('/profitability/benchmarks', requireFinancialAccess, createRateLimit(EndpointType.REPORTS), financesController.getProfitabilityBenchmarks);
+router.get('/profitability/trends', requireFinancialAccess, createRateLimit(EndpointType.REPORTS), financesController.analyzeProfitabilityTrends);
+
+router.get('/budgets', requireFinancialAccess, createRateLimit(EndpointType.CATTLE_READ), financesController.getBudgets);
+router.post('/budgets', requireFinancialAccess, createRateLimit(EndpointType.CATTLE_WRITE), validate('search'), financesController.createBudget);
+router.put('/budgets/:id', validateId('id'), requireFinancialAccess, createRateLimit(EndpointType.CATTLE_WRITE), validate('search'), financesController.updateBudget);
+router.get('/budgets/:id/variance', validateId('id'), requireFinancialAccess, createRateLimit(EndpointType.REPORTS), financesController.getBudgetVarianceAnalysis);
+router.post('/budgets/:id/revise', validateId('id'), requireFinancialAccess, createRateLimit(EndpointType.CATTLE_WRITE), financesController.reviseBudget);
+
+router.get('/assets', requireFinancialAccess, createRateLimit(EndpointType.CATTLE_READ), financesController.getAssets);
+router.post('/assets', requireFinancialAccess, createRateLimit(EndpointType.CATTLE_WRITE), financialUpload.multiple('assetDocuments', 10), processUploadedFiles(FileCategory.FINANCIAL_DOCS), validate('search'), financesController.registerAsset);
+router.put('/assets/:id', validateId('id'), requireFinancialAccess, createRateLimit(EndpointType.CATTLE_WRITE), validate('search'), financesController.updateAsset);
+router.post('/assets/depreciation/calculate', requireFinancialAccess, createRateLimit(EndpointType.REPORTS), validate('search'), financesController.calculateDepreciation);
+router.get('/assets/:id/depreciation-schedule', validateId('id'), requireFinancialAccess, createRateLimit(EndpointType.CATTLE_READ), financesController.getAssetDepreciationSchedule);
+router.post('/assets/:id/dispose', validateId('id'), requireFinancialAccess, createRateLimit(EndpointType.CATTLE_WRITE), financesController.disposeAsset);
+
+router.get('/invoices', requireFinancialAccess, createRateLimit(EndpointType.CATTLE_READ), financesController.getInvoices);
+router.post('/invoices', requireFinancialAccess, createRateLimit(EndpointType.CATTLE_WRITE), simulateMiddleware('taxCalculation'), validate('search'), financesController.createInvoice);
+router.put('/invoices/:id', validateId('id'), requireFinancialAccess, createRateLimit(EndpointType.CATTLE_WRITE), simulateMiddleware('taxCalculation'), validate('search'), financesController.updateInvoice);
+router.post('/invoices/:id/payment', validateId('id'), requireFinancialAccess, createRateLimit(EndpointType.CATTLE_WRITE), financialUpload.multiple('paymentProofs', 5), processUploadedFiles(FileCategory.FINANCIAL_DOCS), validate('search'), financesController.recordInvoicePayment);
+router.get('/invoices/:id/pdf', validateId('id'), requireFinancialAccess, createRateLimit(EndpointType.FILES), financesController.generateInvoicePDF);
+router.post('/invoices/:id/send', validateId('id'), requireFinancialAccess, createRateLimit(EndpointType.EXTERNAL_API), financesController.sendInvoice);
+
+router.get('/cost-centers', requireFinancialAccess, createRateLimit(EndpointType.CATTLE_READ), financesController.getCostCenters);
+router.post('/cost-centers', requireFinancialAccess, createRateLimit(EndpointType.CATTLE_WRITE), validate('search'), financesController.createCostCenter);
+router.post('/cost-centers/allocate', requireFinancialAccess, createRateLimit(EndpointType.CATTLE_WRITE), financesController.allocateCosts);
+router.get('/cost-centers/:id/analysis', validateId('id'), requireFinancialAccess, createRateLimit(EndpointType.REPORTS), financesController.analyzeCostCenter);
+
+router.get('/bank-reconciliation', requireFinancialAccess, createRateLimit(EndpointType.CATTLE_READ), financesController.getBankReconciliations);
+router.post('/bank-reconciliation', requireFinancialAccess, createRateLimit(EndpointType.CATTLE_WRITE), financialUpload.single('bankStatement'), processUploadedFiles(FileCategory.FINANCIAL_DOCS), validate('search'), financesController.startBankReconciliation);
+router.put('/bank-reconciliation/:id/match', validateId('id'), requireFinancialAccess, createRateLimit(EndpointType.CATTLE_WRITE), financesController.matchBankTransactions);
+router.post('/bank-reconciliation/:id/finalize', validateId('id'), requireFinancialAccess, createRateLimit(EndpointType.CATTLE_WRITE), financesController.finalizeReconciliation);
+
+router.post('/reports/generate', requireFinancialAccess, createRateLimit(EndpointType.REPORTS), validate('search'), financesController.generateFinancialReport);
+router.get('/reports/:id/download', validateId('id'), requireFinancialAccess, createRateLimit(EndpointType.FILES), financesController.downloadFinancialReport);
+router.post('/reports/tax-report', requireFinancialAccess, createRateLimit(EndpointType.REPORTS), validate('search'), financesController.generateTaxReport);
+router.get('/reports/scheduled', requireFinancialAccess, createRateLimit(EndpointType.CATTLE_READ), financesController.getScheduledReports);
+router.post('/reports/schedule', requireFinancialAccess, createRateLimit(EndpointType.REPORTS), financesController.scheduleReport);
+
+router.get('/dashboard', requireFinancialAccess, createRateLimit(EndpointType.CATTLE_READ), financesController.getFinancialDashboard);
+router.get('/kpis', requireFinancialAccess, createRateLimit(EndpointType.CATTLE_READ), financesController.getFinancialKPIs);
+router.get('/alerts', requireFinancialAccess, createRateLimit(EndpointType.CATTLE_READ), financesController.getFinancialAlerts);
+
+router.get('/settings', requireFinancialAccess, createRateLimit(EndpointType.CATTLE_READ), financesController.getFinancialSettings);
+router.put('/settings', requireExactRoles(UserRole.OWNER, UserRole.ADMIN), createRateLimit(EndpointType.CATTLE_WRITE), financesController.updateFinancialSettings);
+router.post('/export', requireFinancialAccess, createRateLimit(EndpointType.FILES), financesController.exportFinancialData);
+router.get('/export/:exportId/download', validateId('exportId'), requireFinancialAccess, createRateLimit(EndpointType.FILES), financesController.downloadFinancialExport);
+
+router.use(handleUploadErrors);
+
+router.use((err: any, req: Request, res: Response, next: NextFunction) => {
   console.error('Finance Route Error:', {
     path: req.path,
     method: req.method,
-    userId: req.user?.id,
-    error: error.message,
-    stack: error.stack,
+    userId: (req as any).userId,
+    errorMessage: err.message,
+    stack: err.stack,
     timestamp: new Date().toISOString(),
     requestId: req.headers['x-request-id']
   });
 
-  // Errores específicos financieros
-  if (error.name === 'InsufficientFundsError') {
+  if (err.name === 'InsufficientFundsError') {
     return res.status(400).json({
       success: false,
       message: 'Fondos insuficientes para la operación',
-      error: 'INSUFFICIENT_FUNDS',
-      details: error.details
+      errorCode: 'INSUFFICIENT_FUNDS',
+      details: err.details
     });
   }
 
-  if (error.name === 'BudgetExceededError') {
+  if (err.name === 'BudgetExceededError') {
     return res.status(400).json({
       success: false,
       message: 'Límite presupuestario excedido',
-      error: 'BUDGET_EXCEEDED',
-      details: error.details
+      errorCode: 'BUDGET_EXCEEDED',
+      details: err.details
     });
   }
 
-  if (error.name === 'TaxCalculationError') {
+  if (err.name === 'TaxCalculationError') {
     return res.status(500).json({
       success: false,
       message: 'Error en cálculo de impuestos',
-      error: 'TAX_CALCULATION_ERROR',
-      details: error.details
+      errorCode: 'TAX_CALCULATION_ERROR',
+      details: err.details
     });
   }
 
-  if (error.name === 'AccountingEntryError') {
+  if (err.name === 'AccountingEntryError') {
     return res.status(400).json({
       success: false,
       message: 'Error en entrada contable',
-      error: 'ACCOUNTING_ENTRY_ERROR',
-      details: error.details
+      errorCode: 'ACCOUNTING_ENTRY_ERROR',
+      details: err.details
     });
   }
 
-  if (error.name === 'ReconciliationError') {
+  if (err.name === 'ReconciliationError') {
     return res.status(400).json({
       success: false,
       message: 'Error en conciliación bancaria',
-      error: 'RECONCILIATION_ERROR',
-      details: error.details
+      errorCode: 'RECONCILIATION_ERROR',
+      details: err.details
     });
   }
 
-  if (error.name === 'DepreciationCalculationError') {
+  if (err.name === 'DepreciationCalculationError') {
     return res.status(500).json({
       success: false,
       message: 'Error en cálculo de depreciación',
-      error: 'DEPRECIATION_CALCULATION_ERROR',
-      details: error.details
+      errorCode: 'DEPRECIATION_CALCULATION_ERROR',
+      details: err.details
     });
   }
 
-  if (error.name === 'InvoiceGenerationError') {
+  if (err.name === 'InvoiceGenerationError') {
     return res.status(500).json({
       success: false,
       message: 'Error al generar factura',
-      error: 'INVOICE_GENERATION_ERROR',
-      details: error.details
+      errorCode: 'INVOICE_GENERATION_ERROR',
+      details: err.details
     });
   }
 
-  if (error.name === 'PaymentProcessingError') {
+  if (err.name === 'PaymentProcessingError') {
     return res.status(400).json({
       success: false,
       message: 'Error al procesar pago',
-      error: 'PAYMENT_PROCESSING_ERROR',
-      details: error.details
+      errorCode: 'PAYMENT_PROCESSING_ERROR',
+      details: err.details
     });
   }
 
-  if (error.name === 'ROICalculationError') {
+  if (err.name === 'ROICalculationError') {
     return res.status(500).json({
       success: false,
       message: 'Error en cálculo de ROI',
-      error: 'ROI_CALCULATION_ERROR',
-      details: error.details
+      errorCode: 'ROI_CALCULATION_ERROR',
+      details: err.details
     });
   }
 
-  if (error.name === 'ReportGenerationError') {
+  if (err.name === 'ReportGenerationError') {
     return res.status(500).json({
       success: false,
       message: 'Error al generar reporte financiero',
-      error: 'REPORT_GENERATION_ERROR',
-      details: error.details
+      errorCode: 'REPORT_GENERATION_ERROR',
+      details: err.details
     });
   }
 
-  if (error.name === 'CurrencyConversionError') {
+  if (err.name === 'CurrencyConversionError') {
     return res.status(500).json({
       success: false,
       message: 'Error en conversión de moneda',
-      error: 'CURRENCY_CONVERSION_ERROR',
-      details: error.details
+      errorCode: 'CURRENCY_CONVERSION_ERROR',
+      details: err.details
     });
   }
 
-  if (error.name === 'AuditTrailError') {
+  if (err.name === 'AuditTrailError') {
     return res.status(500).json({
       success: false,
       message: 'Error en registro de auditoría',
-      error: 'AUDIT_TRAIL_ERROR',
-      details: error.details
+      errorCode: 'AUDIT_TRAIL_ERROR',
+      details: err.details
     });
   }
 
-  // Error genérico
   return res.status(500).json({
     success: false,
     message: 'Error interno del servidor financiero',
-    error: 'INTERNAL_SERVER_ERROR'
+    errorCode: 'INTERNAL_SERVER_ERROR'
   });
 });
 

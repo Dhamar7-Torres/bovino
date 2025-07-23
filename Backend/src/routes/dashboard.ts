@@ -1,27 +1,809 @@
 import { Router, Request, Response } from 'express';
-import { DashboardController } from '../controllers/dashboard.controller';
-import { authMiddleware } from '../middleware/auth.middleware';
-import { validationMiddleware } from '../middleware/validation.middleware';
-import { rateLimitMiddleware } from '../middleware/rateLimit.middleware';
-import { roleMiddleware } from '../middleware/role.middleware';
-import { cacheMiddleware } from '../middleware/cache.middleware';
-import { dateRangeMiddleware } from '../middleware/dateRange.middleware';
-import { analyticsMiddleware } from '../middleware/analytics.middleware';
-import {
-  dashboardFiltersValidationRules,
-  timeRangeValidationRules,
-  widgetConfigValidationRules,
-  alertConfigValidationRules,
-  comparisonValidationRules,
-  exportDashboardValidationRules,
-  customMetricValidationRules,
-  benchmarkValidationRules
-} from '../validators/dashboard.validators';
+import { 
+  authenticateToken, 
+  authorizeRoles, 
+  checkPermission, 
+  requireActiveSubscription,
+  UserRole 
+} from '../middleware/auth';
+import { validate, sanitizeInput, validateId } from '../middleware/validation';
+import { createRateLimit, EndpointType } from '../middleware/rate-limit';
+import { 
+  requireMinimumRole, 
+  requireExactRoles, 
+  requireModulePermission,
+  requireVeterinaryAccess,
+  requireFinancialAccess,
+  requireUserManagementAccess 
+} from '../middleware/role';
 
 // Crear instancia del router
 const router = Router();
 
-// Crear instancia del controlador de dashboard
+// Simulación del controlador de dashboard (reemplazar con implementación real)
+class DashboardController {
+  async getMainDashboard(req: Request, res: Response) {
+    try {
+      // TODO: Implementar lógica del dashboard principal
+      res.json({
+        success: true,
+        data: {
+          message: 'Dashboard principal cargado',
+          period: req.query.period || '7d',
+          timezone: req.query.timezone || 'America/Mexico_City',
+          refresh: req.query.refresh === 'true'
+        }
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        error: 'Error al cargar dashboard principal'
+      });
+    }
+  }
+
+  async getExecutiveSummary(req: Request, res: Response) {
+    try {
+      // TODO: Implementar resumen ejecutivo
+      res.json({
+        success: true,
+        data: {
+          message: 'Resumen ejecutivo',
+          includeComparison: req.query.includeComparison === 'true',
+          previousPeriod: req.query.previousPeriod === 'true',
+          benchmarks: req.query.benchmarks
+        }
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        error: 'Error al cargar resumen ejecutivo'
+      });
+    }
+  }
+
+  async getKPIs(req: Request, res: Response) {
+    try {
+      // TODO: Implementar KPIs
+      res.json({
+        success: true,
+        data: {
+          message: 'KPIs principales',
+          metrics: req.query.metrics || 'health,production,financial',
+          format: req.query.format || 'detailed'
+        }
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        error: 'Error al cargar KPIs'
+      });
+    }
+  }
+
+  async getHealthMetrics(req: Request, res: Response) {
+    try {
+      // TODO: Implementar métricas de salud
+      res.json({
+        success: true,
+        data: {
+          message: 'Métricas de salud del ganado',
+          includeVaccinations: req.query.includeVaccinations === 'true',
+          includeTreatments: req.query.includeTreatments === 'true',
+          groupBy: req.query.groupBy
+        }
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        error: 'Error al cargar métricas de salud'
+      });
+    }
+  }
+
+  async getVaccinationStatus(req: Request, res: Response) {
+    try {
+      // TODO: Implementar estado de vacunación
+      res.json({
+        success: true,
+        data: {
+          message: 'Estado de vacunación',
+          includeOverdue: req.query.includeOverdue === 'true',
+          upcomingDays: req.query.upcomingDays || '30',
+          groupBy: req.query.groupBy
+        }
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        error: 'Error al cargar estado de vacunación'
+      });
+    }
+  }
+
+  async getIllnessTrends(req: Request, res: Response) {
+    try {
+      // TODO: Implementar tendencias de enfermedades
+      res.json({
+        success: true,
+        data: {
+          message: 'Tendencias de enfermedades',
+          period: req.query.period || '3m',
+          includeSeasonality: req.query.includeSeasonality === 'true',
+          riskAnalysis: req.query.riskAnalysis === 'true',
+          groupBy: req.query.groupBy
+        }
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        error: 'Error al cargar tendencias de enfermedades'
+      });
+    }
+  }
+
+  async getMortalityRates(req: Request, res: Response) {
+    try {
+      // TODO: Implementar tasas de mortalidad
+      res.json({
+        success: true,
+        data: {
+          message: 'Tasas de mortalidad',
+          period: req.query.period || '1y',
+          includeReasons: req.query.includeReasons === 'true',
+          ageGroups: req.query.ageGroups === 'true',
+          seasonalAnalysis: req.query.seasonalAnalysis === 'true'
+        }
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        error: 'Error al cargar tasas de mortalidad'
+      });
+    }
+  }
+
+  async getProductionMetrics(req: Request, res: Response) {
+    try {
+      // TODO: Implementar métricas de producción
+      res.json({
+        success: true,
+        data: {
+          message: 'Métricas de producción',
+          productionType: req.query.productionType,
+          includeQuality: req.query.includeQuality === 'true',
+          efficiency: req.query.efficiency === 'true'
+        }
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        error: 'Error al cargar métricas de producción'
+      });
+    }
+  }
+
+  async getFeedEfficiency(req: Request, res: Response) {
+    try {
+      // TODO: Implementar eficiencia alimentaria
+      res.json({
+        success: true,
+        data: {
+          message: 'Eficiencia alimentaria',
+          includeNutrition: req.query.includeNutrition === 'true',
+          costAnalysis: req.query.costAnalysis === 'true',
+          groupBy: req.query.groupBy
+        }
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        error: 'Error al cargar eficiencia alimentaria'
+      });
+    }
+  }
+
+  async getGrowthRates(req: Request, res: Response) {
+    try {
+      // TODO: Implementar tasas de crecimiento
+      res.json({
+        success: true,
+        data: {
+          message: 'Tasas de crecimiento',
+          ageGroups: req.query.ageGroups,
+          includeWeight: req.query.includeWeight === 'true',
+          includeHeight: req.query.includeHeight === 'true',
+          benchmarks: req.query.benchmarks === 'true'
+        }
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        error: 'Error al cargar tasas de crecimiento'
+      });
+    }
+  }
+
+  async getReproductivePerformance(req: Request, res: Response) {
+    try {
+      // TODO: Implementar rendimiento reproductivo
+      res.json({
+        success: true,
+        data: {
+          message: 'Rendimiento reproductivo',
+          includeConceptionRates: req.query.includeConceptionRates === 'true',
+          calvingInterval: req.query.calvingInterval === 'true',
+          breedingEfficiency: req.query.breedingEfficiency === 'true'
+        }
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        error: 'Error al cargar rendimiento reproductivo'
+      });
+    }
+  }
+
+  async getFinancialOverview(req: Request, res: Response) {
+    try {
+      // TODO: Implementar resumen financiero
+      res.json({
+        success: true,
+        data: {
+          message: 'Resumen financiero',
+          includeCosts: req.query.includeCosts === 'true',
+          includeRevenue: req.query.includeRevenue === 'true',
+          profitability: req.query.profitability === 'true',
+          period: req.query.period || '1y'
+        }
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        error: 'Error al cargar resumen financiero'
+      });
+    }
+  }
+
+  async getCostAnalysis(req: Request, res: Response) {
+    try {
+      // TODO: Implementar análisis de costos
+      res.json({
+        success: true,
+        data: {
+          message: 'Análisis de costos',
+          costCategories: req.query.costCategories,
+          breakdown: req.query.breakdown,
+          trends: req.query.trends === 'true'
+        }
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        error: 'Error al cargar análisis de costos'
+      });
+    }
+  }
+
+  async getRevenueStreams(req: Request, res: Response) {
+    try {
+      // TODO: Implementar análisis de ingresos
+      res.json({
+        success: true,
+        data: {
+          message: 'Análisis de ingresos',
+          sources: req.query.sources,
+          seasonality: req.query.seasonality === 'true',
+          projections: req.query.projections === 'true'
+        }
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        error: 'Error al cargar análisis de ingresos'
+      });
+    }
+  }
+
+  async getROIAnalysis(req: Request, res: Response) {
+    try {
+      // TODO: Implementar análisis ROI
+      res.json({
+        success: true,
+        data: {
+          message: 'Análisis ROI',
+          investments: req.query.investments,
+          timeframe: req.query.timeframe,
+          includeProjections: req.query.includeProjections === 'true'
+        }
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        error: 'Error al cargar análisis ROI'
+      });
+    }
+  }
+
+  async getActiveAlerts(req: Request, res: Response) {
+    try {
+      // TODO: Implementar alertas activas
+      res.json({
+        success: true,
+        data: {
+          message: 'Alertas activas',
+          severity: req.query.severity,
+          category: req.query.category,
+          limit: req.query.limit || '50'
+        }
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        error: 'Error al cargar alertas activas'
+      });
+    }
+  }
+
+  async acknowledgeAlerts(req: Request, res: Response) {
+    try {
+      // TODO: Implementar reconocimiento de alertas
+      res.json({
+        success: true,
+        data: {
+          message: 'Alertas reconocidas',
+          alertIds: req.body.alertIds,
+          acknowledgement: req.body.acknowledgement,
+          userId: req.body.userId
+        }
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        error: 'Error al reconocer alertas'
+      });
+    }
+  }
+
+  async getUrgentActions(req: Request, res: Response) {
+    try {
+      // TODO: Implementar acciones urgentes
+      res.json({
+        success: true,
+        data: {
+          message: 'Acciones urgentes',
+          priority: req.query.priority,
+          assignedTo: req.query.assignedTo,
+          category: req.query.category
+        }
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        error: 'Error al cargar acciones urgentes'
+      });
+    }
+  }
+
+  async getGeographicDistribution(req: Request, res: Response) {
+    try {
+      // TODO: Implementar distribución geográfica
+      res.json({
+        success: true,
+        data: {
+          message: 'Distribución geográfica',
+          includeHealthEvents: req.query.includeHealthEvents === 'true',
+          includeVaccinations: req.query.includeVaccinations === 'true',
+          clusterAnalysis: req.query.clusterAnalysis === 'true'
+        }
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        error: 'Error al cargar distribución geográfica'
+      });
+    }
+  }
+
+  async getHeatmaps(req: Request, res: Response) {
+    try {
+      // TODO: Implementar mapas de calor
+      res.json({
+        success: true,
+        data: {
+          message: 'Mapas de calor',
+          metric: req.query.metric,
+          resolution: req.query.resolution
+        }
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        error: 'Error al cargar mapas de calor'
+      });
+    }
+  }
+
+  async getMovementPatterns(req: Request, res: Response) {
+    try {
+      // TODO: Implementar patrones de movimiento
+      res.json({
+        success: true,
+        data: {
+          message: 'Patrones de movimiento',
+          timeframe: req.query.timeframe,
+          includeAnomalies: req.query.includeAnomalies === 'true',
+          predictiveAnalysis: req.query.predictiveAnalysis === 'true'
+        }
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        error: 'Error al cargar patrones de movimiento'
+      });
+    }
+  }
+
+  async getUserWidgets(req: Request, res: Response) {
+    try {
+      // TODO: Implementar widgets del usuario
+      res.json({
+        success: true,
+        data: {
+          message: 'Widgets del usuario',
+          layout: req.query.layout,
+          includeData: req.query.includeData === 'true',
+          activeOnly: req.query.activeOnly === 'true'
+        }
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        error: 'Error al cargar widgets del usuario'
+      });
+    }
+  }
+
+  async createWidget(req: Request, res: Response) {
+    try {
+      // TODO: Implementar creación de widget
+      res.json({
+        success: true,
+        data: {
+          message: 'Widget creado',
+          type: req.body.type,
+          config: req.body.config,
+          position: req.body.position,
+          title: req.body.title,
+          dataSource: req.body.dataSource
+        }
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        error: 'Error al crear widget'
+      });
+    }
+  }
+
+  async updateWidget(req: Request, res: Response) {
+    try {
+      // TODO: Implementar actualización de widget
+      res.json({
+        success: true,
+        data: {
+          message: 'Widget actualizado',
+          widgetId: req.params.widgetId,
+          updates: req.body
+        }
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        error: 'Error al actualizar widget'
+      });
+    }
+  }
+
+  async deleteWidget(req: Request, res: Response) {
+    try {
+      // TODO: Implementar eliminación de widget
+      res.json({
+        success: true,
+        data: {
+          message: 'Widget eliminado',
+          widgetId: req.params.widgetId
+        }
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        error: 'Error al eliminar widget'
+      });
+    }
+  }
+
+  async updateDashboardLayout(req: Request, res: Response) {
+    try {
+      // TODO: Implementar actualización de layout
+      res.json({
+        success: true,
+        data: {
+          message: 'Layout del dashboard actualizado',
+          widgets: req.body.widgets,
+          layout: req.body.layout,
+          settings: req.body.settings
+        }
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        error: 'Error al actualizar layout del dashboard'
+      });
+    }
+  }
+
+  async getComparisons(req: Request, res: Response) {
+    try {
+      // TODO: Implementar comparaciones
+      res.json({
+        success: true,
+        data: {
+          message: 'Comparaciones',
+          compareWith: req.query.compareWith,
+          metrics: req.query.metrics,
+          period: req.query.period
+        }
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        error: 'Error al cargar comparaciones'
+      });
+    }
+  }
+
+  async getBenchmarks(req: Request, res: Response) {
+    try {
+      // TODO: Implementar benchmarks
+      res.json({
+        success: true,
+        data: {
+          message: 'Benchmarks de la industria',
+          category: req.query.category,
+          region: req.query.region,
+          ranchSize: req.query.ranchSize
+        }
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        error: 'Error al cargar benchmarks'
+      });
+    }
+  }
+
+  async getPerformanceScores(req: Request, res: Response) {
+    try {
+      // TODO: Implementar puntuaciones de rendimiento
+      res.json({
+        success: true,
+        data: {
+          message: 'Puntuaciones de rendimiento',
+          categories: req.query.categories,
+          includeRecommendations: req.query.includeRecommendations === 'true'
+        }
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        error: 'Error al cargar puntuaciones de rendimiento'
+      });
+    }
+  }
+
+  async getRealtimeData(req: Request, res: Response) {
+    try {
+      // TODO: Implementar datos en tiempo real
+      res.json({
+        success: true,
+        data: {
+          message: 'Datos en tiempo real',
+          metrics: req.query.metrics,
+          format: req.query.format
+        }
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        error: 'Error al cargar datos en tiempo real'
+      });
+    }
+  }
+
+  async getLiveMetrics(req: Request, res: Response) {
+    try {
+      // TODO: Implementar métricas en vivo
+      res.json({
+        success: true,
+        data: {
+          message: 'Métricas en vivo',
+          metrics: req.query.metrics,
+          updateInterval: req.query.updateInterval
+        }
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        error: 'Error al cargar métricas en vivo'
+      });
+    }
+  }
+
+  async exportDashboard(req: Request, res: Response) {
+    try {
+      // TODO: Implementar exportación de dashboard
+      res.json({
+        success: true,
+        data: {
+          message: 'Dashboard exportado',
+          format: req.body.format,
+          sections: req.body.sections,
+          includeCharts: req.body.includeCharts,
+          timeRange: req.body.timeRange
+        }
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        error: 'Error al exportar dashboard'
+      });
+    }
+  }
+
+  async downloadDashboardExport(req: Request, res: Response) {
+    try {
+      // TODO: Implementar descarga de exportación
+      res.json({
+        success: true,
+        data: {
+          message: 'Descarga de exportación',
+          exportId: req.params.exportId
+        }
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        error: 'Error al descargar exportación'
+      });
+    }
+  }
+
+  async createScheduledReport(req: Request, res: Response) {
+    try {
+      // TODO: Implementar creación de reporte programado
+      res.json({
+        success: true,
+        data: {
+          message: 'Reporte programado creado',
+          frequency: req.body.frequency,
+          recipients: req.body.recipients,
+          sections: req.body.sections,
+          format: req.body.format,
+          schedule: req.body.schedule
+        }
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        error: 'Error al crear reporte programado'
+      });
+    }
+  }
+
+  async getDashboardSettings(req: Request, res: Response) {
+    try {
+      // TODO: Implementar obtención de configuración
+      res.json({
+        success: true,
+        data: {
+          message: 'Configuración del dashboard',
+          userId: req.userId
+        }
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        error: 'Error al cargar configuración del dashboard'
+      });
+    }
+  }
+
+  async updateDashboardSettings(req: Request, res: Response) {
+    try {
+      // TODO: Implementar actualización de configuración
+      res.json({
+        success: true,
+        data: {
+          message: 'Configuración actualizada',
+          theme: req.body.theme,
+          layout: req.body.layout,
+          defaultPeriod: req.body.defaultPeriod,
+          autoRefresh: req.body.autoRefresh,
+          notifications: req.body.notifications
+        }
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        error: 'Error al actualizar configuración'
+      });
+    }
+  }
+
+  async resetDashboard(req: Request, res: Response) {
+    try {
+      // TODO: Implementar reset del dashboard
+      res.json({
+        success: true,
+        data: {
+          message: 'Dashboard restablecido',
+          confirmReset: req.body.confirmReset,
+          preserveWidgets: req.body.preserveWidgets
+        }
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        error: 'Error al restablecer dashboard'
+      });
+    }
+  }
+
+  async createCustomMetric(req: Request, res: Response) {
+    try {
+      // TODO: Implementar creación de métrica personalizada
+      res.json({
+        success: true,
+        data: {
+          message: 'Métrica personalizada creada',
+          name: req.body.name,
+          formula: req.body.formula,
+          dataSource: req.body.dataSource,
+          visualization: req.body.visualization,
+          schedule: req.body.schedule
+        }
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        error: 'Error al crear métrica personalizada'
+      });
+    }
+  }
+
+  async getPredictiveAnalytics(req: Request, res: Response) {
+    try {
+      // TODO: Implementar análisis predictivo
+      res.json({
+        success: true,
+        data: {
+          message: 'Análisis predictivo',
+          models: req.query.models,
+          horizon: req.query.horizon,
+          confidence: req.query.confidence
+        }
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        error: 'Error al cargar análisis predictivo'
+      });
+    }
+  }
+}
+
+// Crear instancia del controlador
 const dashboardController = new DashboardController();
 
 // ============================================================================
@@ -29,10 +811,10 @@ const dashboardController = new DashboardController();
 // ============================================================================
 
 // Todas las rutas del dashboard requieren autenticación
-router.use(authMiddleware);
+router.use(authenticateToken);
 
-// Middleware para tracking de analytics del dashboard
-router.use(analyticsMiddleware);
+// Sanitización de entrada para todas las rutas
+router.use(sanitizeInput);
 
 // ============================================================================
 // DASHBOARD PRINCIPAL Y RESUMEN EJECUTIVO
@@ -46,15 +828,7 @@ router.use(analyticsMiddleware);
  */
 router.get(
   '/',
-  rateLimitMiddleware({ 
-    windowMs: 2 * 60 * 1000, // 2 minutos
-    max: 100, // máximo 100 consultas por usuario cada 2 minutos
-    message: 'Too many dashboard requests'
-  }),
-  cacheMiddleware({ ttl: 300 }), // cache de 5 minutos
-  dateRangeMiddleware,
-  dashboardFiltersValidationRules(),
-  validationMiddleware,
+  createRateLimit(EndpointType.CATTLE_READ),
   dashboardController.getMainDashboard
 );
 
@@ -66,12 +840,7 @@ router.get(
  */
 router.get(
   '/summary',
-  rateLimitMiddleware({ 
-    windowMs: 5 * 60 * 1000, // 5 minutos
-    max: 50, // máximo 50 consultas de resumen por usuario cada 5 minutos
-    message: 'Too many summary requests'
-  }),
-  cacheMiddleware({ ttl: 600 }), // cache de 10 minutos
+  createRateLimit(EndpointType.REPORTS),
   dashboardController.getExecutiveSummary
 );
 
@@ -83,12 +852,7 @@ router.get(
  */
 router.get(
   '/kpis',
-  rateLimitMiddleware({ 
-    windowMs: 3 * 60 * 1000, // 3 minutos
-    max: 80, // máximo 80 consultas de KPIs por usuario cada 3 minutos
-    message: 'Too many KPI requests'
-  }),
-  cacheMiddleware({ ttl: 180 }), // cache de 3 minutos
+  createRateLimit(EndpointType.CATTLE_READ),
   dashboardController.getKPIs
 );
 
@@ -104,12 +868,7 @@ router.get(
  */
 router.get(
   '/health-metrics',
-  rateLimitMiddleware({ 
-    windowMs: 5 * 60 * 1000, // 5 minutos
-    max: 60, // máximo 60 consultas de métricas de salud cada 5 minutos
-    message: 'Too many health metrics requests'
-  }),
-  cacheMiddleware({ ttl: 300 }), // cache de 5 minutos
+  createRateLimit(EndpointType.HEALTH),
   dashboardController.getHealthMetrics
 );
 
@@ -121,7 +880,7 @@ router.get(
  */
 router.get(
   '/vaccination-status',
-  cacheMiddleware({ ttl: 300 }),
+  createRateLimit(EndpointType.VACCINATION),
   dashboardController.getVaccinationStatus
 );
 
@@ -133,30 +892,20 @@ router.get(
  */
 router.get(
   '/illness-trends',
-  rateLimitMiddleware({ 
-    windowMs: 10 * 60 * 1000, // 10 minutos
-    max: 30, // máximo 30 análisis de tendencias cada 10 minutos
-    message: 'Too many illness trend requests'
-  }),
-  cacheMiddleware({ ttl: 600 }),
+  createRateLimit(EndpointType.HEALTH),
   dashboardController.getIllnessTrends
 );
 
 /**
  * @route   GET /dashboard/mortality-rates
  * @desc    Tasas de mortalidad y análisis de causas
- * @access  Private (Roles: RANCH_OWNER, ADMIN, VETERINARIAN)
+ * @access  Private (Roles: OWNER, ADMIN, VETERINARIAN)
  * @query   ?period=1y&includeReasons=true&ageGroups=true&seasonalAnalysis=true
  */
 router.get(
   '/mortality-rates',
-  roleMiddleware(['RANCH_OWNER', 'ADMIN', 'VETERINARIAN']),
-  rateLimitMiddleware({ 
-    windowMs: 15 * 60 * 1000, // 15 minutos
-    max: 20, // máximo 20 consultas de mortalidad cada 15 minutos
-    message: 'Too many mortality rate requests'
-  }),
-  cacheMiddleware({ ttl: 1800 }), // cache de 30 minutos
+  requireVeterinaryAccess,
+  createRateLimit(EndpointType.HEALTH),
   dashboardController.getMortalityRates
 );
 
@@ -172,12 +921,7 @@ router.get(
  */
 router.get(
   '/production-metrics',
-  rateLimitMiddleware({ 
-    windowMs: 5 * 60 * 1000, // 5 minutos
-    max: 60, // máximo 60 consultas de producción cada 5 minutos
-    message: 'Too many production metrics requests'
-  }),
-  cacheMiddleware({ ttl: 600 }),
+  createRateLimit(EndpointType.CATTLE_READ),
   dashboardController.getProductionMetrics
 );
 
@@ -189,7 +933,7 @@ router.get(
  */
 router.get(
   '/feed-efficiency',
-  cacheMiddleware({ ttl: 900 }), // cache de 15 minutos
+  createRateLimit(EndpointType.CATTLE_READ),
   dashboardController.getFeedEfficiency
 );
 
@@ -201,25 +945,20 @@ router.get(
  */
 router.get(
   '/growth-rates',
-  cacheMiddleware({ ttl: 600 }),
+  createRateLimit(EndpointType.CATTLE_READ),
   dashboardController.getGrowthRates
 );
 
 /**
  * @route   GET /dashboard/reproductive-performance
  * @desc    Rendimiento reproductivo y indicadores de fertilidad
- * @access  Private (Roles: RANCH_OWNER, ADMIN, VETERINARIAN)
+ * @access  Private (Roles: OWNER, ADMIN, VETERINARIAN)
  * @query   ?includeConceptionRates=true&calvingInterval=true&breedingEfficiency=true
  */
 router.get(
   '/reproductive-performance',
-  roleMiddleware(['RANCH_OWNER', 'ADMIN', 'VETERINARIAN']),
-  rateLimitMiddleware({ 
-    windowMs: 10 * 60 * 1000, // 10 minutos
-    max: 30, // máximo 30 consultas reproductivas cada 10 minutos
-    message: 'Too many reproductive performance requests'
-  }),
-  cacheMiddleware({ ttl: 1200 }), // cache de 20 minutos
+  requireVeterinaryAccess,
+  createRateLimit(EndpointType.HEALTH),
   dashboardController.getReproductivePerformance
 );
 
@@ -230,67 +969,52 @@ router.get(
 /**
  * @route   GET /dashboard/financial-overview
  * @desc    Resumen financiero y análisis económico
- * @access  Private (Roles: RANCH_OWNER, ADMIN)
+ * @access  Private (Roles: OWNER, ADMIN)
  * @query   ?includeCosts=true&includeRevenue=true&profitability=true&period=1y
  */
 router.get(
   '/financial-overview',
-  roleMiddleware(['RANCH_OWNER', 'ADMIN']),
-  rateLimitMiddleware({ 
-    windowMs: 10 * 60 * 1000, // 10 minutos
-    max: 20, // máximo 20 consultas financieras cada 10 minutos
-    message: 'Too many financial overview requests'
-  }),
-  cacheMiddleware({ ttl: 1800 }), // cache de 30 minutos
+  requireFinancialAccess,
+  createRateLimit(EndpointType.REPORTS),
   dashboardController.getFinancialOverview
 );
 
 /**
  * @route   GET /dashboard/cost-analysis
  * @desc    Análisis detallado de costos operativos
- * @access  Private (Roles: RANCH_OWNER, ADMIN)
+ * @access  Private (Roles: OWNER, ADMIN)
  * @query   ?costCategories=feed,medical,labor,facilities&breakdown=detailed&trends=true
  */
 router.get(
   '/cost-analysis',
-  roleMiddleware(['RANCH_OWNER', 'ADMIN']),
-  rateLimitMiddleware({ 
-    windowMs: 15 * 60 * 1000, // 15 minutos
-    max: 15, // máximo 15 análisis de costos cada 15 minutos
-    message: 'Too many cost analysis requests'
-  }),
-  cacheMiddleware({ ttl: 1800 }),
+  requireFinancialAccess,
+  createRateLimit(EndpointType.REPORTS),
   dashboardController.getCostAnalysis
 );
 
 /**
  * @route   GET /dashboard/revenue-streams
  * @desc    Análisis de fuentes de ingresos y rentabilidad
- * @access  Private (Roles: RANCH_OWNER, ADMIN)
+ * @access  Private (Roles: OWNER, ADMIN)
  * @query   ?sources=milk,meat,breeding,other&seasonality=true&projections=true
  */
 router.get(
   '/revenue-streams',
-  roleMiddleware(['RANCH_OWNER', 'ADMIN']),
-  cacheMiddleware({ ttl: 1800 }),
+  requireFinancialAccess,
+  createRateLimit(EndpointType.REPORTS),
   dashboardController.getRevenueStreams
 );
 
 /**
  * @route   GET /dashboard/roi-analysis
  * @desc    Análisis de retorno de inversión por categorías
- * @access  Private (Roles: RANCH_OWNER, ADMIN)
+ * @access  Private (Roles: OWNER, ADMIN)
  * @query   ?investments=genetics,facilities,technology&timeframe=3y&includeProjections=true
  */
 router.get(
   '/roi-analysis',
-  roleMiddleware(['RANCH_OWNER', 'ADMIN']),
-  rateLimitMiddleware({ 
-    windowMs: 30 * 60 * 1000, // 30 minutos
-    max: 10, // máximo 10 análisis ROI cada 30 minutos
-    message: 'Too many ROI analysis requests'
-  }),
-  cacheMiddleware({ ttl: 3600 }), // cache de 1 hora
+  requireFinancialAccess,
+  createRateLimit(EndpointType.REPORTS),
   dashboardController.getROIAnalysis
 );
 
@@ -306,11 +1030,7 @@ router.get(
  */
 router.get(
   '/alerts',
-  rateLimitMiddleware({ 
-    windowMs: 2 * 60 * 1000, // 2 minutos
-    max: 200, // máximo 200 consultas de alertas cada 2 minutos
-    message: 'Too many alert requests'
-  }),
+  createRateLimit(EndpointType.CATTLE_READ),
   dashboardController.getActiveAlerts
 );
 
@@ -322,11 +1042,8 @@ router.get(
  */
 router.post(
   '/alerts/acknowledge',
-  rateLimitMiddleware({ 
-    windowMs: 5 * 60 * 1000, // 5 minutos
-    max: 100, // máximo 100 reconocimientos cada 5 minutos
-    message: 'Too many alert acknowledgements'
-  }),
+  createRateLimit(EndpointType.CATTLE_WRITE),
+  validate('search'), // Usar esquema básico para validación
   dashboardController.acknowledgeAlerts
 );
 
@@ -338,11 +1055,7 @@ router.post(
  */
 router.get(
   '/urgent-actions',
-  rateLimitMiddleware({ 
-    windowMs: 3 * 60 * 1000, // 3 minutos
-    max: 100, // máximo 100 consultas de acciones urgentes cada 3 minutos
-    message: 'Too many urgent actions requests'
-  }),
+  createRateLimit(EndpointType.CATTLE_READ),
   dashboardController.getUrgentActions
 );
 
@@ -358,12 +1071,7 @@ router.get(
  */
 router.get(
   '/geographic-distribution',
-  rateLimitMiddleware({ 
-    windowMs: 10 * 60 * 1000, // 10 minutos
-    max: 30, // máximo 30 análisis geográficos cada 10 minutos
-    message: 'Too many geographic analysis requests'
-  }),
-  cacheMiddleware({ ttl: 900 }), // cache de 15 minutos
+  createRateLimit(EndpointType.MAPS),
   dashboardController.getGeographicDistribution
 );
 
@@ -375,12 +1083,7 @@ router.get(
  */
 router.get(
   '/heatmaps',
-  rateLimitMiddleware({ 
-    windowMs: 15 * 60 * 1000, // 15 minutos
-    max: 20, // máximo 20 mapas de calor cada 15 minutos
-    message: 'Too many heatmap requests'
-  }),
-  cacheMiddleware({ ttl: 1800 }),
+  createRateLimit(EndpointType.MAPS),
   dashboardController.getHeatmaps
 );
 
@@ -392,7 +1095,7 @@ router.get(
  */
 router.get(
   '/movement-patterns',
-  cacheMiddleware({ ttl: 1200 }),
+  createRateLimit(EndpointType.MAPS),
   dashboardController.getMovementPatterns
 );
 
@@ -408,11 +1111,7 @@ router.get(
  */
 router.get(
   '/widgets',
-  rateLimitMiddleware({ 
-    windowMs: 5 * 60 * 1000, // 5 minutos
-    max: 50, // máximo 50 consultas de widgets cada 5 minutos
-    message: 'Too many widget requests'
-  }),
+  createRateLimit(EndpointType.CATTLE_READ),
   dashboardController.getUserWidgets
 );
 
@@ -424,13 +1123,8 @@ router.get(
  */
 router.post(
   '/widgets',
-  rateLimitMiddleware({ 
-    windowMs: 15 * 60 * 1000, // 15 minutos
-    max: 20, // máximo 20 creaciones de widgets cada 15 minutos
-    message: 'Too many widget creation attempts'
-  }),
-  widgetConfigValidationRules(),
-  validationMiddleware,
+  createRateLimit(EndpointType.CATTLE_WRITE),
+  validate('search'), // Usar esquema básico para validación
   dashboardController.createWidget
 );
 
@@ -443,13 +1137,9 @@ router.post(
  */
 router.put(
   '/widgets/:widgetId',
-  rateLimitMiddleware({ 
-    windowMs: 10 * 60 * 1000, // 10 minutos
-    max: 50, // máximo 50 actualizaciones de widgets cada 10 minutos
-    message: 'Too many widget updates'
-  }),
-  widgetConfigValidationRules(),
-  validationMiddleware,
+  validateId('widgetId'),
+  createRateLimit(EndpointType.CATTLE_WRITE),
+  validate('search'), // Usar esquema básico para validación
   dashboardController.updateWidget
 );
 
@@ -461,11 +1151,8 @@ router.put(
  */
 router.delete(
   '/widgets/:widgetId',
-  rateLimitMiddleware({ 
-    windowMs: 10 * 60 * 1000, // 10 minutos
-    max: 30, // máximo 30 eliminaciones de widgets cada 10 minutos
-    message: 'Too many widget deletions'
-  }),
+  validateId('widgetId'),
+  createRateLimit(EndpointType.CATTLE_WRITE),
   dashboardController.deleteWidget
 );
 
@@ -477,11 +1164,8 @@ router.delete(
  */
 router.put(
   '/widgets/layout',
-  rateLimitMiddleware({ 
-    windowMs: 15 * 60 * 1000, // 15 minutos
-    max: 10, // máximo 10 actualizaciones de layout cada 15 minutos
-    message: 'Too many layout updates'
-  }),
+  createRateLimit(EndpointType.CATTLE_WRITE),
+  validate('search'), // Usar esquema básico para validación
   dashboardController.updateDashboardLayout
 );
 
@@ -497,34 +1181,22 @@ router.put(
  */
 router.get(
   '/comparisons',
-  rateLimitMiddleware({ 
-    windowMs: 10 * 60 * 1000, // 10 minutos
-    max: 30, // máximo 30 comparaciones cada 10 minutos
-    message: 'Too many comparison requests'
-  }),
-  cacheMiddleware({ ttl: 1800 }),
-  comparisonValidationRules(),
-  validationMiddleware,
+  createRateLimit(EndpointType.REPORTS),
+  validate('search'), // Usar esquema básico para validación
   dashboardController.getComparisons
 );
 
 /**
  * @route   GET /dashboard/benchmarks
  * @desc    Benchmarks de la industria y mejores prácticas
- * @access  Private (Roles: RANCH_OWNER, ADMIN)
+ * @access  Private (Roles: OWNER, ADMIN)
  * @query   ?category=productivity|efficiency|profitability&region=mexico&ranchSize=similar
  */
 router.get(
   '/benchmarks',
-  roleMiddleware(['RANCH_OWNER', 'ADMIN']),
-  rateLimitMiddleware({ 
-    windowMs: 30 * 60 * 1000, // 30 minutos
-    max: 10, // máximo 10 consultas de benchmarks cada 30 minutos
-    message: 'Too many benchmark requests'
-  }),
-  cacheMiddleware({ ttl: 7200 }), // cache de 2 horas
-  benchmarkValidationRules(),
-  validationMiddleware,
+  requireFinancialAccess,
+  createRateLimit(EndpointType.REPORTS),
+  validate('search'), // Usar esquema básico para validación
   dashboardController.getBenchmarks
 );
 
@@ -536,12 +1208,7 @@ router.get(
  */
 router.get(
   '/performance-scores',
-  rateLimitMiddleware({ 
-    windowMs: 15 * 60 * 1000, // 15 minutos
-    max: 20, // máximo 20 consultas de puntuaciones cada 15 minutos
-    message: 'Too many performance score requests'
-  }),
-  cacheMiddleware({ ttl: 1800 }),
+  createRateLimit(EndpointType.REPORTS),
   dashboardController.getPerformanceScores
 );
 
@@ -557,11 +1224,7 @@ router.get(
  */
 router.get(
   '/realtime-data',
-  rateLimitMiddleware({ 
-    windowMs: 1 * 60 * 1000, // 1 minuto
-    max: 60, // máximo 60 consultas en tiempo real por minuto
-    message: 'Too many realtime data requests'
-  }),
+  createRateLimit(EndpointType.CATTLE_READ),
   dashboardController.getRealtimeData
 );
 
@@ -573,11 +1236,7 @@ router.get(
  */
 router.get(
   '/live-metrics',
-  rateLimitMiddleware({ 
-    windowMs: 1 * 60 * 1000, // 1 minuto
-    max: 120, // máximo 120 consultas de métricas en vivo por minuto
-    message: 'Too many live metrics requests'
-  }),
+  createRateLimit(EndpointType.CATTLE_READ),
   dashboardController.getLiveMetrics
 );
 
@@ -593,13 +1252,8 @@ router.get(
  */
 router.post(
   '/export',
-  rateLimitMiddleware({ 
-    windowMs: 30 * 60 * 1000, // 30 minutos
-    max: 5, // máximo 5 exportaciones cada 30 minutos
-    message: 'Too many dashboard export requests'
-  }),
-  exportDashboardValidationRules(),
-  validationMiddleware,
+  createRateLimit(EndpointType.FILES),
+  validate('search'), // Usar esquema básico para validación
   dashboardController.exportDashboard
 );
 
@@ -611,28 +1265,22 @@ router.post(
  */
 router.get(
   '/export/:exportId/download',
-  rateLimitMiddleware({ 
-    windowMs: 10 * 60 * 1000, // 10 minutos
-    max: 20, // máximo 20 descargas cada 10 minutos
-    message: 'Too many download requests'
-  }),
+  validateId('exportId'),
+  createRateLimit(EndpointType.FILES),
   dashboardController.downloadDashboardExport
 );
 
 /**
  * @route   POST /dashboard/scheduled-reports
  * @desc    Configurar reportes programados del dashboard
- * @access  Private (Roles: RANCH_OWNER, ADMIN)
+ * @access  Private (Roles: OWNER, ADMIN)
  * @body    { frequency: string, recipients: array, sections: array, format: string, schedule: object }
  */
 router.post(
   '/scheduled-reports',
-  roleMiddleware(['RANCH_OWNER', 'ADMIN']),
-  rateLimitMiddleware({ 
-    windowMs: 60 * 60 * 1000, // 1 hora
-    max: 5, // máximo 5 configuraciones de reportes programados por hora
-    message: 'Too many scheduled report configurations'
-  }),
+  requireFinancialAccess,
+  createRateLimit(EndpointType.REPORTS),
+  validate('search'), // Usar esquema básico para validación
   dashboardController.createScheduledReport
 );
 
@@ -647,6 +1295,7 @@ router.post(
  */
 router.get(
   '/settings',
+  createRateLimit(EndpointType.CATTLE_READ),
   dashboardController.getDashboardSettings
 );
 
@@ -658,11 +1307,8 @@ router.get(
  */
 router.put(
   '/settings',
-  rateLimitMiddleware({ 
-    windowMs: 15 * 60 * 1000, // 15 minutos
-    max: 10, // máximo 10 actualizaciones de configuración cada 15 minutos
-    message: 'Too many settings updates'
-  }),
+  createRateLimit(EndpointType.CATTLE_WRITE),
+  validate('search'), // Usar esquema básico para validación
   dashboardController.updateDashboardSettings
 );
 
@@ -674,11 +1320,8 @@ router.put(
  */
 router.post(
   '/reset',
-  rateLimitMiddleware({ 
-    windowMs: 60 * 60 * 1000, // 1 hora
-    max: 3, // máximo 3 resets cada hora
-    message: 'Too many dashboard resets'
-  }),
+  createRateLimit(EndpointType.CATTLE_WRITE),
+  validate('search'), // Usar esquema básico para validación
   dashboardController.resetDashboard
 );
 
@@ -689,37 +1332,27 @@ router.post(
 /**
  * @route   POST /dashboard/custom-metrics
  * @desc    Crear métrica personalizada
- * @access  Private (Roles: RANCH_OWNER, ADMIN)
+ * @access  Private (Roles: OWNER, ADMIN)
  * @body    { name: string, formula: string, dataSource: string, visualization: object, schedule: object }
  */
 router.post(
   '/custom-metrics',
-  roleMiddleware(['RANCH_OWNER', 'ADMIN']),
-  rateLimitMiddleware({ 
-    windowMs: 30 * 60 * 1000, // 30 minutos
-    max: 10, // máximo 10 métricas personalizadas cada 30 minutos
-    message: 'Too many custom metric creations'
-  }),
-  customMetricValidationRules(),
-  validationMiddleware,
+  requireFinancialAccess,
+  createRateLimit(EndpointType.CATTLE_WRITE),
+  validate('search'), // Usar esquema básico para validación
   dashboardController.createCustomMetric
 );
 
 /**
  * @route   GET /dashboard/predictive-analytics
  * @desc    Análisis predictivo y proyecciones
- * @access  Private (Roles: RANCH_OWNER, ADMIN, VETERINARIAN)
+ * @access  Private (Roles: OWNER, ADMIN, VETERINARIAN)
  * @query   ?models=health,production,financial&horizon=30d|90d|1y&confidence=0.95
  */
 router.get(
   '/predictive-analytics',
-  roleMiddleware(['RANCH_OWNER', 'ADMIN', 'VETERINARIAN']),
-  rateLimitMiddleware({ 
-    windowMs: 15 * 60 * 1000, // 15 minutos
-    max: 10, // máximo 10 análisis predictivos cada 15 minutos
-    message: 'Too many predictive analytics requests'
-  }),
-  cacheMiddleware({ ttl: 3600 }), // cache de 1 hora
+  requireVeterinaryAccess,
+  createRateLimit(EndpointType.REPORTS),
   dashboardController.getPredictiveAnalytics
 );
 

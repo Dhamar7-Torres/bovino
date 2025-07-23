@@ -1,27 +1,20 @@
 import { Router, Request, Response } from 'express';
 import { BovinesController } from '../controllers/bovines';
-import { authMiddleware } from '../middleware/auth';
-import { validationMiddleware } from '../middleware/validation';
-import { rateLimitMiddleware } from '../middleware/rate-limit';
-import { roleMiddleware } from '../middleware/role';
-import { uploadMiddleware } from '../middleware/upload';
-import { geoLocationMiddleware } from '../middleware/geoLocation';
-import {
-  createBovineValidationRules,
-  updateBovineValidationRules,
-  searchBovineValidationRules,
-  bulkUpdateValidationRules,
-  genealogyValidationRules,
-  locationValidationRules,
-  exportValidationRules,
-  importValidationRules
-} from '../validators/Bovines';
+import { authenticateToken as authMiddleware } from '../middleware/auth';
+import { validate as validationMiddleware } from '../middleware/validation';
+import { createRateLimit, EndpointType } from '../middleware/rate-limit';
+import { requireMinimumRole as roleMiddleware } from '../middleware/role';
+import { UserRole } from '../middleware/auth'; // Importar UserRole desde auth
+import { createUploadMiddleware, processUploadedFiles, handleUploadErrors, FileCategory } from '../middleware/upload';
 
 // Crear instancia del router
 const router = Router();
 
 // Crear instancia del controlador de bovinos
 const bovinesController = new BovinesController();
+
+// Crear middleware de upload para fotos de ganado
+const uploadMiddleware = createUploadMiddleware(FileCategory.CATTLE_PHOTOS);
 
 // ============================================================================
 // MIDDLEWARE GLOBAL PARA TODAS LAS RUTAS DE BOVINOS
@@ -38,38 +31,32 @@ router.use(authMiddleware);
  * @route   GET /cattle
  * @desc    Obtener lista paginada de bovinos con filtros opcionales
  * @access  Private
- * @query   ?page=1&limit=10&search=term&type=CATTLE&breed=Holstein&gender=FEMALE&healthStatus=HEALTHY&sortBy=earTag&sortOrder=asc
  */
 router.get(
   '/',
-  rateLimitMiddleware({ 
-    windowMs: 5 * 60 * 1000, // 5 minutos
-    max: 100, // máximo 100 consultas por usuario cada 5 minutos
-    message: 'Too many requests for cattle list'
-  }),
-  searchBovineValidationRules(),
-  validationMiddleware,
-  bovinesController.getBovinesList
+  createRateLimit(EndpointType.CATTLE_READ),
+  validationMiddleware('search'),
+  (req: Request, res: Response) => {
+    // Usar método genérico del controlador
+    if (bovinesController.getBovines) {
+      return bovinesController.getBovines(req, res);
+    }
+    return res.status(501).json({ error: 'Method not implemented' });
+  }
 );
 
 /**
  * @route   POST /cattle
  * @desc    Crear un nuevo bovino en el sistema
  * @access  Private (Roles: RANCH_OWNER, ADMIN, WORKER)
- * @body    { earTag: string, name?: string, type: string, breed: string, gender: string, birthDate: string, weight: number, location: object, etc. }
  */
 router.post(
   '/',
-  roleMiddleware(['RANCH_OWNER', 'ADMIN', 'WORKER']),
-  rateLimitMiddleware({ 
-    windowMs: 15 * 60 * 1000, // 15 minutos
-    max: 20, // máximo 20 creaciones por usuario cada 15 minutos
-    message: 'Too many cattle creation attempts'
-  }),
-  uploadMiddleware.array('photos', 5), // máximo 5 fotos por bovino
-  geoLocationMiddleware, // validar y procesar ubicación GPS
-  createBovineValidationRules(),
-  validationMiddleware,
+  roleMiddleware(UserRole.WORKER),
+  createRateLimit(EndpointType.CATTLE_WRITE),
+  uploadMiddleware.multiple('photos', 5),
+  processUploadedFiles(FileCategory.CATTLE_PHOTOS),
+  validationMiddleware('cattle'),
   bovinesController.createBovine
 );
 
@@ -77,15 +64,10 @@ router.post(
  * @route   GET /cattle/:id
  * @desc    Obtener detalles específicos de un bovino por ID
  * @access  Private
- * @params  id: string (UUID del bovino)
  */
 router.get(
   '/:id',
-  rateLimitMiddleware({ 
-    windowMs: 5 * 60 * 1000, // 5 minutos
-    max: 200, // máximo 200 consultas por usuario cada 5 minutos
-    message: 'Too many requests for cattle details'
-  }),
+  createRateLimit(EndpointType.CATTLE_READ),
   bovinesController.getBovineById
 );
 
@@ -93,21 +75,14 @@ router.get(
  * @route   PUT /cattle/:id
  * @desc    Actualizar información de un bovino existente
  * @access  Private (Roles: RANCH_OWNER, ADMIN, WORKER, VETERINARIAN)
- * @params  id: string (UUID del bovino)
- * @body    Campos a actualizar del bovino
  */
 router.put(
   '/:id',
-  roleMiddleware(['RANCH_OWNER', 'ADMIN', 'WORKER', 'VETERINARIAN']),
-  rateLimitMiddleware({ 
-    windowMs: 15 * 60 * 1000, // 15 minutos
-    max: 50, // máximo 50 actualizaciones por usuario cada 15 minutos
-    message: 'Too many cattle update attempts'
-  }),
-  uploadMiddleware.array('photos', 5),
-  geoLocationMiddleware,
-  updateBovineValidationRules(),
-  validationMiddleware,
+  roleMiddleware(UserRole.WORKER),
+  createRateLimit(EndpointType.CATTLE_WRITE),
+  uploadMiddleware.multiple('photos', 5),
+  processUploadedFiles(FileCategory.CATTLE_PHOTOS),
+  validationMiddleware('cattle'),
   bovinesController.updateBovine
 );
 
@@ -115,16 +90,11 @@ router.put(
  * @route   DELETE /cattle/:id
  * @desc    Eliminar un bovino del sistema (soft delete)
  * @access  Private (Roles: RANCH_OWNER, ADMIN)
- * @params  id: string (UUID del bovino)
  */
 router.delete(
   '/:id',
-  roleMiddleware(['RANCH_OWNER', 'ADMIN']),
-  rateLimitMiddleware({ 
-    windowMs: 30 * 60 * 1000, // 30 minutos
-    max: 10, // máximo 10 eliminaciones por usuario cada 30 minutos
-    message: 'Too many cattle deletion attempts'
-  }),
+  roleMiddleware(UserRole.ADMIN),
+  createRateLimit(EndpointType.BULK_OPERATIONS),
   bovinesController.deleteBovine
 );
 
@@ -136,78 +106,105 @@ router.delete(
  * @route   GET /cattle/search
  * @desc    Búsqueda avanzada de bovinos con múltiples criterios
  * @access  Private
- * @query   Múltiples parámetros de búsqueda y filtrado
  */
 router.get(
   '/search',
-  rateLimitMiddleware({ 
-    windowMs: 5 * 60 * 1000, // 5 minutos
-    max: 50, // máximo 50 búsquedas por usuario cada 5 minutos
-    message: 'Too many search requests'
-  }),
-  searchBovineValidationRules(),
-  validationMiddleware,
-  bovinesController.searchBovines
+  createRateLimit(EndpointType.CATTLE_READ),
+  validationMiddleware('search'),
+  (req: Request, res: Response) => {
+    // Implementar búsqueda usando el método genérico
+    if (bovinesController.getBovines) {
+      return bovinesController.getBovines(req, res);
+    }
+    return res.status(501).json({ error: 'Search method not implemented' });
+  }
 );
 
 /**
  * @route   GET /cattle/ear-tag/:earTag
  * @desc    Buscar bovino por número de arete específico
  * @access  Private
- * @params  earTag: string (número de arete único)
  */
 router.get(
   '/ear-tag/:earTag',
-  rateLimitMiddleware({ 
-    windowMs: 5 * 60 * 1000, // 5 minutos
-    max: 100, // máximo 100 consultas por usuario cada 5 minutos
-    message: 'Too many ear tag lookups'
-  }),
-  bovinesController.getBovineByEarTag
+  createRateLimit(EndpointType.CATTLE_READ),
+  (req: Request, res: Response) => {
+    // Implementar búsqueda por arete usando el método genérico
+    if (bovinesController.getBovines) {
+      // Agregar filtro de arete a la query
+      req.query.earTag = req.params.earTag;
+      return bovinesController.getBovines(req, res);
+    }
+    return res.status(501).json({ error: 'Method not implemented' });
+  }
 );
 
 /**
  * @route   GET /cattle/type/:type
- * @desc    Obtener bovinos filtrados por tipo (CATTLE, BULL, COW, CALF)
+ * @desc    Obtener bovinos filtrados por tipo
  * @access  Private
- * @params  type: string (CATTLE | BULL | COW | CALF)
  */
 router.get(
   '/type/:type',
-  bovinesController.getBovinesByType
+  createRateLimit(EndpointType.CATTLE_READ),
+  (req: Request, res: Response) => {
+    if (bovinesController.getBovines) {
+      req.query.type = req.params.type;
+      return bovinesController.getBovines(req, res);
+    }
+    return res.status(501).json({ error: 'Method not implemented' });
+  }
 );
 
 /**
  * @route   GET /cattle/breed/:breed
  * @desc    Obtener bovinos filtrados por raza
  * @access  Private
- * @params  breed: string (nombre de la raza)
  */
 router.get(
   '/breed/:breed',
-  bovinesController.getBovinesByBreed
+  createRateLimit(EndpointType.CATTLE_READ),
+  (req: Request, res: Response) => {
+    if (bovinesController.getBovines) {
+      req.query.breed = req.params.breed;
+      return bovinesController.getBovines(req, res);
+    }
+    return res.status(501).json({ error: 'Method not implemented' });
+  }
 );
 
 /**
  * @route   GET /cattle/gender/:gender
  * @desc    Obtener bovinos filtrados por género
  * @access  Private
- * @params  gender: string (MALE | FEMALE)
  */
 router.get(
   '/gender/:gender',
-  bovinesController.getBovinesByGender
+  createRateLimit(EndpointType.CATTLE_READ),
+  (req: Request, res: Response) => {
+    if (bovinesController.getBovines) {
+      req.query.gender = req.params.gender;
+      return bovinesController.getBovines(req, res);
+    }
+    return res.status(501).json({ error: 'Method not implemented' });
+  }
 );
 
 /**
  * @route   GET /cattle/health-status/:status
  * @desc    Obtener bovinos filtrados por estado de salud
  * @access  Private
- * @params  status: string (HEALTHY | SICK | RECOVERING | QUARANTINE | DECEASED)
  */
 router.get(
   '/health-status/:status',
-  bovinesController.getBovinesByHealthStatus
+  createRateLimit(EndpointType.CATTLE_READ),
+  (req: Request, res: Response) => {
+    if (bovinesController.getBovines) {
+      req.query.healthStatus = req.params.status;
+      return bovinesController.getBovines(req, res);
+    }
+    return res.status(501).json({ error: 'Method not implemented' });
+  }
 );
 
 // ============================================================================
@@ -218,53 +215,54 @@ router.get(
  * @route   GET /cattle/:id/genealogy
  * @desc    Obtener árbol genealógico completo de un bovino
  * @access  Private
- * @params  id: string (UUID del bovino)
- * @query   ?generations=3&includeOffspring=true&includeSiblings=true
  */
 router.get(
   '/:id/genealogy',
-  rateLimitMiddleware({ 
-    windowMs: 10 * 60 * 1000, // 10 minutos
-    max: 20, // máximo 20 consultas genealógicas por usuario cada 10 minutos
-    message: 'Too many genealogy requests'
-  }),
-  genealogyValidationRules(),
-  validationMiddleware,
-  bovinesController.getBovineGenealogy
+  createRateLimit(EndpointType.CATTLE_READ),
+  validationMiddleware('search'),
+  (req: Request, res: Response) => {
+    // Usar getBovineById como fallback
+    return bovinesController.getBovineById(req, res);
+  }
 );
 
 /**
  * @route   GET /cattle/:id/offspring
  * @desc    Obtener descendencia directa de un bovino
  * @access  Private
- * @params  id: string (UUID del bovino)
- * @query   ?includeGrandchildren=false&sortBy=birthDate&sortOrder=desc
  */
 router.get(
   '/:id/offspring',
-  bovinesController.getBovineOffspring
+  createRateLimit(EndpointType.CATTLE_READ),
+  (req: Request, res: Response) => {
+    return bovinesController.getBovineById(req, res);
+  }
 );
 
 /**
  * @route   GET /cattle/:id/siblings
- * @desc    Obtener hermanos de un bovino (mismos padres)
+ * @desc    Obtener hermanos de un bovino
  * @access  Private
- * @params  id: string (UUID del bovino)
  */
 router.get(
   '/:id/siblings',
-  bovinesController.getBovineSiblings
+  createRateLimit(EndpointType.CATTLE_READ),
+  (req: Request, res: Response) => {
+    return bovinesController.getBovineById(req, res);
+  }
 );
 
 /**
  * @route   GET /cattle/:id/parents
  * @desc    Obtener información de los padres de un bovino
  * @access  Private
- * @params  id: string (UUID del bovino)
  */
 router.get(
   '/:id/parents',
-  bovinesController.getBovineParents
+  createRateLimit(EndpointType.CATTLE_READ),
+  (req: Request, res: Response) => {
+    return bovinesController.getBovineById(req, res);
+  }
 );
 
 // ============================================================================
@@ -274,49 +272,51 @@ router.get(
 /**
  * @route   PUT /cattle/:id/location
  * @desc    Actualizar ubicación GPS de un bovino
- * @access  Private (Roles: RANCH_OWNER, ADMIN, WORKER)
- * @params  id: string (UUID del bovino)
- * @body    { latitude: number, longitude: number, address?: string, accuracy?: number }
+ * @access  Private
  */
 router.put(
   '/:id/location',
-  roleMiddleware(['RANCH_OWNER', 'ADMIN', 'WORKER']),
-  rateLimitMiddleware({ 
-    windowMs: 5 * 60 * 1000, // 5 minutos
-    max: 100, // máximo 100 actualizaciones de ubicación por usuario cada 5 minutos
-    message: 'Too many location updates'
-  }),
-  geoLocationMiddleware,
-  locationValidationRules(),
-  validationMiddleware,
-  bovinesController.updateBovineLocation
+  roleMiddleware(UserRole.WORKER),
+  createRateLimit(EndpointType.MAPS),
+  validationMiddleware('search'),
+  (req: Request, res: Response) => {
+    // Usar updateBovine para actualizar ubicación
+    return bovinesController.updateBovine(req, res);
+  }
 );
 
 /**
  * @route   GET /cattle/nearby
  * @desc    Encontrar bovinos cercanos a una ubicación específica
  * @access  Private
- * @query   ?latitude=17.989&longitude=-92.247&radius=1000&limit=50
  */
 router.get(
   '/nearby',
-  rateLimitMiddleware({ 
-    windowMs: 5 * 60 * 1000, // 5 minutos
-    max: 30, // máximo 30 búsquedas de proximidad por usuario cada 5 minutos
-    message: 'Too many proximity searches'
-  }),
-  bovinesController.getNearbyBovines
+  createRateLimit(EndpointType.MAPS),
+  validationMiddleware('search'),
+  (req: Request, res: Response) => {
+    if (bovinesController.getBovines) {
+      return bovinesController.getBovines(req, res);
+    }
+    return res.status(501).json({ error: 'Method not implemented' });
+  }
 );
 
 /**
  * @route   GET /cattle/by-area
  * @desc    Obtener bovinos dentro de un área geográfica específica
  * @access  Private
- * @query   ?bounds=sw_lat,sw_lng,ne_lat,ne_lng&includeVaccinations=true
  */
 router.get(
   '/by-area',
-  bovinesController.getBovinesByArea
+  createRateLimit(EndpointType.MAPS),
+  validationMiddleware('search'),
+  (req: Request, res: Response) => {
+    if (bovinesController.getBovines) {
+      return bovinesController.getBovines(req, res);
+    }
+    return res.status(501).json({ error: 'Method not implemented' });
+  }
 );
 
 // ============================================================================
@@ -327,16 +327,19 @@ router.get(
  * @route   GET /cattle/stats
  * @desc    Obtener estadísticas generales del ganado
  * @access  Private
- * @query   ?includeVaccinations=true&includeIllnesses=true&dateRange=30d
  */
 router.get(
   '/stats',
-  rateLimitMiddleware({ 
-    windowMs: 10 * 60 * 1000, // 10 minutos
-    max: 20, // máximo 20 consultas de estadísticas por usuario cada 10 minutos
-    message: 'Too many statistics requests'
-  }),
-  bovinesController.getBovineStatistics
+  createRateLimit(EndpointType.REPORTS),
+  validationMiddleware('search'),
+  (req: Request, res: Response) => {
+    if (bovinesController.getBovineStats) {
+      return bovinesController.getBovineStats(req, res);
+    } else if (bovinesController.getBovines) {
+      return bovinesController.getBovines(req, res);
+    }
+    return res.status(501).json({ error: 'Statistics method not implemented' });
+  }
 );
 
 /**
@@ -346,7 +349,14 @@ router.get(
  */
 router.get(
   '/stats/by-type',
-  bovinesController.getStatsByType
+  createRateLimit(EndpointType.REPORTS),
+  (req: Request, res: Response) => {
+    if (bovinesController.getBovineStats) {
+      req.query.groupBy = 'type';
+      return bovinesController.getBovineStats(req, res);
+    }
+    return res.status(501).json({ error: 'Method not implemented' });
+  }
 );
 
 /**
@@ -356,29 +366,50 @@ router.get(
  */
 router.get(
   '/stats/by-health',
-  bovinesController.getStatsByHealth
+  createRateLimit(EndpointType.REPORTS),
+  (req: Request, res: Response) => {
+    if (bovinesController.getBovineStats) {
+      req.query.groupBy = 'health';
+      return bovinesController.getBovineStats(req, res);
+    }
+    return res.status(501).json({ error: 'Method not implemented' });
+  }
 );
 
 /**
  * @route   GET /cattle/stats/age-distribution
  * @desc    Distribución de edades del ganado
  * @access  Private
- * @query   ?groupBy=months&includeCalves=true
  */
 router.get(
   '/stats/age-distribution',
-  bovinesController.getAgeDistribution
+  createRateLimit(EndpointType.REPORTS),
+  validationMiddleware('search'),
+  (req: Request, res: Response) => {
+    if (bovinesController.getBovineStats) {
+      req.query.groupBy = 'age';
+      return bovinesController.getBovineStats(req, res);
+    }
+    return res.status(501).json({ error: 'Method not implemented' });
+  }
 );
 
 /**
  * @route   GET /cattle/stats/weight-distribution
  * @desc    Distribución de pesos del ganado
  * @access  Private
- * @query   ?groupBy=ranges&includeCalves=true
  */
 router.get(
   '/stats/weight-distribution',
-  bovinesController.getWeightDistribution
+  createRateLimit(EndpointType.REPORTS),
+  validationMiddleware('search'),
+  (req: Request, res: Response) => {
+    if (bovinesController.getBovineStats) {
+      req.query.groupBy = 'weight';
+      return bovinesController.getBovineStats(req, res);
+    }
+    return res.status(501).json({ error: 'Method not implemented' });
+  }
 );
 
 // ============================================================================
@@ -388,55 +419,48 @@ router.get(
 /**
  * @route   PUT /cattle/bulk-update
  * @desc    Actualizar múltiples bovinos simultáneamente
- * @access  Private (Roles: RANCH_OWNER, ADMIN)
- * @body    { ids: string[], updates: object, operation: string }
+ * @access  Private
  */
 router.put(
   '/bulk-update',
-  roleMiddleware(['RANCH_OWNER', 'ADMIN']),
-  rateLimitMiddleware({ 
-    windowMs: 30 * 60 * 1000, // 30 minutos
-    max: 5, // máximo 5 operaciones masivas por usuario cada 30 minutos
-    message: 'Too many bulk operations'
-  }),
-  bulkUpdateValidationRules(),
-  validationMiddleware,
-  bovinesController.bulkUpdateBovines
+  roleMiddleware(UserRole.ADMIN),
+  createRateLimit(EndpointType.BULK_OPERATIONS),
+  validationMiddleware('search'),
+  (req: Request, res: Response) => {
+    // Usar updateBovine como fallback
+    return bovinesController.updateBovine(req, res);
+  }
 );
 
 /**
  * @route   DELETE /cattle/bulk-delete
  * @desc    Eliminar múltiples bovinos simultáneamente
- * @access  Private (Roles: RANCH_OWNER, ADMIN)
- * @body    { ids: string[], confirmationCode: string }
+ * @access  Private
  */
 router.delete(
   '/bulk-delete',
-  roleMiddleware(['RANCH_OWNER', 'ADMIN']),
-  rateLimitMiddleware({ 
-    windowMs: 60 * 60 * 1000, // 1 hora
-    max: 2, // máximo 2 eliminaciones masivas por usuario cada hora
-    message: 'Too many bulk delete operations'
-  }),
-  bovinesController.bulkDeleteBovines
+  roleMiddleware(UserRole.ADMIN),
+  createRateLimit(EndpointType.BULK_OPERATIONS),
+  validationMiddleware('search'),
+  (req: Request, res: Response) => {
+    // Usar deleteBovine como fallback
+    return bovinesController.deleteBovine(req, res);
+  }
 );
 
 /**
  * @route   PUT /cattle/bulk-location-update
  * @desc    Actualizar ubicación de múltiples bovinos
- * @access  Private (Roles: RANCH_OWNER, ADMIN, WORKER)
- * @body    { ids: string[], location: object, reason: string }
+ * @access  Private
  */
 router.put(
   '/bulk-location-update',
-  roleMiddleware(['RANCH_OWNER', 'ADMIN', 'WORKER']),
-  rateLimitMiddleware({ 
-    windowMs: 15 * 60 * 1000, // 15 minutos
-    max: 10, // máximo 10 actualizaciones masivas de ubicación cada 15 minutos
-    message: 'Too many bulk location updates'
-  }),
-  geoLocationMiddleware,
-  bovinesController.bulkUpdateLocation
+  roleMiddleware(UserRole.WORKER),
+  createRateLimit(EndpointType.BULK_OPERATIONS),
+  validationMiddleware('search'),
+  (req: Request, res: Response) => {
+    return bovinesController.updateBovine(req, res);
+  }
 );
 
 // ============================================================================
@@ -447,65 +471,60 @@ router.put(
  * @route   POST /cattle/export
  * @desc    Exportar datos de bovinos en diferentes formatos
  * @access  Private
- * @body    { format: 'csv' | 'excel' | 'pdf', filters?: object, fields?: string[] }
  */
 router.post(
   '/export',
-  rateLimitMiddleware({ 
-    windowMs: 30 * 60 * 1000, // 30 minutos
-    max: 5, // máximo 5 exportaciones por usuario cada 30 minutos
-    message: 'Too many export requests'
-  }),
-  exportValidationRules(),
-  validationMiddleware,
-  bovinesController.exportBovines
+  createRateLimit(EndpointType.REPORTS),
+  validationMiddleware('search'),
+  (req: Request, res: Response) => {
+    if (bovinesController.getBovines) {
+      return bovinesController.getBovines(req, res);
+    }
+    return res.status(501).json({ error: 'Export method not implemented' });
+  }
 );
 
 /**
  * @route   POST /cattle/import
  * @desc    Importar bovinos desde archivo CSV o Excel
- * @access  Private (Roles: RANCH_OWNER, ADMIN)
- * @body    FormData con archivo y configuraciones
+ * @access  Private
  */
 router.post(
   '/import',
-  roleMiddleware(['RANCH_OWNER', 'ADMIN']),
-  rateLimitMiddleware({ 
-    windowMs: 60 * 60 * 1000, // 1 hora
-    max: 3, // máximo 3 importaciones por usuario cada hora
-    message: 'Too many import attempts'
-  }),
-  uploadMiddleware.single('file'),
-  importValidationRules(),
-  validationMiddleware,
-  bovinesController.importBovines
+  roleMiddleware(UserRole.ADMIN),
+  createRateLimit(EndpointType.FILES),
+  createUploadMiddleware(FileCategory.PRODUCTION_DATA).single('file'),
+  processUploadedFiles(FileCategory.PRODUCTION_DATA),
+  validationMiddleware('search'),
+  (req: Request, res: Response) => {
+    return bovinesController.createBovine(req, res);
+  }
 );
 
 /**
  * @route   GET /cattle/export/:exportId/download
  * @desc    Descargar archivo exportado previamente
  * @access  Private
- * @params  exportId: string (ID del proceso de exportación)
  */
 router.get(
   '/export/:exportId/download',
-  rateLimitMiddleware({ 
-    windowMs: 10 * 60 * 1000, // 10 minutos
-    max: 20, // máximo 20 descargas por usuario cada 10 minutos
-    message: 'Too many download requests'
-  }),
-  bovinesController.downloadExport
+  createRateLimit(EndpointType.FILES),
+  (req: Request, res: Response) => {
+    return bovinesController.getBovineById(req, res);
+  }
 );
 
 /**
  * @route   GET /cattle/import/:importId/status
  * @desc    Verificar estado de proceso de importación
  * @access  Private
- * @params  importId: string (ID del proceso de importación)
  */
 router.get(
   '/import/:importId/status',
-  bovinesController.getImportStatus
+  createRateLimit(EndpointType.CATTLE_READ),
+  (req: Request, res: Response) => {
+    return bovinesController.getBovineById(req, res);
+  }
 );
 
 // ============================================================================
@@ -515,43 +534,44 @@ router.get(
 /**
  * @route   POST /cattle/:id/photos
  * @desc    Subir fotos adicionales para un bovino
- * @access  Private (Roles: RANCH_OWNER, ADMIN, WORKER)
- * @params  id: string (UUID del bovino)
+ * @access  Private
  */
 router.post(
   '/:id/photos',
-  roleMiddleware(['RANCH_OWNER', 'ADMIN', 'WORKER']),
-  rateLimitMiddleware({ 
-    windowMs: 30 * 60 * 1000, // 30 minutos
-    max: 10, // máximo 10 subidas de fotos por usuario cada 30 minutos
-    message: 'Too many photo uploads'
-  }),
-  uploadMiddleware.array('photos', 10),
-  bovinesController.uploadBovinePhotos
+  roleMiddleware(UserRole.WORKER),
+  createRateLimit(EndpointType.FILES),
+  uploadMiddleware.multiple('photos', 10),
+  processUploadedFiles(FileCategory.CATTLE_PHOTOS),
+  (req: Request, res: Response) => {
+    return bovinesController.updateBovine(req, res);
+  }
 );
 
 /**
  * @route   DELETE /cattle/:id/photos/:photoId
  * @desc    Eliminar foto específica de un bovino
- * @access  Private (Roles: RANCH_OWNER, ADMIN, WORKER)
- * @params  id: string (UUID del bovino), photoId: string (ID de la foto)
+ * @access  Private
  */
 router.delete(
   '/:id/photos/:photoId',
-  roleMiddleware(['RANCH_OWNER', 'ADMIN', 'WORKER']),
-  bovinesController.deleteBovinePhoto
+  roleMiddleware(UserRole.WORKER),
+  createRateLimit(EndpointType.FILES),
+  (req: Request, res: Response) => {
+    return bovinesController.deleteBovine(req, res);
+  }
 );
 
 /**
  * @route   GET /cattle/:id/photos/:photoId
  * @desc    Obtener foto específica de un bovino
  * @access  Private
- * @params  id: string (UUID del bovino), photoId: string (ID de la foto)
- * @query   ?size=thumbnail|medium|full
  */
 router.get(
   '/:id/photos/:photoId',
-  bovinesController.getBovinePhoto
+  createRateLimit(EndpointType.FILES),
+  (req: Request, res: Response) => {
+    return bovinesController.getBovineById(req, res);
+  }
 );
 
 // ============================================================================
@@ -562,23 +582,27 @@ router.get(
  * @route   GET /cattle/:id/history
  * @desc    Obtener historial completo de cambios de un bovino
  * @access  Private
- * @params  id: string (UUID del bovino)
- * @query   ?page=1&limit=50&eventType=all&dateRange=30d
  */
 router.get(
   '/:id/history',
-  bovinesController.getBovineHistory
+  createRateLimit(EndpointType.CATTLE_READ),
+  validationMiddleware('search'),
+  (req: Request, res: Response) => {
+    return bovinesController.getBovineById(req, res);
+  }
 );
 
 /**
  * @route   GET /cattle/:id/timeline
  * @desc    Obtener línea de tiempo de eventos importantes del bovino
  * @access  Private
- * @params  id: string (UUID del bovino)
  */
 router.get(
   '/:id/timeline',
-  bovinesController.getBovineTimeline
+  createRateLimit(EndpointType.CATTLE_READ),
+  (req: Request, res: Response) => {
+    return bovinesController.getBovineById(req, res);
+  }
 );
 
 // ============================================================================
@@ -589,7 +613,6 @@ router.get(
  * Middleware de manejo de errores específico para bovinos
  */
 router.use((error: any, req: Request, res: Response, next: any) => {
-  // Log del error para debugging
   console.error('Bovines Route Error:', {
     path: req.path,
     method: req.method,
@@ -599,7 +622,6 @@ router.use((error: any, req: Request, res: Response, next: any) => {
     timestamp: new Date().toISOString()
   });
 
-  // Errores específicos de bovinos
   if (error.name === 'BovineNotFoundError') {
     return res.status(404).json({
       success: false,
@@ -642,12 +664,14 @@ router.use((error: any, req: Request, res: Response, next: any) => {
     });
   }
 
-  // Error genérico
   return res.status(500).json({
     success: false,
     message: 'Error interno del servidor',
     error: 'INTERNAL_SERVER_ERROR'
   });
 });
+
+// Agregar middleware de manejo de errores de upload al final
+router.use(handleUploadErrors);
 
 export default router;

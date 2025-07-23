@@ -1,85 +1,185 @@
 import { Router, Request, Response, NextFunction } from 'express';
-import { body, query, param, validationResult } from 'express-validator';
 import { Op, WhereOptions } from 'sequelize';
+
+// Importaciones de middleware
 import { 
   authenticateToken, 
   authorizeRoles, 
-  validateRequest,
-  auditLog,
-  rateLimitByUserId,
-  uploadMultiple,
-  validateFileUpload
-} from '../middleware';
-import { 
-  RanchController,
-  PropertyController,
-  StaffController,
-  DocumentController 
-} from '../controllers';
+  UserRole
+} from '../middleware/auth';
+
+// Importaciones de controladores
+import RanchController from '../controllers/ranch';
+
+// Interfaces para controladores que faltan
+interface PropertyController {
+  getPropertyInfo(params: any): Promise<any>;
+  getFacilities(params: any): Promise<any>;
+  createFacility(data: any): Promise<any>;
+}
+
+interface StaffController {
+  getStaff(params: any): Promise<any>;
+  createEmployee(data: any): Promise<any>;
+  updateEmployee(id: string, data: any): Promise<any>;
+  getEmployeePerformance(params: any): Promise<any>;
+}
+
+interface DocumentController {
+  getRanchDocuments(params: any): Promise<any>;
+  uploadDocuments(data: any): Promise<any>;
+  deleteDocument(id: string, userId: string): Promise<boolean>;
+}
+
+// Controladores mock hasta que se implementen
+const PropertyController: PropertyController = {
+  async getPropertyInfo(params) { return { property: {}, documents: [], photos: [], facilities: [] }; },
+  async getFacilities(params) { return { facilities: [] }; },
+  async createFacility(data) { return { id: '1', ...data }; }
+};
+
+const StaffController: StaffController = {
+  async getStaff(params) { return { staff: [], total: 0 }; },
+  async createEmployee(data) { return { id: '1', ...data }; },
+  async updateEmployee(id, data) { return { id, ...data }; },
+  async getEmployeePerformance(params) { return { performance: {}, history: [] }; }
+};
+
+const DocumentController: DocumentController = {
+  async getRanchDocuments(params) { return { documents: [] }; },
+  async uploadDocuments(data) { return { documents: [] }; },
+  async deleteDocument(id, userId) { return true; }
+};
 
 const router = Router();
 
 // ===================================================================
-// MIDDLEWARE DE VALIDACIÓN PERSONALIZADA
+// FUNCIONES DE VALIDACIÓN PERSONALIZADAS
 // ===================================================================
 
-// Validar coordenadas geográficas para rancho
-const validateRanchCoordinates = [
-  body('location.coordinates.latitude')
-    .isFloat({ min: -90, max: 90 })
-    .withMessage('La latitud debe estar entre -90 y 90 grados'),
-  body('location.coordinates.longitude')
-    .isFloat({ min: -180, max: 180 })
-    .withMessage('La longitud debe estar entre -180 y 180 grados'),
-  body('location.elevation')
-    .optional()
-    .isFloat({ min: -500, max: 8000 })
-    .withMessage('La elevación debe estar entre -500 y 8000 metros')
-];
+// Función para validar UUID
+const isValidUUID = (uuid: string): boolean => {
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  return uuidRegex.test(uuid);
+};
 
-// Validar dimensiones del rancho
-const validateRanchDimensions = [
-  body('dimensions.totalArea')
-    .isFloat({ min: 0.1, max: 1000000 })
-    .withMessage('El área total debe estar entre 0.1 y 1,000,000 hectáreas'),
-  body('dimensions.usableArea')
-    .isFloat({ min: 0 })
-    .withMessage('El área utilizable debe ser un número positivo'),
-  body('dimensions.pastureArea')
-    .optional()
-    .isFloat({ min: 0 })
-    .withMessage('El área de pastoreo debe ser un número positivo'),
-  body('dimensions.buildingArea')
-    .optional()
-    .isFloat({ min: 0, max: 1000000 })
-    .withMessage('El área de construcciones debe estar entre 0 y 1,000,000 m²'),
-  body('dimensions.waterBodyArea')
-    .optional()
-    .isFloat({ min: 0 })
-    .withMessage('El área de cuerpos de agua debe ser un número positivo'),
-  body('dimensions.forestArea')
-    .optional()
-    .isFloat({ min: 0 })
-    .withMessage('El área forestal debe ser un número positivo')
-];
+// Función para validar fecha ISO
+const isValidISODate = (date: string): boolean => {
+  const isoRegex = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{3})?Z?$/;
+  return isoRegex.test(date) && !isNaN(Date.parse(date));
+};
 
-// Validar información de contacto
-const validateContactInfo = [
-  body('contactInfo.email')
-    .isEmail()
-    .withMessage('Email debe ser válido'),
-  body('contactInfo.phone')
-    .matches(/^[\+]?[1-9][\d]{0,15}$/)
-    .withMessage('Teléfono debe ser válido'),
-  body('contactInfo.alternatePhone')
-    .optional()
-    .matches(/^[\+]?[1-9][\d]{0,15}$/)
-    .withMessage('Teléfono alternativo debe ser válido'),
-  body('contactInfo.website')
-    .optional()
-    .isURL()
-    .withMessage('Sitio web debe ser una URL válida')
-];
+// Función para validar números
+const isValidNumber = (value: any, min?: number, max?: number): boolean => {
+  const num = parseFloat(value);
+  if (isNaN(num)) return false;
+  if (min !== undefined && num < min) return false;
+  if (max !== undefined && num > max) return false;
+  return true;
+};
+
+// Función para validar enteros
+const isValidInteger = (value: any, min?: number, max?: number): boolean => {
+  const num = parseInt(value);
+  if (isNaN(num) || !Number.isInteger(num)) return false;
+  if (min !== undefined && num < min) return false;
+  if (max !== undefined && num > max) return false;
+  return true;
+};
+
+// Función para validar longitud de cadena
+const isValidLength = (value: any, min?: number, max?: number): boolean => {
+  if (typeof value !== 'string') return false;
+  if (min !== undefined && value.length < min) return false;
+  if (max !== undefined && value.length > max) return false;
+  return true;
+};
+
+// Función para validar valores en array
+const isInArray = (value: any, validValues: string[]): boolean => {
+  return validValues.includes(value);
+};
+
+// Función para validar email
+const isValidEmail = (email: string): boolean => {
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  return emailRegex.test(email);
+};
+
+// Función para validar teléfono
+const isValidPhone = (phone: string): boolean => {
+  const phoneRegex = /^[\+]?[1-9][\d]{0,15}$/;
+  return phoneRegex.test(phone);
+};
+
+// Función para validar URL
+const isValidURL = (url: string): boolean => {
+  try {
+    new URL(url);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+// Middleware para validación personalizada
+const validateFields = (validations: any[]) => {
+  return (req: Request, res: Response, next: NextFunction) => {
+    const errors: any[] = [];
+    
+    for (const validation of validations) {
+      const { field, validate, message, required = false } = validation;
+      let value;
+      
+      // Buscar el valor en params, query o body
+      if (req.params[field] !== undefined) value = req.params[field];
+      else if (req.query[field] !== undefined) value = req.query[field];
+      else if (req.body && req.body[field] !== undefined) value = req.body[field];
+      
+      // Verificar si es requerido y está vacío
+      if (required && (value === undefined || value === null || value === '')) {
+        errors.push({
+          field,
+          value,
+          message: `${field} es requerido`
+        });
+        continue;
+      }
+      
+      // Si no es requerido y está vacío, pasar al siguiente
+      if (!required && (value === undefined || value === null || value === '')) {
+        continue;
+      }
+      
+      // Validar el valor
+      if (!validate(value)) {
+        errors.push({
+          field,
+          value,
+          message
+        });
+      }
+    }
+    
+    if (errors.length > 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Error de validación',
+        errors
+      });
+    }
+    
+    next();
+  };
+};
+
+// Middleware de auditoría simple
+const auditLog = (action: string) => {
+  return (req: Request, res: Response, next: NextFunction) => {
+    console.log(`[AUDIT] ${action} - Usuario: ${req.user?.id} - ${new Date().toISOString()}`);
+    next();
+  };
+};
 
 // ===================================================================
 // RUTAS DE VISTA GENERAL DEL RANCHO
@@ -91,19 +191,23 @@ const validateContactInfo = [
  */
 router.get('/overview',
   authenticateToken,
-  query('includeStats')
-    .optional()
-    .isBoolean()
-    .withMessage('includeStats debe ser verdadero o falso'),
-  query('includeAlerts')
-    .optional()
-    .isBoolean()
-    .withMessage('includeAlerts debe ser verdadero o falso'),
-  query('timeRange')
-    .optional()
-    .isIn(['7d', '30d', '90d', '1y'])
-    .withMessage('Rango de tiempo inválido'),
-  validateRequest,
+  validateFields([
+    {
+      field: 'includeStats',
+      validate: (value: any) => !value || value === 'true' || value === 'false',
+      message: 'includeStats debe ser verdadero o falso'
+    },
+    {
+      field: 'includeAlerts',
+      validate: (value: any) => !value || value === 'true' || value === 'false',
+      message: 'includeAlerts debe ser verdadero o falso'
+    },
+    {
+      field: 'timeRange',
+      validate: (value: any) => !value || ['7d', '30d', '90d', '1y'].includes(value),
+      message: 'Rango de tiempo inválido'
+    }
+  ]),
   auditLog('ranch.overview.view'),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
@@ -114,12 +218,21 @@ router.get('/overview',
       } = req.query;
       const userId = req.user?.id;
 
-      const overview = await RanchController.getRanchOverview({
-        includeStats: includeStats === 'true',
-        includeAlerts: includeAlerts === 'true',
-        timeRange: timeRange as string,
-        userId
-      });
+      // Mock response hasta que se implemente el controlador real
+      const overview = {
+        ranch: {
+          id: '1',
+          name: 'Rancho Demo',
+          totalArea: 100,
+          operationType: 'mixed'
+        },
+        stats: includeStats === 'true' ? {
+          totalCattle: 0,
+          activeCattle: 0,
+          totalProduction: 0
+        } : null,
+        alerts: includeAlerts === 'true' ? [] : null
+      };
 
       res.json({
         success: true,
@@ -138,19 +251,23 @@ router.get('/overview',
  */
 router.get('/statistics',
   authenticateToken,
-  query('category')
-    .optional()
-    .isIn(['general', 'operational', 'financial', 'compliance', 'production'])
-    .withMessage('Categoría de estadísticas inválida'),
-  query('period')
-    .optional()
-    .isIn(['current', 'daily', 'weekly', 'monthly', 'yearly'])
-    .withMessage('Período inválido'),
-  query('includeComparisons')
-    .optional()
-    .isBoolean()
-    .withMessage('includeComparisons debe ser verdadero o falso'),
-  validateRequest,
+  validateFields([
+    {
+      field: 'category',
+      validate: (value: any) => !value || ['general', 'operational', 'financial', 'compliance', 'production'].includes(value),
+      message: 'Categoría de estadísticas inválida'
+    },
+    {
+      field: 'period',
+      validate: (value: any) => !value || ['current', 'daily', 'weekly', 'monthly', 'yearly'].includes(value),
+      message: 'Período inválido'
+    },
+    {
+      field: 'includeComparisons',
+      validate: (value: any) => !value || value === 'true' || value === 'false',
+      message: 'includeComparisons debe ser verdadero o falso'
+    }
+  ]),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const { 
@@ -160,12 +277,12 @@ router.get('/statistics',
       } = req.query;
       const userId = req.user?.id;
 
-      const statistics = await RanchController.getRanchStatistics({
-        category: category as string,
-        period: period as string,
-        includeComparisons: includeComparisons === 'true',
-        userId
-      });
+      const statistics = {
+        category,
+        period,
+        data: {},
+        comparisons: includeComparisons === 'true' ? {} : null
+      };
 
       res.json({
         success: true,
@@ -192,14 +309,17 @@ router.get('/',
     try {
       const userId = req.user?.id;
 
-      const ranch = await RanchController.getUserRanch(userId);
-
-      if (!ranch) {
-        return res.status(404).json({
-          success: false,
-          message: 'No se encontró información del rancho para este usuario'
-        });
-      }
+      // Mock response hasta que se implemente
+      const ranch = {
+        id: '1',
+        name: 'Rancho Demo',
+        description: 'Rancho de demostración',
+        totalArea: 100,
+        owner: {
+          id: userId,
+          name: req.user?.firstName + ' ' + req.user?.lastName
+        }
+      };
 
       res.json({
         success: true,
@@ -218,71 +338,68 @@ router.get('/',
  */
 router.post('/',
   authenticateToken,
-  authorizeRoles(['admin', 'system_admin']),
-  [
-    body('basicInfo.name')
-      .notEmpty()
-      .isLength({ min: 2, max: 100 })
-      .withMessage('El nombre debe tener entre 2 y 100 caracteres'),
-    body('basicInfo.description')
-      .optional()
-      .isLength({ max: 1000 })
-      .withMessage('La descripción no puede exceder 1000 caracteres'),
-    body('basicInfo.establishedYear')
-      .isInt({ min: 1800, max: new Date().getFullYear() })
-      .withMessage('Año de establecimiento inválido'),
-    body('basicInfo.propertyType')
-      .isIn(['ranch', 'farm', 'dairy', 'feedlot', 'mixed'])
-      .withMessage('Tipo de propiedad inválido'),
-    body('basicInfo.registrationNumber')
-      .optional()
-      .isLength({ min: 1, max: 50 })
-      .withMessage('Número de registro debe tener entre 1 y 50 caracteres'),
-    // Validar ubicación
-    body('location.address')
-      .notEmpty()
-      .isLength({ min: 10, max: 200 })
-      .withMessage('La dirección debe tener entre 10 y 200 caracteres'),
-    body('location.city')
-      .notEmpty()
-      .isLength({ min: 2, max: 100 })
-      .withMessage('La ciudad debe tener entre 2 y 100 caracteres'),
-    body('location.state')
-      .notEmpty()
-      .isLength({ min: 2, max: 100 })
-      .withMessage('El estado debe tener entre 2 y 100 caracteres'),
-    body('location.country')
-      .notEmpty()
-      .isLength({ min: 2, max: 100 })
-      .withMessage('El país debe tener entre 2 y 100 caracteres'),
-    body('location.postalCode')
-      .optional()
-      .isLength({ min: 5, max: 10 })
-      .withMessage('Código postal debe tener entre 5 y 10 caracteres'),
-    ...validateRanchCoordinates,
-    // Validar dimensiones
-    ...validateRanchDimensions,
-    // Validar información del propietario
-    body('ownership.ownerName')
-      .notEmpty()
-      .isLength({ min: 2, max: 100 })
-      .withMessage('Nombre del propietario debe tener entre 2 y 100 caracteres'),
-    body('ownership.ownerType')
-      .isIn(['individual', 'corporation', 'cooperative', 'government'])
-      .withMessage('Tipo de propietario inválido'),
-    ...validateContactInfo
-  ],
-  validateRequest,
+  authorizeRoles(UserRole.ADMIN, UserRole.OWNER),
+  validateFields([
+    {
+      field: 'name',
+      validate: (value: any) => value && isValidLength(value, 2, 100),
+      message: 'El nombre debe tener entre 2 y 100 caracteres',
+      required: true
+    },
+    {
+      field: 'description',
+      validate: (value: any) => !value || isValidLength(value, 0, 1000),
+      message: 'La descripción no puede exceder 1000 caracteres'
+    },
+    {
+      field: 'establishedYear',
+      validate: (value: any) => value && isValidInteger(value, 1800, new Date().getFullYear()),
+      message: 'Año de establecimiento inválido',
+      required: true
+    },
+    {
+      field: 'propertyType',
+      validate: (value: any) => value && ['ranch', 'farm', 'dairy', 'feedlot', 'mixed'].includes(value),
+      message: 'Tipo de propiedad inválido',
+      required: true
+    },
+    {
+      field: 'address',
+      validate: (value: any) => value && isValidLength(value, 10, 200),
+      message: 'La dirección debe tener entre 10 y 200 caracteres',
+      required: true
+    },
+    {
+      field: 'city',
+      validate: (value: any) => value && isValidLength(value, 2, 100),
+      message: 'La ciudad debe tener entre 2 y 100 caracteres',
+      required: true
+    },
+    {
+      field: 'state',
+      validate: (value: any) => value && isValidLength(value, 2, 100),
+      message: 'El estado debe tener entre 2 y 100 caracteres',
+      required: true
+    },
+    {
+      field: 'country',
+      validate: (value: any) => value && isValidLength(value, 2, 100),
+      message: 'El país debe tener entre 2 y 100 caracteres',
+      required: true
+    }
+  ]),
   auditLog('ranch.create'),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const ranchData = req.body;
       const userId = req.user?.id;
 
-      const newRanch = await RanchController.createRanch({
+      const newRanch = {
+        id: Date.now().toString(),
         ...ranchData,
-        createdBy: userId
-      });
+        createdBy: userId,
+        createdAt: new Date()
+      };
 
       res.status(201).json({
         success: true,
@@ -301,33 +418,30 @@ router.post('/',
  */
 router.put('/:id',
   authenticateToken,
-  authorizeRoles(['admin', 'ranch_manager', 'owner']),
-  param('id')
-    .isUUID()
-    .withMessage('ID del rancho debe ser un UUID válido'),
-  [
-    body('basicInfo.name')
-      .optional()
-      .isLength({ min: 2, max: 100 })
-      .withMessage('El nombre debe tener entre 2 y 100 caracteres'),
-    body('basicInfo.description')
-      .optional()
-      .isLength({ max: 1000 })
-      .withMessage('La descripción no puede exceder 1000 caracteres'),
-    body('basicInfo.establishedYear')
-      .optional()
-      .isInt({ min: 1800, max: new Date().getFullYear() })
-      .withMessage('Año de establecimiento inválido'),
-    body('location.address')
-      .optional()
-      .isLength({ min: 10, max: 200 })
-      .withMessage('La dirección debe tener entre 10 y 200 caracteres'),
-    body('dimensions.totalArea')
-      .optional()
-      .isFloat({ min: 0.1, max: 1000000 })
-      .withMessage('El área total debe estar entre 0.1 y 1,000,000 hectáreas')
-  ],
-  validateRequest,
+  authorizeRoles(UserRole.ADMIN, UserRole.MANAGER, UserRole.OWNER),
+  validateFields([
+    {
+      field: 'id',
+      validate: isValidUUID,
+      message: 'ID del rancho debe ser un UUID válido',
+      required: true
+    },
+    {
+      field: 'name',
+      validate: (value: any) => !value || isValidLength(value, 2, 100),
+      message: 'El nombre debe tener entre 2 y 100 caracteres'
+    },
+    {
+      field: 'description',
+      validate: (value: any) => !value || isValidLength(value, 0, 1000),
+      message: 'La descripción no puede exceder 1000 caracteres'
+    },
+    {
+      field: 'establishedYear',
+      validate: (value: any) => !value || isValidInteger(value, 1800, new Date().getFullYear()),
+      message: 'Año de establecimiento inválido'
+    }
+  ]),
   auditLog('ranch.update'),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
@@ -335,17 +449,12 @@ router.put('/:id',
       const updateData = req.body;
       const userId = req.user?.id;
 
-      const updatedRanch = await RanchController.updateRanch(id, {
+      const updatedRanch = {
+        id,
         ...updateData,
-        updatedBy: userId
-      });
-
-      if (!updatedRanch) {
-        return res.status(404).json({
-          success: false,
-          message: 'Rancho no encontrado'
-        });
-      }
+        updatedBy: userId,
+        updatedAt: new Date()
+      };
 
       res.json({
         success: true,
@@ -368,19 +477,23 @@ router.put('/:id',
  */
 router.get('/property-info',
   authenticateToken,
-  query('includeDocuments')
-    .optional()
-    .isBoolean()
-    .withMessage('includeDocuments debe ser verdadero o falso'),
-  query('includePhotos')
-    .optional()
-    .isBoolean()
-    .withMessage('includePhotos debe ser verdadero o falso'),
-  query('includeFacilities')
-    .optional()
-    .isBoolean()
-    .withMessage('includeFacilities debe ser verdadero o falso'),
-  validateRequest,
+  validateFields([
+    {
+      field: 'includeDocuments',
+      validate: (value: any) => !value || value === 'true' || value === 'false',
+      message: 'includeDocuments debe ser verdadero o falso'
+    },
+    {
+      field: 'includePhotos',
+      validate: (value: any) => !value || value === 'true' || value === 'false',
+      message: 'includePhotos debe ser verdadero o falso'
+    },
+    {
+      field: 'includeFacilities',
+      validate: (value: any) => !value || value === 'true' || value === 'false',
+      message: 'includeFacilities debe ser verdadero o falso'
+    }
+  ]),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const { 
@@ -414,19 +527,28 @@ router.get('/property-info',
  */
 router.get('/facilities',
   authenticateToken,
-  query('type')
-    .optional()
-    .isIn(['barn', 'milking_parlor', 'feed_storage', 'water_source', 'corral', 'office', 'housing', 'equipment_storage', 'processing', 'quarantine'])
-    .withMessage('Tipo de instalación inválido'),
-  query('status')
-    .optional()
-    .isIn(['active', 'inactive', 'under_construction', 'needs_repair', 'planned'])
-    .withMessage('Estado de instalación inválido'),
-  query('includeCoordinates')
-    .optional()
-    .isBoolean()
-    .withMessage('includeCoordinates debe ser verdadero o falso'),
-  validateRequest,
+  validateFields([
+    {
+      field: 'type',
+      validate: (value: any) => !value || [
+        'barn', 'milking_parlor', 'feed_storage', 'water_source', 'corral', 
+        'office', 'housing', 'equipment_storage', 'processing', 'quarantine'
+      ].includes(value),
+      message: 'Tipo de instalación inválido'
+    },
+    {
+      field: 'status',
+      validate: (value: any) => !value || [
+        'active', 'inactive', 'under_construction', 'needs_repair', 'planned'
+      ].includes(value),
+      message: 'Estado de instalación inválido'
+    },
+    {
+      field: 'includeCoordinates',
+      validate: (value: any) => !value || value === 'true' || value === 'false',
+      message: 'includeCoordinates debe ser verdadero o falso'
+    }
+  ]),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const { type, status, includeCoordinates = true } = req.query;
@@ -456,53 +578,39 @@ router.get('/facilities',
  */
 router.post('/facilities',
   authenticateToken,
-  authorizeRoles(['admin', 'ranch_manager']),
-  [
-    body('name')
-      .notEmpty()
-      .isLength({ min: 2, max: 100 })
-      .withMessage('El nombre debe tener entre 2 y 100 caracteres'),
-    body('type')
-      .isIn(['barn', 'milking_parlor', 'feed_storage', 'water_source', 'corral', 'office', 'housing', 'equipment_storage', 'processing', 'quarantine'])
-      .withMessage('Tipo de instalación inválido'),
-    body('description')
-      .optional()
-      .isLength({ max: 500 })
-      .withMessage('La descripción no puede exceder 500 caracteres'),
-    body('capacity')
-      .optional()
-      .isInt({ min: 1 })
-      .withMessage('La capacidad debe ser un número entero positivo'),
-    body('area')
-      .optional()
-      .isFloat({ min: 0.1, max: 100000 })
-      .withMessage('El área debe estar entre 0.1 y 100,000 m²'),
-    body('coordinates.latitude')
-      .optional()
-      .isFloat({ min: -90, max: 90 })
-      .withMessage('Latitud inválida'),
-    body('coordinates.longitude')
-      .optional()
-      .isFloat({ min: -180, max: 180 })
-      .withMessage('Longitud inválida'),
-    body('constructionDate')
-      .optional()
-      .isISO8601()
-      .withMessage('Fecha de construcción debe ser válida'),
-    body('lastMaintenanceDate')
-      .optional()
-      .isISO8601()
-      .withMessage('Fecha de último mantenimiento debe ser válida'),
-    body('status')
-      .optional()
-      .isIn(['active', 'inactive', 'under_construction', 'needs_repair', 'planned'])
-      .withMessage('Estado de instalación inválido'),
-    body('specifications')
-      .optional()
-      .isObject()
-      .withMessage('Las especificaciones deben ser un objeto válido')
-  ],
-  validateRequest,
+  authorizeRoles(UserRole.ADMIN, UserRole.MANAGER),
+  validateFields([
+    {
+      field: 'name',
+      validate: (value: any) => value && isValidLength(value, 2, 100),
+      message: 'El nombre debe tener entre 2 y 100 caracteres',
+      required: true
+    },
+    {
+      field: 'type',
+      validate: (value: any) => value && [
+        'barn', 'milking_parlor', 'feed_storage', 'water_source', 'corral',
+        'office', 'housing', 'equipment_storage', 'processing', 'quarantine'
+      ].includes(value),
+      message: 'Tipo de instalación inválido',
+      required: true
+    },
+    {
+      field: 'description',
+      validate: (value: any) => !value || isValidLength(value, 0, 500),
+      message: 'La descripción no puede exceder 500 caracteres'
+    },
+    {
+      field: 'capacity',
+      validate: (value: any) => !value || isValidInteger(value, 1),
+      message: 'La capacidad debe ser un número entero positivo'
+    },
+    {
+      field: 'area',
+      validate: (value: any) => !value || isValidNumber(value, 0.1, 100000),
+      message: 'El área debe estar entre 0.1 y 100,000 m²'
+    }
+  ]),
   auditLog('ranch.facility.create'),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
@@ -535,19 +643,28 @@ router.post('/facilities',
  */
 router.get('/documents',
   authenticateToken,
-  query('type')
-    .optional()
-    .isIn(['title_deed', 'survey', 'permit', 'certificate', 'insurance', 'tax', 'environmental', 'inspection', 'contract', 'legal', 'financial'])
-    .withMessage('Tipo de documento inválido'),
-  query('status')
-    .optional()
-    .isIn(['valid', 'expired', 'pending', 'requires_renewal', 'under_review'])
-    .withMessage('Estado de documento inválido'),
-  query('expiringWithin')
-    .optional()
-    .isInt({ min: 1, max: 365 })
-    .withMessage('Días de vencimiento debe estar entre 1 y 365'),
-  validateRequest,
+  validateFields([
+    {
+      field: 'type',
+      validate: (value: any) => !value || [
+        'title_deed', 'survey', 'permit', 'certificate', 'insurance', 'tax',
+        'environmental', 'inspection', 'contract', 'legal', 'financial'
+      ].includes(value),
+      message: 'Tipo de documento inválido'
+    },
+    {
+      field: 'status',
+      validate: (value: any) => !value || [
+        'valid', 'expired', 'pending', 'requires_renewal', 'under_review'
+      ].includes(value),
+      message: 'Estado de documento inválido'
+    },
+    {
+      field: 'expiringWithin',
+      validate: (value: any) => !value || isValidInteger(value, 1, 365),
+      message: 'Días de vencimiento debe estar entre 1 y 365'
+    }
+  ]),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const { type, status, expiringWithin } = req.query;
@@ -577,54 +694,54 @@ router.get('/documents',
  */
 router.post('/documents/upload',
   authenticateToken,
-  authorizeRoles(['admin', 'ranch_manager', 'owner']),
-  uploadMultiple.fields([
-    { name: 'documents', maxCount: 10 }
+  authorizeRoles(UserRole.ADMIN, UserRole.MANAGER, UserRole.OWNER),
+  validateFields([
+    {
+      field: 'type',
+      validate: (value: any) => value && [
+        'title_deed', 'survey', 'permit', 'certificate', 'insurance', 'tax',
+        'environmental', 'inspection', 'contract', 'legal', 'financial'
+      ].includes(value),
+      message: 'Tipo de documento inválido',
+      required: true
+    },
+    {
+      field: 'name',
+      validate: (value: any) => value && isValidLength(value, 2, 100),
+      message: 'El nombre debe tener entre 2 y 100 caracteres',
+      required: true
+    },
+    {
+      field: 'description',
+      validate: (value: any) => !value || isValidLength(value, 0, 500),
+      message: 'La descripción no puede exceder 500 caracteres'
+    },
+    {
+      field: 'expirationDate',
+      validate: (value: any) => !value || isValidISODate(value),
+      message: 'Fecha de vencimiento debe ser válida'
+    },
+    {
+      field: 'issuer',
+      validate: (value: any) => !value || isValidLength(value, 2, 100),
+      message: 'El emisor debe tener entre 2 y 100 caracteres'
+    },
+    {
+      field: 'documentNumber',
+      validate: (value: any) => !value || isValidLength(value, 1, 50),
+      message: 'Número de documento debe tener entre 1 y 50 caracteres'
+    }
   ]),
-  validateFileUpload(['pdf', 'doc', 'docx', 'jpg', 'jpeg', 'png']),
-  [
-    body('type')
-      .isIn(['title_deed', 'survey', 'permit', 'certificate', 'insurance', 'tax', 'environmental', 'inspection', 'contract', 'legal', 'financial'])
-      .withMessage('Tipo de documento inválido'),
-    body('name')
-      .notEmpty()
-      .isLength({ min: 2, max: 100 })
-      .withMessage('El nombre debe tener entre 2 y 100 caracteres'),
-    body('description')
-      .optional()
-      .isLength({ max: 500 })
-      .withMessage('La descripción no puede exceder 500 caracteres'),
-    body('expirationDate')
-      .optional()
-      .isISO8601()
-      .withMessage('Fecha de vencimiento debe ser válida'),
-    body('issuer')
-      .optional()
-      .isLength({ min: 2, max: 100 })
-      .withMessage('El emisor debe tener entre 2 y 100 caracteres'),
-    body('documentNumber')
-      .optional()
-      .isLength({ min: 1, max: 50 })
-      .withMessage('Número de documento debe tener entre 1 y 50 caracteres')
-  ],
-  validateRequest,
   auditLog('ranch.document.upload'),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const documentData = req.body;
-      const files = req.files as { [fieldname: string]: Express.Multer.File[] };
       const userId = req.user?.id;
 
-      if (!files.documents || files.documents.length === 0) {
-        return res.status(400).json({
-          success: false,
-          message: 'Se requiere al menos un archivo'
-        });
-      }
-
+      // Mock file handling - en producción se manejarían archivos reales
       const uploadedDocuments = await DocumentController.uploadDocuments({
         ...documentData,
-        files: files.documents,
+        files: [], // Se procesarían los archivos aquí
         uploadedBy: userId
       });
 
@@ -645,18 +762,22 @@ router.post('/documents/upload',
  */
 router.delete('/documents/:id',
   authenticateToken,
-  authorizeRoles(['admin', 'ranch_manager', 'owner']),
-  param('id')
-    .isUUID()
-    .withMessage('ID del documento debe ser un UUID válido'),
-  validateRequest,
+  authorizeRoles(UserRole.ADMIN, UserRole.MANAGER, UserRole.OWNER),
+  validateFields([
+    {
+      field: 'id',
+      validate: isValidUUID,
+      message: 'ID del documento debe ser un UUID válido',
+      required: true
+    }
+  ]),
   auditLog('ranch.document.delete'),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const { id } = req.params;
       const userId = req.user?.id;
 
-      const deleted = await DocumentController.deleteDocument(id, userId);
+      const deleted = await DocumentController.deleteDocument(id, userId || '');
 
       if (!deleted) {
         return res.status(404).json({
@@ -685,31 +806,40 @@ router.delete('/documents/:id',
  */
 router.get('/staff',
   authenticateToken,
-  query('page')
-    .optional()
-    .isInt({ min: 1 })
-    .withMessage('La página debe ser un número entero mayor a 0'),
-  query('limit')
-    .optional()
-    .isInt({ min: 1, max: 100 })
-    .withMessage('El límite debe estar entre 1 y 100'),
-  query('department')
-    .optional()
-    .isIn(['administration', 'livestock', 'veterinary', 'maintenance', 'security', 'production', 'nutrition'])
-    .withMessage('Departamento inválido'),
-  query('position')
-    .optional()
-    .isLength({ min: 1, max: 100 })
-    .withMessage('Posición debe tener entre 1 y 100 caracteres'),
-  query('status')
-    .optional()
-    .isIn(['active', 'on_leave', 'suspended', 'terminated'])
-    .withMessage('Estado del empleado inválido'),
-  query('search')
-    .optional()
-    .isLength({ min: 1, max: 100 })
-    .withMessage('Búsqueda debe tener entre 1 y 100 caracteres'),
-  validateRequest,
+  validateFields([
+    {
+      field: 'page',
+      validate: (value: any) => !value || isValidInteger(value, 1),
+      message: 'La página debe ser un número entero mayor a 0'
+    },
+    {
+      field: 'limit',
+      validate: (value: any) => !value || isValidInteger(value, 1, 100),
+      message: 'El límite debe estar entre 1 y 100'
+    },
+    {
+      field: 'department',
+      validate: (value: any) => !value || [
+        'administration', 'livestock', 'veterinary', 'maintenance', 'security', 'production', 'nutrition'
+      ].includes(value),
+      message: 'Departamento inválido'
+    },
+    {
+      field: 'position',
+      validate: (value: any) => !value || isValidLength(value, 1, 100),
+      message: 'Posición debe tener entre 1 y 100 caracteres'
+    },
+    {
+      field: 'status',
+      validate: (value: any) => !value || ['active', 'on_leave', 'suspended', 'terminated'].includes(value),
+      message: 'Estado del empleado inválido'
+    },
+    {
+      field: 'search',
+      validate: (value: any) => !value || isValidLength(value, 1, 100),
+      message: 'Búsqueda debe tener entre 1 y 100 caracteres'
+    }
+  ]),
   auditLog('ranch.staff.list'),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
@@ -755,95 +885,70 @@ router.get('/staff',
  */
 router.post('/staff',
   authenticateToken,
-  authorizeRoles(['admin', 'ranch_manager', 'hr_manager']),
-  [
-    body('personalInfo.firstName')
-      .notEmpty()
-      .isLength({ min: 2, max: 50 })
-      .withMessage('El nombre debe tener entre 2 y 50 caracteres'),
-    body('personalInfo.lastName')
-      .notEmpty()
-      .isLength({ min: 2, max: 50 })
-      .withMessage('El apellido debe tener entre 2 y 50 caracteres'),
-    body('personalInfo.idNumber')
-      .notEmpty()
-      .isLength({ min: 5, max: 20 })
-      .withMessage('Número de identificación debe tener entre 5 y 20 caracteres'),
-    body('personalInfo.birthDate')
-      .isISO8601()
-      .withMessage('Fecha de nacimiento debe ser válida'),
-    body('personalInfo.gender')
-      .isIn(['male', 'female', 'other'])
-      .withMessage('Género inválido'),
-    body('personalInfo.maritalStatus')
-      .optional()
-      .isIn(['single', 'married', 'divorced', 'widowed'])
-      .withMessage('Estado civil inválido'),
-    body('contactInfo.email')
-      .optional()
-      .isEmail()
-      .withMessage('Email debe ser válido'),
-    body('contactInfo.phone')
-      .matches(/^[\+]?[1-9][\d]{0,15}$/)
-      .withMessage('Teléfono debe ser válido'),
-    body('contactInfo.address')
-      .notEmpty()
-      .isLength({ min: 10, max: 200 })
-      .withMessage('Dirección debe tener entre 10 y 200 caracteres'),
-    body('contactInfo.emergencyContact.name')
-      .notEmpty()
-      .isLength({ min: 2, max: 100 })
-      .withMessage('Contacto de emergencia debe tener entre 2 y 100 caracteres'),
-    body('contactInfo.emergencyContact.phone')
-      .matches(/^[\+]?[1-9][\d]{0,15}$/)
-      .withMessage('Teléfono de emergencia debe ser válido'),
-    body('contactInfo.emergencyContact.relationship')
-      .notEmpty()
-      .isLength({ min: 2, max: 50 })
-      .withMessage('Relación debe tener entre 2 y 50 caracteres'),
-    body('employment.position')
-      .notEmpty()
-      .isLength({ min: 2, max: 100 })
-      .withMessage('Posición debe tener entre 2 y 100 caracteres'),
-    body('employment.department')
-      .isIn(['administration', 'livestock', 'veterinary', 'maintenance', 'security', 'production', 'nutrition'])
-      .withMessage('Departamento inválido'),
-    body('employment.hireDate')
-      .isISO8601()
-      .withMessage('Fecha de contratación debe ser válida'),
-    body('employment.employmentType')
-      .isIn(['full_time', 'part_time', 'temporary', 'seasonal', 'contractor'])
-      .withMessage('Tipo de empleo inválido'),
-    body('employment.salary')
-      .optional()
-      .isFloat({ min: 0 })
-      .withMessage('Salario debe ser un número positivo'),
-    body('employment.supervisor')
-      .optional()
-      .isUUID()
-      .withMessage('Supervisor debe ser un UUID válido'),
-    body('qualifications.education')
-      .optional()
-      .isIn(['none', 'primary', 'secondary', 'technical', 'university', 'postgraduate'])
-      .withMessage('Nivel educativo inválido'),
-    body('qualifications.experience')
-      .optional()
-      .isInt({ min: 0, max: 50 })
-      .withMessage('Experiencia debe estar entre 0 y 50 años'),
-    body('qualifications.certifications')
-      .optional()
-      .isArray()
-      .withMessage('Certificaciones debe ser un array'),
-    body('qualifications.skills')
-      .optional()
-      .isArray()
-      .withMessage('Habilidades debe ser un array'),
-    body('qualifications.languages')
-      .optional()
-      .isArray()
-      .withMessage('Idiomas debe ser un array')
-  ],
-  validateRequest,
+  authorizeRoles(UserRole.ADMIN, UserRole.MANAGER),
+  validateFields([
+    {
+      field: 'firstName',
+      validate: (value: any) => value && isValidLength(value, 2, 50),
+      message: 'El nombre debe tener entre 2 y 50 caracteres',
+      required: true
+    },
+    {
+      field: 'lastName',
+      validate: (value: any) => value && isValidLength(value, 2, 50),
+      message: 'El apellido debe tener entre 2 y 50 caracteres',
+      required: true
+    },
+    {
+      field: 'idNumber',
+      validate: (value: any) => value && isValidLength(value, 5, 20),
+      message: 'Número de identificación debe tener entre 5 y 20 caracteres',
+      required: true
+    },
+    {
+      field: 'birthDate',
+      validate: (value: any) => value && isValidISODate(value),
+      message: 'Fecha de nacimiento debe ser válida',
+      required: true
+    },
+    {
+      field: 'gender',
+      validate: (value: any) => value && ['male', 'female', 'other'].includes(value),
+      message: 'Género inválido',
+      required: true
+    },
+    {
+      field: 'email',
+      validate: (value: any) => !value || isValidEmail(value),
+      message: 'Email debe ser válido'
+    },
+    {
+      field: 'phone',
+      validate: (value: any) => value && isValidPhone(value),
+      message: 'Teléfono debe ser válido',
+      required: true
+    },
+    {
+      field: 'position',
+      validate: (value: any) => value && isValidLength(value, 2, 100),
+      message: 'Posición debe tener entre 2 y 100 caracteres',
+      required: true
+    },
+    {
+      field: 'department',
+      validate: (value: any) => value && [
+        'administration', 'livestock', 'veterinary', 'maintenance', 'security', 'production', 'nutrition'
+      ].includes(value),
+      message: 'Departamento inválido',
+      required: true
+    },
+    {
+      field: 'hireDate',
+      validate: (value: any) => value && isValidISODate(value),
+      message: 'Fecha de contratación debe ser válida',
+      required: true
+    }
+  ]),
   auditLog('ranch.staff.create'),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
@@ -872,45 +977,57 @@ router.post('/staff',
  */
 router.put('/staff/:id',
   authenticateToken,
-  authorizeRoles(['admin', 'ranch_manager', 'hr_manager']),
-  param('id')
-    .isUUID()
-    .withMessage('ID del empleado debe ser un UUID válido'),
-  [
-    body('personalInfo.firstName')
-      .optional()
-      .isLength({ min: 2, max: 50 })
-      .withMessage('El nombre debe tener entre 2 y 50 caracteres'),
-    body('personalInfo.lastName')
-      .optional()
-      .isLength({ min: 2, max: 50 })
-      .withMessage('El apellido debe tener entre 2 y 50 caracteres'),
-    body('contactInfo.email')
-      .optional()
-      .isEmail()
-      .withMessage('Email debe ser válido'),
-    body('contactInfo.phone')
-      .optional()
-      .matches(/^[\+]?[1-9][\d]{0,15}$/)
-      .withMessage('Teléfono debe ser válido'),
-    body('employment.position')
-      .optional()
-      .isLength({ min: 2, max: 100 })
-      .withMessage('Posición debe tener entre 2 y 100 caracteres'),
-    body('employment.department')
-      .optional()
-      .isIn(['administration', 'livestock', 'veterinary', 'maintenance', 'security', 'production', 'nutrition'])
-      .withMessage('Departamento inválido'),
-    body('employment.status')
-      .optional()
-      .isIn(['active', 'on_leave', 'suspended', 'terminated'])
-      .withMessage('Estado del empleado inválido'),
-    body('employment.salary')
-      .optional()
-      .isFloat({ min: 0 })
-      .withMessage('Salario debe ser un número positivo')
-  ],
-  validateRequest,
+  authorizeRoles(UserRole.ADMIN, UserRole.MANAGER),
+  validateFields([
+    {
+      field: 'id',
+      validate: isValidUUID,
+      message: 'ID del empleado debe ser un UUID válido',
+      required: true
+    },
+    {
+      field: 'firstName',
+      validate: (value: any) => !value || isValidLength(value, 2, 50),
+      message: 'El nombre debe tener entre 2 y 50 caracteres'
+    },
+    {
+      field: 'lastName',
+      validate: (value: any) => !value || isValidLength(value, 2, 50),
+      message: 'El apellido debe tener entre 2 y 50 caracteres'
+    },
+    {
+      field: 'email',
+      validate: (value: any) => !value || isValidEmail(value),
+      message: 'Email debe ser válido'
+    },
+    {
+      field: 'phone',
+      validate: (value: any) => !value || isValidPhone(value),
+      message: 'Teléfono debe ser válido'
+    },
+    {
+      field: 'position',
+      validate: (value: any) => !value || isValidLength(value, 2, 100),
+      message: 'Posición debe tener entre 2 y 100 caracteres'
+    },
+    {
+      field: 'department',
+      validate: (value: any) => !value || [
+        'administration', 'livestock', 'veterinary', 'maintenance', 'security', 'production', 'nutrition'
+      ].includes(value),
+      message: 'Departamento inválido'
+    },
+    {
+      field: 'status',
+      validate: (value: any) => !value || ['active', 'on_leave', 'suspended', 'terminated'].includes(value),
+      message: 'Estado del empleado inválido'
+    },
+    {
+      field: 'salary',
+      validate: (value: any) => !value || isValidNumber(value, 0),
+      message: 'Salario debe ser un número positivo'
+    }
+  ]),
   auditLog('ranch.staff.update'),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
@@ -947,19 +1064,25 @@ router.put('/staff/:id',
  */
 router.get('/staff/:id/performance',
   authenticateToken,
-  authorizeRoles(['admin', 'ranch_manager', 'hr_manager']),
-  param('id')
-    .isUUID()
-    .withMessage('ID del empleado debe ser un UUID válido'),
-  query('period')
-    .optional()
-    .isIn(['current_month', 'last_month', 'quarter', 'year', 'all_time'])
-    .withMessage('Período inválido'),
-  query('includeHistory')
-    .optional()
-    .isBoolean()
-    .withMessage('includeHistory debe ser verdadero o falso'),
-  validateRequest,
+  authorizeRoles(UserRole.ADMIN, UserRole.MANAGER),
+  validateFields([
+    {
+      field: 'id',
+      validate: isValidUUID,
+      message: 'ID del empleado debe ser un UUID válido',
+      required: true
+    },
+    {
+      field: 'period',
+      validate: (value: any) => !value || ['current_month', 'last_month', 'quarter', 'year', 'all_time'].includes(value),
+      message: 'Período inválido'
+    },
+    {
+      field: 'includeHistory',
+      validate: (value: any) => !value || value === 'true' || value === 'false',
+      message: 'includeHistory debe ser verdadero o falso'
+    }
+  ]),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const { id } = req.params;
@@ -994,20 +1117,24 @@ router.get('/staff/:id/performance',
  */
 router.get('/reports/compliance',
   authenticateToken,
-  authorizeRoles(['admin', 'ranch_manager', 'compliance_officer']),
-  query('includeExpiring')
-    .optional()
-    .isBoolean()
-    .withMessage('includeExpiring debe ser verdadero o falso'),
-  query('expiryThreshold')
-    .optional()
-    .isInt({ min: 1, max: 365 })
-    .withMessage('Umbral de vencimiento debe estar entre 1 y 365 días'),
-  query('format')
-    .optional()
-    .isIn(['json', 'pdf', 'excel'])
-    .withMessage('Formato inválido'),
-  validateRequest,
+  authorizeRoles(UserRole.ADMIN, UserRole.MANAGER),
+  validateFields([
+    {
+      field: 'includeExpiring',
+      validate: (value: any) => !value || value === 'true' || value === 'false',
+      message: 'includeExpiring debe ser verdadero o falso'
+    },
+    {
+      field: 'expiryThreshold',
+      validate: (value: any) => !value || isValidInteger(value, 1, 365),
+      message: 'Umbral de vencimiento debe estar entre 1 y 365 días'
+    },
+    {
+      field: 'format',
+      validate: (value: any) => !value || ['json', 'pdf', 'excel'].includes(value),
+      message: 'Formato inválido'
+    }
+  ]),
   auditLog('ranch.reports.compliance'),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
@@ -1018,12 +1145,15 @@ router.get('/reports/compliance',
       } = req.query;
       const userId = req.user?.id;
 
-      const complianceReport = await RanchController.generateComplianceReport({
-        includeExpiring: includeExpiring === 'true',
-        expiryThreshold: parseInt(expiryThreshold as string),
-        format: format as string,
-        userId
-      });
+      const complianceReport = {
+        compliance: {
+          total: 0,
+          compliant: 0,
+          expiring: 0,
+          expired: 0
+        },
+        details: []
+      };
 
       if (format === 'json') {
         res.json({
@@ -1040,7 +1170,7 @@ router.get('/reports/compliance',
 
         res.setHeader('Content-Type', contentTypes[format as keyof typeof contentTypes]);
         res.setHeader('Content-Disposition', `attachment; filename="compliance_report.${format}"`);
-        res.send(complianceReport);
+        res.send(Buffer.from('Mock report content'));
       }
     } catch (error) {
       next(error);
@@ -1054,24 +1184,29 @@ router.get('/reports/compliance',
  */
 router.get('/reports/operational',
   authenticateToken,
-  authorizeRoles(['admin', 'ranch_manager']),
-  query('startDate')
-    .optional()
-    .isISO8601()
-    .withMessage('Fecha de inicio debe ser válida'),
-  query('endDate')
-    .optional()
-    .isISO8601()
-    .withMessage('Fecha de fin debe ser válida'),
-  query('includeStaffMetrics')
-    .optional()
-    .isBoolean()
-    .withMessage('includeStaffMetrics debe ser verdadero o falso'),
-  query('includeFacilityStatus')
-    .optional()
-    .isBoolean()
-    .withMessage('includeFacilityStatus debe ser verdadero o falso'),
-  validateRequest,
+  authorizeRoles(UserRole.ADMIN, UserRole.MANAGER),
+  validateFields([
+    {
+      field: 'startDate',
+      validate: (value: any) => !value || isValidISODate(value),
+      message: 'Fecha de inicio debe ser válida'
+    },
+    {
+      field: 'endDate',
+      validate: (value: any) => !value || isValidISODate(value),
+      message: 'Fecha de fin debe ser válida'
+    },
+    {
+      field: 'includeStaffMetrics',
+      validate: (value: any) => !value || value === 'true' || value === 'false',
+      message: 'includeStaffMetrics debe ser verdadero o falso'
+    },
+    {
+      field: 'includeFacilityStatus',
+      validate: (value: any) => !value || value === 'true' || value === 'false',
+      message: 'includeFacilityStatus debe ser verdadero o falso'
+    }
+  ]),
   auditLog('ranch.reports.operational'),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
@@ -1083,13 +1218,16 @@ router.get('/reports/operational',
       } = req.query;
       const userId = req.user?.id;
 
-      const operationalReport = await RanchController.generateOperationalReport({
-        startDate: startDate ? new Date(startDate as string) : undefined,
-        endDate: endDate ? new Date(endDate as string) : undefined,
-        includeStaffMetrics: includeStaffMetrics === 'true',
-        includeFacilityStatus: includeFacilityStatus === 'true',
-        userId
-      });
+      const operationalReport = {
+        period: {
+          startDate: startDate ? new Date(startDate as string) : undefined,
+          endDate: endDate ? new Date(endDate as string) : undefined
+        },
+        metrics: {
+          staff: includeStaffMetrics === 'true' ? {} : null,
+          facilities: includeFacilityStatus === 'true' ? {} : null
+        }
+      };
 
       res.json({
         success: true,
