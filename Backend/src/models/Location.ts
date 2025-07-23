@@ -317,6 +317,8 @@ class Location extends Model<LocationAttributes, LocationCreationAttributes>
   public readonly createdAt!: Date;
   public readonly updatedAt!: Date;
   public deletedAt?: Date;
+  static FARM: LocationType;
+  bovine: null | undefined 
 
   // Métodos de instancia
 

@@ -1,184 +1,73 @@
 import { Request, Response } from 'express';
-import { Op, fn, col, literal } from 'sequelize';
-import { sequelize } from '../config/database';
-import { 
-  Event, 
-  Bovine, 
-  Location, 
-  User,
-  Vaccination,
-  Illness,
-  Finance
-} from '../models';
-import { EventsService } from '../services/events.service';
+import { Op, fn, col } from 'sequelize';
+import sequelize from '../config/database'; // Importación corregida como default
+import Event, { 
+  EventType, 
+  EventStatus, 
+  EventPriority,
+  EventSpecificData,
+  VaccinationEventData,
+  DiseaseEventData,
+  TreatmentEventData,
+  HealthCheckEventData,
+  ReproductionEventData,
+  MovementEventData
+} from '../models/Event'; // Usando los tipos correctos del modelo Event
+import Bovine from '../models/Bovine';
 
-// Tipos de eventos del ganado
-type EventType = 
-  | 'vaccination' 
-  | 'illness' 
-  | 'reproductive' 
-  | 'transfer' 
-  | 'management' 
-  | 'health_check' 
-  | 'feeding' 
-  | 'milking' 
-  | 'pregnancy_check' 
-  | 'birth' 
-  | 'death'
-  | 'purchase'
-  | 'sale'
-  | 'transport'
-  | 'emergency'
-  | 'breeding'
-  | 'treatment'
-  | 'maintenance';
+// Tipos simplificados adaptados al modelo real
+type TimeRange = 'daily' | 'weekly' | 'monthly' | 'quarterly' | 'yearly';
 
-type EventStatus = 'scheduled' | 'in_progress' | 'completed' | 'cancelled' | 'postponed' | 'failed';
-type EventPriority = 'low' | 'medium' | 'high' | 'urgent' | 'emergency';
-type ReproductiveEventType = 'heat_detection' | 'artificial_insemination' | 'natural_breeding' | 'pregnancy_diagnosis' | 'calving' | 'weaning' | 'dry_off' | 'abortion';
-type TransferType = 'within_farm' | 'to_another_farm' | 'to_slaughter' | 'to_market' | 'quarantine' | 'pasture_rotation';
-type ManagementType = 'weighing' | 'tagging' | 'dehorning' | 'castration' | 'hoof_trimming' | 'grooming';
-
-// Interfaces para eventos
+// Interfaces para requests - adaptadas al modelo real
 interface CreateEventRequest {
-  type: EventType;
+  bovineId: string; // Singular, como en el modelo real
+  eventType: EventType; // Usando EventType del modelo
   title: string;
   description?: string;
-  scheduledDate: Date;
-  scheduledTime?: string;
-  duration?: number; // en minutos
+  scheduledDate: Date; // Fecha y hora completa
   location: {
     latitude: number;
     longitude: number;
+    altitude?: number;
+    accuracy?: number;
     address?: string;
-    section?: string;
+    municipality?: string;
+    state?: string;
+    country?: string;
   };
-  bovineIds: string[];
   priority: EventPriority;
-  veterinarianName?: string;
+  veterinarianId?: string; // ID en lugar de nombre
   cost?: number;
-  tags?: string[];
-  notes?: string;
-  
-  // Detalles específicos por tipo de evento
-  vaccinationDetails?: {
-    vaccineType: string;
-    vaccineName: string;
-    dose: string;
-    batchNumber?: string;
-    manufacturer?: string;
-    nextDueDate?: Date;
-    sideEffects?: string[];
-  };
-  
-  illnessDetails?: {
-    diseaseName: string;
-    symptoms: string[];
-    severity: 'mild' | 'moderate' | 'severe' | 'critical';
-    diagnosis: string;
-    treatment?: string;
-    isContagious: boolean;
-    expectedRecoveryDate?: Date;
-  };
-  
-  reproductiveDetails?: {
-    eventType: ReproductiveEventType;
-    bullId?: string;
-    semenBatch?: string;
-    technician?: string;
-    success?: boolean;
-    expectedDueDate?: Date;
-    calvingDifficulty?: 'easy' | 'moderate' | 'difficult' | 'assisted' | 'cesarean';
-    offspringInfo?: {
-      gender: 'male' | 'female';
-      weight: number;
-      health: string;
-    };
-  };
-  
-  transferDetails?: {
-    transferType: TransferType;
-    fromLocation: string;
-    toLocation: string;
-    reason: string;
-    transportMethod?: string;
-    driverName?: string;
-    vehiclePlate?: string;
-    distance?: number;
-    estimatedDuration?: number;
-  };
-  
-  managementDetails?: {
-    managementType: ManagementType;
-    equipment?: string[];
-    measurements?: {
-      weight?: number;
-      height?: number;
-      bodyCondition?: number;
-    };
-    results?: string;
-  };
-  
-  purchaseSaleDetails?: {
-    quantity: number;
-    pricePerUnit: number;
-    totalPrice: number;
-    buyerSeller: string;
-    paymentMethod?: string;
-    contractNumber?: string;
-    quality?: string;
-    weight?: number;
-  };
-  
-  feedingDetails?: {
-    feedType: string;
-    quantity: number;
-    unit: string;
-    supplier?: string;
-    nutritionalInfo?: {
-      protein: number;
-      energy: number;
-      fiber: number;
-    };
-  };
-  
-  emergencyDetails?: {
-    emergencyType: string;
-    severity: 'low' | 'medium' | 'high' | 'critical';
-    responseTime?: number;
-    actionsToken?: string[];
-    outcome?: string;
-    followUpRequired?: boolean;
-  };
-  
-  weatherConditions?: {
-    temperature?: number;
-    humidity?: number;
-    condition?: string;
-    windSpeed?: number;
-  };
-  
-  metadata?: Record<string, any>;
+  currency?: string;
+  eventData?: EventSpecificData; // Datos específicos del evento
+  followUpRequired?: boolean;
+  followUpDate?: Date;
+  publicNotes?: string;
+  privateNotes?: string;
+  photos?: string[];
+  attachments?: string[];
+  weatherConditions?: string;
+  temperature?: number;
+  humidity?: number;
 }
 
 interface UpdateEventRequest extends Partial<CreateEventRequest> {
   id: string;
   status?: EventStatus;
-  completedDate?: Date;
-  actualDuration?: number;
-  actualCost?: number;
-  completionNotes?: string;
-  followUpRequired?: boolean;
-  followUpDate?: Date;
+  startDate?: Date;
+  endDate?: Date;
+  performedBy?: string;
+  results?: string;
+  complications?: string;
+  followUpNotes?: string;
 }
 
 interface EventFilters {
-  type?: EventType[];
+  eventType?: EventType[];
   status?: EventStatus[];
   priority?: EventPriority[];
-  bovineIds?: string[];
-  veterinarianName?: string;
-  tags?: string[];
+  bovineId?: string; // Singular
+  veterinarianId?: string;
   dateRange?: {
     startDate: Date;
     endDate: Date;
@@ -216,40 +105,54 @@ interface EventTimeline {
 
 interface EventTimelineItem {
   id: string;
-  type: EventType;
+  eventType: EventType;
   title: string;
   description: string;
   date: Date;
-  time?: string;
   status: EventStatus;
   priority: EventPriority;
-  bovineInfo: Array<{
+  bovineInfo: {
     id: string;
     earTag: string;
     name?: string;
-    type: string;
-  }>;
+    cattleType: string;
+  };
   location: {
     latitude: number;
     longitude: number;
-    address: string;
-    section?: string;
+    address?: string;
   };
   cost?: number;
-  veterinarianName?: string;
-  tags: string[];
+  veterinarianId?: string;
   createdBy: string;
-  notes?: string;
-  details: Record<string, any>;
+  publicNotes?: string;
+  eventData?: EventSpecificData;
+}
+
+// Tipos específicos para resultados de consultas agregadas con raw: true
+interface EventTypeCountResult {
+  eventType: EventType;
+  count: string;
+}
+
+interface EventStatusCountResult {
+  status: EventStatus;
+  count: string;
+}
+
+interface EventPriorityCountResult {
+  priority: EventPriority;
+  count: string;
+}
+
+interface CostStatsRawResult {
+  totalCost: string | null;
+  averageCost: string | null;
+  minCost: string | null;
+  maxCost: string | null;
 }
 
 export class EventsController {
-  private eventsService: EventsService;
-
-  constructor() {
-    this.eventsService = new EventsService();
-  }
-
   /**
    * Crear nuevo evento
    * POST /api/events
@@ -257,10 +160,10 @@ export class EventsController {
   public createEvent = async (req: Request, res: Response): Promise<void> => {
     try {
       const eventData: CreateEventRequest = req.body;
-      const userId = (req as any).user?.id;
+      const userId = (req as any).user?.id || 'system';
 
       // Validaciones básicas
-      if (!eventData.type || !eventData.title || !eventData.scheduledDate) {
+      if (!eventData.eventType || !eventData.title || !eventData.scheduledDate) {
         res.status(400).json({
           success: false,
           message: 'Campos obligatorios faltantes',
@@ -283,120 +186,72 @@ export class EventsController {
         return;
       }
 
-      // Validar bovinos
-      if (!eventData.bovineIds || eventData.bovineIds.length === 0) {
+      // Validar bovino
+      if (!eventData.bovineId) {
         res.status(400).json({
           success: false,
-          message: 'Debe especificar al menos un bovino',
+          message: 'Debe especificar un bovino',
           errors: {
-            bovineIds: 'Al menos un bovino debe estar asociado al evento'
+            bovineId: 'El ID del bovino es obligatorio'
           }
         });
         return;
       }
 
-      // Verificar que todos los bovinos existen
-      const bovines = await Bovine.findAll({
-        where: {
-          id: { [Op.in]: eventData.bovineIds },
-          isActive: true
-        }
-      });
-
-      if (bovines.length !== eventData.bovineIds.length) {
+      // Verificar que el bovino existe
+      const bovine = await Bovine.findByPk(eventData.bovineId);
+      if (!bovine || !bovine.isActive) {
         res.status(400).json({
           success: false,
-          message: 'Algunos bovinos no fueron encontrados',
+          message: 'Bovino no encontrado',
           errors: {
-            bovineIds: 'Uno o más bovinos no existen o están inactivos'
+            bovineId: 'El bovino no existe o está inactivo'
           }
         });
         return;
       }
 
-      // Crear ubicación
-      const locationRecord = await Location.create({
-        latitude: eventData.location.latitude,
-        longitude: eventData.location.longitude,
-        address: eventData.location.address || '',
-        section: eventData.location.section || '',
-        accuracy: 10,
-        timestamp: new Date()
-      });
-
-      // Crear evento base
+      // Crear evento usando el modelo real
       const newEvent = await Event.create({
-        type: eventData.type,
+        bovineId: eventData.bovineId,
+        eventType: eventData.eventType,
         title: eventData.title,
         description: eventData.description || '',
+        status: EventStatus.SCHEDULED,
+        priority: eventData.priority || EventPriority.MEDIUM,
         scheduledDate: eventData.scheduledDate,
-        scheduledTime: eventData.scheduledTime || '09:00',
-        duration: eventData.duration || 60,
-        locationId: locationRecord.id,
-        bovineIds: eventData.bovineIds,
-        status: 'scheduled',
-        priority: eventData.priority,
-        veterinarianName: eventData.veterinarianName || '',
+        location: {
+          latitude: eventData.location.latitude,
+          longitude: eventData.location.longitude,
+          altitude: eventData.location.altitude,
+          accuracy: eventData.location.accuracy || 10,
+          address: eventData.location.address,
+          municipality: eventData.location.municipality,
+          state: eventData.location.state,
+          country: eventData.location.country || 'México'
+        },
+        veterinarianId: eventData.veterinarianId,
         cost: eventData.cost || 0,
-        tags: eventData.tags || [],
-        notes: eventData.notes || '',
-        weatherConditions: eventData.weatherConditions || {},
-        metadata: eventData.metadata || {},
-        createdBy: userId,
-        createdAt: new Date(),
-        updatedAt: new Date()
+        currency: eventData.currency || 'MXN',
+        eventData: eventData.eventData,
+        followUpRequired: eventData.followUpRequired || false,
+        followUpDate: eventData.followUpDate,
+        publicNotes: eventData.publicNotes,
+        privateNotes: eventData.privateNotes,
+        photos: eventData.photos || [],
+        attachments: eventData.attachments || [],
+        weatherConditions: eventData.weatherConditions,
+        temperature: eventData.temperature,
+        humidity: eventData.humidity,
+        isActive: true,
+        createdBy: userId
       });
-
-      // Crear registros específicos según el tipo de evento
-      await this.createSpecificEventDetails(newEvent.id, eventData);
-
-      // Crear entrada financiera si hay costo
-      if (eventData.cost && eventData.cost > 0) {
-        await Finance.create({
-          type: eventData.type === 'sale' ? 'income' : 'expense',
-          category: this.getFinanceCategoryFromEventType(eventData.type),
-          amount: eventData.cost,
-          date: eventData.scheduledDate,
-          description: `${eventData.title} - ${eventData.description}`,
-          bovineIds: eventData.bovineIds,
-          eventId: newEvent.id,
-          createdBy: userId,
-          createdAt: new Date(),
-          updatedAt: new Date()
-        });
-      }
-
-      // Obtener evento completo con asociaciones
-      const eventWithDetails = await Event.findByPk(newEvent.id, {
-        include: [
-          {
-            model: Location,
-            as: 'location'
-          },
-          {
-            model: User,
-            as: 'creator',
-            attributes: ['id', 'firstName', 'lastName', 'email']
-          }
-        ]
-      });
-
-      // Agregar información de bovinos
-      const bovineInfo = bovines.map(bovine => ({
-        id: bovine.id,
-        earTag: bovine.earTag,
-        name: bovine.name,
-        type: bovine.type
-      }));
 
       res.status(201).json({
         success: true,
         message: 'Evento creado exitosamente',
         data: {
-          event: {
-            ...eventWithDetails.toJSON(),
-            bovineInfo
-          }
+          event: newEvent
         }
       });
 
@@ -406,7 +261,7 @@ export class EventsController {
         success: false,
         message: 'Error interno del servidor',
         errors: {
-          general: 'Ocurrió un error inesperado al crear el evento'
+          general: error instanceof Error ? error.message : 'Ocurrió un error inesperado al crear el evento'
         }
       });
     }
@@ -419,12 +274,11 @@ export class EventsController {
   public getEvents = async (req: Request, res: Response): Promise<void> => {
     try {
       const {
-        type,
+        eventType,
         status,
         priority,
-        bovineIds,
-        veterinarianName,
-        tags,
+        bovineId,
+        veterinarianId,
         dateRange,
         location,
         searchTerm,
@@ -434,15 +288,15 @@ export class EventsController {
         limit = 20,
         sortBy = 'scheduledDate',
         sortOrder = 'DESC'
-      }: EventFilters = req.query;
+      }: EventFilters = req.query as any;
 
       // Construir filtros WHERE
-      const whereConditions: any = {};
+      const whereConditions: any = { isActive: true };
 
       // Filtros específicos
-      if (type) {
-        const typeArray = Array.isArray(type) ? type : [type];
-        whereConditions.type = { [Op.in]: typeArray };
+      if (eventType) {
+        const typeArray = Array.isArray(eventType) ? eventType : [eventType];
+        whereConditions.eventType = { [Op.in]: typeArray };
       }
       if (status) {
         const statusArray = Array.isArray(status) ? status : [status];
@@ -452,8 +306,11 @@ export class EventsController {
         const priorityArray = Array.isArray(priority) ? priority : [priority];
         whereConditions.priority = { [Op.in]: priorityArray };
       }
-      if (veterinarianName) {
-        whereConditions.veterinarianName = { [Op.iLike]: `%${veterinarianName}%` };
+      if (bovineId) {
+        whereConditions.bovineId = bovineId;
+      }
+      if (veterinarianId) {
+        whereConditions.veterinarianId = veterinarianId;
       }
       if (createdBy) {
         whereConditions.createdBy = createdBy;
@@ -478,23 +335,8 @@ export class EventsController {
         whereConditions[Op.or] = [
           { title: { [Op.iLike]: `%${searchTerm}%` } },
           { description: { [Op.iLike]: `%${searchTerm}%` } },
-          { veterinarianName: { [Op.iLike]: `%${searchTerm}%` } },
-          { notes: { [Op.iLike]: `%${searchTerm}%` } }
+          { publicNotes: { [Op.iLike]: `%${searchTerm}%` } }
         ];
-      }
-
-      // Filtros de bovinos
-      if (bovineIds && Array.isArray(bovineIds)) {
-        whereConditions[Op.or] = bovineIds.map(id => ({
-          bovineIds: { [Op.contains]: [id] }
-        }));
-      }
-
-      // Filtros por tags
-      if (tags && Array.isArray(tags)) {
-        whereConditions[Op.and] = tags.map(tag => ({
-          tags: { [Op.contains]: [tag] }
-        }));
       }
 
       // Configurar paginación
@@ -505,17 +347,6 @@ export class EventsController {
       // Ejecutar consulta
       const { count, rows: events } = await Event.findAndCountAll({
         where: whereConditions,
-        include: [
-          {
-            model: Location,
-            as: 'location'
-          },
-          {
-            model: User,
-            as: 'creator',
-            attributes: ['id', 'firstName', 'lastName']
-          }
-        ],
         limit: limitNum,
         offset: offset,
         order: [[sortBy, sortOrder]],
@@ -538,22 +369,18 @@ export class EventsController {
       // Enriquecer eventos con información de bovinos
       const enrichedEvents = await Promise.all(
         filteredEvents.map(async (event: any) => {
-          const bovines = await Bovine.findAll({
-            where: {
-              id: { [Op.in]: event.bovineIds },
-              isActive: true
-            },
-            attributes: ['id', 'earTag', 'name', 'type']
+          const bovine = await Bovine.findByPk(event.bovineId, {
+            attributes: ['id', 'earTag', 'name', 'cattleType']
           });
 
           return {
             ...event.toJSON(),
-            bovineInfo: bovines.map(bovine => ({
+            bovineInfo: bovine ? {
               id: bovine.id,
               earTag: bovine.earTag,
               name: bovine.name,
-              type: bovine.type
-            }))
+              cattleType: bovine.cattleType
+            } : null
           };
         })
       );
@@ -583,7 +410,7 @@ export class EventsController {
         success: false,
         message: 'Error interno del servidor',
         errors: {
-          general: 'Ocurrió un error al obtener los eventos'
+          general: error instanceof Error ? error.message : 'Ocurrió un error al obtener los eventos'
         }
       });
     }
@@ -597,21 +424,9 @@ export class EventsController {
     try {
       const { id } = req.params;
 
-      const event = await Event.findByPk(id, {
-        include: [
-          {
-            model: Location,
-            as: 'location'
-          },
-          {
-            model: User,
-            as: 'creator',
-            attributes: ['id', 'firstName', 'lastName', 'email']
-          }
-        ]
-      });
+      const event = await Event.findByPk(id);
 
-      if (!event) {
+      if (!event || !event.isActive) {
         res.status(404).json({
           success: false,
           message: 'Evento no encontrado',
@@ -622,30 +437,24 @@ export class EventsController {
         return;
       }
 
-      // Obtener información de bovinos
-      const bovines = await Bovine.findAll({
-        where: {
-          id: { [Op.in]: (event as any).bovineIds },
-          isActive: true
-        },
-        attributes: ['id', 'earTag', 'name', 'type', 'breed', 'gender']
+      // Obtener información del bovino
+      const bovine = await Bovine.findByPk(event.bovineId, {
+        attributes: ['id', 'earTag', 'name', 'cattleType', 'breed', 'gender']
       });
 
-      // Obtener detalles específicos según el tipo de evento
-      const specificDetails = await this.getSpecificEventDetails(event.id, (event as any).type);
-
-      // Obtener eventos relacionados (mismo bovino, tipo similar)
+      // Obtener eventos relacionados (mismo bovino o tipo)
       const relatedEvents = await Event.findAll({
         where: {
           id: { [Op.ne]: event.id },
           [Op.or]: [
-            { type: (event as any).type },
-            { bovineIds: { [Op.overlap]: (event as any).bovineIds } }
-          ]
+            { eventType: event.eventType },
+            { bovineId: event.bovineId }
+          ],
+          isActive: true
         },
         limit: 5,
         order: [['scheduledDate', 'DESC']],
-        attributes: ['id', 'title', 'type', 'scheduledDate', 'status']
+        attributes: ['id', 'title', 'eventType', 'scheduledDate', 'status']
       });
 
       res.status(200).json({
@@ -653,17 +462,16 @@ export class EventsController {
         message: 'Evento obtenido exitosamente',
         data: {
           event: {
-            ...(event as any).toJSON(),
-            bovineInfo: bovines.map(bovine => ({
+            ...event.toJSON(),
+            bovineInfo: bovine ? {
               id: bovine.id,
               earTag: bovine.earTag,
               name: bovine.name,
-              type: bovine.type,
+              cattleType: bovine.cattleType,
               breed: bovine.breed,
               gender: bovine.gender
-            })),
-            specificDetails,
-            relatedEvents: relatedEvents.map((e: any) => e.toJSON())
+            } : null,
+            relatedEvents: relatedEvents.map(e => e.toJSON())
           }
         }
       });
@@ -674,7 +482,7 @@ export class EventsController {
         success: false,
         message: 'Error interno del servidor',
         errors: {
-          general: 'Ocurrió un error al obtener el evento'
+          general: error instanceof Error ? error.message : 'Ocurrió un error al obtener el evento'
         }
       });
     }
@@ -688,11 +496,12 @@ export class EventsController {
     try {
       const { id } = req.params;
       const updateData: UpdateEventRequest = req.body;
+      const userId = (req as any).user?.id || 'system';
 
       // Buscar evento existente
       const existingEvent = await Event.findByPk(id);
 
-      if (!existingEvent) {
+      if (!existingEvent || !existingEvent.isActive) {
         res.status(404).json({
           success: false,
           message: 'Evento no encontrado',
@@ -703,77 +512,65 @@ export class EventsController {
         return;
       }
 
+      // Validar bovino si se está cambiando
+      if (updateData.bovineId && updateData.bovineId !== existingEvent.bovineId) {
+        const bovine = await Bovine.findByPk(updateData.bovineId);
+        if (!bovine || !bovine.isActive) {
+          res.status(400).json({
+            success: false,
+            message: 'Bovino no encontrado',
+            errors: {
+              bovineId: 'El bovino no existe o está inactivo'
+            }
+          });
+          return;
+        }
+      }
+
+      // Preparar datos de actualización
+      const updatePayload: any = {
+        title: updateData.title || existingEvent.title,
+        description: updateData.description !== undefined ? updateData.description : existingEvent.description,
+        eventType: updateData.eventType || existingEvent.eventType,
+        scheduledDate: updateData.scheduledDate || existingEvent.scheduledDate,
+        startDate: updateData.startDate !== undefined ? updateData.startDate : existingEvent.startDate,
+        endDate: updateData.endDate !== undefined ? updateData.endDate : existingEvent.endDate,
+        bovineId: updateData.bovineId || existingEvent.bovineId,
+        status: updateData.status || existingEvent.status,
+        priority: updateData.priority || existingEvent.priority,
+        veterinarianId: updateData.veterinarianId !== undefined ? updateData.veterinarianId : existingEvent.veterinarianId,
+        cost: updateData.cost !== undefined ? updateData.cost : existingEvent.cost,
+        currency: updateData.currency || existingEvent.currency,
+        eventData: updateData.eventData !== undefined ? updateData.eventData : existingEvent.eventData,
+        followUpRequired: updateData.followUpRequired !== undefined ? updateData.followUpRequired : existingEvent.followUpRequired,
+        followUpDate: updateData.followUpDate !== undefined ? updateData.followUpDate : existingEvent.followUpDate,
+        publicNotes: updateData.publicNotes !== undefined ? updateData.publicNotes : existingEvent.publicNotes,
+        privateNotes: updateData.privateNotes !== undefined ? updateData.privateNotes : existingEvent.privateNotes,
+        photos: updateData.photos !== undefined ? updateData.photos : existingEvent.photos,
+        attachments: updateData.attachments !== undefined ? updateData.attachments : existingEvent.attachments,
+        results: updateData.results !== undefined ? updateData.results : existingEvent.results,
+        complications: updateData.complications !== undefined ? updateData.complications : existingEvent.complications,
+        followUpNotes: updateData.followUpNotes !== undefined ? updateData.followUpNotes : existingEvent.followUpNotes,
+        weatherConditions: updateData.weatherConditions !== undefined ? updateData.weatherConditions : existingEvent.weatherConditions,
+        temperature: updateData.temperature !== undefined ? updateData.temperature : existingEvent.temperature,
+        humidity: updateData.humidity !== undefined ? updateData.humidity : existingEvent.humidity,
+        performedBy: updateData.performedBy !== undefined ? updateData.performedBy : existingEvent.performedBy,
+        updatedBy: userId
+      };
+
       // Actualizar ubicación si se proporciona
       if (updateData.location) {
-        await Location.update(
-          {
-            latitude: updateData.location.latitude,
-            longitude: updateData.location.longitude,
-            address: updateData.location.address || '',
-            section: updateData.location.section || '',
-            timestamp: new Date()
-          },
-          { where: { id: (existingEvent as any).locationId } }
-        );
+        updatePayload.location = {
+          ...existingEvent.location,
+          ...updateData.location
+        };
       }
 
       // Actualizar evento
-      const updateFields = {
-        type: updateData.type || (existingEvent as any).type,
-        title: updateData.title || (existingEvent as any).title,
-        description: updateData.description !== undefined ? updateData.description : (existingEvent as any).description,
-        scheduledDate: updateData.scheduledDate || (existingEvent as any).scheduledDate,
-        scheduledTime: updateData.scheduledTime || (existingEvent as any).scheduledTime,
-        duration: updateData.duration !== undefined ? updateData.duration : (existingEvent as any).duration,
-        bovineIds: updateData.bovineIds !== undefined ? updateData.bovineIds : (existingEvent as any).bovineIds,
-        status: updateData.status || (existingEvent as any).status,
-        priority: updateData.priority || (existingEvent as any).priority,
-        veterinarianName: updateData.veterinarianName !== undefined ? updateData.veterinarianName : (existingEvent as any).veterinarianName,
-        cost: updateData.cost !== undefined ? updateData.cost : (existingEvent as any).cost,
-        actualCost: updateData.actualCost !== undefined ? updateData.actualCost : (existingEvent as any).actualCost,
-        tags: updateData.tags !== undefined ? updateData.tags : (existingEvent as any).tags,
-        notes: updateData.notes !== undefined ? updateData.notes : (existingEvent as any).notes,
-        completedDate: updateData.completedDate || (existingEvent as any).completedDate,
-        actualDuration: updateData.actualDuration !== undefined ? updateData.actualDuration : (existingEvent as any).actualDuration,
-        completionNotes: updateData.completionNotes !== undefined ? updateData.completionNotes : (existingEvent as any).completionNotes,
-        followUpRequired: updateData.followUpRequired !== undefined ? updateData.followUpRequired : (existingEvent as any).followUpRequired,
-        followUpDate: updateData.followUpDate || (existingEvent as any).followUpDate,
-        weatherConditions: updateData.weatherConditions !== undefined ? updateData.weatherConditions : (existingEvent as any).weatherConditions,
-        metadata: updateData.metadata !== undefined ? updateData.metadata : (existingEvent as any).metadata,
-        updatedAt: new Date()
-      };
-
-      await existingEvent.update(updateFields);
-
-      // Actualizar detalles específicos si se proporcionan
-      await this.updateSpecificEventDetails(id, updateData);
-
-      // Actualizar entrada financiera si cambió el costo
-      if (updateData.cost !== undefined || updateData.actualCost !== undefined) {
-        const finalCost = updateData.actualCost || updateData.cost || (existingEvent as any).cost;
-        await Finance.update(
-          {
-            amount: finalCost,
-            updatedAt: new Date()
-          },
-          { where: { eventId: id } }
-        );
-      }
+      await existingEvent.update(updatePayload);
 
       // Obtener evento actualizado
-      const updatedEvent = await Event.findByPk(id, {
-        include: [
-          {
-            model: Location,
-            as: 'location'
-          },
-          {
-            model: User,
-            as: 'creator',
-            attributes: ['id', 'firstName', 'lastName']
-          }
-        ]
-      });
+      const updatedEvent = await Event.findByPk(id);
 
       res.status(200).json({
         success: true,
@@ -789,14 +586,14 @@ export class EventsController {
         success: false,
         message: 'Error interno del servidor',
         errors: {
-          general: 'Ocurrió un error al actualizar el evento'
+          general: error instanceof Error ? error.message : 'Ocurrió un error al actualizar el evento'
         }
       });
     }
   };
 
   /**
-   * Eliminar evento
+   * Eliminar evento (soft delete)
    * DELETE /api/events/:id
    */
   public deleteEvent = async (req: Request, res: Response): Promise<void> => {
@@ -816,15 +613,7 @@ export class EventsController {
         return;
       }
 
-      // Eliminar entradas financieras asociadas
-      await Finance.destroy({
-        where: { eventId: id }
-      });
-
-      // Eliminar detalles específicos del evento
-      await this.deleteSpecificEventDetails(id, (event as any).type);
-
-      // Eliminar evento
+      // Usar soft delete del modelo Event
       await event.destroy();
 
       res.status(200).json({
@@ -841,7 +630,7 @@ export class EventsController {
         success: false,
         message: 'Error interno del servidor',
         errors: {
-          general: 'Ocurrió un error al eliminar el evento'
+          general: error instanceof Error ? error.message : 'Ocurrió un error al eliminar el evento'
         }
       });
     }
@@ -856,7 +645,7 @@ export class EventsController {
       const {
         startDate,
         endDate,
-        type,
+        eventType,
         bovineId,
         limit = 50
       } = req.query;
@@ -873,71 +662,56 @@ export class EventsController {
       const whereConditions: any = {
         scheduledDate: {
           [Op.between]: [dateRange.startDate, dateRange.endDate]
-        }
+        },
+        isActive: true
       };
 
       // Filtros adicionales
-      if (type) whereConditions.type = type;
-      if (bovineId) {
-        whereConditions.bovineIds = { [Op.contains]: [bovineId] };
-      }
+      if (eventType) whereConditions.eventType = eventType;
+      if (bovineId) whereConditions.bovineId = bovineId;
 
       // Obtener eventos
       const events = await Event.findAll({
         where: whereConditions,
-        include: [
-          {
-            model: Location,
-            as: 'location'
-          },
-          {
-            model: User,
-            as: 'creator',
-            attributes: ['firstName', 'lastName']
-          }
-        ],
-        order: [['scheduledDate', 'DESC'], ['scheduledTime', 'ASC']],
+        order: [['scheduledDate', 'DESC']],
         limit: parseInt(limit.toString())
       });
 
       // Enriquecer con información de bovinos
       const timelineEvents = await Promise.all(
         events.map(async (event: any) => {
-          const bovines = await Bovine.findAll({
-            where: {
-              id: { [Op.in]: event.bovineIds },
-              isActive: true
-            },
-            attributes: ['id', 'earTag', 'name', 'type']
+          const bovine = await Bovine.findByPk(event.bovineId, {
+            attributes: ['id', 'earTag', 'name', 'cattleType']
           });
 
           const timelineItem: EventTimelineItem = {
             id: event.id,
-            type: event.type,
+            eventType: event.eventType,
             title: event.title,
             description: event.description || '',
             date: event.scheduledDate,
-            time: event.scheduledTime,
             status: event.status,
             priority: event.priority,
-            bovineInfo: bovines.map(bovine => ({
+            bovineInfo: bovine ? {
               id: bovine.id,
               earTag: bovine.earTag,
               name: bovine.name,
-              type: bovine.type
-            })),
+              cattleType: bovine.cattleType
+            } : {
+              id: 'unknown',
+              earTag: 'N/A',
+              cattleType: 'UNKNOWN'
+            },
             location: {
               latitude: event.location.latitude,
               longitude: event.location.longitude,
-              address: event.location.address,
-              section: event.location.section
+              address: event.location.address
             },
             cost: event.cost,
-            veterinarianName: event.veterinarianName,
-            tags: event.tags || [],
-            createdBy: event.creator ? `${event.creator.firstName} ${event.creator.lastName}` : 'Desconocido',
-            notes: event.notes,
-            details: event.metadata || {}
+            veterinarianId: event.veterinarianId,
+            createdBy: event.createdBy,
+            publicNotes: event.publicNotes,
+            eventData: event.eventData
           };
 
           return timelineItem;
@@ -950,7 +724,7 @@ export class EventsController {
       let totalCost = 0;
 
       timelineEvents.forEach(event => {
-        eventsByType[event.type] = (eventsByType[event.type] || 0) + 1;
+        eventsByType[event.eventType] = (eventsByType[event.eventType] || 0) + 1;
         eventsByStatus[event.status] = (eventsByStatus[event.status] || 0) + 1;
         totalCost += event.cost || 0;
       });
@@ -980,7 +754,7 @@ export class EventsController {
         success: false,
         message: 'Error interno del servidor',
         errors: {
-          general: 'Ocurrió un error al obtener la timeline de eventos'
+          general: error instanceof Error ? error.message : 'Ocurrió un error al obtener la timeline de eventos'
         }
       });
     }
@@ -1016,7 +790,8 @@ export class EventsController {
       }
 
       const whereConditions = {
-        scheduledDate: { [Op.gte]: startDate }
+        scheduledDate: { [Op.gte]: startDate },
+        isActive: true
       };
 
       // Conteo total
@@ -1026,12 +801,12 @@ export class EventsController {
       const eventsByType = await Event.findAll({
         where: whereConditions,
         attributes: [
-          'type',
-          [fn('COUNT', col('type')), 'count']
+          'eventType',
+          [fn('COUNT', col('eventType')), 'count']
         ],
-        group: ['type'],
+        group: ['eventType'],
         raw: true
-      });
+      }) as unknown as EventTypeCountResult[];
 
       // Eventos por estado
       const eventsByStatus = await Event.findAll({
@@ -1042,7 +817,7 @@ export class EventsController {
         ],
         group: ['status'],
         raw: true
-      });
+      }) as unknown as EventStatusCountResult[];
 
       // Eventos por prioridad
       const eventsByPriority = await Event.findAll({
@@ -1053,7 +828,7 @@ export class EventsController {
         ],
         group: ['priority'],
         raw: true
-      });
+      }) as unknown as EventPriorityCountResult[];
 
       // Costo total y promedio
       const costStats = await Event.findAll({
@@ -1065,7 +840,7 @@ export class EventsController {
           [fn('MAX', col('cost')), 'maxCost']
         ],
         raw: true
-      });
+      }) as unknown as CostStatsRawResult[];
 
       // Eventos próximos (próximos 7 días)
       const upcomingEvents = await Event.findAll({
@@ -1073,48 +848,25 @@ export class EventsController {
           scheduledDate: {
             [Op.between]: [new Date(), new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)]
           },
-          status: { [Op.in]: ['scheduled', 'in_progress'] }
+          status: { [Op.in]: [EventStatus.SCHEDULED] },
+          isActive: true
         },
-        include: [{
-          model: Location,
-          as: 'location'
-        }],
         order: [['scheduledDate', 'ASC']],
         limit: 10
       });
 
-      // Veterinarios más activos
-      const activeVeterinarians = await Event.findAll({
-        where: {
-          ...whereConditions,
-          veterinarianName: { [Op.ne]: '' }
-        },
-        attributes: [
-          'veterinarianName',
-          [fn('COUNT', col('veterinarianName')), 'eventCount']
-        ],
-        group: ['veterinarianName'],
-        order: [[fn('COUNT', col('veterinarianName')), 'DESC']],
-        limit: 5,
-        raw: true
-      });
-
       const statistics = {
         totalEvents,
-        eventsByType: this.formatCountStats(eventsByType),
-        eventsByStatus: this.formatCountStats(eventsByStatus),
-        eventsByPriority: this.formatCountStats(eventsByPriority),
+        eventsByType: this.formatTypeCountStats(eventsByType),
+        eventsByStatus: this.formatStatusCountStats(eventsByStatus),
+        eventsByPriority: this.formatPriorityCountStats(eventsByPriority),
         costStatistics: {
-          total: Math.round((parseFloat(costStats[0]?.totalCost) || 0) * 100) / 100,
-          average: Math.round((parseFloat(costStats[0]?.averageCost) || 0) * 100) / 100,
-          minimum: Math.round((parseFloat(costStats[0]?.minCost) || 0) * 100) / 100,
-          maximum: Math.round((parseFloat(costStats[0]?.maxCost) || 0) * 100) / 100
+          total: Math.round((parseFloat(costStats[0]?.totalCost || '0') || 0) * 100) / 100,
+          average: Math.round((parseFloat(costStats[0]?.averageCost || '0') || 0) * 100) / 100,
+          minimum: Math.round((parseFloat(costStats[0]?.minCost || '0') || 0) * 100) / 100,
+          maximum: Math.round((parseFloat(costStats[0]?.maxCost || '0') || 0) * 100) / 100
         },
         upcomingEvents: upcomingEvents.slice(0, 5),
-        activeVeterinarians: activeVeterinarians.map((vet: any) => ({
-          name: vet.veterinarianName,
-          eventCount: parseInt(vet.eventCount)
-        })),
         timeRange,
         period: { startDate, endDate: currentDate }
       };
@@ -1131,152 +883,13 @@ export class EventsController {
         success: false,
         message: 'Error interno del servidor',
         errors: {
-          general: 'Ocurrió un error al obtener las estadísticas'
+          general: error instanceof Error ? error.message : 'Ocurrió un error al obtener las estadísticas'
         }
       });
     }
   };
 
   // Métodos auxiliares privados
-
-  private async createSpecificEventDetails(eventId: string, eventData: CreateEventRequest): Promise<void> {
-    // Crear detalles específicos según el tipo de evento
-    switch (eventData.type) {
-      case 'vaccination':
-        if (eventData.vaccinationDetails) {
-          await Vaccination.create({
-            bovineId: eventData.bovineIds[0], // Primer bovino para el registro principal
-            vaccineType: eventData.vaccinationDetails.vaccineType,
-            vaccineName: eventData.vaccinationDetails.vaccineName,
-            dose: eventData.vaccinationDetails.dose,
-            applicationDate: eventData.scheduledDate,
-            nextDueDate: eventData.vaccinationDetails.nextDueDate,
-            veterinarianName: eventData.veterinarianName || '',
-            batchNumber: eventData.vaccinationDetails.batchNumber || '',
-            manufacturer: eventData.vaccinationDetails.manufacturer || '',
-            location: eventData.location,
-            notes: eventData.notes || '',
-            sideEffects: eventData.vaccinationDetails.sideEffects || [],
-            eventId: eventId,
-            createdAt: new Date()
-          });
-        }
-        break;
-      
-      case 'illness':
-        if (eventData.illnessDetails) {
-          await Illness.create({
-            bovineId: eventData.bovineIds[0],
-            diseaseName: eventData.illnessDetails.diseaseName,
-            diagnosisDate: eventData.scheduledDate,
-            symptoms: eventData.illnessDetails.symptoms,
-            severity: eventData.illnessDetails.severity,
-            treatment: eventData.illnessDetails.treatment || '',
-            veterinarianName: eventData.veterinarianName || '',
-            recoveryDate: eventData.illnessDetails.expectedRecoveryDate,
-            location: eventData.location,
-            notes: eventData.notes || '',
-            isContagious: eventData.illnessDetails.isContagious,
-            eventId: eventId,
-            createdAt: new Date()
-          });
-        }
-        break;
-      
-      // Agregar más casos según sea necesario
-      default:
-        // Para otros tipos de eventos, almacenar los detalles en metadata
-        break;
-    }
-  }
-
-  private async updateSpecificEventDetails(eventId: string, updateData: UpdateEventRequest): Promise<void> {
-    // Actualizar detalles específicos según el tipo de evento
-    if (updateData.vaccinationDetails && updateData.type === 'vaccination') {
-      await Vaccination.update(
-        {
-          vaccineType: updateData.vaccinationDetails.vaccineType,
-          vaccineName: updateData.vaccinationDetails.vaccineName,
-          dose: updateData.vaccinationDetails.dose,
-          nextDueDate: updateData.vaccinationDetails.nextDueDate,
-          veterinarianName: updateData.veterinarianName,
-          batchNumber: updateData.vaccinationDetails.batchNumber,
-          manufacturer: updateData.vaccinationDetails.manufacturer,
-          notes: updateData.notes,
-          sideEffects: updateData.vaccinationDetails.sideEffects,
-          updatedAt: new Date()
-        },
-        { where: { eventId: eventId } }
-      );
-    }
-
-    if (updateData.illnessDetails && updateData.type === 'illness') {
-      await Illness.update(
-        {
-          diseaseName: updateData.illnessDetails.diseaseName,
-          symptoms: updateData.illnessDetails.symptoms,
-          severity: updateData.illnessDetails.severity,
-          treatment: updateData.illnessDetails.treatment,
-          veterinarianName: updateData.veterinarianName,
-          recoveryDate: updateData.illnessDetails.expectedRecoveryDate,
-          notes: updateData.notes,
-          isContagious: updateData.illnessDetails.isContagious,
-          updatedAt: new Date()
-        },
-        { where: { eventId: eventId } }
-      );
-    }
-  }
-
-  private async deleteSpecificEventDetails(eventId: string, eventType: EventType): Promise<void> {
-    // Eliminar detalles específicos según el tipo de evento
-    switch (eventType) {
-      case 'vaccination':
-        await Vaccination.destroy({ where: { eventId: eventId } });
-        break;
-      case 'illness':
-        await Illness.destroy({ where: { eventId: eventId } });
-        break;
-      // Agregar más casos según sea necesario
-    }
-  }
-
-  private async getSpecificEventDetails(eventId: string, eventType: EventType): Promise<any> {
-    // Obtener detalles específicos según el tipo de evento
-    switch (eventType) {
-      case 'vaccination':
-        return await Vaccination.findOne({ where: { eventId: eventId } });
-      case 'illness':
-        return await Illness.findOne({ where: { eventId: eventId } });
-      default:
-        return null;
-    }
-  }
-
-  private getFinanceCategoryFromEventType(eventType: EventType): string {
-    const categoryMap: Record<EventType, string> = {
-      vaccination: 'veterinary',
-      illness: 'veterinary',
-      treatment: 'veterinary',
-      health_check: 'veterinary',
-      feeding: 'feed',
-      purchase: 'livestock',
-      sale: 'livestock',
-      transport: 'transportation',
-      breeding: 'breeding',
-      reproductive: 'breeding',
-      management: 'management',
-      maintenance: 'maintenance',
-      emergency: 'emergency',
-      birth: 'breeding',
-      death: 'livestock',
-      transfer: 'management',
-      milking: 'production',
-      pregnancy_check: 'veterinary'
-    };
-
-    return categoryMap[eventType] || 'other';
-  }
 
   private calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
     const R = 6371; // Radio de la Tierra en km
@@ -1294,11 +907,26 @@ export class EventsController {
     return deg * (Math.PI/180);
   }
 
-  private formatCountStats(stats: any[]): Record<string, number> {
+  private formatTypeCountStats(stats: EventTypeCountResult[]): Record<string, number> {
     const result: Record<string, number> = {};
     stats.forEach(stat => {
-      const key = stat[Object.keys(stat)[0]];
-      result[key] = parseInt(stat.count);
+      result[stat.eventType] = parseInt(stat.count);
+    });
+    return result;
+  }
+
+  private formatStatusCountStats(stats: EventStatusCountResult[]): Record<string, number> {
+    const result: Record<string, number> = {};
+    stats.forEach(stat => {
+      result[stat.status] = parseInt(stat.count);
+    });
+    return result;
+  }
+
+  private formatPriorityCountStats(stats: EventPriorityCountResult[]): Record<string, number> {
+    const result: Record<string, number> = {};
+    stats.forEach(stat => {
+      result[stat.priority] = parseInt(stat.count);
     });
     return result;
   }

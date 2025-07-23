@@ -1,33 +1,40 @@
 import { Request, Response } from 'express';
 import { Op, fn, col } from 'sequelize';
-import { sequelize } from '../config/database';
-import { Bovine, Vaccination, Illness, Location } from '../models';
-import { BovineService } from '../services/bovine.service';
+import sequelize from '../config/database'; // Importación corregida como default
+import Bovine, { 
+  CattleType, 
+  HealthStatus, 
+  VaccinationStatus, 
+  GenderType, 
+  LocationData,
+  PhysicalMetrics,
+  ReproductiveInfo,
+  TrackingConfig 
+} from '../models/Bovine'; // Usando los tipos correctos del modelo
+import Location from '../models/Location'; // Importación corregida
+import { bovineService } from '../services/bovine'; // Importando la instancia del servicio
 
-// Tipos para las operaciones de bovinos
-type BovineType = "CATTLE" | "BULL" | "COW" | "CALF";
-type BovineGender = "MALE" | "FEMALE";
-type HealthStatus = "HEALTHY" | "SICK" | "RECOVERING" | "QUARANTINE" | "DECEASED";
-type IllnessSeverity = "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
-
-// Interfaces para requests
+// Interfaces para requests - adaptadas al modelo real
 interface CreateBovineRequest {
   earTag: string;
   name?: string;
-  type: BovineType;
+  cattleType: CattleType; // Cambiado de 'type' a 'cattleType'
   breed: string;
-  gender: BovineGender;
+  gender: GenderType; // Usando GenderType del modelo
   birthDate: Date;
-  weight: number;
-  motherEarTag?: string;
-  fatherEarTag?: string;
-  location: {
-    latitude: number;
-    longitude: number;
-    address?: string;
-  };
-  healthStatus: HealthStatus;
-  photos?: string[];
+  weight?: number;
+  motherId?: string; // Cambiado de motherEarTag a motherId
+  fatherId?: string; // Cambiado de fatherEarTag a fatherId
+  location: LocationData; // Usando LocationData del modelo
+  healthStatus?: HealthStatus;
+  vaccinationStatus?: VaccinationStatus;
+  physicalMetrics?: PhysicalMetrics;
+  reproductiveInfo?: ReproductiveInfo;
+  trackingConfig?: TrackingConfig;
+  farmId?: string;
+  ownerId?: string;
+  notes?: string;
+  images?: string[]; // Cambiado de 'photos' a 'images'
 }
 
 interface UpdateBovineRequest extends Partial<CreateBovineRequest> {
@@ -36,10 +43,11 @@ interface UpdateBovineRequest extends Partial<CreateBovineRequest> {
 
 interface BovineSearchParams {
   searchTerm?: string;
-  type?: BovineType;
+  cattleType?: CattleType; // Cambiado de 'type' a 'cattleType'
   breed?: string;
-  gender?: BovineGender;
+  gender?: GenderType;
   healthStatus?: HealthStatus;
+  vaccinationStatus?: VaccinationStatus;
   ageMin?: number;
   ageMax?: number;
   weightMin?: number;
@@ -55,6 +63,8 @@ interface BovineSearchParams {
   limit?: number;
   sortBy?: string;
   sortOrder?: 'ASC' | 'DESC';
+  farmId?: string;
+  ownerId?: string;
 }
 
 interface BulkOperationRequest {
@@ -63,13 +73,24 @@ interface BulkOperationRequest {
   data?: any;
 }
 
+// Tipos temporales para mantener compatibilidad (hasta que tengas los modelos)
+interface Vaccination {
+  id: string;
+  bovineId: string;
+  vaccineType: string;
+  applicationDate: Date;
+  nextDueDate?: Date;
+}
+
+interface Illness {
+  id: string;
+  bovineId: string;
+  diseaseName: string;
+  diagnosisDate: Date;
+  severity: string;
+}
+
 export class BovinesController {
-  private bovineService: BovineService;
-
-  constructor() {
-    this.bovineService = new BovineService();
-  }
-
   /**
    * Crear nuevo bovino
    * POST /api/bovines
@@ -79,7 +100,7 @@ export class BovinesController {
       const bovineData: CreateBovineRequest = req.body;
 
       // Validaciones básicas
-      if (!bovineData.earTag || !bovineData.type || !bovineData.breed || !bovineData.gender) {
+      if (!bovineData.earTag || !bovineData.cattleType || !bovineData.breed || !bovineData.gender) {
         res.status(400).json({
           success: false,
           message: 'Campos obligatorios faltantes',
@@ -118,53 +139,31 @@ export class BovinesController {
         return;
       }
 
-      // Crear registro de ubicación primero
-      const locationRecord = await Location.create({
-        latitude: bovineData.location.latitude,
-        longitude: bovineData.location.longitude,
-        address: bovineData.location.address || '',
-        accuracy: 10, // Valor por defecto
-        timestamp: new Date()
-      });
-
-      // Calcular edad si se proporciona fecha de nacimiento
-      const currentDate = new Date();
-      const birthDate = new Date(bovineData.birthDate);
-      const ageInMonths = Math.floor((currentDate.getTime() - birthDate.getTime()) / (1000 * 60 * 60 * 24 * 30.44));
-
-      // Crear bovino
-      const newBovine = await Bovine.create({
+      // Usar el servicio para crear el bovino
+      const newBovine = await bovineService.createBovine({
         earTag: bovineData.earTag,
-        name: bovineData.name || null,
-        type: bovineData.type,
+        name: bovineData.name,
+        cattleType: bovineData.cattleType,
         breed: bovineData.breed,
         gender: bovineData.gender,
         birthDate: bovineData.birthDate,
-        ageInMonths: ageInMonths,
-        weight: bovineData.weight || 0,
-        motherEarTag: bovineData.motherEarTag || null,
-        fatherEarTag: bovineData.fatherEarTag || null,
-        locationId: locationRecord.id,
-        healthStatus: bovineData.healthStatus || 'HEALTHY',
-        photos: bovineData.photos || [],
-        isActive: true,
-        createdAt: new Date(),
-        updatedAt: new Date()
-      });
-
-      // Incluir datos de ubicación en la respuesta
-      const bovineWithLocation = await Bovine.findByPk(newBovine.id, {
-        include: [{
-          model: Location,
-          as: 'location'
-        }]
-      });
+        weight: bovineData.weight,
+        location: bovineData.location,
+        healthStatus: bovineData.healthStatus || HealthStatus.HEALTHY,
+        vaccinationStatus: bovineData.vaccinationStatus || VaccinationStatus.NONE,
+        physicalMetrics: bovineData.physicalMetrics,
+        reproductiveInfo: bovineData.reproductiveInfo,
+        trackingConfig: bovineData.trackingConfig,
+        farmId: bovineData.farmId,
+        ownerId: bovineData.ownerId,
+        notes: bovineData.notes
+      }, req.user?.id || 'system');
 
       res.status(201).json({
         success: true,
         message: 'Bovino creado exitosamente',
         data: {
-          bovine: bovineWithLocation
+          bovine: newBovine
         }
       });
 
@@ -174,7 +173,7 @@ export class BovinesController {
         success: false,
         message: 'Error interno del servidor',
         errors: {
-          general: 'Ocurrió un error inesperado al crear el bovino'
+          general: error instanceof Error ? error.message : 'Ocurrió un error inesperado al crear el bovino'
         }
       });
     }
@@ -188,10 +187,11 @@ export class BovinesController {
     try {
       const {
         searchTerm,
-        type,
+        cattleType, // Cambiado de 'type' a 'cattleType'
         breed,
         gender,
         healthStatus,
+        vaccinationStatus,
         ageMin,
         ageMax,
         weightMin,
@@ -204,130 +204,51 @@ export class BovinesController {
         page = 1,
         limit = 20,
         sortBy = 'createdAt',
-        sortOrder = 'DESC'
-      }: BovineSearchParams = req.query;
+        sortOrder = 'DESC',
+        farmId,
+        ownerId
+      }: BovineSearchParams = req.query as any;
 
-      // Construir filtros WHERE
-      const whereConditions: any = {
-        isActive: true
+      // Construir filtros
+      const filters = {
+        searchTerm,
+        cattleType,
+        breed,
+        gender,
+        healthStatus,
+        vaccinationStatus,
+        farmId,
+        ownerId,
+        ...(ageMin !== undefined || ageMax !== undefined ? {
+          ageRange: { min: Number(ageMin) || 0, max: Number(ageMax) || 999 }
+        } : {}),
+        ...(weightMin !== undefined || weightMax !== undefined ? {
+          weightRange: { min: Number(weightMin) || 0, max: Number(weightMax) || 9999 }
+        } : {}),
+        ...(locationRadius && centerLatitude && centerLongitude ? {
+          locationRadius: {
+            center: { latitude: Number(centerLatitude), longitude: Number(centerLongitude) },
+            radiusKm: Number(locationRadius)
+          }
+        } : {})
       };
 
-      // Filtro de búsqueda de texto
-      if (searchTerm) {
-        whereConditions[Op.or] = [
-          { earTag: { [Op.iLike]: `%${searchTerm}%` } },
-          { name: { [Op.iLike]: `%${searchTerm}%` } },
-          { breed: { [Op.iLike]: `%${searchTerm}%` } }
-        ];
-      }
-
-      // Filtros específicos
-      if (type) whereConditions.type = type;
-      if (breed) whereConditions.breed = { [Op.iLike]: `%${breed}%` };
-      if (gender) whereConditions.gender = gender;
-      if (healthStatus) whereConditions.healthStatus = healthStatus;
-
-      // Filtros de rango de edad
-      if (ageMin !== undefined || ageMax !== undefined) {
-        whereConditions.ageInMonths = {};
-        if (ageMin !== undefined) whereConditions.ageInMonths[Op.gte] = parseInt(ageMin.toString());
-        if (ageMax !== undefined) whereConditions.ageInMonths[Op.lte] = parseInt(ageMax.toString());
-      }
-
-      // Filtros de rango de peso
-      if (weightMin !== undefined || weightMax !== undefined) {
-        whereConditions.weight = {};
-        if (weightMin !== undefined) whereConditions.weight[Op.gte] = parseFloat(weightMin.toString());
-        if (weightMax !== undefined) whereConditions.weight[Op.lte] = parseFloat(weightMax.toString());
-      }
-
-      // Configurar paginación
-      const pageNum = parseInt(page.toString()) || 1;
-      const limitNum = Math.min(parseInt(limit.toString()) || 20, 100); // Máximo 100
-      const offset = (pageNum - 1) * limitNum;
-
-      // Incluir asociaciones
-      const includeAssociations: any[] = [
+      // Usar el servicio para obtener bovinos
+      const result = await bovineService.getBovines(
+        filters,
         {
-          model: Location,
-          as: 'location',
-          attributes: ['latitude', 'longitude', 'address']
-        }
-      ];
+          page: Number(page),
+          limit: Math.min(Number(limit), 100),
+          sortBy,
+          sortOrder
+        },
+        req.user?.id || 'system'
+      );
 
-      // Filtros condicionales para asociaciones
-      if (hasVaccinations === 'true') {
-        includeAssociations.push({
-          model: Vaccination,
-          as: 'vaccinations',
-          required: true
-        });
-      } else {
-        includeAssociations.push({
-          model: Vaccination,
-          as: 'vaccinations',
-          required: false
-        });
-      }
-
-      if (hasIllnesses === 'true') {
-        includeAssociations.push({
-          model: Illness,
-          as: 'illnesses',
-          required: true
-        });
-      } else {
-        includeAssociations.push({
-          model: Illness,
-          as: 'illnesses',
-          required: false
-        });
-      }
-
-      // Ejecutar consulta
-      const { count, rows: bovines } = await Bovine.findAndCountAll({
-        where: whereConditions,
-        include: includeAssociations,
-        limit: limitNum,
-        offset: offset,
-        order: [[sortBy, sortOrder]],
-        distinct: true
-      });
-
-      // Filtrar por proximidad geográfica si se especifica
-      let filteredBovines = bovines;
-      if (locationRadius && centerLatitude && centerLongitude) {
-        const radiusKm = parseFloat(locationRadius.toString());
-        const centerLat = parseFloat(centerLatitude.toString());
-        const centerLng = parseFloat(centerLongitude.toString());
-
-        filteredBovines = bovines.filter(bovine => {
-          if (!bovine.location) return false;
-          const distance = this.calculateDistance(
-            centerLat, centerLng,
-            bovine.location.latitude, bovine.location.longitude
-          );
-          return distance <= radiusKm;
-        });
-      }
-
-      // Preparar respuesta
-      const totalPages = Math.ceil(count / limitNum);
-      
       res.status(200).json({
         success: true,
         message: 'Bovinos obtenidos exitosamente',
-        data: {
-          bovines: filteredBovines,
-          pagination: {
-            page: pageNum,
-            limit: limitNum,
-            total: count,
-            totalPages: totalPages,
-            hasNext: pageNum < totalPages,
-            hasPrev: pageNum > 1
-          }
-        }
+        data: result
       });
 
     } catch (error) {
@@ -350,28 +271,7 @@ export class BovinesController {
     try {
       const { id } = req.params;
 
-      const bovine = await Bovine.findOne({
-        where: { 
-          id: id,
-          isActive: true 
-        },
-        include: [
-          {
-            model: Location,
-            as: 'location'
-          },
-          {
-            model: Vaccination,
-            as: 'vaccinations',
-            order: [['applicationDate', 'DESC']]
-          },
-          {
-            model: Illness,
-            as: 'illnesses',
-            order: [['diagnosisDate', 'DESC']]
-          }
-        ]
-      });
+      const bovine = await bovineService.getBovineById(id, req.user?.id || 'system');
 
       if (!bovine) {
         res.status(404).json({
@@ -398,7 +298,7 @@ export class BovinesController {
         success: false,
         message: 'Error interno del servidor',
         errors: {
-          general: 'Ocurrió un error al obtener el bovino'
+          general: error instanceof Error ? error.message : 'Ocurrió un error al obtener el bovino'
         }
       });
     }
@@ -411,104 +311,9 @@ export class BovinesController {
   public updateBovine = async (req: Request, res: Response): Promise<void> => {
     try {
       const { id } = req.params;
-      const updateData: UpdateBovineRequest = req.body;
+      const updateData: UpdateBovineRequest = { ...req.body, id };
 
-      // Buscar bovino existente
-      const existingBovine = await Bovine.findOne({
-        where: { 
-          id: id,
-          isActive: true 
-        }
-      });
-
-      if (!existingBovine) {
-        res.status(404).json({
-          success: false,
-          message: 'Bovino no encontrado',
-          errors: {
-            bovine: 'El bovino especificado no existe'
-          }
-        });
-        return;
-      }
-
-      // Validar earTag único si se está actualizando
-      if (updateData.earTag && updateData.earTag !== existingBovine.earTag) {
-        const duplicateEarTag = await Bovine.findOne({
-          where: { 
-            earTag: updateData.earTag,
-            id: { [Op.ne]: id },
-            isActive: true
-          }
-        });
-
-        if (duplicateEarTag) {
-          res.status(409).json({
-            success: false,
-            message: 'El número de arete ya existe',
-            errors: {
-              earTag: 'Ya existe otro bovino con este número de arete'
-            }
-          });
-          return;
-        }
-      }
-
-      // Actualizar ubicación si se proporciona
-      if (updateData.location) {
-        await Location.update(
-          {
-            latitude: updateData.location.latitude,
-            longitude: updateData.location.longitude,
-            address: updateData.location.address || '',
-            timestamp: new Date()
-          },
-          { where: { id: existingBovine.locationId } }
-        );
-      }
-
-      // Recalcular edad si se actualiza fecha de nacimiento
-      let ageInMonths = existingBovine.ageInMonths;
-      if (updateData.birthDate) {
-        const currentDate = new Date();
-        const birthDate = new Date(updateData.birthDate);
-        ageInMonths = Math.floor((currentDate.getTime() - birthDate.getTime()) / (1000 * 60 * 60 * 24 * 30.44));
-      }
-
-      // Actualizar bovino
-      await existingBovine.update({
-        earTag: updateData.earTag || existingBovine.earTag,
-        name: updateData.name !== undefined ? updateData.name : existingBovine.name,
-        type: updateData.type || existingBovine.type,
-        breed: updateData.breed || existingBovine.breed,
-        gender: updateData.gender || existingBovine.gender,
-        birthDate: updateData.birthDate || existingBovine.birthDate,
-        ageInMonths: ageInMonths,
-        weight: updateData.weight !== undefined ? updateData.weight : existingBovine.weight,
-        motherEarTag: updateData.motherEarTag !== undefined ? updateData.motherEarTag : existingBovine.motherEarTag,
-        fatherEarTag: updateData.fatherEarTag !== undefined ? updateData.fatherEarTag : existingBovine.fatherEarTag,
-        healthStatus: updateData.healthStatus || existingBovine.healthStatus,
-        photos: updateData.photos !== undefined ? updateData.photos : existingBovine.photos,
-        updatedAt: new Date()
-      });
-
-      // Obtener bovino actualizado con asociaciones
-      const updatedBovine = await Bovine.findByPk(id, {
-        include: [
-          {
-            model: Location,
-            as: 'location'
-          },
-          {
-            model: Vaccination,
-            as: 'vaccinations'
-          },
-          {
-            model: Illness,
-            as: 'illnesses'
-          }
-        ]
-      });
+      const updatedBovine = await bovineService.updateBovine(updateData, req.user?.id || 'system');
 
       res.status(200).json({
         success: true,
@@ -524,7 +329,7 @@ export class BovinesController {
         success: false,
         message: 'Error interno del servidor',
         errors: {
-          general: 'Ocurrió un error al actualizar el bovino'
+          general: error instanceof Error ? error.message : 'Ocurrió un error al actualizar el bovino'
         }
       });
     }
@@ -538,29 +343,7 @@ export class BovinesController {
     try {
       const { id } = req.params;
 
-      const bovine = await Bovine.findOne({
-        where: { 
-          id: id,
-          isActive: true 
-        }
-      });
-
-      if (!bovine) {
-        res.status(404).json({
-          success: false,
-          message: 'Bovino no encontrado',
-          errors: {
-            bovine: 'El bovino especificado no existe'
-          }
-        });
-        return;
-      }
-
-      // Eliminación lógica
-      await bovine.update({
-        isActive: false,
-        updatedAt: new Date()
-      });
+      await bovineService.deleteBovine(id, req.user?.id || 'system');
 
       res.status(200).json({
         success: true,
@@ -576,7 +359,7 @@ export class BovinesController {
         success: false,
         message: 'Error interno del servidor',
         errors: {
-          general: 'Ocurrió un error al eliminar el bovino'
+          general: error instanceof Error ? error.message : 'Ocurrió un error al eliminar el bovino'
         }
       });
     }
@@ -588,85 +371,12 @@ export class BovinesController {
    */
   public getBovineStats = async (req: Request, res: Response): Promise<void> => {
     try {
-      // Obtener conteos básicos
-      const totalCount = await Bovine.count({ where: { isActive: true } });
+      const { farmId } = req.query;
       
-      // Conteo por tipo
-      const typeStats = await Bovine.findAll({
-        where: { isActive: true },
-        attributes: [
-          'type',
-          [fn('COUNT', col('type')), 'count']
-        ],
-        group: ['type'],
-        raw: true
-      });
-
-      // Conteo por género
-      const genderStats = await Bovine.findAll({
-        where: { isActive: true },
-        attributes: [
-          'gender',
-          [fn('COUNT', col('gender')), 'count']
-        ],
-        group: ['gender'],
-        raw: true
-      });
-
-      // Conteo por estado de salud
-      const healthStats = await Bovine.findAll({
-        where: { isActive: true },
-        attributes: [
-          'healthStatus',
-          [fn('COUNT', col('healthStatus')), 'count']
-        ],
-        group: ['healthStatus'],
-        raw: true
-      });
-
-      // Promedios
-      const averages = await Bovine.findAll({
-        where: { isActive: true },
-        attributes: [
-          [fn('AVG', col('ageInMonths')), 'averageAge'],
-          [fn('AVG', col('weight')), 'averageWeight']
-        ],
-        raw: true
-      });
-
-      // Cobertura de vacunación
-      const totalBovines = totalCount;
-      const bovinersWithVaccinations = await Bovine.count({
-        where: { isActive: true },
-        include: [{
-          model: Vaccination,
-          as: 'vaccinations',
-          required: true
-        }],
-        distinct: true
-      });
-
-      // Tasa de enfermedad
-      const bovinesWithIllnesses = await Bovine.count({
-        where: { isActive: true },
-        include: [{
-          model: Illness,
-          as: 'illnesses',
-          required: true
-        }],
-        distinct: true
-      });
-
-      const stats = {
-        totalCount,
-        countByType: this.formatCountStats(typeStats),
-        countByGender: this.formatCountStats(genderStats),
-        countByHealthStatus: this.formatCountStats(healthStats),
-        averageAge: Math.round(parseFloat(averages[0]?.averageAge) || 0),
-        averageWeight: Math.round(parseFloat(averages[0]?.averageWeight) || 0),
-        vaccinationCoverage: totalBovines > 0 ? Math.round((bovinersWithVaccinations / totalBovines) * 100) : 0,
-        illnessRate: totalBovines > 0 ? Math.round((bovinesWithIllnesses / totalBovines) * 100) : 0
-      };
+      const stats = await bovineService.getBovineStatistics(
+        farmId as string,
+        req.user?.id || 'system'
+      );
 
       res.status(200).json({
         success: true,
@@ -683,6 +393,118 @@ export class BovinesController {
         message: 'Error interno del servidor',
         errors: {
           general: 'Ocurrió un error al obtener las estadísticas'
+        }
+      });
+    }
+  };
+
+  /**
+   * Actualizar ubicación de bovino
+   * PUT /api/bovines/:id/location
+   */
+  public updateBovineLocation = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const { id } = req.params;
+      const { location, source, notes } = req.body;
+
+      if (!location || !location.latitude || !location.longitude) {
+        res.status(400).json({
+          success: false,
+          message: 'Datos de ubicación inválidos',
+          errors: {
+            location: 'Latitud y longitud son requeridas'
+          }
+        });
+        return;
+      }
+
+      await bovineService.updateBovineLocation(
+        {
+          bovineId: id,
+          location,
+          source: source || 'MANUAL',
+          notes,
+          timestamp: new Date()
+        },
+        req.user?.id || 'system'
+      );
+
+      res.status(200).json({
+        success: true,
+        message: 'Ubicación actualizada exitosamente',
+        data: {
+          updated: true
+        }
+      });
+
+    } catch (error) {
+      console.error('Error al actualizar ubicación:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error interno del servidor',
+        errors: {
+          general: error instanceof Error ? error.message : 'Ocurrió un error al actualizar la ubicación'
+        }
+      });
+    }
+  };
+
+  /**
+   * Buscar bovinos por ubicación
+   * POST /api/bovines/search-by-location
+   */
+  public getBovinesByLocation = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const { centerLocation, radiusKm } = req.body;
+
+      if (!centerLocation || !centerLocation.latitude || !centerLocation.longitude) {
+        res.status(400).json({
+          success: false,
+          message: 'Ubicación central inválida',
+          errors: {
+            centerLocation: 'Latitud y longitud son requeridas'
+          }
+        });
+        return;
+      }
+
+      if (!radiusKm || radiusKm <= 0) {
+        res.status(400).json({
+          success: false,
+          message: 'Radio de búsqueda inválido',
+          errors: {
+            radiusKm: 'El radio debe ser mayor a 0'
+          }
+        });
+        return;
+      }
+
+      const bovines = await bovineService.getBovinesByLocation(
+        centerLocation,
+        Number(radiusKm),
+        req.user?.id || 'system'
+      );
+
+      res.status(200).json({
+        success: true,
+        message: 'Búsqueda por ubicación completada',
+        data: {
+          bovines,
+          searchParams: {
+            centerLocation,
+            radiusKm: Number(radiusKm),
+            totalFound: bovines.length
+          }
+        }
+      });
+
+    } catch (error) {
+      console.error('Error en búsqueda por ubicación:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error interno del servidor',
+        errors: {
+          general: error instanceof Error ? error.message : 'Ocurrió un error en la búsqueda por ubicación'
         }
       });
     }
@@ -769,7 +591,8 @@ export class BovinesController {
   private formatCountStats(stats: any[]): Record<string, number> {
     const result: Record<string, number> = {};
     stats.forEach(stat => {
-      result[stat[Object.keys(stat)[0]]] = parseInt(stat.count);
+      const key = Object.keys(stat)[0];
+      result[stat[key]] = parseInt(stat.count);
     });
     return result;
   }
@@ -795,18 +618,12 @@ export class BovinesController {
   }
 
   private async performBulkDelete(ids: string[]): Promise<any> {
-    const [affectedCount] = await Bovine.update(
-      {
-        isActive: false,
-        updatedAt: new Date()
-      },
-      {
-        where: {
-          id: { [Op.in]: ids },
-          isActive: true
-        }
+    // Usar soft delete del modelo Bovine
+    const affectedCount = await Bovine.destroy({
+      where: {
+        id: { [Op.in]: ids }
       }
-    );
+    });
     
     return {
       deletedCount: affectedCount,

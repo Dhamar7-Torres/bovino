@@ -1,66 +1,61 @@
 import { Request, Response } from 'express';
 import { Op, fn, col } from 'sequelize';
-import { sequelize } from '../config/database';
-import { Event, Reminder, Bovine, Location, VaccinationSchedule } from '../models';
-import { CalendarService } from '../services/calendar';
+import sequelize from '../config/database'; // Importación corregida como default
+import Event, { 
+  EventType, 
+  EventStatus, 
+  EventPriority,
+  RecurrenceType,
+  EventSpecificData,
+  NotificationConfig // Importar NotificationConfig del modelo
+} from '../models/Event'; // Usando los tipos correctos del modelo Event
+import Bovine from '../models/Bovine'; // Importación corregida
+import Location from '../models/Location'; // Importación corregida
 
-// Tipos para eventos del calendario
-type EventType = 
-  | 'vaccination' 
-  | 'breeding' 
-  | 'health' 
-  | 'feeding' 
-  | 'general' 
-  | 'veterinary' 
-  | 'checkup' 
-  | 'birth' 
-  | 'emergency' 
-  | 'purchase' 
-  | 'sale' 
-  | 'treatment' 
-  | 'appointment';
-
-type EventStatus = 'scheduled' | 'completed' | 'cancelled' | 'overdue' | 'in_progress';
-type EventPriority = 'low' | 'medium' | 'high' | 'urgent';
-type ReminderType = 'immediate' | '1_hour' | '3_hours' | '1_day' | '3_days' | '7_days';
+// Tipos para eventos del calendario (usando los del modelo Event)
 type CalendarView = 'day' | 'week' | 'month' | 'agenda' | 'year';
+type ReminderType = 'immediate' | '1_hour' | '3_hours' | '1_day' | '3_days' | '7_days';
 
-// Interfaces para requests
+// Interfaces para requests - adaptadas al modelo real
 interface CreateEventRequest {
   title: string;
   description?: string;
-  eventType: EventType;
-  startDate: Date;
-  startTime: string;
+  eventType: EventType; // Usando EventType del modelo
+  scheduledDate: Date; // Cambiado de startDate + startTime
+  startDate?: Date;
   endDate?: Date;
-  endTime?: string;
-  duration?: number; // en minutos
   location: {
     latitude: number;
     longitude: number;
     address?: string;
-    section?: string;
+    municipality?: string;
+    state?: string;
+    country?: string;
   };
-  bovineIds?: string[];
-  priority: EventPriority;
-  veterinarianName?: string;
+  bovineId: string; // Cambiado de bovineIds (array) a bovineId (string)
+  priority: EventPriority; // Usando EventPriority del modelo
+  veterinarianId?: string; // Cambiado de veterinarianName
   cost?: number;
-  tags?: string[];
-  isRecurring: boolean;
-  recurrencePattern?: {
-    type: 'daily' | 'weekly' | 'monthly' | 'yearly';
-    interval: number;
+  currency?: string;
+  eventData?: EventSpecificData; // Usando EventSpecificData del modelo
+  tags?: string[]; // Este campo no existe en Event, se puede agregar a notes
+  isRecurring?: boolean; // Para determinar si crear recurrencia
+  recurrenceConfig?: {
+    type: RecurrenceType;
+    interval?: number;
     endDate?: Date;
-    occurrences?: number;
+    maxOccurrences?: number;
   };
-  reminderSettings: {
+  reminderSettings?: {
     enabled: boolean;
-    types: ReminderType[];
     recipients?: string[];
-    customMessage?: string;
   };
-  notes?: string;
-  metadata?: Record<string, any>;
+  followUpRequired?: boolean;
+  followUpDate?: Date;
+  publicNotes?: string;
+  privateNotes?: string;
+  photos?: string[];
+  attachments?: string[];
 }
 
 interface UpdateEventRequest extends Partial<CreateEventRequest> {
@@ -74,8 +69,8 @@ interface CalendarFilters {
   endDate?: Date;
   status?: EventStatus[];
   priority?: EventPriority[];
-  bovineIds?: string[];
-  veterinarianName?: string;
+  bovineId?: string; // Cambiado de bovineIds
+  veterinarianId?: string; // Cambiado de veterinarianName
   tags?: string[];
   location?: {
     latitude: number;
@@ -88,21 +83,23 @@ interface CalendarFilters {
   limit?: number;
 }
 
+// Interface temporal para recordatorios (hasta implementar modelo Reminder)
+// Nota: Se mapea a NotificationConfig del modelo Event
 interface ReminderRequest {
   eventId: string;
   reminderType: ReminderType;
   customMessage?: string;
   recipients: string[];
-  methods: ('email' | 'sms' | 'push' | 'whatsapp')[];
+  methods: ('EMAIL' | 'SMS' | 'PUSH' | 'WHATSAPP')[]; // Coincide con notificationMethods
 }
 
+// Interface temporal para programación de vacunación (hasta implementar modelo)
 interface VaccinationScheduleRequest {
   bovineId: string;
   vaccineType: string;
   vaccineName: string;
   scheduledDate: Date;
-  scheduledTime: string;
-  veterinarianName: string;
+  veterinarianId: string;
   location: {
     latitude: number;
     longitude: number;
@@ -115,12 +112,6 @@ interface VaccinationScheduleRequest {
 }
 
 export class CalendarController {
-  private calendarService: CalendarService;
-
-  constructor() {
-    this.calendarService = new CalendarService();
-  }
-
   /**
    * Crear nuevo evento en el calendario
    * POST /api/calendar/events
@@ -128,10 +119,10 @@ export class CalendarController {
   public createEvent = async (req: Request, res: Response): Promise<void> => {
     try {
       const eventData: CreateEventRequest = req.body;
-      const userId = (req as any).user?.id;
+      const userId = (req as any).user?.id || 'system';
 
       // Validaciones básicas
-      if (!eventData.title || !eventData.eventType || !eventData.startDate) {
+      if (!eventData.title || !eventData.eventType || !eventData.scheduledDate) {
         res.status(400).json({
           success: false,
           message: 'Campos obligatorios faltantes',
@@ -154,75 +145,74 @@ export class CalendarController {
         return;
       }
 
-      // Crear registro de ubicación
-      const locationRecord = await Location.create({
-        latitude: eventData.location.latitude,
-        longitude: eventData.location.longitude,
-        address: eventData.location.address || '',
-        section: eventData.location.section || '',
-        accuracy: 10,
-        timestamp: new Date()
-      });
-
-      // Calcular fecha y hora de fin si no se proporciona
-      const startDateTime = new Date(`${eventData.startDate.toISOString().split('T')[0]}T${eventData.startTime}`);
-      let endDateTime = eventData.endDate && eventData.endTime 
-        ? new Date(`${eventData.endDate.toISOString().split('T')[0]}T${eventData.endTime}`)
-        : null;
-
-      if (!endDateTime && eventData.duration) {
-        endDateTime = new Date(startDateTime.getTime() + (eventData.duration * 60000));
+      // Validar que el bovino existe
+      if (eventData.bovineId) {
+        const bovine = await Bovine.findByPk(eventData.bovineId);
+        if (!bovine) {
+          res.status(404).json({
+            success: false,
+            message: 'Bovino no encontrado',
+            errors: {
+              bovineId: 'El bovino especificado no existe'
+            }
+          });
+          return;
+        }
       }
 
       // Crear evento
       const newEvent = await Event.create({
+        bovineId: eventData.bovineId,
+        eventType: eventData.eventType,
         title: eventData.title,
         description: eventData.description || '',
-        eventType: eventData.eventType,
+        status: EventStatus.SCHEDULED,
+        priority: eventData.priority || EventPriority.MEDIUM,
+        scheduledDate: eventData.scheduledDate,
         startDate: eventData.startDate,
-        startTime: eventData.startTime,
-        endDate: eventData.endDate || eventData.startDate,
-        endTime: eventData.endTime || eventData.startTime,
-        duration: eventData.duration || 60,
-        locationId: locationRecord.id,
-        bovineIds: eventData.bovineIds || [],
-        status: 'scheduled',
-        priority: eventData.priority,
-        veterinarianName: eventData.veterinarianName || '',
+        endDate: eventData.endDate,
+        location: {
+          latitude: eventData.location.latitude,
+          longitude: eventData.location.longitude,
+          address: eventData.location.address,
+          municipality: eventData.location.municipality,
+          state: eventData.location.state,
+          country: eventData.location.country || 'México'
+        },
+        veterinarianId: eventData.veterinarianId,
         cost: eventData.cost || 0,
-        tags: eventData.tags || [],
-        isRecurring: eventData.isRecurring || false,
-        recurrencePattern: eventData.recurrencePattern || null,
-        notes: eventData.notes || '',
-        metadata: eventData.metadata || {},
-        createdBy: userId,
-        createdAt: new Date(),
-        updatedAt: new Date()
+        currency: eventData.currency || 'MXN',
+        eventData: eventData.eventData,
+        recurrence: eventData.isRecurring ? {
+          type: eventData.recurrenceConfig?.type || RecurrenceType.NONE,
+          interval: eventData.recurrenceConfig?.interval,
+          endDate: eventData.recurrenceConfig?.endDate,
+          maxOccurrences: eventData.recurrenceConfig?.maxOccurrences
+        } : undefined,
+        notifications: eventData.reminderSettings ? {
+          enabled: eventData.reminderSettings.enabled,
+          advanceNotice: 1, // Por defecto 1 día antes
+          reminderFrequency: 'DAILY',
+          notificationMethods: ['EMAIL', 'PUSH'],
+          recipients: eventData.reminderSettings.recipients || []
+        } : undefined,
+        followUpRequired: eventData.followUpRequired || false,
+        followUpDate: eventData.followUpDate,
+        publicNotes: eventData.publicNotes,
+        privateNotes: eventData.privateNotes,
+        photos: eventData.photos || [],
+        attachments: eventData.attachments || [],
+        isActive: true,
+        createdBy: userId
       });
-
-      // Crear recordatorios si están habilitados
-      if (eventData.reminderSettings.enabled) {
-        await this.createEventReminders(newEvent.id, eventData.reminderSettings, startDateTime);
-      }
 
       // Crear eventos recurrentes si es necesario
-      if (eventData.isRecurring && eventData.recurrencePattern) {
-        await this.createRecurringEvents(newEvent, eventData.recurrencePattern);
+      if (eventData.isRecurring && eventData.recurrenceConfig) {
+        await this.createRecurringEvents(newEvent, eventData.recurrenceConfig);
       }
 
-      // Obtener evento completo con asociaciones
-      const eventWithDetails = await Event.findByPk(newEvent.id, {
-        include: [
-          {
-            model: Location,
-            as: 'location'
-          },
-          {
-            model: Reminder,
-            as: 'reminders'
-          }
-        ]
-      });
+      // Obtener evento completo
+      const eventWithDetails = await Event.findByPk(newEvent.id);
 
       res.status(201).json({
         success: true,
@@ -238,7 +228,7 @@ export class CalendarController {
         success: false,
         message: 'Error interno del servidor',
         errors: {
-          general: 'Ocurrió un error inesperado al crear el evento'
+          general: error instanceof Error ? error.message : 'Ocurrió un error inesperado al crear el evento'
         }
       });
     }
@@ -256,24 +246,24 @@ export class CalendarController {
         endDate,
         status,
         priority,
-        bovineIds,
-        veterinarianName,
+        bovineId,
+        veterinarianId,
         tags,
         location,
         searchTerm,
         view = 'month',
         page = 1,
         limit = 50
-      }: CalendarFilters = req.query;
+      }: CalendarFilters = req.query as any;
 
       // Construir filtros WHERE
-      const whereConditions: any = {};
+      const whereConditions: any = { isActive: true };
 
       // Filtro por fechas
       if (startDate || endDate) {
-        whereConditions.startDate = {};
-        if (startDate) whereConditions.startDate[Op.gte] = new Date(startDate);
-        if (endDate) whereConditions.startDate[Op.lte] = new Date(endDate);
+        whereConditions.scheduledDate = {};
+        if (startDate) whereConditions.scheduledDate[Op.gte] = new Date(startDate);
+        if (endDate) whereConditions.scheduledDate[Op.lte] = new Date(endDate);
       }
 
       // Filtros específicos
@@ -286,8 +276,11 @@ export class CalendarController {
       if (priority && Array.isArray(priority)) {
         whereConditions.priority = { [Op.in]: priority };
       }
-      if (veterinarianName) {
-        whereConditions.veterinarianName = { [Op.iLike]: `%${veterinarianName}%` };
+      if (bovineId) {
+        whereConditions.bovineId = bovineId;
+      }
+      if (veterinarianId) {
+        whereConditions.veterinarianId = veterinarianId;
       }
 
       // Filtro de búsqueda de texto
@@ -295,22 +288,8 @@ export class CalendarController {
         whereConditions[Op.or] = [
           { title: { [Op.iLike]: `%${searchTerm}%` } },
           { description: { [Op.iLike]: `%${searchTerm}%` } },
-          { veterinarianName: { [Op.iLike]: `%${searchTerm}%` } }
+          { publicNotes: { [Op.iLike]: `%${searchTerm}%` } }
         ];
-      }
-
-      // Filtros de bovinos
-      if (bovineIds && Array.isArray(bovineIds)) {
-        whereConditions[Op.or] = bovineIds.map(id => ({
-          bovineIds: { [Op.contains]: [id] }
-        }));
-      }
-
-      // Filtros por tags
-      if (tags && Array.isArray(tags)) {
-        whereConditions[Op.and] = tags.map(tag => ({
-          tags: { [Op.contains]: [tag] }
-        }));
       }
 
       // Configurar paginación
@@ -321,21 +300,9 @@ export class CalendarController {
       // Ejecutar consulta
       const { count, rows: events } = await Event.findAndCountAll({
         where: whereConditions,
-        include: [
-          {
-            model: Location,
-            as: 'location'
-          },
-          {
-            model: Reminder,
-            as: 'reminders',
-            where: { isActive: true },
-            required: false
-          }
-        ],
         limit: limitNum,
         offset: offset,
-        order: [['startDate', 'ASC'], ['startTime', 'ASC']],
+        order: [['scheduledDate', 'ASC']],
         distinct: true
       });
 
@@ -392,18 +359,7 @@ export class CalendarController {
     try {
       const { id } = req.params;
 
-      const event = await Event.findByPk(id, {
-        include: [
-          {
-            model: Location,
-            as: 'location'
-          },
-          {
-            model: Reminder,
-            as: 'reminders'
-          }
-        ]
-      });
+      const event = await Event.findByPk(id);
 
       if (!event) {
         res.status(404).json({
@@ -416,15 +372,11 @@ export class CalendarController {
         return;
       }
 
-      // Obtener información de bovinos si existen
-      let bovines = [];
-      if (event.bovineIds && event.bovineIds.length > 0) {
-        bovines = await Bovine.findAll({
-          where: {
-            id: { [Op.in]: event.bovineIds },
-            isActive: true
-          },
-          attributes: ['id', 'earTag', 'name', 'type', 'breed']
+      // Obtener información del bovino si existe
+      let bovine = null;
+      if (event.bovineId) {
+        bovine = await Bovine.findByPk(event.bovineId, {
+          attributes: ['id', 'earTag', 'name', 'cattleType', 'breed'] // Cambiado 'type' por 'cattleType'
         });
       }
 
@@ -434,7 +386,7 @@ export class CalendarController {
         data: {
           event: {
             ...event.toJSON(),
-            bovines: bovines
+            bovine: bovine
           }
         }
       });
@@ -459,6 +411,7 @@ export class CalendarController {
     try {
       const { id } = req.params;
       const updateData: UpdateEventRequest = req.body;
+      const userId = (req as any).user?.id || 'system';
 
       // Buscar evento existente
       const existingEvent = await Event.findByPk(id);
@@ -474,54 +427,58 @@ export class CalendarController {
         return;
       }
 
-      // Actualizar ubicación si se proporciona
-      if (updateData.location) {
-        await Location.update(
-          {
-            latitude: updateData.location.latitude,
-            longitude: updateData.location.longitude,
-            address: updateData.location.address || '',
-            section: updateData.location.section || '',
-            timestamp: new Date()
-          },
-          { where: { id: existingEvent.locationId } }
-        );
+      // Validar bovino si se está cambiando
+      if (updateData.bovineId && updateData.bovineId !== existingEvent.bovineId) {
+        const bovine = await Bovine.findByPk(updateData.bovineId);
+        if (!bovine) {
+          res.status(404).json({
+            success: false,
+            message: 'Bovino no encontrado',
+            errors: {
+              bovineId: 'El bovino especificado no existe'
+            }
+          });
+          return;
+        }
       }
 
-      // Actualizar evento
-      await existingEvent.update({
+      // Preparar datos de actualización
+      const updatePayload: any = {
         title: updateData.title || existingEvent.title,
         description: updateData.description !== undefined ? updateData.description : existingEvent.description,
         eventType: updateData.eventType || existingEvent.eventType,
-        startDate: updateData.startDate || existingEvent.startDate,
-        startTime: updateData.startTime || existingEvent.startTime,
-        endDate: updateData.endDate || existingEvent.endDate,
-        endTime: updateData.endTime || existingEvent.endTime,
-        duration: updateData.duration !== undefined ? updateData.duration : existingEvent.duration,
-        bovineIds: updateData.bovineIds !== undefined ? updateData.bovineIds : existingEvent.bovineIds,
+        scheduledDate: updateData.scheduledDate || existingEvent.scheduledDate,
+        startDate: updateData.startDate !== undefined ? updateData.startDate : existingEvent.startDate,
+        endDate: updateData.endDate !== undefined ? updateData.endDate : existingEvent.endDate,
+        bovineId: updateData.bovineId || existingEvent.bovineId,
         status: updateData.status || existingEvent.status,
         priority: updateData.priority || existingEvent.priority,
-        veterinarianName: updateData.veterinarianName !== undefined ? updateData.veterinarianName : existingEvent.veterinarianName,
+        veterinarianId: updateData.veterinarianId !== undefined ? updateData.veterinarianId : existingEvent.veterinarianId,
         cost: updateData.cost !== undefined ? updateData.cost : existingEvent.cost,
-        tags: updateData.tags !== undefined ? updateData.tags : existingEvent.tags,
-        notes: updateData.notes !== undefined ? updateData.notes : existingEvent.notes,
-        metadata: updateData.metadata !== undefined ? updateData.metadata : existingEvent.metadata,
-        updatedAt: new Date()
-      });
+        currency: updateData.currency || existingEvent.currency,
+        eventData: updateData.eventData !== undefined ? updateData.eventData : existingEvent.eventData,
+        followUpRequired: updateData.followUpRequired !== undefined ? updateData.followUpRequired : existingEvent.followUpRequired,
+        followUpDate: updateData.followUpDate !== undefined ? updateData.followUpDate : existingEvent.followUpDate,
+        publicNotes: updateData.publicNotes !== undefined ? updateData.publicNotes : existingEvent.publicNotes,
+        privateNotes: updateData.privateNotes !== undefined ? updateData.privateNotes : existingEvent.privateNotes,
+        photos: updateData.photos !== undefined ? updateData.photos : existingEvent.photos,
+        attachments: updateData.attachments !== undefined ? updateData.attachments : existingEvent.attachments,
+        updatedBy: userId
+      };
+
+      // Actualizar ubicación si se proporciona
+      if (updateData.location) {
+        updatePayload.location = {
+          ...existingEvent.location,
+          ...updateData.location
+        };
+      }
+
+      // Actualizar evento
+      await existingEvent.update(updatePayload);
 
       // Obtener evento actualizado
-      const updatedEvent = await Event.findByPk(id, {
-        include: [
-          {
-            model: Location,
-            as: 'location'
-          },
-          {
-            model: Reminder,
-            as: 'reminders'
-          }
-        ]
-      });
+      const updatedEvent = await Event.findByPk(id);
 
       res.status(200).json({
         success: true,
@@ -537,7 +494,7 @@ export class CalendarController {
         success: false,
         message: 'Error interno del servidor',
         errors: {
-          general: 'Ocurrió un error al actualizar el evento'
+          general: error instanceof Error ? error.message : 'Ocurrió un error al actualizar el evento'
         }
       });
     }
@@ -564,12 +521,7 @@ export class CalendarController {
         return;
       }
 
-      // Eliminar recordatorios asociados
-      await Reminder.destroy({
-        where: { eventId: id }
-      });
-
-      // Eliminar evento
+      // Usar soft delete del modelo Event
       await event.destroy();
 
       res.status(200).json({
@@ -605,9 +557,10 @@ export class CalendarController {
       const end = endDate ? new Date(endDate as string) : new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0);
 
       const whereConditions = {
-        startDate: {
+        scheduledDate: {
           [Op.between]: [start, end]
-        }
+        },
+        isActive: true
       };
 
       // Conteo total de eventos
@@ -649,24 +602,22 @@ export class CalendarController {
       // Próximos eventos (próximos 7 días)
       const upcomingEvents = await Event.findAll({
         where: {
-          startDate: {
+          scheduledDate: {
             [Op.between]: [new Date(), new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)]
           },
-          status: { [Op.in]: ['scheduled', 'in_progress'] }
+          status: { [Op.in]: [EventStatus.SCHEDULED] },
+          isActive: true
         },
-        include: [{
-          model: Location,
-          as: 'location'
-        }],
-        order: [['startDate', 'ASC']],
+        order: [['scheduledDate', 'ASC']],
         limit: 10
       });
 
       // Eventos vencidos
       const overdueEvents = await Event.count({
         where: {
-          startDate: { [Op.lt]: new Date() },
-          status: 'scheduled'
+          scheduledDate: { [Op.lt]: new Date() },
+          status: EventStatus.SCHEDULED,
+          isActive: true
         }
       });
 
@@ -703,13 +654,12 @@ export class CalendarController {
   };
 
   /**
-   * Crear recordatorio para evento
+   * Crear recordatorio para evento (funcionalidad simplificada)
    * POST /api/calendar/reminders
    */
   public createReminder = async (req: Request, res: Response): Promise<void> => {
     try {
       const reminderData: ReminderRequest = req.body;
-      const userId = (req as any).user?.id;
 
       // Validar que el evento existe
       const event = await Event.findByPk(reminderData.eventId);
@@ -724,36 +674,45 @@ export class CalendarController {
         return;
       }
 
-      // Calcular fecha/hora del recordatorio
-      const eventDateTime = new Date(`${event.startDate.toISOString().split('T')[0]}T${event.startTime}`);
-      const reminderDateTime = this.calculateReminderDateTime(eventDateTime, reminderData.reminderType);
+      // Calcular advanceNotice basado en reminderType
+      let advanceNotice = 0;
+      switch (reminderData.reminderType) {
+        case '1_hour':
+          advanceNotice = 0; // Notificar el mismo día
+          break;
+        case '1_day':
+          advanceNotice = 1;
+          break;
+        case '3_days':
+          advanceNotice = 3;
+          break;
+        case '7_days':
+          advanceNotice = 7;
+          break;
+        default:
+          advanceNotice = 0;
+      }
 
-      // Crear recordatorio
-      const reminder = await Reminder.create({
-        eventId: reminderData.eventId,
-        eventTitle: event.title,
-        eventType: event.eventType,
-        eventDate: event.startDate,
-        eventTime: event.startTime,
-        reminderType: reminderData.reminderType,
-        reminderTime: reminderDateTime,
-        status: 'scheduled',
-        recipients: reminderData.recipients,
-        methods: reminderData.methods,
-        priority: event.priority,
-        message: reminderData.customMessage || this.generateDefaultReminderMessage(event),
-        isRecurring: event.isRecurring,
-        isActive: true,
-        createdBy: userId,
-        createdAt: new Date(),
-        updatedAt: new Date()
+      // Por ahora, solo actualizar las notificaciones del evento
+      // En el futuro se puede crear un modelo Reminder separado
+      await event.update({
+        notifications: {
+          enabled: true,
+          advanceNotice: advanceNotice,
+          reminderFrequency: 'DAILY',
+          notificationMethods: reminderData.methods as ('EMAIL' | 'SMS' | 'PUSH' | 'WHATSAPP')[],
+          recipients: reminderData.recipients
+        }
       });
 
       res.status(201).json({
         success: true,
         message: 'Recordatorio creado exitosamente',
         data: {
-          reminder
+          eventId: reminderData.eventId,
+          reminderType: reminderData.reminderType,
+          advanceNotice: advanceNotice,
+          enabled: true
         }
       });
 
@@ -770,14 +729,17 @@ export class CalendarController {
   };
 
   /**
-   * Obtener programación de vacunación
+   * Obtener eventos de vacunación programados
    * GET /api/calendar/vaccination-schedule
    */
   public getVaccinationSchedule = async (req: Request, res: Response): Promise<void> => {
     try {
       const { startDate, endDate, bovineId, status, vaccineType } = req.query;
 
-      const whereConditions: any = {};
+      const whereConditions: any = {
+        eventType: EventType.VACCINATION,
+        isActive: true
+      };
 
       // Filtros por fecha
       if (startDate || endDate) {
@@ -789,29 +751,36 @@ export class CalendarController {
       // Filtros específicos
       if (bovineId) whereConditions.bovineId = bovineId;
       if (status) whereConditions.status = status;
-      if (vaccineType) whereConditions.vaccineType = { [Op.iLike]: `%${vaccineType}%` };
+      
+      // Filtro por tipo de vacuna (en eventData)
+      if (vaccineType) {
+        whereConditions['eventData.vaccineType'] = { [Op.iLike]: `%${vaccineType}%` };
+      }
 
-      const vaccinationSchedule = await VaccinationSchedule.findAll({
+      const vaccinationSchedule = await Event.findAll({
         where: whereConditions,
-        include: [
-          {
-            model: Bovine,
-            as: 'bovine',
-            attributes: ['id', 'earTag', 'name', 'type', 'breed']
-          },
-          {
-            model: Location,
-            as: 'location'
-          }
-        ],
-        order: [['scheduledDate', 'ASC'], ['scheduledTime', 'ASC']]
+        order: [['scheduledDate', 'ASC']]
       });
+
+      // Obtener información de bovinos para cada evento
+      const scheduleWithBovines = await Promise.all(
+        vaccinationSchedule.map(async (event) => {
+          const bovine = await Bovine.findByPk(event.bovineId, {
+            attributes: ['id', 'earTag', 'name', 'cattleType', 'breed']
+          });
+          
+          return {
+            ...event.toJSON(),
+            bovine
+          };
+        })
+      );
 
       res.status(200).json({
         success: true,
         message: 'Programación de vacunación obtenida exitosamente',
         data: {
-          schedule: vaccinationSchedule
+          schedule: scheduleWithBovines
         }
       });
 
@@ -834,7 +803,7 @@ export class CalendarController {
   public createVaccinationSchedule = async (req: Request, res: Response): Promise<void> => {
     try {
       const scheduleData: VaccinationScheduleRequest = req.body;
-      const userId = (req as any).user?.id;
+      const userId = (req as any).user?.id || 'system';
 
       // Validar que el bovino existe
       const bovine = await Bovine.findByPk(scheduleData.bovineId);
@@ -849,63 +818,50 @@ export class CalendarController {
         return;
       }
 
-      // Crear ubicación para la vacunación
-      const locationRecord = await Location.create({
-        latitude: scheduleData.location.latitude,
-        longitude: scheduleData.location.longitude,
-        address: scheduleData.location.address || '',
-        accuracy: 10,
-        timestamp: new Date()
-      });
-
-      // Calcular próxima fecha de refuerzo (ejemplo: 1 año después)
-      const nextDueDate = new Date(scheduleData.scheduledDate);
-      nextDueDate.setFullYear(nextDueDate.getFullYear() + 1);
-
-      // Crear entrada en programación
-      const schedule = await VaccinationSchedule.create({
+      // Crear evento de vacunación
+      const vaccinationEvent = await Event.create({
         bovineId: scheduleData.bovineId,
-        bovineName: bovine.name || '',
-        bovineTag: bovine.earTag,
-        vaccineType: scheduleData.vaccineType,
-        vaccineName: scheduleData.vaccineName,
+        eventType: EventType.VACCINATION,
+        title: `Vacunación: ${scheduleData.vaccineName}`,
+        description: `Aplicación de vacuna ${scheduleData.vaccineName} - Dosis ${scheduleData.doseNumber}/${scheduleData.totalDoses}`,
+        status: EventStatus.SCHEDULED,
+        priority: EventPriority.MEDIUM,
         scheduledDate: scheduleData.scheduledDate,
-        scheduledTime: scheduleData.scheduledTime,
-        status: 'scheduled',
-        doseNumber: scheduleData.doseNumber || 1,
-        totalDoses: scheduleData.totalDoses || 1,
-        nextDueDate: nextDueDate,
-        veterinarianName: scheduleData.veterinarianName,
-        locationId: locationRecord.id,
+        location: {
+          latitude: scheduleData.location.latitude,
+          longitude: scheduleData.location.longitude,
+          address: scheduleData.location.address
+        },
+        veterinarianId: scheduleData.veterinarianId,
         cost: scheduleData.cost || 0,
-        notes: scheduleData.notes || '',
-        reminderSent: false,
-        certificateGenerated: false,
-        createdBy: userId,
-        createdAt: new Date(),
-        updatedAt: new Date()
+        currency: 'MXN',
+        eventData: {
+          vaccineType: scheduleData.vaccineType,
+          vaccineName: scheduleData.vaccineName,
+          dosage: scheduleData.doseNumber,
+          dosageUnit: 'dosis',
+          applicationMethod: 'SUBCUTANEOUS' as const
+        },
+        followUpRequired: scheduleData.doseNumber < scheduleData.totalDoses,
+        publicNotes: scheduleData.notes,
+        isActive: true,
+        createdBy: userId
       });
 
-      // Obtener programación completa con asociaciones
-      const scheduleWithDetails = await VaccinationSchedule.findByPk(schedule.id, {
-        include: [
-          {
-            model: Bovine,
-            as: 'bovine',
-            attributes: ['id', 'earTag', 'name', 'type', 'breed']
-          },
-          {
-            model: Location,
-            as: 'location'
-          }
-        ]
+      // Obtener evento con información del bovino
+      const eventWithBovine = await Event.findByPk(vaccinationEvent.id);
+      const bovineInfo = await Bovine.findByPk(scheduleData.bovineId, {
+        attributes: ['id', 'earTag', 'name', 'cattleType', 'breed']
       });
 
       res.status(201).json({
         success: true,
         message: 'Programación de vacunación creada exitosamente',
         data: {
-          schedule: scheduleWithDetails
+          schedule: {
+            ...eventWithBovine?.toJSON(),
+            bovine: bovineInfo
+          }
         }
       });
 
@@ -915,7 +871,7 @@ export class CalendarController {
         success: false,
         message: 'Error interno del servidor',
         errors: {
-          general: 'Ocurrió un error al crear la programación'
+          general: error instanceof Error ? error.message : 'Ocurrió un error al crear la programación'
         }
       });
     }
@@ -923,101 +879,68 @@ export class CalendarController {
 
   // Métodos auxiliares privados
 
-  private async createEventReminders(eventId: string, reminderSettings: any, eventDateTime: Date): Promise<void> {
-    const userId = (req as any)?.user?.id;
-    
-    for (const reminderType of reminderSettings.types) {
-      const reminderTime = this.calculateReminderDateTime(eventDateTime, reminderType);
+  private async createRecurringEvents(baseEvent: Event, recurrenceConfig: any): Promise<void> {
+    try {
+      const maxOccurrences = recurrenceConfig.maxOccurrences || 10;
+      const interval = recurrenceConfig.interval || 1;
       
-      await Reminder.create({
-        eventId: eventId,
-        reminderType: reminderType,
-        reminderTime: reminderTime,
-        status: 'scheduled',
-        recipients: reminderSettings.recipients || [],
-        methods: ['email', 'push'],
-        message: reminderSettings.customMessage || '',
-        isActive: true,
-        createdBy: userId,
-        createdAt: new Date(),
-        updatedAt: new Date()
-      });
+      // Crear eventos futuros basados en el patrón
+      for (let i = 1; i < maxOccurrences; i++) {
+        const nextDate = this.calculateNextRecurrenceDate(baseEvent.scheduledDate, recurrenceConfig.type, interval * i);
+        
+        // Verificar fecha límite
+        if (recurrenceConfig.endDate && nextDate > recurrenceConfig.endDate) {
+          break;
+        }
+
+        await Event.create({
+          bovineId: baseEvent.bovineId,
+          eventType: baseEvent.eventType,
+          title: baseEvent.title,
+          description: baseEvent.description,
+          status: EventStatus.SCHEDULED,
+          priority: baseEvent.priority,
+          scheduledDate: nextDate,
+          location: baseEvent.location,
+          veterinarianId: baseEvent.veterinarianId,
+          cost: baseEvent.cost,
+          currency: baseEvent.currency,
+          eventData: baseEvent.eventData,
+          recurrence: baseEvent.recurrence,
+          parentEventId: baseEvent.id,
+          followUpRequired: baseEvent.followUpRequired,
+          publicNotes: baseEvent.publicNotes,
+          privateNotes: baseEvent.privateNotes,
+          isActive: true,
+          createdBy: baseEvent.createdBy
+        });
+      }
+    } catch (error) {
+      console.error('Error creando eventos recurrentes:', error);
     }
   }
 
-  private async createRecurringEvents(baseEvent: any, pattern: any): Promise<void> {
-    // Implementar lógica de creación de eventos recurrentes
-    // Esto se puede expandir según las necesidades específicas
-    const occurrences = pattern.occurrences || 10;
-    const interval = pattern.interval || 1;
-    
-    // Crear eventos futuros basados en el patrón
-    for (let i = 1; i < occurrences; i++) {
-      const nextDate = this.calculateNextRecurrenceDate(baseEvent.startDate, pattern.type, interval * i);
-      
-      await Event.create({
-        ...baseEvent.dataValues,
-        id: undefined, // Generar nuevo ID
-        startDate: nextDate,
-        endDate: nextDate,
-        parentEventId: baseEvent.id,
-        createdAt: new Date(),
-        updatedAt: new Date()
-      });
-    }
-  }
-
-  private calculateReminderDateTime(eventDateTime: Date, reminderType: ReminderType): Date {
-    const reminderTime = new Date(eventDateTime);
-
-    switch (reminderType) {
-      case 'immediate':
-        return eventDateTime;
-      case '1_hour':
-        reminderTime.setHours(reminderTime.getHours() - 1);
-        break;
-      case '3_hours':
-        reminderTime.setHours(reminderTime.getHours() - 3);
-        break;
-      case '1_day':
-        reminderTime.setDate(reminderTime.getDate() - 1);
-        break;
-      case '3_days':
-        reminderTime.setDate(reminderTime.getDate() - 3);
-        break;
-      case '7_days':
-        reminderTime.setDate(reminderTime.getDate() - 7);
-        break;
-      default:
-        return eventDateTime;
-    }
-
-    return reminderTime;
-  }
-
-  private calculateNextRecurrenceDate(baseDate: Date, type: string, multiplier: number): Date {
+  private calculateNextRecurrenceDate(baseDate: Date, type: RecurrenceType, multiplier: number): Date {
     const nextDate = new Date(baseDate);
 
     switch (type) {
-      case 'daily':
+      case RecurrenceType.DAILY:
         nextDate.setDate(nextDate.getDate() + multiplier);
         break;
-      case 'weekly':
+      case RecurrenceType.WEEKLY:
         nextDate.setDate(nextDate.getDate() + (7 * multiplier));
         break;
-      case 'monthly':
+      case RecurrenceType.MONTHLY:
         nextDate.setMonth(nextDate.getMonth() + multiplier);
         break;
-      case 'yearly':
+      case RecurrenceType.YEARLY:
         nextDate.setFullYear(nextDate.getFullYear() + multiplier);
+        break;
+      default:
         break;
     }
 
     return nextDate;
-  }
-
-  private generateDefaultReminderMessage(event: any): string {
-    return `Recordatorio: ${event.title} programado para ${event.startDate.toLocaleDateString()} a las ${event.startTime}`;
   }
 
   private calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
