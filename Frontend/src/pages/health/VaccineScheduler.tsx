@@ -10,9 +10,7 @@ import {
   Plus,
   Edit3,
   Trash2,
-  Filter,
   Search,
-  Download,
   Bell,
   Shield,
   FileText,
@@ -25,6 +23,9 @@ import {
   Target,
   ChevronLeft,
   ChevronRight,
+  Save,
+  Navigation,
+  Loader,
 } from "lucide-react";
 
 // Interfaces TypeScript - Comentarios en español
@@ -71,12 +72,12 @@ interface VaccineType {
   storageRequirements: string;
   sideEffects: string[];
   contraindications: string[];
-  withdrawalPeriod: number; // días
+  withdrawalPeriod: number;
   boosterRequired: boolean;
-  boosterInterval: number; // días
+  boosterInterval: number;
   ageRestrictions: {
-    minAge: number; // meses
-    maxAge?: number; // meses
+    minAge: number;
+    maxAge?: number;
   };
   seasonalRecommendation?: string;
   regulatoryApproval: string;
@@ -120,6 +121,27 @@ interface CalendarDay {
   hasCompleted: boolean;
 }
 
+interface ScheduleFormData {
+  bovineId: string;
+  bovineName: string;
+  bovineTag: string;
+  vaccineId: string;
+  vaccineName: string;
+  scheduledDate: string;
+  scheduledTime: string;
+  veterinarian: string;
+  location: {
+    latitude: number;
+    longitude: number;
+    address: string;
+  };
+  priority: Priority;
+  notes: string;
+  cost: number;
+  doseNumber: number;
+  totalDoses: number;
+}
+
 // Enums para tipos específicos
 enum ScheduleStatus {
   SCHEDULED = "scheduled",
@@ -157,34 +179,636 @@ enum Priority {
   URGENT = "urgent",
 }
 
+// Componente del formulario de programación (crear/editar)
+const ScheduleForm: React.FC<{
+  isOpen: boolean;
+  onClose: () => void;
+  onSave: (data: ScheduleFormData) => void;
+  editingSchedule?: VaccinationSchedule | null;
+}> = ({ isOpen, onClose, onSave, editingSchedule = null }) => {
+  const [formData, setFormData] = useState<ScheduleFormData>({
+    bovineId: "",
+    bovineName: "",
+    bovineTag: "",
+    vaccineId: "",
+    vaccineName: "",
+    scheduledDate: "",
+    scheduledTime: "",
+    veterinarian: "",
+    location: {
+      latitude: 0,
+      longitude: 0,
+      address: "",
+    },
+    priority: Priority.MEDIUM,
+    notes: "",
+    cost: 0,
+    doseNumber: 1,
+    totalDoses: 1,
+  });
+
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [isGettingLocation, setIsGettingLocation] = useState(false);
+
+  // Llenar formulario con datos de edición
+  useEffect(() => {
+    if (editingSchedule) {
+      setFormData({
+        bovineId: editingSchedule.bovineId,
+        bovineName: editingSchedule.bovineName,
+        bovineTag: editingSchedule.bovineTag,
+        vaccineId: editingSchedule.vaccineId,
+        vaccineName: editingSchedule.vaccineName,
+        scheduledDate: editingSchedule.scheduledDate,
+        scheduledTime: editingSchedule.scheduledTime,
+        veterinarian: editingSchedule.veterinarian || "",
+        location: editingSchedule.location,
+        priority: editingSchedule.priority,
+        notes: editingSchedule.notes || "",
+        cost: editingSchedule.cost,
+        doseNumber: editingSchedule.doseNumber,
+        totalDoses: editingSchedule.totalDoses,
+      });
+    } else {
+      // Resetear formulario para nuevo registro
+      setFormData({
+        bovineId: "",
+        bovineName: "",
+        bovineTag: "",
+        vaccineId: "",
+        vaccineName: "",
+        scheduledDate: "",
+        scheduledTime: "",
+        veterinarian: "",
+        location: {
+          latitude: 0,
+          longitude: 0,
+          address: "",
+        },
+        priority: Priority.MEDIUM,
+        notes: "",
+        cost: 0,
+        doseNumber: 1,
+        totalDoses: 1,
+      });
+    }
+  }, [editingSchedule]);
+
+  const getCurrentLocation = async () => {
+    setIsGettingLocation(true);
+    
+    if (!navigator.geolocation) {
+      alert('Geolocalización no es soportada por este navegador.');
+      setIsGettingLocation(false);
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        const { latitude, longitude } = position.coords;
+        
+        try {
+          // Usar Nominatim de OpenStreetMap para geocodificación inversa
+          const response = await fetch(
+            `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&addressdetails=1`
+          );
+          
+          if (response.ok) {
+            const data = await response.json();
+            const address = data.display_name || `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`;
+            
+            setFormData(prev => ({
+              ...prev,
+              location: {
+                latitude: parseFloat(latitude.toFixed(6)),
+                longitude: parseFloat(longitude.toFixed(6)),
+                address: address
+              }
+            }));
+          } else {
+            // Si falla la geocodificación, al menos usar las coordenadas
+            setFormData(prev => ({
+              ...prev,
+              location: {
+                latitude: parseFloat(latitude.toFixed(6)),
+                longitude: parseFloat(longitude.toFixed(6)),
+                address: `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`
+              }
+            }));
+          }
+        } catch (error) {
+          console.error('Error al obtener la dirección:', error);
+          // Usar solo coordenadas si falla todo
+          setFormData(prev => ({
+            ...prev,
+            location: {
+              latitude: parseFloat(latitude.toFixed(6)),
+              longitude: parseFloat(longitude.toFixed(6)),
+              address: `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`
+            }
+          }));
+        }
+        
+        setIsGettingLocation(false);
+      },
+      (error) => {
+        console.error('Error al obtener la ubicación:', error);
+        alert('No se pudo obtener la ubicación. Verifica los permisos.');
+        setIsGettingLocation(false);
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 60000
+      }
+    );
+  };
+
+  const handleInputChange = (field: keyof ScheduleFormData, value: any) => {
+    setFormData(prev => ({
+      ...prev,
+      [field]: value
+    }));
+    
+    if (errors[field]) {
+      setErrors(prev => ({
+        ...prev,
+        [field]: ""
+      }));
+    }
+  };
+
+  const handleLocationChange = (field: keyof ScheduleFormData['location'], value: any) => {
+    setFormData(prev => ({
+      ...prev,
+      location: {
+        ...prev.location,
+        [field]: value
+      }
+    }));
+  };
+
+  const validateForm = () => {
+    const newErrors: Record<string, string> = {};
+
+    if (!formData.bovineId) newErrors.bovineId = "ID del bovino es requerido";
+    if (!formData.bovineName) newErrors.bovineName = "Nombre del bovino es requerido";
+    if (!formData.bovineTag) newErrors.bovineTag = "Etiqueta del bovino es requerida";
+    if (!formData.vaccineId) newErrors.vaccineId = "Vacuna es requerida";
+    if (!formData.scheduledDate) newErrors.scheduledDate = "Fecha programada es requerida";
+    if (!formData.scheduledTime) newErrors.scheduledTime = "Hora programada es requerida";
+    if (!formData.veterinarian) newErrors.veterinarian = "Veterinario es requerido";
+    if (formData.cost < 0) newErrors.cost = "El costo no puede ser negativo";
+    if (formData.doseNumber < 1) newErrors.doseNumber = "El número de dosis debe ser mayor a 0";
+    if (formData.totalDoses < 1) newErrors.totalDoses = "El total de dosis debe ser mayor a 0";
+    if (formData.doseNumber > formData.totalDoses) newErrors.doseNumber = "El número de dosis no puede ser mayor al total";
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const handleSubmit = () => {
+    if (validateForm()) {
+      onSave(formData);
+      onClose();
+    }
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50"
+      onClick={onClose}
+    >
+      <motion.div
+        initial={{ opacity: 0, scale: 0.9, y: 20 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.9, y: 20 }}
+        transition={{ duration: 0.3 }}
+        className="bg-white rounded-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="p-4 sm:p-6 border-b border-gray-200">
+          <div className="flex items-center justify-between">
+            <h3 className="text-xl sm:text-2xl font-bold text-gray-900">
+              {editingSchedule ? 'Editar Programación de Vacuna' : 'Nueva Programación de Vacuna'}
+            </h3>
+            <button
+              onClick={onClose}
+              className="text-gray-400 hover:text-gray-600 p-2 rounded-lg hover:bg-gray-100"
+            >
+              <X size={24} />
+            </button>
+          </div>
+        </div>
+
+        <div className="p-4 sm:p-6 space-y-6">
+          {/* Información del Bovino */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                ID del Bovino *
+              </label>
+              <input
+                type="text"
+                value={formData.bovineId}
+                onChange={(e) => handleInputChange('bovineId', e.target.value)}
+                className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 ${
+                  errors.bovineId ? 'border-red-500' : 'border-gray-300'
+                }`}
+                placeholder="BOV-001"
+              />
+              {errors.bovineId && <p className="text-red-500 text-xs mt-1">{errors.bovineId}</p>}
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Nombre del Bovino *
+              </label>
+              <input
+                type="text"
+                value={formData.bovineName}
+                onChange={(e) => handleInputChange('bovineName', e.target.value)}
+                className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 ${
+                  errors.bovineName ? 'border-red-500' : 'border-gray-300'
+                }`}
+                placeholder="Esperanza"
+              />
+              {errors.bovineName && <p className="text-red-500 text-xs mt-1">{errors.bovineName}</p>}
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Etiqueta del Bovino *
+              </label>
+              <input
+                type="text"
+                value={formData.bovineTag}
+                onChange={(e) => handleInputChange('bovineTag', e.target.value)}
+                className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 ${
+                  errors.bovineTag ? 'border-red-500' : 'border-gray-300'
+                }`}
+                placeholder="ESP-001"
+              />
+              {errors.bovineTag && <p className="text-red-500 text-xs mt-1">{errors.bovineTag}</p>}
+            </div>
+          </div>
+
+          {/* Información de la Vacuna */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Vacuna *
+              </label>
+              <select
+                value={formData.vaccineId}
+                onChange={(e) => {
+                  const selectedValue = e.target.value;
+                  handleInputChange('vaccineId', selectedValue);
+                  
+                  const vaccineNames: Record<string, string> = {
+                    'vac-001': 'Triple Viral Bovina',
+                    'vac-002': 'Vacuna contra Brucelosis',
+                    'vac-003': 'Vacuna Pentavalente',
+                    'vac-004': 'Vacuna contra Fiebre Aftosa',
+                    'vac-005': 'Vacuna contra Rabia'
+                  };
+                  
+                  if (vaccineNames[selectedValue]) {
+                    handleInputChange('vaccineName', vaccineNames[selectedValue]);
+                  }
+                }}
+                className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 ${
+                  errors.vaccineId ? 'border-red-500' : 'border-gray-300'
+                }`}
+              >
+                <option value="">Seleccionar vacuna</option>
+                <option value="vac-001">Triple Viral Bovina</option>
+                <option value="vac-002">Vacuna contra Brucelosis</option>
+                <option value="vac-003">Vacuna Pentavalente</option>
+                <option value="vac-004">Vacuna contra Fiebre Aftosa</option>
+                <option value="vac-005">Vacuna contra Rabia</option>
+              </select>
+              {errors.vaccineId && <p className="text-red-500 text-xs mt-1">{errors.vaccineId}</p>}
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Veterinario *
+              </label>
+              <select
+                value={formData.veterinarian}
+                onChange={(e) => handleInputChange('veterinarian', e.target.value)}
+                className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 ${
+                  errors.veterinarian ? 'border-red-500' : 'border-gray-300'
+                }`}
+              >
+                <option value="">Seleccionar veterinario</option>
+                <option value="Dr. María García">Dr. María García</option>
+                <option value="Dr. Carlos Rodríguez">Dr. Carlos Rodríguez</option>
+                <option value="Dr. Ana López">Dr. Ana López</option>
+                <option value="Dr. José Martínez">Dr. José Martínez</option>
+              </select>
+              {errors.veterinarian && <p className="text-red-500 text-xs mt-1">{errors.veterinarian}</p>}
+            </div>
+          </div>
+
+          {/* Programación */}
+          <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Fecha Programada *
+              </label>
+              <input
+                type="date"
+                value={formData.scheduledDate}
+                onChange={(e) => handleInputChange('scheduledDate', e.target.value)}
+                className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 ${
+                  errors.scheduledDate ? 'border-red-500' : 'border-gray-300'
+                }`}
+              />
+              {errors.scheduledDate && <p className="text-red-500 text-xs mt-1">{errors.scheduledDate}</p>}
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Hora Programada *
+              </label>
+              <input
+                type="time"
+                value={formData.scheduledTime}
+                onChange={(e) => handleInputChange('scheduledTime', e.target.value)}
+                className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 ${
+                  errors.scheduledTime ? 'border-red-500' : 'border-gray-300'
+                }`}
+              />
+              {errors.scheduledTime && <p className="text-red-500 text-xs mt-1">{errors.scheduledTime}</p>}
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Prioridad
+              </label>
+              <select
+                value={formData.priority}
+                onChange={(e) => handleInputChange('priority', e.target.value as Priority)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+              >
+                <option value={Priority.LOW}>Baja</option>
+                <option value={Priority.MEDIUM}>Media</option>
+                <option value={Priority.HIGH}>Alta</option>
+                <option value={Priority.URGENT}>Urgente</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Costo ($)
+              </label>
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                value={formData.cost}
+                onChange={(e) => handleInputChange('cost', parseFloat(e.target.value) || 0)}
+                className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 ${
+                  errors.cost ? 'border-red-500' : 'border-gray-300'
+                }`}
+                placeholder="0.00"
+              />
+              {errors.cost && <p className="text-red-500 text-xs mt-1">{errors.cost}</p>}
+            </div>
+          </div>
+
+          {/* Dosis */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Número de Dosis
+              </label>
+              <input
+                type="number"
+                min="1"
+                value={formData.doseNumber}
+                onChange={(e) => handleInputChange('doseNumber', parseInt(e.target.value) || 1)}
+                className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 ${
+                  errors.doseNumber ? 'border-red-500' : 'border-gray-300'
+                }`}
+                placeholder="1"
+              />
+              {errors.doseNumber && <p className="text-red-500 text-xs mt-1">{errors.doseNumber}</p>}
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Total de Dosis
+              </label>
+              <input
+                type="number"
+                min="1"
+                value={formData.totalDoses}
+                onChange={(e) => handleInputChange('totalDoses', parseInt(e.target.value) || 1)}
+                className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 ${
+                  errors.totalDoses ? 'border-red-500' : 'border-gray-300'
+                }`}
+                placeholder="1"
+              />
+              {errors.totalDoses && <p className="text-red-500 text-xs mt-1">{errors.totalDoses}</p>}
+            </div>
+          </div>
+
+          {/* Ubicación */}
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <label className="text-sm font-medium text-gray-700">
+                Ubicación
+              </label>
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={getCurrentLocation}
+                disabled={isGettingLocation}
+                className="px-3 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white rounded-lg text-sm flex items-center gap-2 transition-colors"
+              >
+                {isGettingLocation ? (
+                  <Loader size={14} className="animate-spin" />
+                ) : (
+                  <Navigation size={14} />
+                )}
+                {isGettingLocation ? 'Obteniendo...' : 'Mi Ubicación'}
+              </motion.button>
+            </div>
+            
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Dirección
+                </label>
+                <input
+                  type="text"
+                  value={formData.location.address}
+                  onChange={(e) => handleLocationChange('address', e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                  placeholder="Sector Norte, Rancho La Esperanza"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Latitud
+                </label>
+                <input
+                  type="number"
+                  step="any"
+                  value={formData.location.latitude}
+                  onChange={(e) => handleLocationChange('latitude', parseFloat(e.target.value) || 0)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                  placeholder="17.9889"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Longitud
+                </label>
+                <input
+                  type="number"
+                  step="any"
+                  value={formData.location.longitude}
+                  onChange={(e) => handleLocationChange('longitude', parseFloat(e.target.value) || 0)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                  placeholder="-92.9303"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Notas */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Notas Adicionales
+            </label>
+            <textarea
+              value={formData.notes}
+              onChange={(e) => handleInputChange('notes', e.target.value)}
+              rows={3}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+              placeholder="Observaciones, instrucciones especiales..."
+            />
+          </div>
+
+          {/* Botones de acción */}
+          <div className="flex flex-col sm:flex-row justify-end gap-3 pt-4 border-t border-gray-200">
+            <button
+              onClick={onClose}
+              className="px-6 py-2 text-gray-600 hover:text-gray-800 font-medium transition-colors order-2 sm:order-1"
+            >
+              Cancelar
+            </button>
+            <button
+              onClick={handleSubmit}
+              className="px-6 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-medium transition-colors flex items-center justify-center gap-2 order-1 sm:order-2"
+            >
+              <Save size={16} />
+              {editingSchedule ? 'Actualizar Programación' : 'Guardar Programación'}
+            </button>
+          </div>
+        </div>
+      </motion.div>
+    </motion.div>
+  );
+};
+
+// Modal de confirmación para eliminar
+const DeleteConfirmModal: React.FC<{
+  isOpen: boolean;
+  onClose: () => void;
+  onConfirm: () => void;
+  scheduleName: string;
+}> = ({ isOpen, onClose, onConfirm, scheduleName }) => {
+  if (!isOpen) return null;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50"
+      onClick={onClose}
+    >
+      <motion.div
+        initial={{ opacity: 0, scale: 0.9 }}
+        animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0, scale: 0.9 }}
+        className="bg-white rounded-xl max-w-md w-full p-6 shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center gap-3 mb-4">
+          <div className="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center">
+            <AlertTriangle className="w-5 h-5 text-red-600" />
+          </div>
+          <div>
+            <h3 className="text-lg font-semibold text-gray-900">Confirmar Eliminación</h3>
+            <p className="text-sm text-gray-500">Esta acción no se puede deshacer</p>
+          </div>
+        </div>
+
+        <p className="text-gray-700 mb-6">
+          ¿Estás seguro de que deseas eliminar la programación de vacuna para <strong>{scheduleName}</strong>?
+        </p>
+
+        <div className="flex gap-3 justify-end">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 text-gray-600 hover:text-gray-800 font-medium transition-colors"
+          >
+            Cancelar
+          </button>
+          <motion.button
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            onClick={() => {
+              onConfirm();
+              onClose();
+            }}
+            className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium transition-colors flex items-center gap-2"
+          >
+            <Trash2 size={16} />
+            Eliminar
+          </motion.button>
+        </div>
+      </motion.div>
+    </motion.div>
+  );
+};
+
 // Componente principal del programador de vacunas
 const VaccineScheduler: React.FC = () => {
-  // Estados del componente - Comentarios en español
   const [schedules, setSchedules] = useState<VaccinationSchedule[]>([]);
   const [protocols, setProtocols] = useState<VaccinationProtocol[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [currentDate, setCurrentDate] = useState(new Date());
-  const [viewMode, setViewMode] = useState<"calendar" | "list" | "protocols">(
-    "calendar"
-  );
+  const [viewMode, setViewMode] = useState<"calendar" | "list" | "protocols">("calendar");
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
-  const [statusFilter, setStatusFilter] = useState<ScheduleStatus | "all">(
-    "all"
-  );
+  const [statusFilter, setStatusFilter] = useState<ScheduleStatus | "all">("all");
   const [priorityFilter, setPriorityFilter] = useState<Priority | "all">("all");
-  const [showFilters, setShowFilters] = useState(false);
-  const [selectedSchedule, setSelectedSchedule] =
-    useState<VaccinationSchedule | null>(null);
+  const [selectedSchedule, setSelectedSchedule] = useState<VaccinationSchedule | null>(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
-  const [, setShowCreateModal] = useState(false);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [editingSchedule, setEditingSchedule] = useState<VaccinationSchedule | null>(null);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [scheduleToDelete, setScheduleToDelete] = useState<VaccinationSchedule | null>(null);
 
   // Carga de datos simulada
   useEffect(() => {
     const loadSchedulerData = async () => {
       setIsLoading(true);
 
-      // Datos de ejemplo para programaciones
       const mockSchedules: VaccinationSchedule[] = [
         {
           id: "sched-001",
@@ -211,7 +835,7 @@ const VaccineScheduler: React.FC = () => {
             costPerDose: 45.5,
             isGovernmentRequired: true,
           },
-          scheduledDate: "2025-07-15",
+          scheduledDate: "2025-07-25",
           scheduledTime: "09:00",
           status: ScheduleStatus.SCHEDULED,
           doseNumber: 1,
@@ -257,7 +881,7 @@ const VaccineScheduler: React.FC = () => {
             costPerDose: 65.0,
             isGovernmentRequired: true,
           },
-          scheduledDate: "2025-07-20",
+          scheduledDate: "2025-07-28",
           scheduledTime: "14:30",
           status: ScheduleStatus.SCHEDULED,
           doseNumber: 1,
@@ -302,7 +926,7 @@ const VaccineScheduler: React.FC = () => {
             costPerDose: 58.75,
             isGovernmentRequired: false,
           },
-          scheduledDate: "2025-07-10",
+          scheduledDate: "2025-07-20",
           scheduledTime: "11:00",
           status: ScheduleStatus.OVERDUE,
           doseNumber: 2,
@@ -325,13 +949,11 @@ const VaccineScheduler: React.FC = () => {
         },
       ];
 
-      // Datos de ejemplo para protocolos
       const mockProtocols: VaccinationProtocol[] = [
         {
           id: "prot-001",
           name: "Protocolo Terneros",
-          description:
-            "Protocolo estándar de vacunación para terneros de 0-12 meses",
+          description: "Protocolo estándar de vacunación para terneros de 0-12 meses",
           targetCategory: AnimalCategory.CALVES,
           vaccines: [
             {
@@ -388,42 +1010,128 @@ const VaccineScheduler: React.FC = () => {
     loadSchedulerData();
   }, []);
 
-  // Filtrado de programaciones
+  const handleSaveSchedule = (formData: ScheduleFormData) => {
+    if (editingSchedule) {
+      // Editar programación existente
+      const updatedSchedule: VaccinationSchedule = {
+        ...editingSchedule,
+        bovineId: formData.bovineId,
+        bovineName: formData.bovineName,
+        bovineTag: formData.bovineTag,
+        vaccineId: formData.vaccineId,
+        vaccineName: formData.vaccineName,
+        scheduledDate: formData.scheduledDate,
+        scheduledTime: formData.scheduledTime,
+        doseNumber: formData.doseNumber,
+        totalDoses: formData.totalDoses,
+        veterinarian: formData.veterinarian,
+        location: formData.location,
+        priority: formData.priority,
+        notes: formData.notes,
+        cost: formData.cost,
+        updatedAt: new Date().toISOString(),
+      };
+
+      setSchedules(schedules.map(s => s.id === editingSchedule.id ? updatedSchedule : s));
+      setEditingSchedule(null);
+    } else {
+      // Crear nueva programación
+      const newSchedule: VaccinationSchedule = {
+        id: `sched-${Date.now()}`,
+        bovineId: formData.bovineId,
+        bovineName: formData.bovineName,
+        bovineTag: formData.bovineTag,
+        vaccineId: formData.vaccineId,
+        vaccineName: formData.vaccineName,
+        vaccineType: {
+          id: formData.vaccineId,
+          name: formData.vaccineName,
+          manufacturer: "Zoetis",
+          category: VaccineCategory.VIRAL,
+          description: "Vacuna programada",
+          dosageInstructions: "Según protocolo",
+          storageRequirements: "2-8°C",
+          sideEffects: [],
+          contraindications: [],
+          withdrawalPeriod: 0,
+          boosterRequired: false,
+          boosterInterval: 0,
+          ageRestrictions: { minAge: 0 },
+          regulatoryApproval: "SENASICA-2025",
+          costPerDose: formData.cost,
+          isGovernmentRequired: false,
+        },
+        scheduledDate: formData.scheduledDate,
+        scheduledTime: formData.scheduledTime,
+        status: ScheduleStatus.SCHEDULED,
+        doseNumber: formData.doseNumber,
+        totalDoses: formData.totalDoses,
+        veterinarian: formData.veterinarian,
+        location: formData.location,
+        cost: formData.cost,
+        reminderSent: false,
+        certificateGenerated: false,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        createdBy: "admin",
+        priority: formData.priority,
+        notes: formData.notes,
+      };
+
+      setSchedules([newSchedule, ...schedules]);
+    }
+    
+    setShowCreateModal(false);
+  };
+
+  const handleEditSchedule = (schedule: VaccinationSchedule) => {
+    setEditingSchedule(schedule);
+    setShowCreateModal(true);
+    setShowDetailModal(false);
+  };
+
+  const handleDeleteSchedule = (schedule: VaccinationSchedule) => {
+    setScheduleToDelete(schedule);
+    setShowDeleteModal(true);
+  };
+
+  const confirmDeleteSchedule = () => {
+    if (scheduleToDelete) {
+      setSchedules(schedules.filter(s => s.id !== scheduleToDelete.id));
+      setScheduleToDelete(null);
+      setShowDetailModal(false);
+    }
+  };
+
+  const openCreateModal = () => {
+    setEditingSchedule(null);
+    setShowCreateModal(true);
+  };
+
   const filteredSchedules = useMemo(() => {
     let filtered = schedules;
 
     if (searchTerm) {
       filtered = filtered.filter(
         (schedule) =>
-          schedule.bovineName
-            .toLowerCase()
-            .includes(searchTerm.toLowerCase()) ||
+          schedule.bovineName.toLowerCase().includes(searchTerm.toLowerCase()) ||
           schedule.bovineTag.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          schedule.vaccineName
-            .toLowerCase()
-            .includes(searchTerm.toLowerCase()) ||
-          schedule.veterinarian
-            ?.toLowerCase()
-            .includes(searchTerm.toLowerCase())
+          schedule.vaccineName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          schedule.veterinarian?.toLowerCase().includes(searchTerm.toLowerCase())
       );
     }
 
     if (statusFilter !== "all") {
-      filtered = filtered.filter(
-        (schedule) => schedule.status === statusFilter
-      );
+      filtered = filtered.filter((schedule) => schedule.status === statusFilter);
     }
 
     if (priorityFilter !== "all") {
-      filtered = filtered.filter(
-        (schedule) => schedule.priority === priorityFilter
-      );
+      filtered = filtered.filter((schedule) => schedule.priority === priorityFilter);
     }
 
     return filtered;
   }, [schedules, searchTerm, statusFilter, priorityFilter]);
 
-  // Generación del calendario
   const calendarDays = useMemo(() => {
     const year = currentDate.getFullYear();
     const month = currentDate.getMonth();
@@ -440,8 +1148,7 @@ const VaccineScheduler: React.FC = () => {
 
       const daySchedules = filteredSchedules.filter(
         (schedule) =>
-          new Date(schedule.scheduledDate).toDateString() ===
-          date.toDateString()
+          new Date(schedule.scheduledDate).toDateString() === date.toDateString()
       );
 
       days.push({
@@ -450,33 +1157,20 @@ const VaccineScheduler: React.FC = () => {
         isToday: date.toDateString() === currentDateStr,
         isSelected: selectedDate?.toDateString() === date.toDateString(),
         schedules: daySchedules,
-        hasScheduled: daySchedules.some(
-          (s) => s.status === ScheduleStatus.SCHEDULED
-        ),
-        hasOverdue: daySchedules.some(
-          (s) => s.status === ScheduleStatus.OVERDUE
-        ),
-        hasCompleted: daySchedules.some(
-          (s) => s.status === ScheduleStatus.COMPLETED
-        ),
+        hasScheduled: daySchedules.some((s) => s.status === ScheduleStatus.SCHEDULED),
+        hasOverdue: daySchedules.some((s) => s.status === ScheduleStatus.OVERDUE),
+        hasCompleted: daySchedules.some((s) => s.status === ScheduleStatus.COMPLETED),
       });
     }
 
     return days;
   }, [currentDate, filteredSchedules, selectedDate]);
 
-  // Cálculo de estadísticas
   const getSchedulerStats = () => {
     const total = schedules.length;
-    const scheduled = schedules.filter(
-      (s) => s.status === ScheduleStatus.SCHEDULED
-    ).length;
-    const completed = schedules.filter(
-      (s) => s.status === ScheduleStatus.COMPLETED
-    ).length;
-    const overdue = schedules.filter(
-      (s) => s.status === ScheduleStatus.OVERDUE
-    ).length;
+    const scheduled = schedules.filter((s) => s.status === ScheduleStatus.SCHEDULED).length;
+    const completed = schedules.filter((s) => s.status === ScheduleStatus.COMPLETED).length;
+    const overdue = schedules.filter((s) => s.status === ScheduleStatus.OVERDUE).length;
     const thisWeek = schedules.filter((s) => {
       const scheduleDate = new Date(s.scheduledDate);
       const now = new Date();
@@ -490,7 +1184,6 @@ const VaccineScheduler: React.FC = () => {
 
   const stats = getSchedulerStats();
 
-  // Funciones de utilidad
   const getStatusColor = (status: ScheduleStatus) => {
     switch (status) {
       case ScheduleStatus.SCHEDULED:
@@ -555,7 +1248,6 @@ const VaccineScheduler: React.FC = () => {
     }
   };
 
-  // Navegación del calendario
   const navigateMonth = (direction: "prev" | "next") => {
     setCurrentDate((prev) => {
       const newDate = new Date(prev);
@@ -569,21 +1261,21 @@ const VaccineScheduler: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#519a7c] via-[#f2e9d8] to-[#f4ac3a] p-6">
+    <div className="min-h-screen bg-gradient-to-br from-[#519a7c] via-[#f2e9d8] to-[#f4ac3a] p-4 sm:p-6">
       <div className="max-w-7xl mx-auto">
-        {/* Header con título y controles */}
+        {/* Header */}
         <motion.div
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6 }}
-          className="mb-8"
+          className="mb-6 sm:mb-8"
         >
           <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
             <div>
-              <h1 className="text-4xl font-bold text-white mb-2 drop-shadow-lg">
+              <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-white mb-2 drop-shadow-lg">
                 Programador de Vacunas
               </h1>
-              <p className="text-white/90 text-lg">
+              <p className="text-white/90 text-sm sm:text-base lg:text-lg">
                 Gestión y planificación de calendarios de vacunación
               </p>
             </div>
@@ -592,257 +1284,177 @@ const VaccineScheduler: React.FC = () => {
               <motion.button
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
-                onClick={() => setShowCreateModal(true)}
-                className="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-3 rounded-xl flex items-center gap-2 shadow-lg transition-colors"
+                onClick={openCreateModal}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 sm:px-6 py-2 sm:py-3 rounded-xl flex items-center gap-2 shadow-lg transition-colors text-sm sm:text-base"
               >
-                <Plus size={20} />
+                <Plus size={18} className="sm:w-5 sm:h-5" />
                 Nueva Programación
-              </motion.button>
-
-              <motion.button
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                onClick={() => setShowFilters(!showFilters)}
-                className="bg-white/20 hover:bg-white/30 text-white px-6 py-3 rounded-xl flex items-center gap-2 backdrop-blur-sm transition-colors"
-              >
-                <Filter size={20} />
-                Filtros
-              </motion.button>
-
-              <motion.button
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                className="bg-orange-500 hover:bg-orange-600 text-white px-6 py-3 rounded-xl flex items-center gap-2 shadow-lg transition-colors"
-              >
-                <Download size={20} />
-                Exportar
               </motion.button>
             </div>
           </div>
         </motion.div>
 
-        {/* Tarjetas de estadísticas */}
+        {/* Estadísticas */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6, delay: 0.1 }}
-          className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-6 mb-8"
+          className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4 lg:gap-6 mb-6 sm:mb-8"
         >
-          <div className="bg-white/95 backdrop-blur-sm rounded-xl p-6 shadow-lg border border-white/20">
+          <div className="bg-white/95 backdrop-blur-sm rounded-xl p-3 sm:p-4 lg:p-6 shadow-lg border border-white/20">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-gray-600 text-sm font-medium">
-                  Total Programadas
-                </p>
-                <p className="text-3xl font-bold text-gray-900">
-                  {stats.total}
-                </p>
+                <p className="text-gray-600 text-xs sm:text-sm font-medium">Total Programadas</p>
+                <p className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900">{stats.total}</p>
               </div>
-              <div className="bg-blue-100 p-3 rounded-lg">
-                <Calendar className="w-6 h-6 text-blue-600" />
+              <div className="bg-blue-100 p-2 sm:p-3 rounded-lg">
+                <Calendar className="w-4 h-4 sm:w-5 sm:h-5 lg:w-6 lg:h-6 text-blue-600" />
               </div>
             </div>
           </div>
 
-          <div className="bg-white/95 backdrop-blur-sm rounded-xl p-6 shadow-lg border border-white/20">
+          <div className="bg-white/95 backdrop-blur-sm rounded-xl p-3 sm:p-4 lg:p-6 shadow-lg border border-white/20">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-gray-600 text-sm font-medium">Programadas</p>
-                <p className="text-3xl font-bold text-blue-600">
-                  {stats.scheduled}
-                </p>
+                <p className="text-gray-600 text-xs sm:text-sm font-medium">Programadas</p>
+                <p className="text-xl sm:text-2xl lg:text-3xl font-bold text-blue-600">{stats.scheduled}</p>
               </div>
-              <div className="bg-blue-100 p-3 rounded-lg">
-                <Clock className="w-6 h-6 text-blue-600" />
+              <div className="bg-blue-100 p-2 sm:p-3 rounded-lg">
+                <Clock className="w-4 h-4 sm:w-5 sm:h-5 lg:w-6 lg:h-6 text-blue-600" />
               </div>
             </div>
           </div>
 
-          <div className="bg-white/95 backdrop-blur-sm rounded-xl p-6 shadow-lg border border-white/20">
+          <div className="bg-white/95 backdrop-blur-sm rounded-xl p-3 sm:p-4 lg:p-6 shadow-lg border border-white/20">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-gray-600 text-sm font-medium">Completadas</p>
-                <p className="text-3xl font-bold text-green-600">
-                  {stats.completed}
-                </p>
+                <p className="text-gray-600 text-xs sm:text-sm font-medium">Completadas</p>
+                <p className="text-xl sm:text-2xl lg:text-3xl font-bold text-green-600">{stats.completed}</p>
               </div>
-              <div className="bg-green-100 p-3 rounded-lg">
-                <CheckCircle className="w-6 h-6 text-green-600" />
+              <div className="bg-green-100 p-2 sm:p-3 rounded-lg">
+                <CheckCircle className="w-4 h-4 sm:w-5 sm:h-5 lg:w-6 lg:h-6 text-green-600" />
               </div>
             </div>
           </div>
 
-          <div className="bg-white/95 backdrop-blur-sm rounded-xl p-6 shadow-lg border border-white/20">
+          <div className="bg-white/95 backdrop-blur-sm rounded-xl p-3 sm:p-4 lg:p-6 shadow-lg border border-white/20">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-gray-600 text-sm font-medium">Vencidas</p>
-                <p className="text-3xl font-bold text-red-600">
-                  {stats.overdue}
-                </p>
+                <p className="text-gray-600 text-xs sm:text-sm font-medium">Vencidas</p>
+                <p className="text-xl sm:text-2xl lg:text-3xl font-bold text-red-600">{stats.overdue}</p>
               </div>
-              <div className="bg-red-100 p-3 rounded-lg">
-                <AlertTriangle className="w-6 h-6 text-red-600" />
+              <div className="bg-red-100 p-2 sm:p-3 rounded-lg">
+                <AlertTriangle className="w-4 h-4 sm:w-5 sm:h-5 lg:w-6 lg:h-6 text-red-600" />
               </div>
             </div>
           </div>
 
-          <div className="bg-white/95 backdrop-blur-sm rounded-xl p-6 shadow-lg border border-white/20">
+          <div className="bg-white/95 backdrop-blur-sm rounded-xl p-3 sm:p-4 lg:p-6 shadow-lg border border-white/20">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-gray-600 text-sm font-medium">Esta Semana</p>
-                <p className="text-3xl font-bold text-purple-600">
-                  {stats.thisWeek}
-                </p>
+                <p className="text-gray-600 text-xs sm:text-sm font-medium">Esta Semana</p>
+                <p className="text-xl sm:text-2xl lg:text-3xl font-bold text-purple-600">{stats.thisWeek}</p>
               </div>
-              <div className="bg-purple-100 p-3 rounded-lg">
-                <Bell className="w-6 h-6 text-purple-600" />
+              <div className="bg-purple-100 p-2 sm:p-3 rounded-lg">
+                <Bell className="w-4 h-4 sm:w-5 sm:h-5 lg:w-6 lg:h-6 text-purple-600" />
               </div>
             </div>
           </div>
 
-          <div className="bg-white/95 backdrop-blur-sm rounded-xl p-6 shadow-lg border border-white/20">
+          <div className="bg-white/95 backdrop-blur-sm rounded-xl p-3 sm:p-4 lg:p-6 shadow-lg border border-white/20">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-gray-600 text-sm font-medium">Costo Total</p>
-                <p className="text-3xl font-bold text-emerald-600">
-                  ${stats.totalCost.toFixed(2)}
-                </p>
+                <p className="text-gray-600 text-xs sm:text-sm font-medium">Costo Total</p>
+                <p className="text-xl sm:text-2xl lg:text-3xl font-bold text-emerald-600">${stats.totalCost.toFixed(2)}</p>
               </div>
-              <div className="bg-emerald-100 p-3 rounded-lg">
-                <DollarSign className="w-6 h-6 text-emerald-600" />
+              <div className="bg-emerald-100 p-2 sm:p-3 rounded-lg">
+                <DollarSign className="w-4 h-4 sm:w-5 sm:h-5 lg:w-6 lg:h-6 text-emerald-600" />
               </div>
             </div>
           </div>
         </motion.div>
 
-        {/* Panel de filtros */}
-        <AnimatePresence>
-          {showFilters && (
-            <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: "auto" }}
-              exit={{ opacity: 0, height: 0 }}
-              className="bg-white/95 backdrop-blur-sm rounded-xl p-6 shadow-lg border border-white/20 mb-8"
-            >
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Buscar
-                  </label>
-                  <div className="relative">
-                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-                    <input
-                      type="text"
-                      placeholder="Animal, vacuna, veterinario..."
-                      value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
-                      className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Estado
-                  </label>
-                  <select
-                    value={statusFilter}
-                    onChange={(e) =>
-                      setStatusFilter(e.target.value as ScheduleStatus | "all")
-                    }
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-                  >
-                    <option value="all">Todos los estados</option>
-                    <option value={ScheduleStatus.SCHEDULED}>Programada</option>
-                    <option value={ScheduleStatus.COMPLETED}>Completada</option>
-                    <option value={ScheduleStatus.OVERDUE}>Vencida</option>
-                    <option value={ScheduleStatus.CANCELLED}>Cancelada</option>
-                    <option value={ScheduleStatus.RESCHEDULED}>
-                      Reprogramada
-                    </option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Prioridad
-                  </label>
-                  <select
-                    value={priorityFilter}
-                    onChange={(e) =>
-                      setPriorityFilter(e.target.value as Priority | "all")
-                    }
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-                  >
-                    <option value="all">Todas las prioridades</option>
-                    <option value={Priority.LOW}>Baja</option>
-                    <option value={Priority.MEDIUM}>Media</option>
-                    <option value={Priority.HIGH}>Alta</option>
-                    <option value={Priority.URGENT}>Urgente</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Vista
-                  </label>
-                  <select
-                    value={viewMode}
-                    onChange={(e) =>
-                      setViewMode(
-                        e.target.value as "calendar" | "list" | "protocols"
-                      )
-                    }
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-                  >
-                    <option value="calendar">Calendario</option>
-                    <option value="list">Lista</option>
-                    <option value="protocols">Protocolos</option>
-                  </select>
-                </div>
+        {/* Panel de filtros siempre visible */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, delay: 0.15 }}
+          className="bg-white/95 backdrop-blur-sm rounded-xl p-4 sm:p-6 shadow-lg border border-white/20 mb-6 sm:mb-8"
+        >
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Buscar</label>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                <input
+                  type="text"
+                  placeholder="Animal, vacuna, veterinario..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 text-sm"
+                />
               </div>
+            </div>
 
-              <div className="flex justify-end gap-3 mt-4 pt-4 border-t border-gray-200">
-                <motion.button
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                  onClick={() => {
-                    setSearchTerm("");
-                    setStatusFilter("all");
-                    setPriorityFilter("all");
-                  }}
-                  className="px-4 py-2 text-gray-600 hover:text-gray-800 font-medium transition-colors"
-                >
-                  Limpiar Filtros
-                </motion.button>
-                <motion.button
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                  onClick={() => setShowFilters(false)}
-                  className="px-6 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-medium transition-colors"
-                >
-                  Aplicar
-                </motion.button>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Estado</label>
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value as ScheduleStatus | "all")}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 text-sm"
+              >
+                <option value="all">Todos los estados</option>
+                <option value={ScheduleStatus.SCHEDULED}>Programada</option>
+                <option value={ScheduleStatus.COMPLETED}>Completada</option>
+                <option value={ScheduleStatus.OVERDUE}>Vencida</option>
+                <option value={ScheduleStatus.CANCELLED}>Cancelada</option>
+                <option value={ScheduleStatus.RESCHEDULED}>Reprogramada</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Prioridad</label>
+              <select
+                value={priorityFilter}
+                onChange={(e) => setPriorityFilter(e.target.value as Priority | "all")}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 text-sm"
+              >
+                <option value="all">Todas las prioridades</option>
+                <option value={Priority.LOW}>Baja</option>
+                <option value={Priority.MEDIUM}>Media</option>
+                <option value={Priority.HIGH}>Alta</option>
+                <option value={Priority.URGENT}>Urgente</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Vista</label>
+              <select
+                value={viewMode}
+                onChange={(e) => setViewMode(e.target.value as "calendar" | "list" | "protocols")}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 text-sm"
+              >
+                <option value="calendar">Calendario</option>
+                <option value="list">Lista</option>
+                <option value="protocols">Protocolos</option>
+              </select>
+            </div>
+          </div>
+        </motion.div>
 
         {/* Loading state */}
         {isLoading ? (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            className="bg-white/95 backdrop-blur-sm rounded-xl p-12 shadow-lg border border-white/20 text-center"
+            className="bg-white/95 backdrop-blur-sm rounded-xl p-8 sm:p-12 shadow-lg border border-white/20 text-center"
           >
             <motion.div
               animate={{ rotate: 360 }}
               transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-              className="w-12 h-12 border-4 border-emerald-200 border-t-emerald-600 rounded-full mx-auto mb-4"
+              className="w-8 h-8 sm:w-12 sm:h-12 border-4 border-emerald-200 border-t-emerald-600 rounded-full mx-auto mb-4"
             />
-            <p className="text-gray-600 text-lg">
-              Cargando programador de vacunas...
-            </p>
+            <p className="text-gray-600 text-base sm:text-lg">Cargando programador de vacunas...</p>
           </motion.div>
         ) : (
           <>
@@ -854,14 +1466,10 @@ const VaccineScheduler: React.FC = () => {
                 transition={{ duration: 0.6, delay: 0.2 }}
                 className="bg-white/95 backdrop-blur-sm rounded-xl shadow-lg border border-white/20 overflow-hidden"
               >
-                {/* Header del calendario */}
-                <div className="p-6 border-b border-gray-200">
+                <div className="p-4 sm:p-6 border-b border-gray-200">
                   <div className="flex items-center justify-between">
-                    <h2 className="text-2xl font-bold text-gray-900">
-                      {currentDate.toLocaleDateString("es-ES", {
-                        month: "long",
-                        year: "numeric",
-                      })}
+                    <h2 className="text-xl sm:text-2xl font-bold text-gray-900">
+                      {currentDate.toLocaleDateString("es-ES", { month: "long", year: "numeric" })}
                     </h2>
                     <div className="flex items-center gap-2">
                       <motion.button
@@ -876,7 +1484,7 @@ const VaccineScheduler: React.FC = () => {
                         whileHover={{ scale: 1.05 }}
                         whileTap={{ scale: 0.95 }}
                         onClick={() => setCurrentDate(new Date())}
-                        className="px-4 py-2 text-sm font-medium text-gray-700 hover:text-gray-900 transition-colors"
+                        className="px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium text-gray-700 hover:text-gray-900 transition-colors"
                       >
                         Hoy
                       </motion.button>
@@ -892,28 +1500,24 @@ const VaccineScheduler: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Días de la semana */}
                 <div className="grid grid-cols-7 border-b border-gray-200">
-                  {["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"].map(
-                    (day) => (
-                      <div
-                        key={day}
-                        className="p-4 text-center text-sm font-medium text-gray-500 bg-gray-50"
-                      >
-                        {day}
-                      </div>
-                    )
-                  )}
+                  {["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"].map((day) => (
+                    <div
+                      key={day}
+                      className="p-2 sm:p-4 text-center text-xs sm:text-sm font-medium text-gray-500 bg-gray-50"
+                    >
+                      {day}
+                    </div>
+                  ))}
                 </div>
 
-                {/* Calendario de días */}
                 <div className="grid grid-cols-7">
                   {calendarDays.map((day, index) => (
                     <motion.div
                       key={index}
                       whileHover={{ scale: 1.02 }}
                       onClick={() => setSelectedDate(day.date)}
-                      className={`p-2 h-24 border-r border-b border-gray-100 cursor-pointer transition-colors ${
+                      className={`p-1 sm:p-2 h-16 sm:h-20 lg:h-24 border-r border-b border-gray-100 cursor-pointer transition-colors ${
                         !day.isCurrentMonth
                           ? "bg-gray-50 text-gray-400"
                           : day.isToday
@@ -925,12 +1529,8 @@ const VaccineScheduler: React.FC = () => {
                     >
                       <div className="h-full flex flex-col">
                         <div
-                          className={`text-sm font-medium mb-1 ${
-                            day.isToday
-                              ? "text-blue-600"
-                              : day.isSelected
-                              ? "text-emerald-600"
-                              : ""
+                          className={`text-xs sm:text-sm font-medium mb-1 ${
+                            day.isToday ? "text-blue-600" : day.isSelected ? "text-emerald-600" : ""
                           }`}
                         >
                           {day.date.getDate()}
@@ -961,9 +1561,7 @@ const VaccineScheduler: React.FC = () => {
                           ))}
 
                           {day.schedules.length > 2 && (
-                            <div className="text-xs text-gray-500 px-1">
-                              +{day.schedules.length - 2} más
-                            </div>
+                            <div className="text-xs text-gray-500 px-1">+{day.schedules.length - 2} más</div>
                           )}
                         </div>
                       </div>
@@ -982,14 +1580,10 @@ const VaccineScheduler: React.FC = () => {
                 className="bg-white/95 backdrop-blur-sm rounded-xl shadow-lg border border-white/20 overflow-hidden"
               >
                 {filteredSchedules.length === 0 ? (
-                  <div className="p-12 text-center">
-                    <Syringe className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-                    <h3 className="text-xl font-semibold text-gray-600 mb-2">
-                      No se encontraron programaciones
-                    </h3>
-                    <p className="text-gray-500">
-                      Intenta ajustar los filtros o crear una nueva programación
-                    </p>
+                  <div className="p-8 sm:p-12 text-center">
+                    <Syringe className="w-12 h-12 sm:w-16 sm:h-16 text-gray-300 mx-auto mb-4" />
+                    <h3 className="text-lg sm:text-xl font-semibold text-gray-600 mb-2">No se encontraron programaciones</h3>
+                    <p className="text-gray-500 text-sm sm:text-base">Intenta ajustar los filtros o crear una nueva programación</p>
                   </div>
                 ) : (
                   <div className="divide-y divide-gray-200">
@@ -999,49 +1593,51 @@ const VaccineScheduler: React.FC = () => {
                         initial={{ opacity: 0, x: -20 }}
                         animate={{ opacity: 1, x: 0 }}
                         transition={{ duration: 0.3 }}
-                        className="p-6 hover:bg-gray-50 transition-colors cursor-pointer"
+                        className="p-4 sm:p-6 hover:bg-gray-50 transition-colors cursor-pointer"
                         onClick={() => {
                           setSelectedSchedule(schedule);
                           setShowDetailModal(true);
                         }}
                       >
                         <div className="flex items-center justify-between">
-                          <div className="flex items-start space-x-4">
-                            <div className="w-12 h-12 bg-emerald-100 rounded-lg flex items-center justify-center">
-                              <Syringe className="w-6 h-6 text-emerald-600" />
+                          <div className="flex items-start space-x-3 sm:space-x-4 flex-1">
+                            <div className="w-10 h-10 sm:w-12 sm:h-12 bg-emerald-100 rounded-lg flex items-center justify-center">
+                              <Syringe className="w-5 h-5 sm:w-6 sm:h-6 text-emerald-600" />
                             </div>
 
-                            <div className="flex-1">
-                              <div className="flex items-center gap-3 mb-2">
-                                <h3 className="text-lg font-semibold text-gray-900">
+                            <div className="flex-1 min-w-0">
+                              <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 mb-2">
+                                <h3 className="text-base sm:text-lg font-semibold text-gray-900 truncate">
                                   {schedule.bovineName} ({schedule.bovineTag})
                                 </h3>
-                                <span
-                                  className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(
-                                    schedule.status
-                                  )}`}
-                                >
-                                  {getStatusText(schedule.status)}
-                                </span>
-                                <span
-                                  className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getPriorityColor(
-                                    schedule.priority
-                                  )}`}
-                                >
-                                  {getPriorityText(schedule.priority)}
-                                </span>
+                                <div className="flex flex-wrap gap-2">
+                                  <span
+                                    className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(
+                                      schedule.status
+                                    )}`}
+                                  >
+                                    {getStatusText(schedule.status)}
+                                  </span>
+                                  <span
+                                    className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getPriorityColor(
+                                      schedule.priority
+                                    )}`}
+                                  >
+                                    {getPriorityText(schedule.priority)}
+                                  </span>
+                                </div>
                               </div>
 
-                              <p className="text-gray-700 font-medium mb-1">
+                              <p className="text-gray-700 font-medium mb-2 text-sm sm:text-base">
                                 {schedule.vaccineName}
                               </p>
 
-                              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm text-gray-600">
+                              <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4 text-xs sm:text-sm text-gray-600">
                                 <div className="flex items-center gap-1">
                                   <Calendar size={14} />
-                                  {new Date(
-                                    schedule.scheduledDate
-                                  ).toLocaleDateString()}
+                                  <span className="truncate">
+                                    {new Date(schedule.scheduledDate).toLocaleDateString()}
+                                  </span>
                                 </div>
                                 <div className="flex items-center gap-1">
                                   <Clock size={14} />
@@ -1049,23 +1645,25 @@ const VaccineScheduler: React.FC = () => {
                                 </div>
                                 <div className="flex items-center gap-1">
                                   <User size={14} />
-                                  {schedule.veterinarian || "Sin asignar"}
+                                  <span className="truncate">
+                                    {schedule.veterinarian || "Sin asignar"}
+                                  </span>
                                 </div>
                                 <div className="flex items-center gap-1">
-                                  <DollarSign size={14} />$
-                                  {schedule.cost.toFixed(2)}
+                                  <DollarSign size={14} />
+                                  ${schedule.cost.toFixed(2)}
                                 </div>
                               </div>
 
                               {schedule.notes && (
-                                <p className="text-sm text-gray-500 mt-2 italic">
+                                <p className="text-xs sm:text-sm text-gray-500 mt-2 italic truncate">
                                   {schedule.notes}
                                 </p>
                               )}
                             </div>
                           </div>
 
-                          <div className="flex items-center space-x-2">
+                          <div className="flex items-center space-x-1 sm:space-x-2 ml-2">
                             <motion.button
                               whileHover={{ scale: 1.1 }}
                               whileTap={{ scale: 0.9 }}
@@ -1074,26 +1672,34 @@ const VaccineScheduler: React.FC = () => {
                                 setSelectedSchedule(schedule);
                                 setShowDetailModal(true);
                               }}
-                              className="text-emerald-600 hover:text-emerald-900 p-2 rounded-lg hover:bg-emerald-50"
+                              className="text-emerald-600 hover:text-emerald-900 p-1.5 sm:p-2 rounded-lg hover:bg-emerald-50"
                               title="Ver detalles"
                             >
-                              <Eye size={16} />
+                              <Eye size={14} className="sm:w-4 sm:h-4" />
                             </motion.button>
                             <motion.button
                               whileHover={{ scale: 1.1 }}
                               whileTap={{ scale: 0.9 }}
-                              className="text-blue-600 hover:text-blue-900 p-2 rounded-lg hover:bg-blue-50"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleEditSchedule(schedule);
+                              }}
+                              className="text-blue-600 hover:text-blue-900 p-1.5 sm:p-2 rounded-lg hover:bg-blue-50"
                               title="Editar"
                             >
-                              <Edit3 size={16} />
+                              <Edit3 size={14} className="sm:w-4 sm:h-4" />
                             </motion.button>
                             <motion.button
                               whileHover={{ scale: 1.1 }}
                               whileTap={{ scale: 0.9 }}
-                              className="text-red-600 hover:text-red-900 p-2 rounded-lg hover:bg-red-50"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDeleteSchedule(schedule);
+                              }}
+                              className="text-red-600 hover:text-red-900 p-1.5 sm:p-2 rounded-lg hover:bg-red-50"
                               title="Eliminar"
                             >
-                              <Trash2 size={16} />
+                              <Trash2 size={14} className="sm:w-4 sm:h-4" />
                             </motion.button>
                           </div>
                         </div>
@@ -1110,7 +1716,7 @@ const VaccineScheduler: React.FC = () => {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.6, delay: 0.2 }}
-                className="grid grid-cols-1 lg:grid-cols-2 gap-6"
+                className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6"
               >
                 {protocols.map((protocol) => (
                   <motion.div
@@ -1118,25 +1724,23 @@ const VaccineScheduler: React.FC = () => {
                     initial={{ opacity: 0, scale: 0.95 }}
                     animate={{ opacity: 1, scale: 1 }}
                     transition={{ duration: 0.3 }}
-                    className="bg-white/95 backdrop-blur-sm rounded-xl p-6 shadow-lg border border-white/20"
+                    className="bg-white/95 backdrop-blur-sm rounded-xl p-4 sm:p-6 shadow-lg border border-white/20"
                   >
                     <div className="flex items-center justify-between mb-4">
                       <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-                          <FileText className="w-5 h-5 text-blue-600" />
+                        <div className="w-8 h-8 sm:w-10 sm:h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                          <FileText className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600" />
                         </div>
                         <div>
-                          <h3 className="font-semibold text-gray-900">
+                          <h3 className="font-semibold text-gray-900 text-sm sm:text-base">
                             {protocol.name}
                           </h3>
-                          <p className="text-sm text-gray-500 capitalize">
+                          <p className="text-xs sm:text-sm text-gray-500 capitalize">
                             {protocol.targetCategory === AnimalCategory.CALVES
                               ? "Terneros"
-                              : protocol.targetCategory ===
-                                AnimalCategory.ADULTS
+                              : protocol.targetCategory === AnimalCategory.ADULTS
                               ? "Adultos"
-                              : protocol.targetCategory ===
-                                AnimalCategory.BREEDING
+                              : protocol.targetCategory === AnimalCategory.BREEDING
                               ? "Reproductoras"
                               : "Todos"}
                           </p>
@@ -1146,26 +1750,22 @@ const VaccineScheduler: React.FC = () => {
                       {protocol.isGovernmentRequired && (
                         <div className="px-2 py-1 bg-red-50 text-red-700 rounded-full text-xs flex items-center gap-1">
                           <Shield className="w-3 h-3" />
-                          Obligatorio
+                          <span className="hidden sm:inline">Obligatorio</span>
                         </div>
                       )}
                     </div>
 
-                    <p className="text-gray-600 text-sm mb-4">
+                    <p className="text-gray-600 text-xs sm:text-sm mb-4">
                       {protocol.description}
                     </p>
 
-                    <div className="space-y-3 mb-4">
-                      <div className="text-sm">
-                        <span className="text-gray-500">
-                          Vacunas incluidas:
-                        </span>
-                        <span className="ml-2 font-medium">
-                          {protocol.vaccines.length}
-                        </span>
+                    <div className="space-y-2 sm:space-y-3 mb-4">
+                      <div className="text-xs sm:text-sm">
+                        <span className="text-gray-500">Vacunas incluidas:</span>
+                        <span className="ml-2 font-medium">{protocol.vaccines.length}</span>
                       </div>
 
-                      <div className="text-sm">
+                      <div className="text-xs sm:text-sm">
                         <span className="text-gray-500">Frecuencia:</span>
                         <span className="ml-2 font-medium capitalize">
                           {protocol.frequency === Frequency.ANNUAL
@@ -1177,18 +1777,17 @@ const VaccineScheduler: React.FC = () => {
                       </div>
 
                       {protocol.seasonality && (
-                        <div className="text-sm">
+                        <div className="text-xs sm:text-sm">
                           <span className="text-gray-500">Temporada:</span>
                           <span className="ml-2 font-medium">
-                            Mes {protocol.seasonality.startMonth} -{" "}
-                            {protocol.seasonality.endMonth}
+                            Mes {protocol.seasonality.startMonth} - {protocol.seasonality.endMonth}
                           </span>
                         </div>
                       )}
                     </div>
 
                     <div className="space-y-2 mb-4">
-                      <h4 className="text-sm font-medium text-gray-700">
+                      <h4 className="text-xs sm:text-sm font-medium text-gray-700">
                         Secuencia de Vacunas:
                       </h4>
                       {protocol.vaccines.map((vaccine) => (
@@ -1196,19 +1795,19 @@ const VaccineScheduler: React.FC = () => {
                           key={vaccine.vaccineId}
                           className="flex items-center justify-between py-2 px-3 bg-gray-50 rounded-lg"
                         >
-                          <div>
-                            <p className="text-sm font-medium text-gray-900">
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs sm:text-sm font-medium text-gray-900 truncate">
                               {vaccine.sequence}. {vaccine.vaccineName}
                             </p>
                             <p className="text-xs text-gray-500">
                               A los {vaccine.ageInMonths} meses
-                              {vaccine.intervalDays &&
-                                `, cada ${vaccine.intervalDays} días`}
+                              {vaccine.intervalDays && `, cada ${vaccine.intervalDays} días`}
                             </p>
                           </div>
                           {!vaccine.isOptional && (
-                            <div className="px-2 py-1 bg-orange-100 text-orange-700 rounded text-xs">
-                              Requerida
+                            <div className="px-2 py-1 bg-orange-100 text-orange-700 rounded text-xs ml-2">
+                              <span className="hidden sm:inline">Requerida</span>
+                              <span className="sm:hidden">Req.</span>
                             </div>
                           )}
                         </div>
@@ -1216,7 +1815,7 @@ const VaccineScheduler: React.FC = () => {
                     </div>
 
                     <div className="flex items-center justify-between pt-4 border-t border-gray-200">
-                      <div className="text-xs text-gray-500">
+                      <div className="text-xs text-gray-500 truncate">
                         Por: {protocol.createdBy}
                       </div>
                       <div className="flex gap-2">
@@ -1226,7 +1825,7 @@ const VaccineScheduler: React.FC = () => {
                           className="text-emerald-600 hover:text-emerald-900 p-1 rounded"
                           title="Aplicar protocolo"
                         >
-                          <Target size={16} />
+                          <Target size={14} className="sm:w-4 sm:h-4" />
                         </motion.button>
                         <motion.button
                           whileHover={{ scale: 1.05 }}
@@ -1234,7 +1833,7 @@ const VaccineScheduler: React.FC = () => {
                           className="text-blue-600 hover:text-blue-900 p-1 rounded"
                           title="Editar protocolo"
                         >
-                          <Edit3 size={16} />
+                          <Edit3 size={14} className="sm:w-4 sm:h-4" />
                         </motion.button>
                       </div>
                     </div>
@@ -1244,6 +1843,33 @@ const VaccineScheduler: React.FC = () => {
             )}
           </>
         )}
+
+        {/* Modal del formulario de programación (crear/editar) */}
+        <AnimatePresence>
+          {showCreateModal && (
+            <ScheduleForm
+              isOpen={showCreateModal}
+              onClose={() => {
+                setShowCreateModal(false);
+                setEditingSchedule(null);
+              }}
+              onSave={handleSaveSchedule}
+              editingSchedule={editingSchedule}
+            />
+          )}
+        </AnimatePresence>
+
+        {/* Modal de confirmación de eliminación */}
+        <AnimatePresence>
+          {showDeleteModal && scheduleToDelete && (
+            <DeleteConfirmModal
+              isOpen={showDeleteModal}
+              onClose={() => setShowDeleteModal(false)}
+              onConfirm={confirmDeleteSchedule}
+              scheduleName={`${scheduleToDelete.bovineName} - ${scheduleToDelete.vaccineName}`}
+            />
+          )}
+        </AnimatePresence>
 
         {/* Modal de detalles */}
         <AnimatePresence>
@@ -1263,9 +1889,9 @@ const VaccineScheduler: React.FC = () => {
                 className="bg-white rounded-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto shadow-2xl"
                 onClick={(e) => e.stopPropagation()}
               >
-                <div className="p-6 border-b border-gray-200">
+                <div className="p-4 sm:p-6 border-b border-gray-200">
                   <div className="flex items-center justify-between">
-                    <h3 className="text-2xl font-bold text-gray-900">
+                    <h3 className="text-xl sm:text-2xl font-bold text-gray-900">
                       Detalles de Programación
                     </h3>
                     <button
@@ -1277,7 +1903,7 @@ const VaccineScheduler: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="p-6 space-y-6">
+                <div className="p-4 sm:p-6 space-y-6">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="bg-gray-50 rounded-lg p-4">
                       <h4 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
@@ -1286,16 +1912,13 @@ const VaccineScheduler: React.FC = () => {
                       </h4>
                       <div className="space-y-2">
                         <p>
-                          <span className="font-medium">Nombre:</span>{" "}
-                          {selectedSchedule.bovineName}
+                          <span className="font-medium">Nombre:</span> {selectedSchedule.bovineName}
                         </p>
                         <p>
-                          <span className="font-medium">Etiqueta:</span>{" "}
-                          {selectedSchedule.bovineTag}
+                          <span className="font-medium">Etiqueta:</span> {selectedSchedule.bovineTag}
                         </p>
                         <p>
-                          <span className="font-medium">ID:</span>{" "}
-                          {selectedSchedule.bovineId}
+                          <span className="font-medium">ID:</span> {selectedSchedule.bovineId}
                         </p>
                       </div>
                     </div>
@@ -1307,8 +1930,7 @@ const VaccineScheduler: React.FC = () => {
                       </h4>
                       <div className="space-y-2">
                         <p>
-                          <span className="font-medium">Vacuna:</span>{" "}
-                          {selectedSchedule.vaccineName}
+                          <span className="font-medium">Vacuna:</span> {selectedSchedule.vaccineName}
                         </p>
                         <p>
                           <span className="font-medium">Fabricante:</span>{" "}
@@ -1319,13 +1941,11 @@ const VaccineScheduler: React.FC = () => {
                           {selectedSchedule.vaccineType.category}
                         </p>
                         <p>
-                          <span className="font-medium">Dosis:</span>{" "}
-                          {selectedSchedule.doseNumber} de{" "}
+                          <span className="font-medium">Dosis:</span> {selectedSchedule.doseNumber} de{" "}
                           {selectedSchedule.totalDoses}
                         </p>
                         <p>
-                          <span className="font-medium">Costo:</span> $
-                          {selectedSchedule.cost.toFixed(2)}
+                          <span className="font-medium">Costo:</span> ${selectedSchedule.cost.toFixed(2)}
                         </p>
                       </div>
                     </div>
@@ -1338,28 +1958,21 @@ const VaccineScheduler: React.FC = () => {
                       <div className="space-y-2">
                         <p>
                           <span className="font-medium">Fecha programada:</span>{" "}
-                          {new Date(
-                            selectedSchedule.scheduledDate
-                          ).toLocaleDateString()}
+                          {new Date(selectedSchedule.scheduledDate).toLocaleDateString()}
                         </p>
                         <p>
-                          <span className="font-medium">Hora:</span>{" "}
-                          {selectedSchedule.scheduledTime}
+                          <span className="font-medium">Hora:</span> {selectedSchedule.scheduledTime}
                         </p>
                         {selectedSchedule.nextDueDate && (
                           <p>
                             <span className="font-medium">Próxima dosis:</span>{" "}
-                            {new Date(
-                              selectedSchedule.nextDueDate
-                            ).toLocaleDateString()}
+                            {new Date(selectedSchedule.nextDueDate).toLocaleDateString()}
                           </p>
                         )}
                         {selectedSchedule.completedDate && (
                           <p>
                             <span className="font-medium">Completada:</span>{" "}
-                            {new Date(
-                              selectedSchedule.completedDate
-                            ).toLocaleDateString()}
+                            {new Date(selectedSchedule.completedDate).toLocaleDateString()}
                           </p>
                         )}
                       </div>
@@ -1373,17 +1986,14 @@ const VaccineScheduler: React.FC = () => {
                       <div className="space-y-2">
                         {selectedSchedule.veterinarian && (
                           <p>
-                            <span className="font-medium">Veterinario:</span>{" "}
-                            {selectedSchedule.veterinarian}
+                            <span className="font-medium">Veterinario:</span> {selectedSchedule.veterinarian}
                           </p>
                         )}
                         <p>
-                          <span className="font-medium">Ubicación:</span>{" "}
-                          {selectedSchedule.location.address}
+                          <span className="font-medium">Ubicación:</span> {selectedSchedule.location.address}
                         </p>
                         <p>
-                          <span className="font-medium">Creado por:</span>{" "}
-                          {selectedSchedule.createdBy}
+                          <span className="font-medium">Creado por:</span> {selectedSchedule.createdBy}
                         </p>
                       </div>
                     </div>
@@ -1417,9 +2027,7 @@ const VaccineScheduler: React.FC = () => {
                           </span>
                         </div>
                         <div className="flex items-center gap-2">
-                          <span className="font-medium">
-                            Recordatorio enviado:
-                          </span>
+                          <span className="font-medium">Recordatorio enviado:</span>
                           <span
                             className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
                               selectedSchedule.reminderSent
@@ -1448,9 +2056,7 @@ const VaccineScheduler: React.FC = () => {
                           {selectedSchedule.vaccineType.dosageInstructions}
                         </p>
                         <p>
-                          <span className="font-medium">
-                            Período de retiro:
-                          </span>{" "}
+                          <span className="font-medium">Período de retiro:</span>{" "}
                           {selectedSchedule.vaccineType.withdrawalPeriod} días
                         </p>
                         {selectedSchedule.vaccineType.isGovernmentRequired && (
@@ -1473,19 +2079,29 @@ const VaccineScheduler: React.FC = () => {
                   )}
                 </div>
 
-                <div className="p-6 border-t border-gray-200 flex justify-end gap-3">
+                <div className="p-4 sm:p-6 border-t border-gray-200 flex flex-col sm:flex-row justify-end gap-3">
                   <motion.button
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
                     onClick={() => setShowDetailModal(false)}
-                    className="px-6 py-2 text-gray-600 hover:text-gray-800 font-medium transition-colors"
+                    className="px-6 py-2 text-gray-600 hover:text-gray-800 font-medium transition-colors order-3 sm:order-1"
                   >
                     Cerrar
                   </motion.button>
                   <motion.button
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
-                    className="px-6 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-medium transition-colors flex items-center gap-2"
+                    onClick={() => handleDeleteSchedule(selectedSchedule)}
+                    className="px-6 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium transition-colors flex items-center justify-center gap-2 order-2 sm:order-2"
+                  >
+                    <Trash2 size={16} />
+                    Eliminar
+                  </motion.button>
+                  <motion.button
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={() => handleEditSchedule(selectedSchedule)}
+                    className="px-6 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-medium transition-colors flex items-center justify-center gap-2 order-1 sm:order-3"
                   >
                     <Edit3 size={16} />
                     Editar

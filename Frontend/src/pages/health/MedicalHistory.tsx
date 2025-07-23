@@ -13,12 +13,12 @@ import {
   Pill,
   Activity,
   Eye,
-  Edit,
   User,
   Tag,
   TrendingUp,
   History,
-  Download,
+  X,
+  Save,
 } from "lucide-react";
 
 // Interfaces para tipos de datos
@@ -88,6 +88,29 @@ interface HealthStats {
   lastEventDate: Date;
 }
 
+interface NewEventForm {
+  animalId: string;
+  eventType: string;
+  title: string;
+  description: string;
+  date: string;
+  veterinarian: string;
+  severity?: string;
+  status: string;
+  medications: string;
+  diagnosis: string;
+  treatment: string;
+  followUpDate: string;
+  cost: number;
+  notes: string;
+  vitalSigns: {
+    temperature: number;
+    heartRate: number;
+    respiratoryRate: number;
+    weight: number;
+  };
+}
+
 // Componentes reutilizables
 const Card: React.FC<{ children: React.ReactNode; className?: string }> = ({
   children,
@@ -100,8 +123,13 @@ const Card: React.FC<{ children: React.ReactNode; className?: string }> = ({
   </div>
 );
 
-const CardHeader: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-  <div className="px-6 py-4 border-b border-gray-200">{children}</div>
+const CardHeader: React.FC<{ children: React.ReactNode; className?: string }> = ({ 
+  children, 
+  className = "" 
+}) => (
+  <div className={`px-4 sm:px-6 py-4 border-b border-gray-200 ${className}`}>
+    {children}
+  </div>
 );
 
 const CardTitle: React.FC<{
@@ -113,15 +141,20 @@ const CardTitle: React.FC<{
   </h3>
 );
 
-const CardDescription: React.FC<{ children: React.ReactNode }> = ({
+const CardDescription: React.FC<{ children: React.ReactNode; className?: string }> = ({
   children,
-}) => <p className="text-sm text-gray-600 mt-1">{children}</p>;
+  className = "",
+}) => (
+  <p className={`text-sm text-gray-600 mt-1 ${className}`}>
+    {children}
+  </p>
+);
 
 const CardContent: React.FC<{
   children: React.ReactNode;
   className?: string;
 }> = ({ children, className = "" }) => (
-  <div className={`px-6 py-4 ${className}`}>{children}</div>
+  <div className={`px-4 sm:px-6 py-4 ${className}`}>{children}</div>
 );
 
 const Button: React.FC<{
@@ -130,15 +163,19 @@ const Button: React.FC<{
   variant?: "default" | "outline" | "success" | "danger";
   size?: "sm" | "default";
   className?: string;
+  type?: "button" | "submit";
+  disabled?: boolean;
 }> = ({
   children,
   onClick,
   variant = "default",
   size = "default",
   className = "",
+  type = "button",
+  disabled = false,
 }) => {
   const baseClasses =
-    "inline-flex items-center justify-center font-medium rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2";
+    "inline-flex items-center justify-center font-medium rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed";
   const variantClasses = {
     default: "bg-blue-600 text-white hover:bg-blue-700 focus:ring-blue-500",
     outline:
@@ -153,6 +190,8 @@ const Button: React.FC<{
 
   return (
     <button
+      type={type}
+      disabled={disabled}
       className={`${baseClasses} ${variantClasses[variant]} ${sizeClasses[size]} ${className}`}
       onClick={onClick}
     >
@@ -216,6 +255,436 @@ const Badge: React.FC<{
   );
 };
 
+// Modal para crear nuevo evento
+const NewEventModal: React.FC<{
+  isOpen: boolean;
+  onClose: () => void;
+  onSave: (event: NewEventForm) => void;
+  animals: AnimalProfile[];
+}> = ({ isOpen, onClose, onSave, animals }) => {
+  const [formData, setFormData] = useState<NewEventForm>({
+    animalId: "",
+    eventType: "vaccination",
+    title: "",
+    description: "",
+    date: new Date().toISOString().split("T")[0],
+    veterinarian: "",
+    severity: "low",
+    status: "active",
+    medications: "",
+    diagnosis: "",
+    treatment: "",
+    followUpDate: "",
+    cost: 0,
+    notes: "",
+    vitalSigns: {
+      temperature: 0,
+      heartRate: 0,
+      respiratoryRate: 0,
+      weight: 0,
+    },
+  });
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    onSave(formData);
+    onClose();
+    // Resetear formulario
+    setFormData({
+      animalId: "",
+      eventType: "vaccination",
+      title: "",
+      description: "",
+      date: new Date().toISOString().split("T")[0],
+      veterinarian: "",
+      severity: "low",
+      status: "active",
+      medications: "",
+      diagnosis: "",
+      treatment: "",
+      followUpDate: "",
+      cost: 0,
+      notes: "",
+      vitalSigns: {
+        temperature: 0,
+        heartRate: 0,
+        respiratoryRate: 0,
+        weight: 0,
+      },
+    });
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0, scale: 0.95 }}
+        className="bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-screen overflow-y-auto"
+      >
+        <div className="sticky top-0 bg-white px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+          <h2 className="text-xl font-semibold text-gray-900">
+            Nuevo Evento Médico
+          </h2>
+          <button
+            onClick={onClose}
+            className="text-gray-400 hover:text-gray-600"
+          >
+            <X className="w-6 h-6" />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="p-6 space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Animal */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Animal *
+              </label>
+              <select
+                required
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                value={formData.animalId}
+                onChange={(e) =>
+                  setFormData({ ...formData, animalId: e.target.value })
+                }
+              >
+                <option value="">Seleccionar animal</option>
+                {animals.map((animal) => (
+                  <option key={animal.id} value={animal.id}>
+                    {animal.name} ({animal.tag})
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Tipo de evento */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Tipo de Evento *
+              </label>
+              <select
+                required
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                value={formData.eventType}
+                onChange={(e) =>
+                  setFormData({ ...formData, eventType: e.target.value })
+                }
+              >
+                <option value="vaccination">Vacunación</option>
+                <option value="illness">Enfermedad</option>
+                <option value="treatment">Tratamiento</option>
+                <option value="checkup">Chequeo</option>
+                <option value="surgery">Cirugía</option>
+                <option value="medication">Medicamento</option>
+                <option value="exam">Examen</option>
+                <option value="observation">Observación</option>
+              </select>
+            </div>
+
+            {/* Título */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Título *
+              </label>
+              <input
+                type="text"
+                required
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                value={formData.title}
+                onChange={(e) =>
+                  setFormData({ ...formData, title: e.target.value })
+                }
+              />
+            </div>
+
+            {/* Veterinario */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Veterinario *
+              </label>
+              <input
+                type="text"
+                required
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                value={formData.veterinarian}
+                onChange={(e) =>
+                  setFormData({ ...formData, veterinarian: e.target.value })
+                }
+              />
+            </div>
+
+            {/* Fecha */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Fecha *
+              </label>
+              <input
+                type="date"
+                required
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                value={formData.date}
+                onChange={(e) =>
+                  setFormData({ ...formData, date: e.target.value })
+                }
+              />
+            </div>
+
+            {/* Status */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Estado
+              </label>
+              <select
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                value={formData.status}
+                onChange={(e) =>
+                  setFormData({ ...formData, status: e.target.value })
+                }
+              >
+                <option value="active">Activo</option>
+                <option value="completed">Completado</option>
+                <option value="ongoing">En progreso</option>
+                <option value="cancelled">Cancelado</option>
+              </select>
+            </div>
+
+            {/* Severidad */}
+            {["illness", "surgery"].includes(formData.eventType) && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Severidad
+                </label>
+                <select
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  value={formData.severity}
+                  onChange={(e) =>
+                    setFormData({ ...formData, severity: e.target.value })
+                  }
+                >
+                  <option value="low">Baja</option>
+                  <option value="medium">Media</option>
+                  <option value="high">Alta</option>
+                  <option value="critical">Crítica</option>
+                </select>
+              </div>
+            )}
+
+            {/* Costo */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Costo ($)
+              </label>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                value={formData.cost}
+                onChange={(e) =>
+                  setFormData({ ...formData, cost: parseFloat(e.target.value) || 0 })
+                }
+              />
+            </div>
+          </div>
+
+          {/* Descripción */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Descripción *
+            </label>
+            <textarea
+              required
+              rows={3}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              value={formData.description}
+              onChange={(e) =>
+                setFormData({ ...formData, description: e.target.value })
+              }
+            />
+          </div>
+
+          {/* Signos vitales */}
+          <div>
+            <h3 className="text-lg font-medium text-gray-900 mb-3">
+              Signos Vitales
+            </h3>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Temperatura (°C)
+                </label>
+                <input
+                  type="number"
+                  step="0.1"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  value={formData.vitalSigns.temperature}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      vitalSigns: {
+                        ...formData.vitalSigns,
+                        temperature: parseFloat(e.target.value) || 0,
+                      },
+                    })
+                  }
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Pulso (bpm)
+                </label>
+                <input
+                  type="number"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  value={formData.vitalSigns.heartRate}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      vitalSigns: {
+                        ...formData.vitalSigns,
+                        heartRate: parseInt(e.target.value) || 0,
+                      },
+                    })
+                  }
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Respiración (rpm)
+                </label>
+                <input
+                  type="number"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  value={formData.vitalSigns.respiratoryRate}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      vitalSigns: {
+                        ...formData.vitalSigns,
+                        respiratoryRate: parseInt(e.target.value) || 0,
+                      },
+                    })
+                  }
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Peso (kg)
+                </label>
+                <input
+                  type="number"
+                  step="0.1"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  value={formData.vitalSigns.weight}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      vitalSigns: {
+                        ...formData.vitalSigns,
+                        weight: parseFloat(e.target.value) || 0,
+                      },
+                    })
+                  }
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Medicamentos */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Medicamentos (separados por comas)
+            </label>
+            <input
+              type="text"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              value={formData.medications}
+              onChange={(e) =>
+                setFormData({ ...formData, medications: e.target.value })
+              }
+              placeholder="Ej: Antibiótico, Antiinflamatorio"
+            />
+          </div>
+
+          {/* Diagnóstico */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Diagnóstico
+            </label>
+            <textarea
+              rows={3}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              value={formData.diagnosis}
+              onChange={(e) =>
+                setFormData({ ...formData, diagnosis: e.target.value })
+              }
+            />
+          </div>
+
+          {/* Tratamiento */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Tratamiento
+            </label>
+            <textarea
+              rows={3}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              value={formData.treatment}
+              onChange={(e) =>
+                setFormData({ ...formData, treatment: e.target.value })
+              }
+            />
+          </div>
+
+          {/* Notas */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Notas Adicionales
+            </label>
+            <textarea
+              rows={3}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              value={formData.notes}
+              onChange={(e) =>
+                setFormData({ ...formData, notes: e.target.value })
+              }
+            />
+          </div>
+
+          {/* Fecha de seguimiento */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Fecha de Seguimiento
+            </label>
+            <input
+              type="date"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              value={formData.followUpDate}
+              onChange={(e) =>
+                setFormData({ ...formData, followUpDate: e.target.value })
+              }
+            />
+          </div>
+
+          {/* Botones */}
+          <div className="flex items-center justify-end gap-3 pt-6 border-t border-gray-200">
+            <Button variant="outline" onClick={onClose}>
+              Cancelar
+            </Button>
+            <Button type="submit">
+              <Save className="w-4 h-4 mr-2" />
+              Guardar Evento
+            </Button>
+          </div>
+        </form>
+      </motion.div>
+    </div>
+  );
+};
+
 // Componente de Timeline de Eventos
 const EventTimeline: React.FC<{ events: MedicalEvent[] }> = ({ events }) => {
   const getEventIcon = (eventType: string) => {
@@ -265,7 +734,7 @@ const EventTimeline: React.FC<{ events: MedicalEvent[] }> = ({ events }) => {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       {events.map((event, index) => {
         const Icon = getEventIcon(event.eventType);
         const color = getEventColor(event.eventType);
@@ -276,17 +745,17 @@ const EventTimeline: React.FC<{ events: MedicalEvent[] }> = ({ events }) => {
             initial={{ opacity: 0, x: -20 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ delay: index * 0.1 }}
-            className="flex gap-4"
+            className="flex gap-3 sm:gap-4"
           >
             {/* Timeline indicator */}
-            <div className="flex flex-col items-center">
+            <div className="flex flex-col items-center flex-shrink-0">
               <div
-                className={`w-10 h-10 bg-${color}-100 rounded-full flex items-center justify-center border-2 border-${color}-200`}
+                className={`w-8 h-8 sm:w-10 sm:h-10 bg-${color}-100 rounded-full flex items-center justify-center border-2 border-${color}-200`}
               >
-                <Icon className={`w-5 h-5 text-${color}-600`} />
+                <Icon className={`w-4 h-4 sm:w-5 sm:h-5 text-${color}-600`} />
               </div>
               {index < events.length - 1 && (
-                <div className="w-0.5 h-16 bg-gray-200 mt-2"></div>
+                <div className="w-0.5 h-12 sm:h-16 bg-gray-200 mt-2"></div>
               )}
             </div>
 
@@ -294,14 +763,14 @@ const EventTimeline: React.FC<{ events: MedicalEvent[] }> = ({ events }) => {
             <div className="flex-1 min-w-0">
               <motion.div
                 whileHover={{ scale: 1.01 }}
-                className="bg-white rounded-lg border border-gray-200 p-4 hover:shadow-md transition-all duration-200"
+                className="bg-white rounded-lg border border-gray-200 p-3 sm:p-4 hover:shadow-md transition-all duration-200"
               >
-                <div className="flex items-start justify-between mb-2">
-                  <div>
-                    <h4 className="text-lg font-semibold text-gray-900">
+                <div className="flex items-start justify-between mb-2 flex-wrap gap-2">
+                  <div className="min-w-0 flex-1">
+                    <h4 className="text-base sm:text-lg font-semibold text-gray-900 break-words">
                       {event.title}
                     </h4>
-                    <div className="flex items-center gap-2 mt-1">
+                    <div className="flex items-center gap-1 sm:gap-2 mt-1 flex-wrap">
                       <Badge variant={event.eventType}>
                         {event.eventType === "vaccination"
                           ? "Vacunación"
@@ -341,39 +810,33 @@ const EventTimeline: React.FC<{ events: MedicalEvent[] }> = ({ events }) => {
                       )}
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Button variant="outline" size="sm">
-                      <Eye className="w-4 h-4" />
-                    </Button>
-                    <Button variant="outline" size="sm">
-                      <Edit className="w-4 h-4" />
-                    </Button>
-                  </div>
                 </div>
 
-                <p className="text-gray-600 mb-3">{event.description}</p>
+                <p className="text-gray-600 mb-3 text-sm sm:text-base">
+                  {event.description}
+                </p>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm mb-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-4 text-xs sm:text-sm mb-3">
                   <div className="flex items-center gap-2">
-                    <Calendar className="w-4 h-4 text-gray-400" />
-                    <span>{event.date.toLocaleDateString()}</span>
+                    <Calendar className="w-3 h-3 sm:w-4 sm:h-4 text-gray-400 flex-shrink-0" />
+                    <span className="truncate">{event.date.toLocaleDateString()}</span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <User className="w-4 h-4 text-gray-400" />
-                    <span>{event.veterinarian}</span>
+                    <User className="w-3 h-3 sm:w-4 sm:h-4 text-gray-400 flex-shrink-0" />
+                    <span className="truncate">{event.veterinarian}</span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <MapPin className="w-4 h-4 text-gray-400" />
-                    <span>{event.location.facility}</span>
+                    <MapPin className="w-3 h-3 sm:w-4 sm:h-4 text-gray-400 flex-shrink-0" />
+                    <span className="truncate">{event.location.facility}</span>
                   </div>
                 </div>
 
                 {event.vitalSigns && (
-                  <div className="bg-gray-50 rounded-lg p-3 mb-3">
-                    <h5 className="font-medium text-gray-900 mb-2">
+                  <div className="bg-gray-50 rounded-lg p-2 sm:p-3 mb-3">
+                    <h5 className="font-medium text-gray-900 mb-2 text-sm sm:text-base">
                       Signos Vitales
                     </h5>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3 text-xs sm:text-sm">
                       <div>
                         <span className="text-gray-600">Temperatura:</span>
                         <span className="ml-1 font-medium">
@@ -404,7 +867,7 @@ const EventTimeline: React.FC<{ events: MedicalEvent[] }> = ({ events }) => {
 
                 {event.medications && event.medications.length > 0 && (
                   <div className="mb-3">
-                    <h5 className="font-medium text-gray-900 mb-2">
+                    <h5 className="font-medium text-gray-900 mb-2 text-sm sm:text-base">
                       Medicamentos
                     </h5>
                     <div className="flex flex-wrap gap-1">
@@ -422,30 +885,30 @@ const EventTimeline: React.FC<{ events: MedicalEvent[] }> = ({ events }) => {
 
                 {event.diagnosis && (
                   <div className="mb-3">
-                    <h5 className="font-medium text-gray-900 mb-1">
+                    <h5 className="font-medium text-gray-900 mb-1 text-sm sm:text-base">
                       Diagnóstico
                     </h5>
-                    <p className="text-gray-700 text-sm">{event.diagnosis}</p>
+                    <p className="text-gray-700 text-xs sm:text-sm">{event.diagnosis}</p>
                   </div>
                 )}
 
                 {event.treatment && (
                   <div className="mb-3">
-                    <h5 className="font-medium text-gray-900 mb-1">
+                    <h5 className="font-medium text-gray-900 mb-1 text-sm sm:text-base">
                       Tratamiento
                     </h5>
-                    <p className="text-gray-700 text-sm">{event.treatment}</p>
+                    <p className="text-gray-700 text-xs sm:text-sm">{event.treatment}</p>
                   </div>
                 )}
 
                 {event.notes && (
                   <div className="mb-3">
-                    <h5 className="font-medium text-gray-900 mb-1">Notas</h5>
-                    <p className="text-gray-700 text-sm">{event.notes}</p>
+                    <h5 className="font-medium text-gray-900 mb-1 text-sm sm:text-base">Notas</h5>
+                    <p className="text-gray-700 text-xs sm:text-sm">{event.notes}</p>
                   </div>
                 )}
 
-                <div className="flex items-center justify-between text-sm text-gray-600">
+                <div className="flex items-center justify-between text-xs sm:text-sm text-gray-600 flex-wrap gap-2">
                   <span>Costo: ${event.cost.toLocaleString()}</span>
                   {event.followUpDate && (
                     <span>
@@ -481,6 +944,60 @@ const MedicalHistory: React.FC = () => {
   const [selectedDateRange, setSelectedDateRange] = useState<string>("30");
   const [selectedVeterinarian, setSelectedVeterinarian] =
     useState<string>("all");
+  const [showNewEventModal, setShowNewEventModal] = useState(false);
+
+  // Función para generar ID único
+  const generateId = () => {
+    return Date.now().toString() + Math.random().toString(36).substr(2, 9);
+  };
+
+  // Función para manejar nuevo evento
+  const handleNewEvent = (eventData: NewEventForm) => {
+    const selectedAnimalData = animals.find(a => a.id === eventData.animalId);
+    if (!selectedAnimalData) return;
+
+    const newEvent: MedicalEvent = {
+      id: generateId(),
+      animalId: eventData.animalId,
+      animalName: selectedAnimalData.name,
+      animalTag: selectedAnimalData.tag,
+      eventType: eventData.eventType as any,
+      title: eventData.title,
+      description: eventData.description,
+      date: new Date(eventData.date),
+      veterinarian: eventData.veterinarian,
+      location: {
+        lat: 17.9869,
+        lng: -92.9303,
+        address: "Ubicación actual",
+        facility: "Clínica Principal",
+      },
+      severity: eventData.severity as any,
+      status: eventData.status as any,
+      medications: eventData.medications ? eventData.medications.split(',').map(m => m.trim()) : [],
+      diagnosis: eventData.diagnosis,
+      treatment: eventData.treatment,
+      followUpDate: eventData.followUpDate ? new Date(eventData.followUpDate) : undefined,
+      cost: eventData.cost,
+      attachments: [],
+      notes: eventData.notes,
+      vitalSigns: eventData.vitalSigns.temperature > 0 ? eventData.vitalSigns : undefined,
+    };
+
+    setMedicalEvents(prev => [newEvent, ...prev]);
+    
+    // Actualizar estadísticas
+    setHealthStats(prev => ({
+      ...prev,
+      totalEvents: prev.totalEvents + 1,
+      vaccinationsCount: eventData.eventType === 'vaccination' ? prev.vaccinationsCount + 1 : prev.vaccinationsCount,
+      illnessesCount: eventData.eventType === 'illness' ? prev.illnessesCount + 1 : prev.illnessesCount,
+      treatmentsCount: eventData.eventType === 'treatment' ? prev.treatmentsCount + 1 : prev.treatmentsCount,
+      lastEventDate: new Date(),
+    }));
+
+    console.log("Nuevo evento creado:", newEvent);
+  };
 
   // Simulación de datos
   useEffect(() => {
@@ -708,21 +1225,21 @@ const MedicalHistory: React.FC = () => {
         className="bg-white/80 backdrop-blur-md border-b border-green-200 sticky top-0 z-40"
       >
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900">
+          <div className="flex items-center justify-between flex-wrap gap-4">
+            <div className="min-w-0 flex-1">
+              <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">
                 Historial Médico
               </h1>
-              <p className="text-gray-600 mt-1">
+              <p className="text-gray-600 mt-1 text-sm sm:text-base">
                 Registro completo de eventos médicos del ganado
               </p>
             </div>
             <div className="flex items-center gap-3">
-              <Button variant="outline" size="sm">
-                <Download className="w-4 h-4 mr-2" />
-                Exportar
-              </Button>
-              <Button size="sm">
+              <Button 
+                size="sm" 
+                onClick={() => setShowNewEventModal(true)}
+                className="whitespace-nowrap"
+              >
                 <Plus className="w-4 h-4 mr-2" />
                 Nuevo Evento
               </Button>
@@ -731,26 +1248,26 @@ const MedicalHistory: React.FC = () => {
         </div>
       </motion.div>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-6">
           {/* Estadísticas Generales */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             className="lg:col-span-12"
           >
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-4 sm:mb-6">
               <Card className="bg-white/80 backdrop-blur-md border-blue-200">
-                <CardContent className="p-6">
-                  <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
-                      <History className="w-6 h-6 text-blue-600" />
+                <CardContent className="p-4 sm:p-6">
+                  <div className="flex items-center gap-3 sm:gap-4">
+                    <div className="w-10 h-10 sm:w-12 sm:h-12 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                      <History className="w-5 h-5 sm:w-6 sm:h-6 text-blue-600" />
                     </div>
-                    <div>
-                      <p className="text-sm font-medium text-gray-600">
+                    <div className="min-w-0">
+                      <p className="text-xs sm:text-sm font-medium text-gray-600">
                         Total de Eventos
                       </p>
-                      <p className="text-2xl font-bold text-gray-900">
+                      <p className="text-lg sm:text-2xl font-bold text-gray-900">
                         {healthStats.totalEvents}
                       </p>
                     </div>
@@ -759,16 +1276,16 @@ const MedicalHistory: React.FC = () => {
               </Card>
 
               <Card className="bg-white/80 backdrop-blur-md border-purple-200">
-                <CardContent className="p-6">
-                  <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
-                      <Syringe className="w-6 h-6 text-purple-600" />
+                <CardContent className="p-4 sm:p-6">
+                  <div className="flex items-center gap-3 sm:gap-4">
+                    <div className="w-10 h-10 sm:w-12 sm:h-12 bg-purple-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                      <Syringe className="w-5 h-5 sm:w-6 sm:h-6 text-purple-600" />
                     </div>
-                    <div>
-                      <p className="text-sm font-medium text-gray-600">
+                    <div className="min-w-0">
+                      <p className="text-xs sm:text-sm font-medium text-gray-600">
                         Vacunaciones
                       </p>
-                      <p className="text-2xl font-bold text-gray-900">
+                      <p className="text-lg sm:text-2xl font-bold text-gray-900">
                         {healthStats.vaccinationsCount}
                       </p>
                     </div>
@@ -777,16 +1294,16 @@ const MedicalHistory: React.FC = () => {
               </Card>
 
               <Card className="bg-white/80 backdrop-blur-md border-red-200">
-                <CardContent className="p-6">
-                  <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 bg-red-100 rounded-lg flex items-center justify-center">
-                      <Thermometer className="w-6 h-6 text-red-600" />
+                <CardContent className="p-4 sm:p-6">
+                  <div className="flex items-center gap-3 sm:gap-4">
+                    <div className="w-10 h-10 sm:w-12 sm:h-12 bg-red-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                      <Thermometer className="w-5 h-5 sm:w-6 sm:h-6 text-red-600" />
                     </div>
-                    <div>
-                      <p className="text-sm font-medium text-gray-600">
+                    <div className="min-w-0">
+                      <p className="text-xs sm:text-sm font-medium text-gray-600">
                         Enfermedades
                       </p>
-                      <p className="text-2xl font-bold text-gray-900">
+                      <p className="text-lg sm:text-2xl font-bold text-gray-900">
                         {healthStats.illnessesCount}
                       </p>
                     </div>
@@ -795,16 +1312,16 @@ const MedicalHistory: React.FC = () => {
               </Card>
 
               <Card className="bg-white/80 backdrop-blur-md border-green-200">
-                <CardContent className="p-6">
-                  <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
-                      <TrendingUp className="w-6 h-6 text-green-600" />
+                <CardContent className="p-4 sm:p-6">
+                  <div className="flex items-center gap-3 sm:gap-4">
+                    <div className="w-10 h-10 sm:w-12 sm:h-12 bg-green-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                      <TrendingUp className="w-5 h-5 sm:w-6 sm:h-6 text-green-600" />
                     </div>
-                    <div>
-                      <p className="text-sm font-medium text-gray-600">
+                    <div className="min-w-0">
+                      <p className="text-xs sm:text-sm font-medium text-gray-600">
                         Score de Salud
                       </p>
-                      <p className="text-2xl font-bold text-gray-900">
+                      <p className="text-lg sm:text-2xl font-bold text-gray-900">
                         {healthStats.healthScore}%
                       </p>
                     </div>
@@ -819,13 +1336,13 @@ const MedicalHistory: React.FC = () => {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.1 }}
-            className="lg:col-span-4 space-y-6"
+            className="lg:col-span-4 space-y-4 sm:space-y-6"
           >
             {/* Filtros */}
             <Card className="bg-white/80 backdrop-blur-md border-gray-200">
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Filter className="w-5 h-5 text-blue-600" />
+                <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
+                  <Filter className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600" />
                   Filtros de Búsqueda
                 </CardTitle>
               </CardHeader>
@@ -840,7 +1357,7 @@ const MedicalHistory: React.FC = () => {
                     <input
                       type="text"
                       placeholder="Evento, animal, descripción..."
-                      className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
                     />
@@ -853,7 +1370,7 @@ const MedicalHistory: React.FC = () => {
                     Animal
                   </label>
                   <select
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
                     value={selectedAnimal}
                     onChange={(e) => setSelectedAnimal(e.target.value)}
                   >
@@ -872,7 +1389,7 @@ const MedicalHistory: React.FC = () => {
                     Tipo de Evento
                   </label>
                   <select
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
                     value={selectedEventType}
                     onChange={(e) => setSelectedEventType(e.target.value)}
                   >
@@ -894,7 +1411,7 @@ const MedicalHistory: React.FC = () => {
                     Veterinario
                   </label>
                   <select
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
                     value={selectedVeterinarian}
                     onChange={(e) => setSelectedVeterinarian(e.target.value)}
                   >
@@ -912,7 +1429,7 @@ const MedicalHistory: React.FC = () => {
                     Período
                   </label>
                   <select
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
                     value={selectedDateRange}
                     onChange={(e) => setSelectedDateRange(e.target.value)}
                   >
@@ -930,17 +1447,17 @@ const MedicalHistory: React.FC = () => {
             {selectedAnimalProfile && (
               <Card className="bg-white/80 backdrop-blur-md border-gray-200">
                 <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Tag className="w-5 h-5 text-green-600" />
+                  <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
+                    <Tag className="w-4 h-4 sm:w-5 sm:h-5 text-green-600" />
                     Perfil del Animal
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-3">
                   <div className="text-center mb-4">
-                    <h3 className="text-xl font-bold text-gray-900">
+                    <h3 className="text-lg sm:text-xl font-bold text-gray-900">
                       {selectedAnimalProfile.name}
                     </h3>
-                    <p className="text-gray-600">{selectedAnimalProfile.tag}</p>
+                    <p className="text-gray-600 text-sm">{selectedAnimalProfile.tag}</p>
                     <Badge
                       variant={selectedAnimalProfile.healthStatus}
                       className="mt-2"
@@ -955,7 +1472,7 @@ const MedicalHistory: React.FC = () => {
                     </Badge>
                   </div>
 
-                  <div className="space-y-2 text-sm">
+                  <div className="space-y-2 text-xs sm:text-sm">
                     <div className="flex justify-between">
                       <span className="text-gray-600">Raza:</span>
                       <span className="font-medium">
@@ -995,7 +1512,7 @@ const MedicalHistory: React.FC = () => {
 
                   {selectedAnimalProfile.chronicConditions.length > 0 && (
                     <div>
-                      <h5 className="font-medium text-gray-900 mb-2">
+                      <h5 className="font-medium text-gray-900 mb-2 text-sm">
                         Condiciones Crónicas
                       </h5>
                       <div className="space-y-1">
@@ -1003,7 +1520,7 @@ const MedicalHistory: React.FC = () => {
                           (condition, idx) => (
                             <span
                               key={idx}
-                              className="inline-block px-2 py-1 bg-orange-100 text-orange-800 rounded-full text-xs"
+                              className="inline-block px-2 py-1 bg-orange-100 text-orange-800 rounded-full text-xs mr-1 mb-1"
                             >
                               {condition}
                             </span>
@@ -1015,14 +1532,14 @@ const MedicalHistory: React.FC = () => {
 
                   {selectedAnimalProfile.allergies.length > 0 && (
                     <div>
-                      <h5 className="font-medium text-gray-900 mb-2">
+                      <h5 className="font-medium text-gray-900 mb-2 text-sm">
                         Alergias
                       </h5>
                       <div className="space-y-1">
                         {selectedAnimalProfile.allergies.map((allergy, idx) => (
                           <span
                             key={idx}
-                            className="inline-block px-2 py-1 bg-red-100 text-red-800 rounded-full text-xs"
+                            className="inline-block px-2 py-1 bg-red-100 text-red-800 rounded-full text-xs mr-1 mb-1"
                           >
                             {allergy}
                           </span>
@@ -1044,15 +1561,15 @@ const MedicalHistory: React.FC = () => {
           >
             <Card className="bg-white/80 backdrop-blur-md border-gray-200">
               <CardHeader>
-                <CardTitle>
+                <CardTitle className="text-base sm:text-lg">
                   Historial de Eventos ({filteredEvents.length})
                   {selectedAnimalProfile && (
-                    <span className="text-base font-normal text-gray-600 ml-2">
+                    <span className="text-sm sm:text-base font-normal text-gray-600 ml-2">
                       - {selectedAnimalProfile.name}
                     </span>
                   )}
                 </CardTitle>
-                <CardDescription>
+                <CardDescription className="text-sm">
                   Cronología detallada de todos los eventos médicos registrados
                 </CardDescription>
               </CardHeader>
@@ -1060,16 +1577,16 @@ const MedicalHistory: React.FC = () => {
                 {filteredEvents.length > 0 ? (
                   <EventTimeline events={filteredEvents} />
                 ) : (
-                  <div className="text-center py-12">
-                    <Stethoscope className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                    <h3 className="text-lg font-medium text-gray-900 mb-2">
+                  <div className="text-center py-8 sm:py-12">
+                    <Stethoscope className="w-10 h-10 sm:w-12 sm:h-12 text-gray-400 mx-auto mb-4" />
+                    <h3 className="text-base sm:text-lg font-medium text-gray-900 mb-2">
                       No hay eventos médicos
                     </h3>
-                    <p className="text-gray-600 mb-4">
+                    <p className="text-gray-600 mb-4 text-sm sm:text-base">
                       No se encontraron eventos que coincidan con los filtros
                       seleccionados.
                     </p>
-                    <Button>
+                    <Button onClick={() => setShowNewEventModal(true)}>
                       <Plus className="w-4 h-4 mr-2" />
                       Registrar Primer Evento
                     </Button>
@@ -1080,6 +1597,14 @@ const MedicalHistory: React.FC = () => {
           </motion.div>
         </div>
       </div>
+
+      {/* Modal para nuevo evento */}
+      <NewEventModal
+        isOpen={showNewEventModal}
+        onClose={() => setShowNewEventModal(false)}
+        onSave={handleNewEvent}
+        animals={animals}
+      />
     </div>
   );
 };

@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import {
   Routes,
   Route,
@@ -20,10 +20,11 @@ import {
   Skull,
   HeartHandshake,
   Bug,
+  Menu,
+  X,
 } from "lucide-react";
 
 // Importar todos los componentes del módulo health - Comentarios en español
-import HealthDashboard from "./HealthDashboard";
 import VaccinationRecords from "./VaccinationRecords";
 import VaccineScheduler from "./VaccineScheduler";
 import MedicalHistory from "./MedicalHistory";
@@ -39,6 +40,7 @@ import ParasiteParatrol from "./ParasiteParatrol";
 const HealthNavigation: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   const navItems = [
     { label: "Dashboard", path: "/health", icon: Home, exact: true },
@@ -93,35 +95,93 @@ const HealthNavigation: React.FC = () => {
     return location.pathname.startsWith(path);
   };
 
+  const handleNavigation = (path: string) => {
+    navigate(path);
+    setIsMenuOpen(false); // Cerrar menú móvil después de navegar
+  };
+
   return (
     <motion.div
       initial={{ opacity: 0, y: -10 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5 }}
-      className="bg-white/95 backdrop-blur-sm rounded-xl shadow-lg border border-white/20 p-4 mb-8"
+      className="bg-white/95 backdrop-blur-sm rounded-xl shadow-lg border border-white/20 p-3 sm:p-4 mb-6 sm:mb-8"
     >
-      <div className="flex items-center overflow-x-auto space-x-1 pb-2">
-        {navItems.map((item) => {
-          const Icon = item.icon;
-          const active = isActive(item.path, item.exact);
+      {/* Navegación móvil - Menú hamburguesa */}
+      <div className="lg:hidden">
+        <div className="flex items-center justify-between">
+          <span className="text-lg font-semibold text-gray-800">Módulo de Salud</span>
+          <button
+            onClick={() => setIsMenuOpen(!isMenuOpen)}
+            className="p-2 rounded-lg hover:bg-gray-100 transition-colors"
+          >
+            {isMenuOpen ? <X size={20} /> : <Menu size={20} />}
+          </button>
+        </div>
 
-          return (
-            <motion.button
-              key={item.path}
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              onClick={() => navigate(item.path)}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg whitespace-nowrap text-sm font-medium transition-all ${
-                active
-                  ? "bg-emerald-100 text-emerald-700 shadow-md"
-                  : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
-              }`}
+        {/* Menú desplegable móvil */}
+        <AnimatePresence>
+          {isMenuOpen && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+              exit={{ opacity: 0, height: 0 }}
+              transition={{ duration: 0.3 }}
+              className="mt-4 overflow-hidden"
             >
-              <Icon size={16} />
-              {item.label}
-            </motion.button>
-          );
-        })}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {navItems.map((item) => {
+                  const Icon = item.icon;
+                  const active = isActive(item.path, item.exact);
+
+                  return (
+                    <motion.button
+                      key={item.path}
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      onClick={() => handleNavigation(item.path)}
+                      className={`flex items-center gap-3 px-4 py-3 rounded-lg text-left text-sm font-medium transition-all ${
+                        active
+                          ? "bg-emerald-100 text-emerald-700 shadow-md"
+                          : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
+                      }`}
+                    >
+                      <Icon size={18} />
+                      <span className="truncate">{item.label}</span>
+                    </motion.button>
+                  );
+                })}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+
+      {/* Navegación desktop - Scroll horizontal */}
+      <div className="hidden lg:block">
+        <div className="flex items-center overflow-x-auto space-x-1 pb-2 scrollbar-hide">
+          {navItems.map((item) => {
+            const Icon = item.icon;
+            const active = isActive(item.path, item.exact);
+
+            return (
+              <motion.button
+                key={item.path}
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={() => handleNavigation(item.path)}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg whitespace-nowrap text-sm font-medium transition-all ${
+                  active
+                    ? "bg-emerald-100 text-emerald-700 shadow-md"
+                    : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
+                }`}
+              >
+                <Icon size={16} />
+                {item.label}
+              </motion.button>
+            );
+          })}
+        </div>
       </div>
     </motion.div>
   );
@@ -172,14 +232,19 @@ const HealthBreadcrumbs: React.FC = () => {
       initial={{ opacity: 0, x: -20 }}
       animate={{ opacity: 1, x: 0 }}
       transition={{ duration: 0.5 }}
-      className="flex items-center space-x-2 text-white/80 mb-6"
+      className="flex items-center space-x-1 sm:space-x-2 text-white/80 mb-4 sm:mb-6 overflow-x-auto scrollbar-hide"
     >
       {breadcrumbs.map((crumb, index) => (
         <React.Fragment key={crumb.path}>
-          {index > 0 && <ChevronRight size={16} className="text-white/60" />}
+          {index > 0 && (
+            <ChevronRight 
+              size={14} 
+              className="text-white/60 flex-shrink-0 sm:w-4 sm:h-4" 
+            />
+          )}
           <button
             onClick={() => navigate(crumb.path)}
-            className={`text-sm hover:text-white transition-colors ${
+            className={`text-xs sm:text-sm hover:text-white transition-colors whitespace-nowrap ${
               index === breadcrumbs.length - 1
                 ? "text-white font-medium"
                 : "hover:underline"
@@ -198,51 +263,67 @@ const HealthPage: React.FC = () => {
   const location = useLocation();
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#519a7c] via-[#f2e9d8] to-[#f4ac3a] p-6">
-      <div className="max-w-7xl mx-auto">
-        {/* Breadcrumbs */}
-        <HealthBreadcrumbs />
+    <div className="min-h-screen bg-gradient-to-br from-[#519a7c] via-[#f2e9d8] to-[#f4ac3a]">
+      {/* Container principal responsive */}
+      <div className="min-h-screen p-3 sm:p-4 md:p-6">
+        <div className="max-w-7xl mx-auto">
+          {/* Breadcrumbs */}
+          <HealthBreadcrumbs />
 
-        {/* Navegación del módulo (solo mostrar en páginas que no sean el dashboard) */}
-        {location.pathname !== "/health" && <HealthNavigation />}
+          {/* Navegación del módulo (solo mostrar en páginas que no sean el dashboard) */}
+          {location.pathname !== "/health" && <HealthNavigation />}
 
-        {/* Contenido principal con animaciones */}
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={location.pathname}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            transition={{ duration: 0.3 }}
-          >
-            <Routes>
-              {/* Ruta principal - Dashboard de salud */}
-              <Route index element={<HealthDashboard />} />
+          {/* Contenido principal con animaciones */}
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={location.pathname}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              transition={{ duration: 0.3 }}
+              className="w-full overflow-hidden"
+            >
+              {/* Wrapper para hacer responsivo el contenido */}
+              <div className="w-full">
+                <Routes>
 
-              {/* Todas las rutas del módulo health completamente implementadas */}
-              <Route
-                path="vaccination-records"
-                element={<VaccinationRecords />}
-              />
-              <Route path="vaccine-scheduler" element={<VaccineScheduler />} />
-              <Route path="medical-history" element={<MedicalHistory />} />
-              <Route path="treatment-plans" element={<TreatmentPlans />} />
-              <Route path="disease-tracking" element={<DiseaseTracking />} />
-              <Route
-                path="medication-inventory"
-                element={<MedicationInventory />}
-              />
-              <Route path="reports" element={<HealthReports />} />
-              <Route path="postmortem" element={<PostMortemReports />} />
-              <Route path="reproductive" element={<ReproductiveHealth />} />
-              <Route path="parasite-control" element={<ParasiteParatrol />} />
+                  {/* Todas las rutas del módulo health completamente implementadas */}
+                  <Route
+                    path="vaccination-records"
+                    element={<VaccinationRecords />}
+                  />
+                  <Route path="vaccine-scheduler" element={<VaccineScheduler />} />
+                  <Route path="medical-history" element={<MedicalHistory />} />
+                  <Route path="treatment-plans" element={<TreatmentPlans />} />
+                  <Route path="disease-tracking" element={<DiseaseTracking />} />
+                  <Route
+                    path="medication-inventory"
+                    element={<MedicationInventory />}
+                  />
+                  <Route path="reports" element={<HealthReports />} />
+                  <Route path="postmortem" element={<PostMortemReports />} />
+                  <Route path="reproductive" element={<ReproductiveHealth />} />
+                  <Route path="parasite-control" element={<ParasiteParatrol />} />
 
-              {/* Ruta fallback - redirigir al dashboard */}
-              <Route path="*" element={<Navigate to="/health" replace />} />
-            </Routes>
-          </motion.div>
-        </AnimatePresence>
+                  {/* Ruta fallback - redirigir al dashboard */}
+                  <Route path="*" element={<Navigate to="/health" replace />} />
+                </Routes>
+              </div>
+            </motion.div>
+          </AnimatePresence>
+        </div>
       </div>
+
+      {/* Estilos para ocultar scrollbars en navegadores webkit */}
+      <style>{`
+        .scrollbar-hide {
+          -ms-overflow-style: none;
+          scrollbar-width: none;
+        }
+        .scrollbar-hide::-webkit-scrollbar {
+          display: none;
+        }
+      `}</style>
     </div>
   );
 };

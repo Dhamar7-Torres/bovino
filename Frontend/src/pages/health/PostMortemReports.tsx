@@ -2,27 +2,21 @@ import React, { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import {
   Skull,
-  FileText,
   MapPin,
   Search,
   Filter,
   Plus,
   TrendingUp,
-  TrendingDown,
   AlertTriangle,
   Microscope,
-  Camera,
-  Eye,
   Edit,
-  Download,
   BarChart3,
-  Activity,
   Shield,
   Target,
-  Settings,
-  Archive,
-  BookOpen,
+  X,
+  Trash2,
   Zap,
+  Navigation,
 } from "lucide-react";
 
 // Interfaces para tipos de datos
@@ -150,11 +144,36 @@ interface MortalityAlert {
   createdAt: Date;
 }
 
+interface NewReportForm {
+  animalId: string;
+  animalName: string;
+  animalTag: string;
+  breed: string;
+  age: number;
+  gender: "male" | "female";
+  weight: number;
+  deathDate: string;
+  discoveryDate: string;
+  preliminaryCause: string;
+  finalCause: string;
+  causeCategory: string;
+  pathologist: string;
+  veterinarian: string;
+  circumstances: string;
+  positionFound: string;
+  weatherConditions: string;
+  economicImpact: number;
+  isContagious: boolean;
+  requiresQuarantine: boolean;
+  latitude: number;
+  longitude: number;
+  address: string;
+  sector: string;
+  environment: string;
+}
+
 // Componentes reutilizables
-const Card: React.FC<{ children: React.ReactNode; className?: string }> = ({
-  children,
-  className = "",
-}) => (
+const Card = ({ children, className = "" }: { children: React.ReactNode; className?: string }) => (
   <div
     className={`bg-white rounded-lg shadow-md border border-gray-200 ${className}`}
   >
@@ -162,45 +181,43 @@ const Card: React.FC<{ children: React.ReactNode; className?: string }> = ({
   </div>
 );
 
-const CardHeader: React.FC<{ children: React.ReactNode }> = ({ children }) => (
+const CardHeader = ({ children }: { children: React.ReactNode }) => (
   <div className="px-6 py-4 border-b border-gray-200">{children}</div>
 );
 
-const CardTitle: React.FC<{
-  children: React.ReactNode;
-  className?: string;
-}> = ({ children, className = "" }) => (
+const CardTitle = ({ children, className = "" }: { children: React.ReactNode; className?: string }) => (
   <h3 className={`text-lg font-semibold text-gray-900 ${className}`}>
     {children}
   </h3>
 );
 
-const CardDescription: React.FC<{ children: React.ReactNode }> = ({
-  children,
-}) => <p className="text-sm text-gray-600 mt-1">{children}</p>;
+const CardDescription = ({ children }: { children: React.ReactNode }) => (
+  <p className="text-sm text-gray-600 mt-1">{children}</p>
+);
 
-const CardContent: React.FC<{
-  children: React.ReactNode;
-  className?: string;
-}> = ({ children, className = "" }) => (
+const CardContent = ({ children, className = "" }: { children: React.ReactNode; className?: string }) => (
   <div className={`px-6 py-4 ${className}`}>{children}</div>
 );
 
-const Button: React.FC<{
-  children: React.ReactNode;
-  onClick?: () => void;
-  variant?: "default" | "outline" | "success" | "danger" | "warning";
-  size?: "sm" | "default";
-  className?: string;
-}> = ({
+const Button = ({
   children,
   onClick,
   variant = "default",
   size = "default",
   className = "",
+  disabled = false,
+  type = "button"
+}: {
+  children: React.ReactNode;
+  onClick?: () => void;
+  variant?: "default" | "outline" | "success" | "danger" | "warning";
+  size?: "sm" | "default";
+  className?: string;
+  disabled?: boolean;
+  type?: "button" | "submit";
 }) => {
   const baseClasses =
-    "inline-flex items-center justify-center font-medium rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2";
+    "inline-flex items-center justify-center font-medium rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed";
   const variantClasses = {
     default: "bg-blue-600 text-white hover:bg-blue-700 focus:ring-blue-500",
     outline:
@@ -217,19 +234,21 @@ const Button: React.FC<{
 
   return (
     <button
+      type={type}
       className={`${baseClasses} ${variantClasses[variant]} ${sizeClasses[size]} ${className}`}
       onClick={onClick}
+      disabled={disabled}
     >
       {children}
     </button>
   );
 };
 
-const Badge: React.FC<{
+const Badge = ({ children, variant, className = "" }: {
   children: React.ReactNode;
   variant: string;
   className?: string;
-}> = ({ children, variant, className = "" }) => {
+}) => {
   const getVariantClasses = (variant: string) => {
     switch (variant) {
       case "critical":
@@ -288,8 +307,1174 @@ const Badge: React.FC<{
   );
 };
 
+// Modal para Nuevo Reporte
+const NewReportModal = ({
+  isOpen,
+  onClose,
+  onSubmit,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  onSubmit: (formData: NewReportForm) => void;
+}) => {
+  const [formData, setFormData] = useState<NewReportForm>({
+    animalId: "",
+    animalName: "",
+    animalTag: "",
+    breed: "",
+    age: 0,
+    gender: "female",
+    weight: 0,
+    deathDate: "",
+    discoveryDate: "",
+    preliminaryCause: "",
+    finalCause: "",
+    causeCategory: "disease",
+    pathologist: "",
+    veterinarian: "",
+    circumstances: "",
+    positionFound: "",
+    weatherConditions: "",
+    economicImpact: 0,
+    isContagious: false,
+    requiresQuarantine: false,
+    latitude: 0,
+    longitude: 0,
+    address: "",
+    sector: "",
+    environment: "",
+  });
+
+  const [isGettingLocation, setIsGettingLocation] = useState(false);
+
+  const handleGetLocation = () => {
+    setIsGettingLocation(true);
+    
+    if (!navigator.geolocation) {
+      alert("La geolocalización no está soportada en este navegador");
+      setIsGettingLocation(false);
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const lat = position.coords.latitude;
+        const lng = position.coords.longitude;
+        
+        setFormData(prev => ({
+          ...prev,
+          latitude: lat,
+          longitude: lng,
+          address: `${lat.toFixed(6)}, ${lng.toFixed(6)}`
+        }));
+        
+        setIsGettingLocation(false);
+      },
+      (error) => {
+        console.error("Error obteniendo ubicación:", error);
+        let errorMessage = "Error desconocido";
+        
+        switch(error.code) {
+          case error.PERMISSION_DENIED:
+            errorMessage = "Permiso de ubicación denegado";
+            break;
+          case error.POSITION_UNAVAILABLE:
+            errorMessage = "Ubicación no disponible";
+            break;
+          case error.TIMEOUT:
+            errorMessage = "Tiempo agotado para obtener ubicación";
+            break;
+        }
+        
+        alert(`Error obteniendo ubicación: ${errorMessage}`);
+        setIsGettingLocation(false);
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 60000
+      }
+    );
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    onSubmit(formData);
+    setFormData({
+      animalId: "",
+      animalName: "",
+      animalTag: "",
+      breed: "",
+      age: 0,
+      gender: "female",
+      weight: 0,
+      deathDate: "",
+      discoveryDate: "",
+      preliminaryCause: "",
+      finalCause: "",
+      causeCategory: "disease",
+      pathologist: "",
+      veterinarian: "",
+      circumstances: "",
+      positionFound: "",
+      weatherConditions: "",
+      economicImpact: 0,
+      isContagious: false,
+      requiresQuarantine: false,
+      latitude: 0,
+      longitude: 0,
+      address: "",
+      sector: "",
+      environment: "",
+    });
+    onClose();
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-lg w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+        <div className="flex justify-between items-center p-6 border-b">
+          <h2 className="text-xl font-semibold">Nuevo Reporte Post-Mortem</h2>
+          <Button variant="outline" size="sm" onClick={onClose}>
+            <X className="w-4 h-4" />
+          </Button>
+        </div>
+        
+        <form onSubmit={handleSubmit} className="p-6 space-y-6">
+          {/* Información del Animal */}
+          <div>
+            <h3 className="text-lg font-medium mb-4">Información del Animal</h3>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  ID Animal
+                </label>
+                <input
+                  type="text"
+                  required
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  value={formData.animalId}
+                  onChange={(e) => setFormData({...formData, animalId: e.target.value})}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Nombre
+                </label>
+                <input
+                  type="text"
+                  required
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  value={formData.animalName}
+                  onChange={(e) => setFormData({...formData, animalName: e.target.value})}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Etiqueta
+                </label>
+                <input
+                  type="text"
+                  required
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  value={formData.animalTag}
+                  onChange={(e) => setFormData({...formData, animalTag: e.target.value})}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Raza
+                </label>
+                <input
+                  type="text"
+                  required
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  value={formData.breed}
+                  onChange={(e) => setFormData({...formData, breed: e.target.value})}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Edad (años)
+                </label>
+                <input
+                  type="number"
+                  required
+                  min="0"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  value={formData.age}
+                  onChange={(e) => setFormData({...formData, age: parseInt(e.target.value)})}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Sexo
+                </label>
+                <select
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  value={formData.gender}
+                  onChange={(e) => setFormData({...formData, gender: e.target.value as "male" | "female"})}
+                >
+                  <option value="female">Hembra</option>
+                  <option value="male">Macho</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Peso (kg)
+                </label>
+                <input
+                  type="number"
+                  required
+                  min="0"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  value={formData.weight}
+                  onChange={(e) => setFormData({...formData, weight: parseFloat(e.target.value)})}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Fecha de Muerte
+                </label>
+                <input
+                  type="date"
+                  required
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  value={formData.deathDate}
+                  onChange={(e) => setFormData({...formData, deathDate: e.target.value})}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Fecha de Descubrimiento
+                </label>
+                <input
+                  type="date"
+                  required
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  value={formData.discoveryDate}
+                  onChange={(e) => setFormData({...formData, discoveryDate: e.target.value})}
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Causa de Muerte */}
+          <div>
+            <h3 className="text-lg font-medium mb-4">Causa de Muerte</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Causa Preliminar
+                </label>
+                <input
+                  type="text"
+                  required
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  value={formData.preliminaryCause}
+                  onChange={(e) => setFormData({...formData, preliminaryCause: e.target.value})}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Causa Final
+                </label>
+                <input
+                  type="text"
+                  required
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  value={formData.finalCause}
+                  onChange={(e) => setFormData({...formData, finalCause: e.target.value})}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Categoría
+                </label>
+                <select
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  value={formData.causeCategory}
+                  onChange={(e) => setFormData({...formData, causeCategory: e.target.value})}
+                >
+                  <option value="disease">Enfermedad</option>
+                  <option value="trauma">Trauma</option>
+                  <option value="poisoning">Envenenamiento</option>
+                  <option value="metabolic">Metabólica</option>
+                  <option value="reproductive">Reproductiva</option>
+                  <option value="congenital">Congénita</option>
+                  <option value="predation">Depredación</option>
+                  <option value="unknown">Desconocida</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          {/* Personal */}
+          <div>
+            <h3 className="text-lg font-medium mb-4">Personal</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Patólogo
+                </label>
+                <input
+                  type="text"
+                  required
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  value={formData.pathologist}
+                  onChange={(e) => setFormData({...formData, pathologist: e.target.value})}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Veterinario
+                </label>
+                <input
+                  type="text"
+                  required
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  value={formData.veterinarian}
+                  onChange={(e) => setFormData({...formData, veterinarian: e.target.value})}
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Circunstancias */}
+          <div>
+            <h3 className="text-lg font-medium mb-4">Circunstancias del Hallazgo</h3>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Circunstancias
+                </label>
+                <textarea
+                  required
+                  rows={3}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  value={formData.circumstances}
+                  onChange={(e) => setFormData({...formData, circumstances: e.target.value})}
+                />
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Posición Encontrada
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    value={formData.positionFound}
+                    onChange={(e) => setFormData({...formData, positionFound: e.target.value})}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Condiciones Climáticas
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    value={formData.weatherConditions}
+                    onChange={(e) => setFormData({...formData, weatherConditions: e.target.value})}
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Ubicación del Incidente */}
+          <div>
+            <h3 className="text-lg font-medium mb-4">Ubicación del Incidente</h3>
+            <div className="space-y-4">
+              <div className="flex items-center gap-2 mb-4">
+                <Button 
+                  type="button"
+                  variant="outline" 
+                  onClick={handleGetLocation}
+                  disabled={isGettingLocation}
+                  className="flex items-center gap-2"
+                >
+                  <Navigation className={`w-4 h-4 ${isGettingLocation ? 'animate-spin' : ''}`} />
+                  {isGettingLocation ? 'Obteniendo ubicación...' : 'Obtener ubicación actual'}
+                </Button>
+                <span className="text-sm text-gray-500">
+                  Usar GPS para obtener coordenadas automáticamente
+                </span>
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Latitud
+                  </label>
+                  <input
+                    type="number"
+                    step="any"
+                    required
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    value={formData.latitude}
+                    onChange={(e) => setFormData({...formData, latitude: parseFloat(e.target.value) || 0})}
+                    placeholder="17.9869"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Longitud
+                  </label>
+                  <input
+                    type="number"
+                    step="any"
+                    required
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    value={formData.longitude}
+                    onChange={(e) => setFormData({...formData, longitude: parseFloat(e.target.value) || 0})}
+                    placeholder="-92.9303"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Sector
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    value={formData.sector}
+                    onChange={(e) => setFormData({...formData, sector: e.target.value})}
+                    placeholder="Sector A, B, C..."
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Dirección/Descripción del Lugar
+                  </label>
+                  <textarea
+                    required
+                    rows={3}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    value={formData.address}
+                    onChange={(e) => setFormData({...formData, address: e.target.value})}
+                    placeholder="Descripción detallada del lugar donde se encontró el animal"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Ambiente
+                  </label>
+                  <select
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    value={formData.environment}
+                    onChange={(e) => setFormData({...formData, environment: e.target.value})}
+                    required
+                  >
+                    <option value="">Seleccionar ambiente</option>
+                    <option value="Confinamiento">Confinamiento/Establo</option>
+                    <option value="Pastoreo">Pastoreo libre</option>
+                    <option value="Corral">Corral/Manga</option>
+                    <option value="Potrero">Potrero</option>
+                    <option value="Bebedero">Área de bebedero</option>
+                    <option value="Comedero">Área de comedero</option>
+                    <option value="Sombra">Área de sombra</option>
+                    <option value="Camino">Camino/Sendero</option>
+                    <option value="Otro">Otro</option>
+                  </select>
+                </div>
+              </div>
+
+              {(formData.latitude !== 0 && formData.longitude !== 0) && (
+                <div className="bg-blue-50 p-3 rounded-lg">
+                  <p className="text-sm text-blue-800">
+                    <strong>Coordenadas registradas:</strong> {formData.latitude.toFixed(6)}, {formData.longitude.toFixed(6)}
+                  </p>
+                  <p className="text-xs text-blue-600 mt-1">
+                    Puedes verificar la ubicación en Google Maps: 
+                    <a 
+                      href={`https://www.google.com/maps?q=${formData.latitude},${formData.longitude}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="underline ml-1"
+                    >
+                      Ver en mapa
+                    </a>
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Información Adicional */}
+          <div>
+            <h3 className="text-lg font-medium mb-4">Información Adicional</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Impacto Económico ($)
+                </label>
+                <input
+                  type="number"
+                  required
+                  min="0"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  value={formData.economicImpact}
+                  onChange={(e) => setFormData({...formData, economicImpact: parseFloat(e.target.value)})}
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    checked={formData.isContagious}
+                    onChange={(e) => setFormData({...formData, isContagious: e.target.checked})}
+                  />
+                  <span className="text-sm font-medium text-gray-700">Es contagioso</span>
+                </label>
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    checked={formData.requiresQuarantine}
+                    onChange={(e) => setFormData({...formData, requiresQuarantine: e.target.checked})}
+                  />
+                  <span className="text-sm font-medium text-gray-700">Requiere cuarentena</span>
+                </label>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-2 pt-4 border-t">
+            <Button variant="outline" onClick={onClose}>
+              Cancelar
+            </Button>
+            <Button type="submit">
+              Crear Reporte
+            </Button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+};
+
+// Modal para Editar Reporte
+const EditReportModal = ({
+  isOpen,
+  onClose,
+  onSubmit,
+  report,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  onSubmit: (formData: NewReportForm) => void;
+  report: PostMortemReport | null;
+}) => {
+  const [formData, setFormData] = useState<NewReportForm>({
+    animalId: "",
+    animalName: "",
+    animalTag: "",
+    breed: "",
+    age: 0,
+    gender: "female",
+    weight: 0,
+    deathDate: "",
+    discoveryDate: "",
+    preliminaryCause: "",
+    finalCause: "",
+    causeCategory: "disease",
+    pathologist: "",
+    veterinarian: "",
+    circumstances: "",
+    positionFound: "",
+    weatherConditions: "",
+    economicImpact: 0,
+    isContagious: false,
+    requiresQuarantine: false,
+    latitude: 0,
+    longitude: 0,
+    address: "",
+    sector: "",
+    environment: "",
+  });
+
+  const [isGettingLocation, setIsGettingLocation] = useState(false);
+
+  useEffect(() => {
+    if (report) {
+      setFormData({
+        animalId: report.animalId,
+        animalName: report.animalName,
+        animalTag: report.animalTag,
+        breed: report.breed,
+        age: report.age,
+        gender: report.gender,
+        weight: report.weight,
+        deathDate: report.deathDate.toISOString().split('T')[0],
+        discoveryDate: report.discoveryDate.toISOString().split('T')[0],
+        preliminaryCause: report.preliminaryCause,
+        finalCause: report.finalCause,
+        causeCategory: report.causeCategory,
+        pathologist: report.pathologist,
+        veterinarian: report.veterinarian,
+        circumstances: report.deathCircumstances.circumstances,
+        positionFound: report.deathCircumstances.positionFound,
+        weatherConditions: report.deathCircumstances.weatherConditions,
+        economicImpact: report.economicImpact,
+        isContagious: report.isContagious,
+        requiresQuarantine: report.requiresQuarantine,
+        latitude: report.location.lat,
+        longitude: report.location.lng,
+        address: report.location.address,
+        sector: report.location.sector,
+        environment: report.location.environment,
+      });
+    }
+  }, [report]);
+
+  const handleGetLocation = () => {
+    setIsGettingLocation(true);
+    
+    if (!navigator.geolocation) {
+      alert("La geolocalización no está soportada en este navegador");
+      setIsGettingLocation(false);
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const lat = position.coords.latitude;
+        const lng = position.coords.longitude;
+        
+        setFormData(prev => ({
+          ...prev,
+          latitude: lat,
+          longitude: lng,
+          address: `${lat.toFixed(6)}, ${lng.toFixed(6)}`
+        }));
+        
+        setIsGettingLocation(false);
+      },
+      (error) => {
+        console.error("Error obteniendo ubicación:", error);
+        let errorMessage = "Error desconocido";
+        
+        switch(error.code) {
+          case error.PERMISSION_DENIED:
+            errorMessage = "Permiso de ubicación denegado";
+            break;
+          case error.POSITION_UNAVAILABLE:
+            errorMessage = "Ubicación no disponible";
+            break;
+          case error.TIMEOUT:
+            errorMessage = "Tiempo agotado para obtener ubicación";
+            break;
+        }
+        
+        alert(`Error obteniendo ubicación: ${errorMessage}`);
+        setIsGettingLocation(false);
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 60000
+      }
+    );
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    onSubmit(formData);
+    onClose();
+  };
+
+  if (!isOpen || !report) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-lg w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+        <div className="flex justify-between items-center p-6 border-b">
+          <h2 className="text-xl font-semibold">Editar Reporte Post-Mortem</h2>
+          <Button variant="outline" size="sm" onClick={onClose}>
+            <X className="w-4 h-4" />
+          </Button>
+        </div>
+        
+        <form onSubmit={handleSubmit} className="p-6 space-y-6">
+          {/* Información del Animal */}
+          <div>
+            <h3 className="text-lg font-medium mb-4">Información del Animal</h3>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  ID Animal
+                </label>
+                <input
+                  type="text"
+                  required
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  value={formData.animalId}
+                  onChange={(e) => setFormData({...formData, animalId: e.target.value})}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Nombre
+                </label>
+                <input
+                  type="text"
+                  required
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  value={formData.animalName}
+                  onChange={(e) => setFormData({...formData, animalName: e.target.value})}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Etiqueta
+                </label>
+                <input
+                  type="text"
+                  required
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  value={formData.animalTag}
+                  onChange={(e) => setFormData({...formData, animalTag: e.target.value})}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Raza
+                </label>
+                <input
+                  type="text"
+                  required
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  value={formData.breed}
+                  onChange={(e) => setFormData({...formData, breed: e.target.value})}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Edad (años)
+                </label>
+                <input
+                  type="number"
+                  required
+                  min="0"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  value={formData.age}
+                  onChange={(e) => setFormData({...formData, age: parseInt(e.target.value)})}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Sexo
+                </label>
+                <select
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  value={formData.gender}
+                  onChange={(e) => setFormData({...formData, gender: e.target.value as "male" | "female"})}
+                >
+                  <option value="female">Hembra</option>
+                  <option value="male">Macho</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Peso (kg)
+                </label>
+                <input
+                  type="number"
+                  required
+                  min="0"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  value={formData.weight}
+                  onChange={(e) => setFormData({...formData, weight: parseFloat(e.target.value)})}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Fecha de Muerte
+                </label>
+                <input
+                  type="date"
+                  required
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  value={formData.deathDate}
+                  onChange={(e) => setFormData({...formData, deathDate: e.target.value})}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Fecha de Descubrimiento
+                </label>
+                <input
+                  type="date"
+                  required
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  value={formData.discoveryDate}
+                  onChange={(e) => setFormData({...formData, discoveryDate: e.target.value})}
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Causa de Muerte */}
+          <div>
+            <h3 className="text-lg font-medium mb-4">Causa de Muerte</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Causa Preliminar
+                </label>
+                <input
+                  type="text"
+                  required
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  value={formData.preliminaryCause}
+                  onChange={(e) => setFormData({...formData, preliminaryCause: e.target.value})}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Causa Final
+                </label>
+                <input
+                  type="text"
+                  required
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  value={formData.finalCause}
+                  onChange={(e) => setFormData({...formData, finalCause: e.target.value})}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Categoría
+                </label>
+                <select
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  value={formData.causeCategory}
+                  onChange={(e) => setFormData({...formData, causeCategory: e.target.value})}
+                >
+                  <option value="disease">Enfermedad</option>
+                  <option value="trauma">Trauma</option>
+                  <option value="poisoning">Envenenamiento</option>
+                  <option value="metabolic">Metabólica</option>
+                  <option value="reproductive">Reproductiva</option>
+                  <option value="congenital">Congénita</option>
+                  <option value="predation">Depredación</option>
+                  <option value="unknown">Desconocida</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          {/* Personal */}
+          <div>
+            <h3 className="text-lg font-medium mb-4">Personal</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Patólogo
+                </label>
+                <input
+                  type="text"
+                  required
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  value={formData.pathologist}
+                  onChange={(e) => setFormData({...formData, pathologist: e.target.value})}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Veterinario
+                </label>
+                <input
+                  type="text"
+                  required
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  value={formData.veterinarian}
+                  onChange={(e) => setFormData({...formData, veterinarian: e.target.value})}
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Circunstancias */}
+          <div>
+            <h3 className="text-lg font-medium mb-4">Circunstancias del Hallazgo</h3>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Circunstancias
+                </label>
+                <textarea
+                  required
+                  rows={3}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  value={formData.circumstances}
+                  onChange={(e) => setFormData({...formData, circumstances: e.target.value})}
+                />
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Posición Encontrada
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    value={formData.positionFound}
+                    onChange={(e) => setFormData({...formData, positionFound: e.target.value})}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Condiciones Climáticas
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    value={formData.weatherConditions}
+                    onChange={(e) => setFormData({...formData, weatherConditions: e.target.value})}
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Ubicación del Incidente */}
+          <div>
+            <h3 className="text-lg font-medium mb-4">Ubicación del Incidente</h3>
+            <div className="space-y-4">
+              <div className="flex items-center gap-2 mb-4">
+                <Button 
+                  type="button"
+                  variant="outline" 
+                  onClick={handleGetLocation}
+                  disabled={isGettingLocation}
+                  className="flex items-center gap-2"
+                >
+                  <Navigation className={`w-4 h-4 ${isGettingLocation ? 'animate-spin' : ''}`} />
+                  {isGettingLocation ? 'Obteniendo ubicación...' : 'Actualizar ubicación actual'}
+                </Button>
+                <span className="text-sm text-gray-500">
+                  Usar GPS para obtener coordenadas automáticamente
+                </span>
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Latitud
+                  </label>
+                  <input
+                    type="number"
+                    step="any"
+                    required
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    value={formData.latitude}
+                    onChange={(e) => setFormData({...formData, latitude: parseFloat(e.target.value) || 0})}
+                    placeholder="17.9869"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Longitud
+                  </label>
+                  <input
+                    type="number"
+                    step="any"
+                    required
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    value={formData.longitude}
+                    onChange={(e) => setFormData({...formData, longitude: parseFloat(e.target.value) || 0})}
+                    placeholder="-92.9303"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Sector
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    value={formData.sector}
+                    onChange={(e) => setFormData({...formData, sector: e.target.value})}
+                    placeholder="Sector A, B, C..."
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Dirección/Descripción del Lugar
+                  </label>
+                  <textarea
+                    required
+                    rows={3}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    value={formData.address}
+                    onChange={(e) => setFormData({...formData, address: e.target.value})}
+                    placeholder="Descripción detallada del lugar donde se encontró el animal"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Ambiente
+                  </label>
+                  <select
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    value={formData.environment}
+                    onChange={(e) => setFormData({...formData, environment: e.target.value})}
+                    required
+                  >
+                    <option value="">Seleccionar ambiente</option>
+                    <option value="Confinamiento">Confinamiento/Establo</option>
+                    <option value="Pastoreo">Pastoreo libre</option>
+                    <option value="Corral">Corral/Manga</option>
+                    <option value="Potrero">Potrero</option>
+                    <option value="Bebedero">Área de bebedero</option>
+                    <option value="Comedero">Área de comedero</option>
+                    <option value="Sombra">Área de sombra</option>
+                    <option value="Camino">Camino/Sendero</option>
+                    <option value="Otro">Otro</option>
+                  </select>
+                </div>
+              </div>
+
+              {(formData.latitude !== 0 && formData.longitude !== 0) && (
+                <div className="bg-blue-50 p-3 rounded-lg">
+                  <p className="text-sm text-blue-800">
+                    <strong>Coordenadas registradas:</strong> {formData.latitude.toFixed(6)}, {formData.longitude.toFixed(6)}
+                  </p>
+                  <p className="text-xs text-blue-600 mt-1">
+                    Puedes verificar la ubicación en Google Maps: 
+                    <a 
+                      href={`https://www.google.com/maps?q=${formData.latitude},${formData.longitude}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="underline ml-1"
+                    >
+                      Ver en mapa
+                    </a>
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Información Adicional */}
+          <div>
+            <h3 className="text-lg font-medium mb-4">Información Adicional</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Impacto Económico ($)
+                </label>
+                <input
+                  type="number"
+                  required
+                  min="0"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  value={formData.economicImpact}
+                  onChange={(e) => setFormData({...formData, economicImpact: parseFloat(e.target.value)})}
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    checked={formData.isContagious}
+                    onChange={(e) => setFormData({...formData, isContagious: e.target.checked})}
+                  />
+                  <span className="text-sm font-medium text-gray-700">Es contagioso</span>
+                </label>
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    checked={formData.requiresQuarantine}
+                    onChange={(e) => setFormData({...formData, requiresQuarantine: e.target.checked})}
+                  />
+                  <span className="text-sm font-medium text-gray-700">Requiere cuarentena</span>
+                </label>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-2 pt-4 border-t">
+            <Button variant="outline" onClick={onClose}>
+              Cancelar
+            </Button>
+            <Button type="submit">
+              Actualizar Reporte
+            </Button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+};
+
+// Modal de Confirmación para Eliminar
+const DeleteConfirmModal = ({
+  isOpen,
+  onClose,
+  onConfirm,
+  reportName,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  onConfirm: () => void;
+  reportName: string;
+}) => {
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="w-10 h-10 bg-red-100 rounded-lg flex items-center justify-center">
+            <Trash2 className="w-5 h-5 text-red-600" />
+          </div>
+          <div>
+            <h2 className="text-lg font-semibold text-gray-900">Eliminar Reporte</h2>
+            <p className="text-sm text-gray-600">Esta acción no se puede deshacer</p>
+          </div>
+        </div>
+        
+        <p className="text-gray-700 mb-6">
+          ¿Estás seguro de que quieres eliminar el reporte de{" "}
+          <span className="font-medium">"{reportName}"</span>?
+        </p>
+
+        <div className="flex justify-end gap-2">
+          <Button variant="outline" onClick={onClose}>
+            Cancelar
+          </Button>
+          <Button variant="danger" onClick={onConfirm}>
+            Eliminar
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // Componente de Mapa de Mortalidad
-const MortalityMap: React.FC = () => {
+const MortalityMap = () => {
   return (
     <div className="h-96 bg-gray-100 rounded-lg flex items-center justify-center relative overflow-hidden">
       {/* Fondo del mapa simulado */}
@@ -387,7 +1572,7 @@ const MortalityMap: React.FC = () => {
 };
 
 // Componente de Alerta de Mortalidad
-const MortalityAlertCard: React.FC<{ alert: MortalityAlert }> = ({ alert }) => {
+const MortalityAlertCard = ({ alert }: { alert: MortalityAlert }) => {
   const getAlertIcon = (type: string) => {
     switch (type) {
       case "outbreak":
@@ -462,7 +1647,7 @@ const MortalityAlertCard: React.FC<{ alert: MortalityAlert }> = ({ alert }) => {
   );
 };
 
-const PostMortemReports: React.FC = () => {
+const PostMortemReports = () => {
   // Estados del componente
   const [reports, setReports] = useState<PostMortemReport[]>([]);
   const [stats, setStats] = useState<MortalityStats>({
@@ -482,6 +1667,11 @@ const PostMortemReports: React.FC = () => {
   const [selectedCause, setSelectedCause] = useState<string>("all");
   const [selectedStatus, setSelectedStatus] = useState<string>("all");
   const [selectedPeriod, setSelectedPeriod] = useState<string>("30");
+  const [isNewReportModalOpen, setIsNewReportModalOpen] = useState(false);
+  const [isEditReportModalOpen, setIsEditReportModalOpen] = useState(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [editingReport, setEditingReport] = useState<PostMortemReport | null>(null);
+  const [deletingReport, setDeletingReport] = useState<PostMortemReport | null>(null);
 
   // Simulación de datos
   useEffect(() => {
@@ -814,19 +2004,168 @@ const PostMortemReports: React.FC = () => {
     loadData();
   }, []);
 
-  // Filtrar reportes
+  // Filtrar reportes con filtros funcionales
   const filteredReports = reports.filter((report) => {
     const matchesSearch =
       report.animalName.toLowerCase().includes(searchTerm.toLowerCase()) ||
       report.animalTag.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      report.finalCause.toLowerCase().includes(searchTerm.toLowerCase());
+      report.finalCause.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      report.animalId.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      report.breed.toLowerCase().includes(searchTerm.toLowerCase());
+    
     const matchesCause =
       selectedCause === "all" || report.causeCategory === selectedCause;
+    
     const matchesStatus =
       selectedStatus === "all" || report.reportStatus === selectedStatus;
 
-    return matchesSearch && matchesCause && matchesStatus;
+    // Filtro por período
+    const now = new Date();
+    const reportDate = new Date(report.deathDate);
+    const daysDifference = Math.floor((now.getTime() - reportDate.getTime()) / (1000 * 3600 * 24));
+    
+    let matchesPeriod = true;
+    if (selectedPeriod === "7") {
+      matchesPeriod = daysDifference <= 7;
+    } else if (selectedPeriod === "30") {
+      matchesPeriod = daysDifference <= 30;
+    } else if (selectedPeriod === "90") {
+      matchesPeriod = daysDifference <= 90;
+    } else if (selectedPeriod === "365") {
+      matchesPeriod = daysDifference <= 365;
+    }
+
+    return matchesSearch && matchesCause && matchesStatus && matchesPeriod;
   });
+
+  // Funciones de manejo
+  const handleNewReport = (formData: NewReportForm) => {
+    const newReport: PostMortemReport = {
+      id: Date.now().toString(),
+      animalId: formData.animalId,
+      animalName: formData.animalName,
+      animalTag: formData.animalTag,
+      breed: formData.breed,
+      age: formData.age,
+      gender: formData.gender,
+      weight: formData.weight,
+      deathDate: new Date(formData.deathDate),
+      discoveryDate: new Date(formData.discoveryDate),
+      location: {
+        lat: formData.latitude,
+        lng: formData.longitude,
+        address: formData.address,
+        sector: formData.sector,
+        environment: formData.environment,
+      },
+      deathCircumstances: {
+        witnessed: false,
+        positionFound: formData.positionFound,
+        weatherConditions: formData.weatherConditions,
+        circumstances: formData.circumstances,
+      },
+      preliminaryCause: formData.preliminaryCause,
+      finalCause: formData.finalCause,
+      causeCategory: formData.causeCategory as any,
+      necropsyPerformed: true,
+      necropsyDate: new Date(),
+      pathologist: formData.pathologist,
+      veterinarian: formData.veterinarian,
+      grossFindings: {
+        externalExamination: "",
+        cardiovascularSystem: "",
+        respiratorySystem: "",
+        digestiveSystem: "",
+        nervousSystem: "",
+        reproductiveSystem: "",
+        musculoskeletalSystem: "",
+        lymphaticSystem: "",
+        other: "",
+      },
+      photos: [],
+      samples: [],
+      preventiveRecommendations: [],
+      economicImpact: formData.economicImpact,
+      reportStatus: "preliminary",
+      createdBy: "Usuario Actual",
+      createdAt: new Date(),
+      lastUpdated: new Date(),
+      isContagious: formData.isContagious,
+      requiresQuarantine: formData.requiresQuarantine,
+      notifiableDisease: false,
+      reportedToAuthorities: false,
+    };
+
+    setReports([newReport, ...reports]);
+  };
+
+  const handleEditReport = (formData: NewReportForm) => {
+    if (!editingReport) return;
+
+    const updatedReport: PostMortemReport = {
+      ...editingReport,
+      animalId: formData.animalId,
+      animalName: formData.animalName,
+      animalTag: formData.animalTag,
+      breed: formData.breed,
+      age: formData.age,
+      gender: formData.gender,
+      weight: formData.weight,
+      deathDate: new Date(formData.deathDate),
+      discoveryDate: new Date(formData.discoveryDate),
+      location: {
+        lat: formData.latitude,
+        lng: formData.longitude,
+        address: formData.address,
+        sector: formData.sector,
+        environment: formData.environment,
+      },
+      preliminaryCause: formData.preliminaryCause,
+      finalCause: formData.finalCause,
+      causeCategory: formData.causeCategory as any,
+      pathologist: formData.pathologist,
+      veterinarian: formData.veterinarian,
+      deathCircumstances: {
+        ...editingReport.deathCircumstances,
+        positionFound: formData.positionFound,
+        weatherConditions: formData.weatherConditions,
+        circumstances: formData.circumstances,
+      },
+      economicImpact: formData.economicImpact,
+      isContagious: formData.isContagious,
+      requiresQuarantine: formData.requiresQuarantine,
+      lastUpdated: new Date(),
+    };
+
+    setReports(prevReports =>
+      prevReports.map(report =>
+        report.id === editingReport.id ? updatedReport : report
+      )
+    );
+
+    setEditingReport(null);
+  };
+
+  const handleDeleteReport = () => {
+    if (!deletingReport) return;
+
+    setReports(prevReports =>
+      prevReports.filter(report => report.id !== deletingReport.id)
+    );
+
+    setDeletingReport(null);
+    setIsDeleteModalOpen(false);
+  };
+
+  const openEditModal = (report: PostMortemReport) => {
+    setEditingReport(report);
+    setIsEditReportModalOpen(true);
+  };
+
+  const openDeleteModal = (report: PostMortemReport) => {
+    setDeletingReport(report);
+    setIsDeleteModalOpen(true);
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-emerald-50 via-teal-50 to-cyan-50">
@@ -847,15 +2186,10 @@ const PostMortemReports: React.FC = () => {
               </p>
             </div>
             <div className="flex items-center gap-3">
-              <Button variant="outline" size="sm">
-                <Archive className="w-4 h-4 mr-2" />
-                Histórico
-              </Button>
-              <Button variant="outline" size="sm">
-                <Download className="w-4 h-4 mr-2" />
-                Exportar
-              </Button>
-              <Button size="sm">
+              <Button 
+                size="sm"
+                onClick={() => setIsNewReportModalOpen(true)}
+              >
                 <Plus className="w-4 h-4 mr-2" />
                 Nuevo Reporte
               </Button>
@@ -1018,14 +2352,13 @@ const PostMortemReports: React.FC = () => {
             </Card>
           </motion.div>
 
-          {/* Panel de Control */}
+          {/* Panel de Filtros */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.2 }}
-            className="lg:col-span-4 space-y-6"
+            className="lg:col-span-4"
           >
-            {/* Filtros */}
             <Card className="bg-white/80 backdrop-blur-md border-gray-200">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
@@ -1107,96 +2440,6 @@ const PostMortemReports: React.FC = () => {
                     <option value="365">Último año</option>
                   </select>
                 </div>
-              </CardContent>
-            </Card>
-
-            {/* Causa Más Común */}
-            <Card className="bg-white/80 backdrop-blur-md border-gray-200">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <BarChart3 className="w-5 h-5 text-purple-600" />
-                  Causa Predominante
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div className="text-center">
-                  <h3 className="text-lg font-bold text-gray-900">
-                    {stats.mostCommonCause}
-                  </h3>
-                  <p className="text-gray-600">Causa más frecuente</p>
-                </div>
-
-                <div className="space-y-2 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Tendencia estacional:</span>
-                    <div className="flex items-center gap-1">
-                      {stats.seasonalTrend === "increasing" ? (
-                        <TrendingUp className="w-4 h-4 text-red-500" />
-                      ) : stats.seasonalTrend === "decreasing" ? (
-                        <TrendingDown className="w-4 h-4 text-green-500" />
-                      ) : (
-                        <Activity className="w-4 h-4 text-blue-500" />
-                      )}
-                      <span
-                        className={`font-medium ${
-                          stats.seasonalTrend === "increasing"
-                            ? "text-red-600"
-                            : stats.seasonalTrend === "decreasing"
-                            ? "text-green-600"
-                            : "text-blue-600"
-                        }`}
-                      >
-                        {stats.seasonalTrend === "increasing"
-                          ? "Aumentando"
-                          : stats.seasonalTrend === "decreasing"
-                          ? "Disminuyendo"
-                          : "Estable"}
-                      </span>
-                    </div>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Edad promedio:</span>
-                    <span className="font-medium">{stats.averageAge} años</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Muertes este mes:</span>
-                    <span className="font-medium">{stats.monthlyDeaths}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Casos contagiosos:</span>
-                    <span className="font-medium text-red-600">
-                      {stats.contagiousCases}
-                    </span>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Acciones Rápidas */}
-            <Card className="bg-white/80 backdrop-blur-md border-gray-200">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Settings className="w-5 h-5 text-green-600" />
-                  Acciones Rápidas
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <Button variant="outline" className="w-full justify-start">
-                  <BookOpen className="w-4 h-4 mr-2" />
-                  Guía de Necropsia
-                </Button>
-                <Button variant="outline" className="w-full justify-start">
-                  <Camera className="w-4 h-4 mr-2" />
-                  Protocolo Fotográfico
-                </Button>
-                <Button variant="outline" className="w-full justify-start">
-                  <FileText className="w-4 h-4 mr-2" />
-                  Reporte Epidemiológico
-                </Button>
-                <Button variant="outline" className="w-full justify-start">
-                  <Archive className="w-4 h-4 mr-2" />
-                  Base de Datos Histórica
-                </Button>
               </CardContent>
             </Card>
           </motion.div>
@@ -1283,6 +2526,41 @@ const PostMortemReports: React.FC = () => {
                               <p className="font-medium">
                                 {report.deathDate.toLocaleDateString()}
                               </p>
+                            </div>
+                          </div>
+
+                          <div className="mb-4">
+                            <h5 className="font-semibold text-gray-900 mb-2">
+                              Ubicación del Incidente
+                            </h5>
+                            <div className="bg-gray-50 p-3 rounded-lg text-sm">
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                <div>
+                                  <p>
+                                    <strong>Dirección:</strong> {report.location.address}
+                                  </p>
+                                  <p>
+                                    <strong>Sector:</strong> {report.location.sector}
+                                  </p>
+                                  <p>
+                                    <strong>Ambiente:</strong> {report.location.environment}
+                                  </p>
+                                </div>
+                                <div>
+                                  <p>
+                                    <strong>Coordenadas:</strong> {report.location.lat.toFixed(6)}, {report.location.lng.toFixed(6)}
+                                  </p>
+                                  <a 
+                                    href={`https://www.google.com/maps?q=${report.location.lat},${report.location.lng}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-blue-600 hover:text-blue-800 underline text-xs flex items-center gap-1 mt-1"
+                                  >
+                                    <MapPin className="w-3 h-3" />
+                                    Ver ubicación en Google Maps
+                                  </a>
+                                </div>
+                              </div>
                             </div>
                           </div>
 
@@ -1445,14 +2723,10 @@ const PostMortemReports: React.FC = () => {
                             </div>
                           </div>
 
-                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-gray-600">
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-gray-600">
                             <div>
                               <strong>Veterinario:</strong>{" "}
                               {report.veterinarian}
-                            </div>
-                            <div>
-                              <strong>Ubicación:</strong>{" "}
-                              {report.location.address}
                             </div>
                             <div>
                               <strong>Impacto económico:</strong> $
@@ -1462,14 +2736,21 @@ const PostMortemReports: React.FC = () => {
                         </div>
 
                         <div className="flex items-center gap-2 ml-4">
-                          <Button variant="outline" size="sm">
-                            <Eye className="w-4 h-4" />
-                          </Button>
-                          <Button variant="outline" size="sm">
+                          <Button 
+                            variant="outline" 
+                            size="sm"
+                            onClick={() => openEditModal(report)}
+                            className="hover:bg-blue-50 hover:border-blue-300"
+                          >
                             <Edit className="w-4 h-4" />
                           </Button>
-                          <Button variant="outline" size="sm">
-                            <Camera className="w-4 h-4" />
+                          <Button 
+                            variant="outline" 
+                            size="sm"
+                            onClick={() => openDeleteModal(report)}
+                            className="hover:bg-red-50 hover:border-red-300 hover:text-red-600"
+                          >
+                            <Trash2 className="w-4 h-4" />
                           </Button>
                         </div>
                       </div>
@@ -1481,6 +2762,35 @@ const PostMortemReports: React.FC = () => {
           </motion.div>
         </div>
       </div>
+
+      {/* Modal para Nuevo Reporte */}
+      <NewReportModal
+        isOpen={isNewReportModalOpen}
+        onClose={() => setIsNewReportModalOpen(false)}
+        onSubmit={handleNewReport}
+      />
+
+      {/* Modal para Editar Reporte */}
+      <EditReportModal
+        isOpen={isEditReportModalOpen}
+        onClose={() => {
+          setIsEditReportModalOpen(false);
+          setEditingReport(null);
+        }}
+        onSubmit={handleEditReport}
+        report={editingReport}
+      />
+
+      {/* Modal de Confirmación para Eliminar */}
+      <DeleteConfirmModal
+        isOpen={isDeleteModalOpen}
+        onClose={() => {
+          setIsDeleteModalOpen(false);
+          setDeletingReport(null);
+        }}
+        onConfirm={handleDeleteReport}
+        reportName={deletingReport?.animalName || ""}
+      />
     </div>
   );
 };

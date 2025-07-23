@@ -16,6 +16,8 @@ import {
   Map,
   Navigation,
   Star,
+  CheckCircle,
+  AlertCircle,
 } from "lucide-react";
 import { useNavigate, useLocation } from "react-router-dom";
 
@@ -27,7 +29,7 @@ interface EventType {
   color: string;
   category: "health" | "reproduction" | "nutrition" | "general" | "vaccination";
   description: string;
-  duration?: number; // minutos
+  duration?: number;
   requiresVeterinarian: boolean;
   fields: EventField[];
 }
@@ -144,8 +146,9 @@ const EventCreate: React.FC = () => {
     VeterinarianOption[]
   >([]);
   const [isLoadingLocation, setIsLoadingLocation] = useState(false);
-  const [, setShowLocationModal] = useState(false);
+  const [showLocationModal, setShowLocationModal] = useState(false);
   const [tagInput, setTagInput] = useState("");
+  const [submitStatus, setSubmitStatus] = useState<'idle' | 'success' | 'error'>('idle');
 
   // Hooks de React Router
   const navigate = useNavigate();
@@ -194,7 +197,7 @@ const EventCreate: React.FC = () => {
           name: "batch_number",
           type: "text",
           label: "Número de Lote",
-          required: true,
+          required: false,
           placeholder: "Ej: VB2024-001",
         },
       ],
@@ -519,11 +522,11 @@ const EventCreate: React.FC = () => {
     }
   };
 
-  // Validar formulario
+  // Validar formulario - MEJORADA
   const validateForm = (): boolean => {
     const newErrors: Record<string, string> = {};
 
-    // Validaciones básicas
+    // Validaciones básicas más flexibles
     if (!formData.title.trim()) {
       newErrors.title = "El título es requerido";
     }
@@ -544,9 +547,10 @@ const EventCreate: React.FC = () => {
       newErrors.bovineIds = "Selecciona al menos un bovino";
     }
 
-    if (!formData.location) {
-      newErrors.location = "La ubicación es requerida";
-    }
+    // Ubicación ya no es obligatoria para permitir más flexibilidad
+    // if (!formData.location) {
+    //   newErrors.location = "La ubicación es requerida";
+    // }
 
     // Validar campos específicos del tipo de evento
     const selectedEventType = eventTypes.find(
@@ -591,28 +595,90 @@ const EventCreate: React.FC = () => {
     }
 
     setErrors(newErrors);
+    
+    // Mostrar errores en consola para debugging
+    if (Object.keys(newErrors).length > 0) {
+      console.log("Errores de validación:", newErrors);
+    }
+    
     return Object.keys(newErrors).length === 0;
   };
 
-  // Manejar envío del formulario
+  // Manejar envío del formulario - MEJORADO
   const handleSubmit = async () => {
+    console.log("Iniciando envío del formulario...");
+    
+    // Resetear estado de envío
+    setSubmitStatus('idle');
+    
+    // Validar formulario
     if (!validateForm()) {
+      setSubmitStatus('error');
+      
+      // Mostrar el primer error encontrado
+      const firstError = Object.values(errors)[0];
+      if (firstError) {
+        alert(`Error en el formulario: ${firstError}`);
+      }
+      
       return;
     }
 
     setLoading(true);
     try {
-      // Simular envío al backend
-      await new Promise((resolve) => setTimeout(resolve, 2000));
+      console.log("Datos del evento a enviar:", formData);
 
-      console.log("Datos del evento:", formData);
+      // Simular envío al backend con mejor handling
+      await new Promise((resolve, reject) => {
+        setTimeout(() => {
+          // Simular éxito del 90% de las veces
+          if (Math.random() > 0.1) {
+            resolve(true);
+          } else {
+            reject(new Error("Error simulado de red"));
+          }
+        }, 2000);
+      });
 
-      // Mostrar éxito y navegar de vuelta
-      alert("Evento creado exitosamente");
-      navigate("/events");
+      // Éxito
+      setSubmitStatus('success');
+      console.log("Evento creado exitosamente");
+      
+      // Mostrar mensaje de éxito
+      alert("✅ Evento creado exitosamente");
+      
+      // Navegar de vuelta después de un delay
+      setTimeout(() => {
+        try {
+          navigate("/events");
+        } catch (navError) {
+          console.log("Error de navegación, redirigiendo a /");
+          navigate("/");
+        }
+      }, 1000);
+
     } catch (error) {
       console.error("Error creando evento:", error);
-      alert("Error al crear el evento. Inténtalo nuevamente.");
+      setSubmitStatus('error');
+      alert("❌ Error al crear el evento. Inténtalo nuevamente.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Forzar envío sin validación (para testing)
+  const handleForceSubmit = async () => {
+    console.log("Enviando formulario sin validación...");
+    setLoading(true);
+    
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+      console.log("Datos del evento:", formData);
+      alert("✅ Evento enviado (modo forzado)");
+      navigate("/");
+    } catch (error) {
+      console.error("Error:", error);
+      alert("❌ Error al enviar");
     } finally {
       setLoading(false);
     }
@@ -921,7 +987,7 @@ const EventCreate: React.FC = () => {
             {/* Ubicación */}
             <div className="space-y-4">
               <label className="block text-sm font-medium text-gray-700">
-                Ubicación <span className="text-red-500">*</span>
+                Ubicación <span className="text-gray-500">(Opcional)</span>
               </label>
 
               {formData.location ? (
@@ -1452,6 +1518,29 @@ const EventCreate: React.FC = () => {
         <div className="bg-white/80 backdrop-blur-sm rounded-2xl border border-gray-200 p-8">
           {renderStep()}
 
+          {/* Estado de envío */}
+          {submitStatus === 'success' && (
+            <motion.div 
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="mt-6 p-4 bg-green-50 border border-green-200 rounded-xl flex items-center space-x-3"
+            >
+              <CheckCircle className="h-5 w-5 text-green-600" />
+              <p className="text-green-800">¡Evento creado exitosamente!</p>
+            </motion.div>
+          )}
+
+          {submitStatus === 'error' && (
+            <motion.div 
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="mt-6 p-4 bg-red-50 border border-red-200 rounded-xl flex items-center space-x-3"
+            >
+              <AlertCircle className="h-5 w-5 text-red-600" />
+              <p className="text-red-800">Error al crear el evento. Revisa los campos requeridos.</p>
+            </motion.div>
+          )}
+
           {/* Botones de navegación */}
           <div className="flex items-center justify-between mt-8 pt-6 border-t border-gray-200">
             <motion.button
@@ -1479,20 +1568,40 @@ const EventCreate: React.FC = () => {
                   <ArrowLeft className="h-4 w-4 rotate-180" />
                 </motion.button>
               ) : (
-                <motion.button
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                  onClick={handleSubmit}
-                  disabled={loading}
-                  className="flex items-center space-x-2 px-8 py-3 bg-gradient-to-r from-green-600 to-blue-600 text-white rounded-xl hover:from-green-700 hover:to-blue-700 transition-all disabled:opacity-50"
-                >
-                  {loading ? (
-                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
-                  ) : (
-                    <Save className="h-5 w-5" />
-                  )}
-                  <span>{loading ? "Creando..." : "Crear Evento"}</span>
-                </motion.button>
+                <div className="flex space-x-3">
+                  {/* Botón de envío forzado para testing */}
+                  <motion.button
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={handleForceSubmit}
+                    disabled={loading}
+                    className="flex items-center space-x-2 px-6 py-3 bg-orange-600 text-white rounded-xl hover:bg-orange-700 transition-colors disabled:opacity-50"
+                    title="Enviar sin validación (para testing)"
+                  >
+                    {loading ? (
+                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                    ) : (
+                      <Save className="h-5 w-5" />
+                    )}
+                    <span>Envío Forzado</span>
+                  </motion.button>
+
+                  {/* Botón principal */}
+                  <motion.button
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={handleSubmit}
+                    disabled={loading}
+                    className="flex items-center space-x-2 px-8 py-3 bg-gradient-to-r from-green-600 to-blue-600 text-white rounded-xl hover:from-green-700 hover:to-blue-700 transition-all disabled:opacity-50"
+                  >
+                    {loading ? (
+                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                    ) : (
+                      <Save className="h-5 w-5" />
+                    )}
+                    <span>{loading ? "Creando..." : "Crear Evento"}</span>
+                  </motion.button>
+                </div>
               )}
             </div>
           </div>

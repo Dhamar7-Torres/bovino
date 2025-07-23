@@ -12,7 +12,6 @@ import {
   Eye,
   Edit3,
   Trash2,
-  MoreVertical,
   Grid,
   List,
   Activity,
@@ -108,6 +107,8 @@ const EventList: React.FC = () => {
   const [showFilters, setShowFilters] = useState(false);
   const [bulkActions, setBulkActions] = useState(false);
   const [selectedEvents, setSelectedEvents] = useState<string[]>([]);
+  const [notification, setNotification] = useState<{type: 'success' | 'error' | 'info', message: string} | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<{eventId: string, eventTitle: string} | null>(null);
 
   // Hook de navegación
   const navigate = useNavigate();
@@ -292,12 +293,12 @@ const EventList: React.FC = () => {
 
   // Estados de los eventos (simulado)
   const eventStatuses = [
-    { id: "all", name: "Todos", count: 5 },
+    { id: "all", name: "Todos", count: 4 },
     { id: "scheduled", name: "Programados", count: 2 },
     { id: "in_progress", name: "En Progreso", count: 1 },
-    { id: "completed", name: "Completados", count: 2 },
-    { id: "overdue", name: "Vencidos", count: 2 },
-    { id: "high_priority", name: "Alta Prioridad", count: 3 },
+    { id: "completed", name: "Completados", count: 1 },
+    { id: "overdue", name: "Vencidos", count: 0 },
+    { id: "high_priority", name: "Alta Prioridad", count: 2 },
   ];
 
   // Modos de vista
@@ -346,6 +347,7 @@ const EventList: React.FC = () => {
         setEvents(mockEvents);
       } catch (error) {
         console.error("Error cargando eventos:", error);
+        setNotification({type: 'error', message: 'Error al cargar los eventos'});
       } finally {
         setLoading(false);
       }
@@ -353,6 +355,16 @@ const EventList: React.FC = () => {
 
     loadEvents();
   }, []);
+
+  // Auto-limpiar notificaciones
+  useEffect(() => {
+    if (notification) {
+      const timer = setTimeout(() => {
+        setNotification(null);
+      }, 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [notification]);
 
   // Filtrar y ordenar eventos
   const filteredEvents = events
@@ -391,8 +403,9 @@ const EventList: React.FC = () => {
       switch (field) {
         case "scheduledDate":
           return (
-            new Date(a.scheduledDate).getTime() -
-            new Date(b.scheduledDate).getTime() * multiplier
+            (new Date(a.scheduledDate).getTime() -
+              new Date(b.scheduledDate).getTime()) *
+            multiplier
           );
         case "priority":
           return (a.priority.level - b.priority.level) * multiplier;
@@ -403,23 +416,112 @@ const EventList: React.FC = () => {
       }
     });
 
-  // Funciones de manejo
+  // Funciones de manejo mejoradas
   const handleCreateEvent = () => {
-    navigate("/events/create");
+    setNotification({type: 'info', message: 'Redirigiendo a crear evento...'});
+    setTimeout(() => navigate("/events/create"), 500);
   };
 
   const handleViewEvent = (eventId: string) => {
-    navigate(`/events/${eventId}`);
-  };
-
-  const handleEditEvent = (eventId: string) => {
-    navigate(`/events/edit/${eventId}`);
-  };
-
-  const handleDeleteEvent = (eventId: string) => {
-    if (confirm("¿Estás seguro de que quieres eliminar este evento?")) {
-      setEvents((prev) => prev.filter((event) => event.id !== eventId));
+    const event = events.find(e => e.id === eventId);
+    if (!event) {
+      setNotification({type: 'error', message: 'Evento no encontrado'});
+      return;
     }
+    setNotification({type: 'info', message: `Abriendo detalles de: ${event.title}`});
+    setTimeout(() => navigate(`/events/${eventId}`), 500);
+  };
+
+  const handleEditEvent = (eventId: string, e?: React.MouseEvent) => {
+    if (e) {
+      e.stopPropagation();
+    }
+    
+    const event = events.find(e => e.id === eventId);
+    if (!event) {
+      setNotification({type: 'error', message: 'Evento no encontrado'});
+      return;
+    }
+
+    // Verificar si se puede editar según el estado
+    if (event.status.id === 'completed') {
+      setNotification({type: 'error', message: 'No se puede editar un evento completado'});
+      return;
+    }
+
+    setNotification({type: 'info', message: `Editando: ${event.title}`});
+    setTimeout(() => navigate(`/events/edit/${eventId}`), 500);
+  };
+
+  const handleDeleteEvent = (eventId: string, e?: React.MouseEvent) => {
+    if (e) {
+      e.stopPropagation();
+    }
+    
+    const event = events.find(e => e.id === eventId);
+    if (!event) {
+      setNotification({type: 'error', message: 'Evento no encontrado'});
+      return;
+    }
+
+    // Mostrar modal de confirmación personalizado
+    setDeleteConfirm({eventId, eventTitle: event.title});
+  };
+
+  const confirmDeleteEvent = () => {
+    if (!deleteConfirm) return;
+    
+    const {eventId, eventTitle} = deleteConfirm;
+    
+    // Verificar si se puede eliminar
+    const event = events.find(e => e.id === eventId);
+    if (event?.status.id === 'in_progress') {
+      setNotification({type: 'error', message: 'No se puede eliminar un evento en progreso'});
+      setDeleteConfirm(null);
+      return;
+    }
+
+    // Eliminar evento
+    setEvents((prev) => prev.filter((event) => event.id !== eventId));
+    setNotification({type: 'success', message: `Evento "${eventTitle}" eliminado correctamente`});
+    setDeleteConfirm(null);
+    
+    // También remover de selección múltiple si estaba seleccionado
+    setSelectedEvents(prev => prev.filter(id => id !== eventId));
+  };
+
+  const cancelDeleteEvent = () => {
+    setDeleteConfirm(null);
+  };
+
+  // Funciones para selección múltiple
+  const handleBulkDelete = () => {
+    if (selectedEvents.length === 0) {
+      setNotification({type: 'error', message: 'No hay eventos seleccionados'});
+      return;
+    }
+
+    const eventsToDelete = events.filter(event => selectedEvents.includes(event.id));
+    const inProgressEvents = eventsToDelete.filter(event => event.status.id === 'in_progress');
+    
+    if (inProgressEvents.length > 0) {
+      setNotification({type: 'error', message: 'No se pueden eliminar eventos en progreso'});
+      return;
+    }
+
+    if (window.confirm(`¿Eliminar ${selectedEvents.length} evento(s) seleccionado(s)?`)) {
+      setEvents(prev => prev.filter(event => !selectedEvents.includes(event.id)));
+      setNotification({type: 'success', message: `${selectedEvents.length} evento(s) eliminado(s) correctamente`});
+      setSelectedEvents([]);
+    }
+  };
+
+  const handleBulkEdit = () => {
+    if (selectedEvents.length === 0) {
+      setNotification({type: 'error', message: 'No hay eventos seleccionados'});
+      return;
+    }
+    setNotification({type: 'info', message: 'Función de edición múltiple próximamente'});
   };
 
   const toggleEventSelection = (eventId: string) => {
@@ -585,33 +687,40 @@ const EventList: React.FC = () => {
                   e.stopPropagation();
                   handleViewEvent(event.id);
                 }}
-                className="p-1 hover:bg-blue-100 rounded-lg transition-colors text-blue-600"
+                className="p-1 hover:bg-blue-100 rounded-lg transition-colors text-blue-600 group"
+                title="Ver detalles"
               >
-                <Eye className="h-4 w-4" />
+                <Eye className="h-4 w-4 group-hover:scale-110 transition-transform" />
               </motion.button>
 
               <motion.button
                 whileHover={{ scale: 1.1 }}
                 whileTap={{ scale: 0.9 }}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleEditEvent(event.id);
-                }}
-                className="p-1 hover:bg-yellow-100 rounded-lg transition-colors text-yellow-600"
+                onClick={(e) => handleEditEvent(event.id, e)}
+                disabled={event.status.id === 'completed'}
+                className={`p-1 rounded-lg transition-colors group ${
+                  event.status.id === 'completed' 
+                    ? 'text-gray-400 cursor-not-allowed' 
+                    : 'hover:bg-yellow-100 text-yellow-600'
+                }`}
+                title={event.status.id === 'completed' ? "No se puede editar evento completado" : "Editar evento"}
               >
-                <Edit3 className="h-4 w-4" />
+                <Edit3 className="h-4 w-4 group-hover:scale-110 transition-transform" />
               </motion.button>
 
               <motion.button
                 whileHover={{ scale: 1.1 }}
                 whileTap={{ scale: 0.9 }}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  // Mostrar menú de más opciones
-                }}
-                className="p-1 hover:bg-gray-100 rounded-lg transition-colors text-gray-600"
+                onClick={(e) => handleDeleteEvent(event.id, e)}
+                disabled={event.status.id === 'in_progress'}
+                className={`p-1 rounded-lg transition-colors group ${
+                  event.status.id === 'in_progress' 
+                    ? 'text-gray-400 cursor-not-allowed' 
+                    : 'hover:bg-red-100 text-red-600'
+                }`}
+                title={event.status.id === 'in_progress' ? "No se puede eliminar evento en progreso" : "Eliminar evento"}
               >
-                <MoreVertical className="h-4 w-4" />
+                <Trash2 className="h-4 w-4 group-hover:scale-110 transition-transform" />
               </motion.button>
             </div>
           </div>
@@ -752,20 +861,38 @@ const EventList: React.FC = () => {
                       whileTap={{ scale: 0.9 }}
                       onClick={(e) => {
                         e.stopPropagation();
-                        handleEditEvent(event.id);
+                        handleViewEvent(event.id);
                       }}
-                      className="text-indigo-600 hover:text-indigo-900"
+                      className="text-blue-600 hover:text-blue-900"
+                      title="Ver detalles"
+                    >
+                      <Eye className="h-4 w-4" />
+                    </motion.button>
+                    <motion.button
+                      whileHover={{ scale: 1.1 }}
+                      whileTap={{ scale: 0.9 }}
+                      onClick={(e) => handleEditEvent(event.id, e)}
+                      disabled={event.status.id === 'completed'}
+                      className={`${
+                        event.status.id === 'completed' 
+                          ? 'text-gray-400 cursor-not-allowed' 
+                          : 'text-indigo-600 hover:text-indigo-900'
+                      }`}
+                      title={event.status.id === 'completed' ? "No se puede editar evento completado" : "Editar evento"}
                     >
                       <Edit3 className="h-4 w-4" />
                     </motion.button>
                     <motion.button
                       whileHover={{ scale: 1.1 }}
                       whileTap={{ scale: 0.9 }}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleDeleteEvent(event.id);
-                      }}
-                      className="text-red-600 hover:text-red-900"
+                      onClick={(e) => handleDeleteEvent(event.id, e)}
+                      disabled={event.status.id === 'in_progress'}
+                      className={`${
+                        event.status.id === 'in_progress' 
+                          ? 'text-gray-400 cursor-not-allowed' 
+                          : 'text-red-600 hover:text-red-900'
+                      }`}
+                      title={event.status.id === 'in_progress' ? "No se puede eliminar evento en progreso" : "Eliminar evento"}
                     >
                       <Trash2 className="h-4 w-4" />
                     </motion.button>
@@ -806,14 +933,55 @@ const EventList: React.FC = () => {
               )}
             </div>
 
-            <div className="flex-1 min-w-0">
+            <div className="flex-1 min-w-0 bg-white/80 backdrop-blur-sm rounded-lg p-4 border border-gray-200 hover:shadow-md transition-shadow">
               <div className="flex items-center justify-between mb-2">
                 <h3 className="text-sm font-medium text-gray-900">
                   {event.title}
                 </h3>
-                <span className="text-xs text-gray-500">
-                  {formatDate(event.scheduledDate)}
-                </span>
+                <div className="flex items-center space-x-2">
+                  <span className="text-xs text-gray-500">
+                    {formatDate(event.scheduledDate)}
+                  </span>
+                  <div className="flex items-center space-x-1">
+                    <motion.button
+                      whileHover={{ scale: 1.1 }}
+                      whileTap={{ scale: 0.9 }}
+                      onClick={() => handleViewEvent(event.id)}
+                      className="p-1 hover:bg-blue-100 rounded-lg transition-colors text-blue-600"
+                      title="Ver detalles"
+                    >
+                      <Eye className="h-3 w-3" />
+                    </motion.button>
+                    <motion.button
+                      whileHover={{ scale: 1.1 }}
+                      whileTap={{ scale: 0.9 }}
+                      onClick={() => handleEditEvent(event.id)}
+                      disabled={event.status.id === 'completed'}
+                      className={`p-1 rounded-lg transition-colors ${
+                        event.status.id === 'completed' 
+                          ? 'text-gray-400 cursor-not-allowed' 
+                          : 'hover:bg-yellow-100 text-yellow-600'
+                      }`}
+                      title={event.status.id === 'completed' ? "No se puede editar evento completado" : "Editar evento"}
+                    >
+                      <Edit3 className="h-3 w-3" />
+                    </motion.button>
+                    <motion.button
+                      whileHover={{ scale: 1.1 }}
+                      whileTap={{ scale: 0.9 }}
+                      onClick={() => handleDeleteEvent(event.id)}
+                      disabled={event.status.id === 'in_progress'}
+                      className={`p-1 rounded-lg transition-colors ${
+                        event.status.id === 'in_progress' 
+                          ? 'text-gray-400 cursor-not-allowed' 
+                          : 'hover:bg-red-100 text-red-600'
+                      }`}
+                      title={event.status.id === 'in_progress' ? "No se puede eliminar evento en progreso" : "Eliminar evento"}
+                    >
+                      <Trash2 className="h-3 w-3" />
+                    </motion.button>
+                  </div>
+                </div>
               </div>
 
               <div className="flex items-center space-x-4 mb-2">
@@ -850,6 +1018,139 @@ const EventList: React.FC = () => {
       default:
         return renderGridView();
     }
+  };
+
+  // Función para limpiar filtros
+  const clearFilters = () => {
+    setSearchTerm("");
+    setSelectedFilter("all");
+    setSortBy("scheduledDate-desc");
+  };
+
+  // Función para exportar eventos
+  const exportEvents = () => {
+    try {
+      const dataToExport = filteredEvents.map(event => ({
+        id: event.id,
+        titulo: event.title,
+        descripcion: event.description,
+        tipo: event.type.name,
+        estado: event.status.name,
+        prioridad: event.priority.name,
+        fecha: event.scheduledDate,
+        hora: event.scheduledTime,
+        ubicacion: event.location.section,
+        bovino: event.bovineInfo.name,
+        etiqueta: event.bovineInfo.tag,
+        veterinario: event.veterinarian || 'N/A',
+        costo: event.cost || 0,
+        creado: event.createdAt,
+        actualizado: event.updatedAt
+      }));
+
+      const dataStr = JSON.stringify(dataToExport, null, 2);
+      const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
+      
+      const exportFileDefaultName = `eventos_ganado_${new Date().toISOString().split('T')[0]}.json`;
+      
+      const linkElement = document.createElement('a');
+      linkElement.setAttribute('href', dataUri);
+      linkElement.setAttribute('download', exportFileDefaultName);
+      linkElement.click();
+
+      setNotification({type: 'success', message: `${filteredEvents.length} eventos exportados correctamente`});
+    } catch (error) {
+      setNotification({type: 'error', message: 'Error al exportar eventos'});
+    }
+  };
+
+  // Componente de notificación
+  const NotificationComponent = () => {
+    if (!notification) return null;
+
+    const bgColor = notification.type === 'success' ? 'bg-green-500' : 
+                   notification.type === 'error' ? 'bg-red-500' : 'bg-blue-500';
+    
+    return (
+      <motion.div
+        initial={{ opacity: 0, y: -50 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: -50 }}
+        className={`fixed top-4 right-4 z-50 ${bgColor} text-white px-6 py-3 rounded-lg shadow-lg flex items-center space-x-2`}
+      >
+        {notification.type === 'success' && <CheckCircle className="h-5 w-5" />}
+        {notification.type === 'error' && <Trash2 className="h-5 w-5" />}
+        {notification.type === 'info' && <Bell className="h-5 w-5" />}
+        <span>{notification.message}</span>
+        <button
+          onClick={() => setNotification(null)}
+          className="ml-2 hover:bg-white/20 rounded p-1"
+        >
+          ×
+        </button>
+      </motion.div>
+    );
+  };
+
+  // Modal de confirmación de eliminación
+  const DeleteConfirmModal = () => {
+    if (!deleteConfirm) return null;
+
+    return (
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+        onClick={cancelDeleteEvent}
+      >
+        <motion.div
+          initial={{ scale: 0.8, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          exit={{ scale: 0.8, opacity: 0 }}
+          className="bg-white rounded-2xl p-6 max-w-md mx-4 shadow-xl"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="flex items-center space-x-3 mb-4">
+            <div className="p-2 bg-red-100 rounded-full">
+              <Trash2 className="h-6 w-6 text-red-600" />
+            </div>
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900">
+                Eliminar Evento
+              </h3>
+              <p className="text-sm text-gray-600">
+                Esta acción no se puede deshacer
+              </p>
+            </div>
+          </div>
+          
+          <p className="text-gray-700 mb-6">
+            ¿Estás seguro de que quieres eliminar el evento 
+            <span className="font-semibold"> "{deleteConfirm.eventTitle}"</span>?
+          </p>
+          
+          <div className="flex justify-end space-x-3">
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={cancelDeleteEvent}
+              className="px-4 py-2 text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+            >
+              Cancelar
+            </motion.button>
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={confirmDeleteEvent}
+              className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+            >
+              Eliminar
+            </motion.button>
+          </div>
+        </motion.div>
+      </motion.div>
+    );
   };
 
   if (loading) {
@@ -941,9 +1242,11 @@ const EventList: React.FC = () => {
             <motion.button
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
-              className="text-gray-400 hover:text-gray-600"
+              onClick={exportEvents}
+              className="text-gray-400 hover:text-gray-600 flex items-center space-x-2 px-3 py-1 rounded-lg hover:bg-gray-100 transition-colors"
+              title="Exportar eventos"
             >
-              <MoreVertical className="h-5 w-5" />
+              <span className="text-sm">Exportar</span>
             </motion.button>
           </div>
 
@@ -965,7 +1268,7 @@ const EventList: React.FC = () => {
                 <div className="text-center">
                   <div
                     className={`text-2xl font-bold ${
-                      status.id === "total"
+                      status.id === "all"
                         ? "text-blue-600"
                         : status.id === "scheduled"
                         ? "text-blue-600"
@@ -1010,6 +1313,18 @@ const EventList: React.FC = () => {
             </div>
 
             <div className="flex items-center space-x-4">
+              {/* Limpiar filtros */}
+              {(searchTerm || selectedFilter !== "all" || sortBy !== "scheduledDate-desc") && (
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={clearFilters}
+                  className="flex items-center space-x-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  <span>Limpiar</span>
+                </motion.button>
+              )}
+
               {/* Filtros */}
               <motion.button
                 whileHover={{ scale: 1.05 }}
@@ -1019,16 +1334,6 @@ const EventList: React.FC = () => {
               >
                 <Filter className="h-4 w-4" />
                 <span>Filtros</span>
-              </motion.button>
-
-              {/* Búsqueda avanzada */}
-              <motion.button
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                className="flex items-center space-x-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
-              >
-                <Search className="h-4 w-4" />
-                <span>Avanzado</span>
               </motion.button>
 
               {/* Ordenamiento */}
@@ -1060,6 +1365,7 @@ const EventList: React.FC = () => {
                         ? "bg-white text-blue-600 shadow-sm"
                         : "text-gray-600 hover:text-gray-900"
                     }`}
+                    title={mode.description}
                   >
                     <mode.icon className="h-4 w-4" />
                   </motion.button>
@@ -1068,6 +1374,51 @@ const EventList: React.FC = () => {
             </div>
           </div>
         </motion.div>
+
+        {/* Barra de acciones para selección múltiple */}
+        {bulkActions && selectedEvents.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="bg-blue-50 border border-blue-200 rounded-2xl p-4 mb-6"
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-4">
+                <span className="text-blue-800 font-medium">
+                  {selectedEvents.length} evento(s) seleccionado(s)
+                </span>
+                <div className="flex items-center space-x-2">
+                  <motion.button
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={handleBulkEdit}
+                    className="flex items-center space-x-2 px-3 py-1 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 transition-colors"
+                  >
+                    <Edit3 className="h-4 w-4" />
+                    <span>Editar</span>
+                  </motion.button>
+                  <motion.button
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={handleBulkDelete}
+                    className="flex items-center space-x-2 px-3 py-1 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    <span>Eliminar</span>
+                  </motion.button>
+                </div>
+              </div>
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={() => setSelectedEvents([])}
+                className="text-blue-600 hover:text-blue-800 px-2 py-1 rounded hover:bg-blue-100 transition-colors"
+              >
+                Limpiar selección
+              </motion.button>
+            </div>
+          </motion.div>
+        )}
 
         {/* Lista de eventos */}
         <motion.div
@@ -1100,6 +1451,10 @@ const EventList: React.FC = () => {
           )}
         </motion.div>
       </div>
+
+      {/* Componentes de UI adicionales */}
+      <NotificationComponent />
+      <DeleteConfirmModal />
     </div>
   );
 };

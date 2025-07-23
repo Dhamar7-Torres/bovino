@@ -20,7 +20,6 @@ import {
   User,
   Bell,
   Syringe,
-  Stethoscope,
   Truck,
   Clipboard,
   Clock,
@@ -184,24 +183,10 @@ const Sidebar: React.FC<SidebarProps> = ({
           badge: 3,
           children: [
             {
-              id: "health-dashboard",
-              title: "Dashboard de Salud",
-              href: "/health/dashboard",
-              icon: BarChart3,
-              color: "text-[#4e9c75]",
-            },
-            {
               id: "vaccination-records",
               title: "Registros de Vacunación",
               href: "/health/vaccination-records",
               icon: Syringe,
-              color: "text-[#4e9c75]",
-            },
-            {
-              id: "feeding",
-              title: "Alimentación",
-              href: "/health/feeding",
-              icon: Utensils,
               color: "text-[#4e9c75]",
             },
             {

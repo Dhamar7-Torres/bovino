@@ -7,7 +7,7 @@ export { default as default } from "./HealthPage";
 // =================================================================
 // COMPONENTES DE DASHBOARD Y NAVEGACIÓN
 // =================================================================
-export { default as HealthDashboard } from "./HealthDashboard";
+
 
 // =================================================================
 // COMPONENTES DE VACUNACIÓN Y PROGRAMACIÓN

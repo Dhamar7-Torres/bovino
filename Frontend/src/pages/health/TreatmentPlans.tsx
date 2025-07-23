@@ -1,10 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { 
   Clipboard,
-  Pill,
-  Calendar,
-  MapPin,
   Search,
   Filter,
   Plus,
@@ -13,18 +10,13 @@ import {
   AlertTriangle,
   Eye,
   Edit,
-  BarChart3,
-  Stethoscope,
   Target,
   TrendingDown,
   Bell,
-  Settings,
-  FileText,
-  Download,
-  Play,
-  Pause,
-  Zap,
   Shield,
+  X,
+  Save,
+  Trash2,
 } from 'lucide-react';
 
 // Interfaces para tipos de datos
@@ -57,7 +49,7 @@ interface TreatmentPlan {
     dosage: string;
     frequency: string;
     route: 'oral' | 'injectable' | 'topical' | 'intravenous' | 'intramuscular';
-    duration: number; // días
+    duration: number;
     startDay: number;
     endDay: number;
     instructions: string;
@@ -101,47 +93,29 @@ interface TreatmentPlan {
     normalRange: string;
     alertThreshold: string;
   }>;
-  withdrawalPeriod: number; // días
+  withdrawalPeriod: number;
   totalCost: number;
-  effectiveness: number; // porcentaje
-  compliance: number; // porcentaje
+  effectiveness: number;
+  compliance: number;
   notes: string;
   followUpDate?: Date;
   complications?: string[];
   protocolId?: string;
 }
 
-interface TreatmentProtocol {
-  id: string;
-  name: string;
-  description: string;
-  category: string;
-  conditions: string[];
-  standardDuration: number;
-  medications: Array<{
-    medicationName: string;
-    dosage: string;
-    frequency: string;
-    route: string;
-    duration: number;
-    isEssential: boolean;
-  }>;
-  monitoringSchedule: Array<{
-    parameter: string;
-    frequency: string;
-    criticalValues: string;
-  }>;
-  expectedOutcomes: {
-    successRate: number;
-    averageRecoveryTime: number;
-    commonSideEffects: string[];
-  };
-  contraindications: string[];
-  cost: number;
-  isStandard: boolean;
-  createdBy: string;
-  lastUpdated: Date;
-  timesUsed: number;
+interface NewTreatmentForm {
+  animalName: string;
+  animalTag: string;
+  condition: string;
+  conditionCategory: 'respiratory' | 'digestive' | 'reproductive' | 'metabolic' | 'infectious' | 'parasitic' | 'injury' | 'chronic';
+  severity: 'mild' | 'moderate' | 'severe' | 'critical';
+  priority: 'low' | 'medium' | 'high' | 'urgent';
+  veterinarian: string;
+  diagnosis: string;
+  expectedDuration: number;
+  medications: string[];
+  notes: string;
+  estimatedCost: number;
 }
 
 interface TreatmentStats {
@@ -212,7 +186,8 @@ const Button: React.FC<{
   size?: 'sm' | 'default';
   className?: string;
   disabled?: boolean;
-}> = ({ children, onClick, variant = 'default', size = 'default', className = '', disabled = false }) => {
+  type?: 'button' | 'submit' | 'reset';
+}> = ({ children, onClick, variant = 'default', size = 'default', className = '', disabled = false, type = 'button' }) => {
   const baseClasses = "inline-flex items-center justify-center font-medium rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed";
   const variantClasses = {
     default: "bg-blue-600 text-white hover:bg-blue-700 focus:ring-blue-500",
@@ -228,6 +203,7 @@ const Button: React.FC<{
 
   return (
     <button 
+      type={type}
       className={`${baseClasses} ${variantClasses[variant]} ${sizeClasses[size]} ${className}`}
       onClick={onClick}
       disabled={disabled}
@@ -276,119 +252,623 @@ const Badge: React.FC<{ children: React.ReactNode; variant: string; className?: 
   );
 };
 
-// Componente de Mapa de Tratamientos
-const TreatmentMap: React.FC = () => {
+// Modal para nuevo plan de tratamiento
+const NewTreatmentModal: React.FC<{
+  isOpen: boolean;
+  onClose: () => void;
+  onSave: (data: NewTreatmentForm) => void;
+}> = ({ isOpen, onClose, onSave }) => {
+  const [formData, setFormData] = useState<NewTreatmentForm>({
+    animalName: '',
+    animalTag: '',
+    condition: '',
+    conditionCategory: 'infectious',
+    severity: 'mild',
+    priority: 'medium',
+    veterinarian: '',
+    diagnosis: '',
+    expectedDuration: 7,
+    medications: [],
+    notes: '',
+    estimatedCost: 0,
+  });
+
+  const [currentMedication, setCurrentMedication] = useState('');
+
+  const addMedication = () => {
+    if (currentMedication.trim() && !formData.medications.includes(currentMedication.trim())) {
+      setFormData(prev => ({
+        ...prev,
+        medications: [...prev.medications, currentMedication.trim()]
+      }));
+      setCurrentMedication('');
+    }
+  };
+
+  const removeMedication = (index: number) => {
+    setFormData(prev => ({
+      ...prev,
+      medications: prev.medications.filter((_, i) => i !== index)
+    }));
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!formData.animalName || !formData.condition || !formData.veterinarian) {
+      alert('Por favor complete los campos obligatorios: Nombre del animal, condición y veterinario');
+      return;
+    }
+
+    onSave(formData);
+  };
+
+  const resetForm = () => {
+    setFormData({
+      animalName: '',
+      animalTag: '',
+      condition: '',
+      conditionCategory: 'infectious',
+      severity: 'mild',
+      priority: 'medium',
+      veterinarian: '',
+      diagnosis: '',
+      expectedDuration: 7,
+      medications: [],
+      notes: '',
+      estimatedCost: 0,
+    });
+    setCurrentMedication('');
+  };
+
+  useEffect(() => {
+    if (isOpen) {
+      resetForm();
+    }
+  }, [isOpen]);
+
+  if (!isOpen) return null;
+
   return (
-    <div className="h-96 bg-gray-100 rounded-lg flex items-center justify-center relative overflow-hidden">
-      {/* Fondo del mapa simulado */}
-      <div className="absolute inset-0 bg-gradient-to-br from-blue-50 to-green-100"></div>
-      
-      {/* Título de ubicación */}
-      <div className="absolute top-4 left-4 bg-white rounded-lg px-3 py-2 shadow-md">
-        <div className="flex items-center gap-2">
-          <MapPin className="w-4 h-4 text-blue-600" />
-          <span className="text-sm font-medium">Mapa de Tratamientos - Villahermosa, Tabasco</span>
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 overflow-y-auto">
+      <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl mx-4 my-8 max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between p-6 border-b">
+          <h2 className="text-xl font-semibold text-gray-900">Nuevo Plan de Tratamiento</h2>
+          <button
+            onClick={onClose}
+            className="text-gray-400 hover:text-gray-600 transition-colors"
+          >
+            <X className="w-6 h-6" />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          {/* Información del Animal */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Nombre del Animal *
+              </label>
+              <input
+                type="text"
+                value={formData.animalName}
+                onChange={(e) => setFormData(prev => ({ ...prev, animalName: e.target.value }))}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="Ej: Bessie"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Etiqueta/TAG
+              </label>
+              <input
+                type="text"
+                value={formData.animalTag}
+                onChange={(e) => setFormData(prev => ({ ...prev, animalTag: e.target.value }))}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="Ej: TAG-001"
+              />
+            </div>
+          </div>
+
+          {/* Condición y Categoría */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Condición/Enfermedad *
+              </label>
+              <input
+                type="text"
+                value={formData.condition}
+                onChange={(e) => setFormData(prev => ({ ...prev, condition: e.target.value }))}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="Ej: Mastitis"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Categoría
+              </label>
+              <select
+                value={formData.conditionCategory}
+                onChange={(e) => setFormData(prev => ({ ...prev, conditionCategory: e.target.value as NewTreatmentForm['conditionCategory'] }))}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="infectious">Infeccioso</option>
+                <option value="respiratory">Respiratorio</option>
+                <option value="digestive">Digestivo</option>
+                <option value="reproductive">Reproductivo</option>
+                <option value="metabolic">Metabólico</option>
+                <option value="parasitic">Parasitario</option>
+                <option value="injury">Lesión</option>
+                <option value="chronic">Crónico</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Severidad y Prioridad */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Severidad
+              </label>
+              <select
+                value={formData.severity}
+                onChange={(e) => setFormData(prev => ({ ...prev, severity: e.target.value as NewTreatmentForm['severity'] }))}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="mild">Leve</option>
+                <option value="moderate">Moderada</option>
+                <option value="severe">Severa</option>
+                <option value="critical">Crítica</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Prioridad
+              </label>
+              <select
+                value={formData.priority}
+                onChange={(e) => setFormData(prev => ({ ...prev, priority: e.target.value as NewTreatmentForm['priority'] }))}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="low">Baja</option>
+                <option value="medium">Media</option>
+                <option value="high">Alta</option>
+                <option value="urgent">Urgente</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Veterinario y Duración */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Veterinario *
+              </label>
+              <input
+                type="text"
+                value={formData.veterinarian}
+                onChange={(e) => setFormData(prev => ({ ...prev, veterinarian: e.target.value }))}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="Ej: Dr. García"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Duración Estimada (días)
+              </label>
+              <input
+                type="number"
+                min="1"
+                value={formData.expectedDuration}
+                onChange={(e) => setFormData(prev => ({ ...prev, expectedDuration: parseInt(e.target.value) || 1 }))}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+          </div>
+
+          {/* Diagnóstico */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Diagnóstico
+            </label>
+            <textarea
+              value={formData.diagnosis}
+              onChange={(e) => setFormData(prev => ({ ...prev, diagnosis: e.target.value }))}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              rows={3}
+              placeholder="Describa el diagnóstico detallado..."
+            />
+          </div>
+
+          {/* Medicamentos */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Medicamentos
+            </label>
+            <div className="flex gap-2 mb-2">
+              <input
+                type="text"
+                value={currentMedication}
+                onChange={(e) => setCurrentMedication(e.target.value)}
+                onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addMedication())}
+                className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="Agregar medicamento"
+              />
+              <Button type="button" onClick={addMedication}>
+                <Plus className="w-4 h-4" />
+              </Button>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {formData.medications.map((medication, index) => (
+                <span
+                  key={index}
+                  className="inline-flex items-center px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm"
+                >
+                  {medication}
+                  <button
+                    type="button"
+                    onClick={() => removeMedication(index)}
+                    className="ml-2 text-blue-600 hover:text-blue-800"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </span>
+              ))}
+            </div>
+          </div>
+
+          {/* Costo y Notas */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Costo Estimado (MXN)
+              </label>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={formData.estimatedCost}
+                onChange={(e) => setFormData(prev => ({ ...prev, estimatedCost: parseFloat(e.target.value) || 0 }))}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="0.00"
+              />
+            </div>
+          </div>
+
+          {/* Notas */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Notas Adicionales
+            </label>
+            <textarea
+              value={formData.notes}
+              onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              rows={3}
+              placeholder="Notas adicionales del tratamiento..."
+            />
+          </div>
+
+          {/* Botones de acción */}
+          <div className="flex justify-end space-x-3 pt-6 border-t">
+            <Button type="button" variant="outline" onClick={onClose}>
+              Cancelar
+            </Button>
+            <Button type="submit" variant="success">
+              <Save className="w-4 h-4 mr-2" />
+              Crear Plan
+            </Button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+};
+
+// Modal para ver detalles del plan
+const ViewTreatmentModal: React.FC<{
+  isOpen: boolean;
+  onClose: () => void;
+  plan: TreatmentPlan | null;
+}> = ({ isOpen, onClose, plan }) => {
+  if (!isOpen || !plan) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 overflow-y-auto">
+      <div className="bg-white rounded-lg shadow-xl w-full max-w-4xl mx-4 my-8 max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between p-6 border-b">
+          <h2 className="text-xl font-semibold text-gray-900">Detalles del Plan de Tratamiento</h2>
+          <button
+            onClick={onClose}
+            className="text-gray-400 hover:text-gray-600 transition-colors"
+          >
+            <X className="w-6 h-6" />
+          </button>
+        </div>
+
+        <div className="p-6 space-y-6">
+          {/* Información básica */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900 mb-3">Información del Animal</h3>
+              <div className="space-y-2">
+                <p><strong>Nombre:</strong> {plan.animalName}</p>
+                <p><strong>TAG:</strong> {plan.animalTag}</p>
+                <p><strong>Condición:</strong> {plan.condition}</p>
+                <p><strong>Categoría:</strong> {plan.conditionCategory}</p>
+              </div>
+            </div>
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900 mb-3">Estado del Tratamiento</h3>
+              <div className="space-y-2">
+                <p><strong>Estado:</strong> <Badge variant={plan.status}>{plan.status}</Badge></p>
+                <p><strong>Prioridad:</strong> <Badge variant={plan.priority}>{plan.priority}</Badge></p>
+                <p><strong>Severidad:</strong> <Badge variant={plan.severity}>{plan.severity}</Badge></p>
+                <p><strong>Veterinario:</strong> {plan.veterinarian}</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Diagnóstico */}
+          <div>
+            <h3 className="text-lg font-semibold text-gray-900 mb-3">Diagnóstico</h3>
+            <p className="text-gray-700 bg-gray-50 p-4 rounded-lg">{plan.diagnosis}</p>
+          </div>
+
+          {/* Fechas y duración */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <p className="text-sm font-medium text-gray-600">Fecha de inicio</p>
+              <p className="text-lg">{plan.startDate.toLocaleDateString()}</p>
+            </div>
+            <div>
+              <p className="text-sm font-medium text-gray-600">Fecha esperada de fin</p>
+              <p className="text-lg">{plan.expectedEndDate.toLocaleDateString()}</p>
+            </div>
+            <div>
+              <p className="text-sm font-medium text-gray-600">Duración</p>
+              <p className="text-lg">
+                {Math.ceil((plan.expectedEndDate.getTime() - plan.startDate.getTime()) / (1000 * 60 * 60 * 24))} días
+              </p>
+            </div>
+          </div>
+
+          {/* Medicamentos */}
+          <div>
+            <h3 className="text-lg font-semibold text-gray-900 mb-3">Medicamentos</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {plan.medications.map((med, idx) => (
+                <div key={idx} className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                  <h4 className="font-semibold text-blue-900">{med.medicationName}</h4>
+                  <p className="text-sm text-blue-700 mt-1"><strong>Dosis:</strong> {med.dosage}</p>
+                  <p className="text-sm text-blue-700"><strong>Frecuencia:</strong> {med.frequency}</p>
+                  <p className="text-sm text-blue-700"><strong>Vía:</strong> {med.route}</p>
+                  <p className="text-sm text-blue-700"><strong>Duración:</strong> Días {med.startDay}-{med.endDay}</p>
+                  <p className="text-sm text-blue-600 mt-2"><strong>Costo:</strong> ${med.cost}</p>
+                  <p className="text-sm text-gray-600 mt-2">{med.instructions}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Objetivos del tratamiento */}
+          <div>
+            <h3 className="text-lg font-semibold text-gray-900 mb-3">Objetivos del Tratamiento</h3>
+            <div className="space-y-3">
+              {plan.treatmentGoals.map((goal, idx) => (
+                <div key={idx} className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">
+                  {goal.achieved ? (
+                    <CheckCircle className="w-5 h-5 text-green-600 mt-0.5" />
+                  ) : (
+                    <Clock className="w-5 h-5 text-yellow-600 mt-0.5" />
+                  )}
+                  <div className="flex-1">
+                    <p className="font-medium">{goal.goal}</p>
+                    <div className="text-sm text-gray-600 mt-1 space-y-1">
+                      <p><strong>Objetivo:</strong> {goal.targetValue}</p>
+                      <p><strong>Valor actual:</strong> {goal.currentValue || 'Pendiente'}</p>
+                      <p><strong>Fecha meta:</strong> {goal.targetDate.toLocaleDateString()}</p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Indicadores de progreso */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="text-center p-4 bg-green-50 rounded-lg">
+              <p className="text-sm font-medium text-gray-600">Efectividad</p>
+              <p className="text-2xl font-bold text-green-600">{plan.effectiveness}%</p>
+            </div>
+            <div className="text-center p-4 bg-blue-50 rounded-lg">
+              <p className="text-sm font-medium text-gray-600">Cumplimiento</p>
+              <p className="text-2xl font-bold text-blue-600">{plan.compliance}%</p>
+            </div>
+            <div className="text-center p-4 bg-red-50 rounded-lg">
+              <p className="text-sm font-medium text-gray-600">Costo Total</p>
+              <p className="text-2xl font-bold text-red-600">${plan.totalCost}</p>
+            </div>
+          </div>
+
+          {/* Notas */}
+          {plan.notes && (
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900 mb-3">Notas</h3>
+              <p className="text-gray-700 bg-gray-50 p-4 rounded-lg">{plan.notes}</p>
+            </div>
+          )}
+        </div>
+
+        <div className="flex justify-end p-6 border-t">
+          <Button onClick={onClose}>Cerrar</Button>
         </div>
       </div>
-      
-      {/* Leyenda */}
-      <div className="absolute top-4 right-4 bg-white rounded-lg p-3 shadow-md text-xs">
-        <div className="space-y-1">
-          <div className="flex items-center gap-2">
-            <div className="w-3 h-3 bg-green-600 rounded-full"></div>
-            <span>Activo</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
-            <span>Programado</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="w-3 h-3 bg-yellow-500 rounded-full"></div>
-            <span>Pausado</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="w-3 h-3 bg-red-500 rounded-full"></div>
-            <span>Crítico</span>
-          </div>
-        </div>
-      </div>
-      
-      {/* Marcadores simulados de tratamientos */}
-      <div className="relative w-full h-full">
-        {/* Tratamiento activo */}
-        <div className="absolute top-1/3 left-1/4 transform -translate-x-1/2 -translate-y-1/2">
-          <motion.div
-            initial={{ scale: 0 }}
-            animate={{ scale: 1 }}
-            className="bg-green-600 rounded-full w-8 h-8 flex items-center justify-center shadow-lg cursor-pointer"
-            whileHover={{ scale: 1.2 }}
+    </div>
+  );
+};
+
+// Modal para editar plan
+const EditTreatmentModal: React.FC<{
+  isOpen: boolean;
+  onClose: () => void;
+  plan: TreatmentPlan | null;
+  onSave: (updatedPlan: TreatmentPlan) => void;
+}> = ({ isOpen, onClose, plan, onSave }) => {
+  const [formData, setFormData] = useState<Partial<TreatmentPlan>>({});
+
+  useEffect(() => {
+    if (plan) {
+      setFormData({ ...plan });
+    }
+  }, [plan]);
+
+  if (!isOpen || !plan) return null;
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (formData.animalName && formData.condition && formData.veterinarian) {
+      onSave(formData as TreatmentPlan);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 overflow-y-auto">
+      <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl mx-4 my-8 max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between p-6 border-b">
+          <h2 className="text-xl font-semibold text-gray-900">Editar Plan de Tratamiento</h2>
+          <button
+            onClick={onClose}
+            className="text-gray-400 hover:text-gray-600 transition-colors"
           >
-            <Pill className="w-4 h-4 text-white" />
-          </motion.div>
-          <div className="absolute top-10 left-1/2 transform -translate-x-1/2 bg-white rounded-lg p-2 shadow-lg min-w-36 text-xs">
-            <p className="font-medium text-green-700">Tratamiento Activo</p>
-            <p className="text-gray-600">Mastitis - Bessie</p>
-            <p className="text-gray-600">Día 3 de 7</p>
-            <p className="text-gray-600">Sector A</p>
-          </div>
+            <X className="w-6 h-6" />
+          </button>
         </div>
-        
-        {/* Tratamiento crítico */}
-        <div className="absolute top-2/3 right-1/4 transform translate-x-1/2 -translate-y-1/2">
-          <motion.div
-            initial={{ scale: 0 }}
-            animate={{ scale: 1 }}
-            transition={{ delay: 0.2 }}
-            className="bg-red-500 rounded-full w-7 h-7 flex items-center justify-center shadow-lg cursor-pointer"
-            whileHover={{ scale: 1.2 }}
-          >
-            <AlertTriangle className="w-4 h-4 text-white" />
-          </motion.div>
-          <div className="absolute top-8 left-1/2 transform -translate-x-1/2 bg-white rounded-lg p-2 shadow-lg min-w-32 text-xs">
-            <p className="font-medium text-red-700">Urgente</p>
-            <p className="text-gray-600">Neumonía - Luna</p>
-            <p className="text-gray-600">Dosis vencida</p>
-            <p className="text-gray-600">Sector B</p>
+
+        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Nombre del Animal
+              </label>
+              <input
+                type="text"
+                value={formData.animalName || ''}
+                onChange={(e) => setFormData(prev => ({ ...prev, animalName: e.target.value }))}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                TAG
+              </label>
+              <input
+                type="text"
+                value={formData.animalTag || ''}
+                onChange={(e) => setFormData(prev => ({ ...prev, animalTag: e.target.value }))}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
           </div>
-        </div>
-        
-        {/* Tratamiento programado */}
-        <div className="absolute bottom-1/4 left-2/3 transform -translate-x-1/2 translate-y-1/2">
-          <motion.div
-            initial={{ scale: 0 }}
-            animate={{ scale: 1 }}
-            transition={{ delay: 0.4 }}
-            className="bg-blue-500 rounded-full w-6 h-6 flex items-center justify-center shadow-lg cursor-pointer"
-            whileHover={{ scale: 1.2 }}
-          >
-            <Clock className="w-3 h-3 text-white" />
-          </motion.div>
-          <div className="absolute bottom-8 left-1/2 transform -translate-x-1/2 bg-white rounded-lg p-2 shadow-lg min-w-32 text-xs">
-            <p className="font-medium text-blue-700">Programado</p>
-            <p className="text-gray-600">Desparasitación</p>
-            <p className="text-gray-600">Inicia mañana</p>
-            <p className="text-gray-600">Sector C</p>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Condición
+            </label>
+            <input
+              type="text"
+              value={formData.condition || ''}
+              onChange={(e) => setFormData(prev => ({ ...prev, condition: e.target.value }))}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
           </div>
-        </div>
-        
-        {/* Tratamiento pausado */}
-        <div className="absolute top-1/2 right-1/3 transform translate-x-1/2 -translate-y-1/2">
-          <motion.div
-            initial={{ scale: 0 }}
-            animate={{ scale: 1 }}
-            transition={{ delay: 0.6 }}
-            className="bg-yellow-500 rounded-full w-5 h-5 flex items-center justify-center shadow-lg cursor-pointer"
-            whileHover={{ scale: 1.2 }}
-          >
-            <Pause className="w-3 h-3 text-white" />
-          </motion.div>
-          <div className="absolute top-8 left-1/2 transform -translate-x-1/2 bg-white rounded-lg p-2 shadow-lg min-w-32 text-xs">
-            <p className="font-medium text-yellow-700">Pausado</p>
-            <p className="text-gray-600">Antiinflamatorio</p>
-            <p className="text-gray-600">Reacción adversa</p>
-            <p className="text-gray-600">Sector D</p>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Estado
+              </label>
+              <select
+                value={formData.status || ''}
+                onChange={(e) => setFormData(prev => ({ ...prev, status: e.target.value as TreatmentPlan['status'] }))}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="planned">Programado</option>
+                <option value="active">Activo</option>
+                <option value="paused">Pausado</option>
+                <option value="completed">Completado</option>
+                <option value="discontinued">Discontinuado</option>
+                <option value="failed">Fallido</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Prioridad
+              </label>
+              <select
+                value={formData.priority || ''}
+                onChange={(e) => setFormData(prev => ({ ...prev, priority: e.target.value as TreatmentPlan['priority'] }))}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="low">Baja</option>
+                <option value="medium">Media</option>
+                <option value="high">Alta</option>
+                <option value="urgent">Urgente</option>
+              </select>
+            </div>
           </div>
-        </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Veterinario
+            </label>
+            <input
+              type="text"
+              value={formData.veterinarian || ''}
+              onChange={(e) => setFormData(prev => ({ ...prev, veterinarian: e.target.value }))}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Diagnóstico
+            </label>
+            <textarea
+              value={formData.diagnosis || ''}
+              onChange={(e) => setFormData(prev => ({ ...prev, diagnosis: e.target.value }))}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              rows={3}
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Notas
+            </label>
+            <textarea
+              value={formData.notes || ''}
+              onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              rows={3}
+            />
+          </div>
+
+          <div className="flex justify-end space-x-3 pt-6 border-t">
+            <Button type="button" variant="outline" onClick={onClose}>
+              Cancelar
+            </Button>
+            <Button type="submit" variant="success">
+              <Save className="w-4 h-4 mr-2" />
+              Guardar Cambios
+            </Button>
+          </div>
+        </form>
       </div>
     </div>
   );
@@ -398,11 +878,11 @@ const TreatmentMap: React.FC = () => {
 const TreatmentAlertCard: React.FC<{ alert: TreatmentAlert }> = ({ alert }) => {
   const getAlertIcon = (type: string) => {
     switch (type) {
-      case 'dose_due': return Pill;
-      case 'monitoring_due': return Stethoscope;
+      case 'dose_due': return AlertTriangle;
+      case 'monitoring_due': return Eye;
       case 'side_effect': return AlertTriangle;
       case 'poor_response': return TrendingDown;
-      case 'follow_up_due': return Calendar;
+      case 'follow_up_due': return Clock;
       case 'withdrawal_period': return Shield;
       default: return Bell;
     }
@@ -461,7 +941,6 @@ const TreatmentAlertCard: React.FC<{ alert: TreatmentAlert }> = ({ alert }) => {
 const TreatmentPlans: React.FC = () => {
   // Estados del componente
   const [treatmentPlans, setTreatmentPlans] = useState<TreatmentPlan[]>([]);
-  const [protocols, setProtocols] = useState<TreatmentProtocol[]>([]);
   const [stats, setStats] = useState<TreatmentStats>({
     totalActivePlans: 0,
     completedThisMonth: 0,
@@ -480,7 +959,134 @@ const TreatmentPlans: React.FC = () => {
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [selectedPriority, setSelectedPriority] = useState<string>('all');
-  const [viewMode, setViewMode] = useState<'plans' | 'protocols' | 'schedule'>('plans');
+  
+  // Estados para modales
+  const [isNewPlanModalOpen, setIsNewPlanModalOpen] = useState(false);
+  const [isViewModalOpen, setIsViewModalOpen] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [selectedPlan, setSelectedPlan] = useState<TreatmentPlan | null>(null);
+
+  // Funciones para manejar modales y acciones
+  const handleNewPlan = (formData: NewTreatmentForm) => {
+    const newPlan: TreatmentPlan = {
+      id: Date.now().toString(),
+      animalId: `COW${Date.now()}`,
+      animalName: formData.animalName,
+      animalTag: formData.animalTag || `TAG-${Date.now()}`,
+      planName: `Tratamiento ${formData.condition}`,
+      condition: formData.condition,
+      conditionCategory: formData.conditionCategory,
+      severity: formData.severity,
+      diagnosis: formData.diagnosis,
+      createdDate: new Date(),
+      startDate: new Date(),
+      expectedEndDate: new Date(Date.now() + formData.expectedDuration * 24 * 60 * 60 * 1000),
+      status: 'planned',
+      priority: formData.priority,
+      veterinarian: formData.veterinarian,
+      location: {
+        lat: 17.9869,
+        lng: -92.9303,
+        address: 'Ubicación por defecto',
+        sector: 'A'
+      },
+      medications: formData.medications.map((med, idx) => ({
+        medicationId: `MED${Date.now()}-${idx}`,
+        medicationName: med,
+        dosage: 'Por determinar',
+        frequency: 'Por determinar',
+        route: 'oral',
+        duration: formData.expectedDuration,
+        startDay: 1,
+        endDay: formData.expectedDuration,
+        instructions: 'Instrucciones por determinar',
+        cost: formData.estimatedCost / formData.medications.length || 0
+      })),
+      schedule: [],
+      treatmentGoals: [
+        {
+          goal: `Recuperación de ${formData.condition}`,
+          targetValue: 'Completa recuperación',
+          achieved: false,
+          targetDate: new Date(Date.now() + formData.expectedDuration * 24 * 60 * 60 * 1000)
+        }
+      ],
+      contraindications: [],
+      sideEffects: [],
+      monitoringParameters: [],
+      withdrawalPeriod: 7,
+      totalCost: formData.estimatedCost,
+      effectiveness: 0,
+      compliance: 0,
+      notes: formData.notes
+    };
+
+    setTreatmentPlans(prev => [newPlan, ...prev]);
+    
+    // Actualizar estadísticas
+    setStats(prev => ({
+      ...prev,
+      totalActivePlans: prev.totalActivePlans + 1,
+      totalCost: prev.totalCost + formData.estimatedCost
+    }));
+
+    setIsNewPlanModalOpen(false);
+    alert('Plan de tratamiento creado exitosamente');
+  };
+
+  const handleViewPlan = (plan: TreatmentPlan) => {
+    setSelectedPlan(plan);
+    setIsViewModalOpen(true);
+  };
+
+  const handleEditPlan = (plan: TreatmentPlan) => {
+    setSelectedPlan(plan);
+    setIsEditModalOpen(true);
+  };
+
+  const handleSaveEdit = (updatedPlan: TreatmentPlan) => {
+    setTreatmentPlans(prev => 
+      prev.map(plan => plan.id === updatedPlan.id ? updatedPlan : plan)
+    );
+    setIsEditModalOpen(false);
+    setSelectedPlan(null);
+    alert('Plan actualizado exitosamente');
+  };
+
+  const handleDeletePlan = (planId: string) => {
+    const planToDelete = treatmentPlans.find(plan => plan.id === planId);
+    
+    if (!planToDelete) {
+      alert('Plan no encontrado');
+      return;
+    }
+
+    const confirmMessage = `¿Está seguro de que desea eliminar el plan de tratamiento para ${planToDelete.animalName}?\n\nEsta acción no se puede deshacer.`;
+    
+    if (window.confirm(confirmMessage)) {
+      try {
+        // Filtrar el plan a eliminar
+        setTreatmentPlans(prev => prev.filter(plan => plan.id !== planId));
+        
+        // Actualizar estadísticas
+        setStats(prev => ({
+          ...prev,
+          totalActivePlans: Math.max(0, prev.totalActivePlans - 1),
+          totalCost: Math.max(0, prev.totalCost - planToDelete.totalCost)
+        }));
+
+        // Eliminar alertas relacionadas con este plan
+        setTreatmentAlerts(prev => 
+          prev.filter(alert => alert.planId !== planId)
+        );
+
+        alert(`Plan de tratamiento para ${planToDelete.animalName} eliminado exitosamente`);
+      } catch (error) {
+        console.error('Error al eliminar el plan:', error);
+        alert('Error al eliminar el plan de tratamiento. Por favor, intente nuevamente.');
+      }
+    }
+  };
 
   // Simulación de datos
   useEffect(() => {
@@ -551,24 +1157,6 @@ const TreatmentPlans: React.FC = () => {
                   completedBy: 'Juan Pérez',
                   completedAt: new Date('2025-07-10T08:15:00'),
                   notes: 'Aplicación sin complicaciones'
-                },
-                {
-                  time: '08:15',
-                  medication: 'Meloxicam',
-                  dosage: '0.5 mg/kg',
-                  route: 'IM',
-                  completed: true,
-                  completedBy: 'Juan Pérez',
-                  completedAt: new Date('2025-07-10T08:20:00')
-                },
-                {
-                  time: '20:00',
-                  medication: 'Penicilina G',
-                  dosage: '20,000 UI/kg',
-                  route: 'IM',
-                  completed: true,
-                  completedBy: 'Carlos Ruiz',
-                  completedAt: new Date('2025-07-10T20:10:00')
                 }
               ],
               observations: [
@@ -579,52 +1167,9 @@ const TreatmentPlans: React.FC = () => {
                   status: 'normal',
                   recordedBy: 'Dr. García',
                   recordedAt: new Date('2025-07-10T08:30:00')
-                },
-                {
-                  parameter: 'Inflamación de ubre',
-                  expectedValue: 'Reducción visible',
-                  actualValue: 'Ligera mejora',
-                  status: 'normal',
-                  recordedBy: 'Dr. García',
-                  recordedAt: new Date('2025-07-10T20:30:00')
                 }
               ],
               dailyNotes: 'Buen inicio del tratamiento, animal responde positivamente'
-            },
-            {
-              day: 2,
-              date: new Date('2025-07-11'),
-              tasks: [
-                {
-                  time: '08:00',
-                  medication: 'Penicilina G',
-                  dosage: '20,000 UI/kg',
-                  route: 'IM',
-                  completed: true,
-                  completedBy: 'Juan Pérez',
-                  completedAt: new Date('2025-07-11T08:05:00')
-                },
-                {
-                  time: '08:15',
-                  medication: 'Meloxicam',
-                  dosage: '0.5 mg/kg',
-                  route: 'IM',
-                  completed: true,
-                  completedBy: 'Juan Pérez',
-                  completedAt: new Date('2025-07-11T08:18:00')
-                }
-              ],
-              observations: [
-                {
-                  parameter: 'Temperatura corporal',
-                  expectedValue: '< 39.0°C',
-                  actualValue: '38.8°C',
-                  status: 'normal',
-                  recordedBy: 'Dr. García',
-                  recordedAt: new Date('2025-07-11T08:25:00')
-                }
-              ],
-              dailyNotes: 'Mejora notable en la inflamación y temperatura'
             }
           ],
           treatmentGoals: [
@@ -634,13 +1179,6 @@ const TreatmentPlans: React.FC = () => {
               currentValue: '38.8°C',
               achieved: true,
               targetDate: new Date('2025-07-12')
-            },
-            {
-              goal: 'Reducir inflamación de ubre',
-              targetValue: 'Ausencia de inflamación',
-              currentValue: 'Mejora del 70%',
-              achieved: false,
-              targetDate: new Date('2025-07-15')
             }
           ],
           contraindications: ['Alergia conocida a penicilina', 'Gestación en primer trimestre'],
@@ -651,12 +1189,6 @@ const TreatmentPlans: React.FC = () => {
               frequency: 'Cada 12 horas',
               normalRange: '38.0 - 39.5°C',
               alertThreshold: '> 40.0°C'
-            },
-            {
-              parameter: 'Apetito',
-              frequency: 'Diario',
-              normalRange: 'Normal',
-              alertThreshold: 'Anorexia > 24h'
             }
           ],
           withdrawalPeriod: 14,
@@ -665,148 +1197,6 @@ const TreatmentPlans: React.FC = () => {
           compliance: 95,
           notes: 'Respuesta favorable al tratamiento. Continuar monitoreo.',
           followUpDate: new Date('2025-07-20')
-        },
-        {
-          id: '2',
-          animalId: 'COW002',
-          animalName: 'Luna',
-          animalTag: 'TAG-002',
-          planName: 'Tratamiento Neumonía Bacteriana',
-          condition: 'Neumonía',
-          conditionCategory: 'respiratory',
-          severity: 'severe',
-          diagnosis: 'Neumonía bacteriana por Mannheimia haemolytica con compromiso respiratorio severo',
-          createdDate: new Date('2025-07-08'),
-          startDate: new Date('2025-07-08'),
-          expectedEndDate: new Date('2025-07-18'),
-          status: 'active',
-          priority: 'urgent',
-          veterinarian: 'Dr. Martínez',
-          location: {
-            lat: 17.9719,
-            lng: -92.9456,
-            address: 'Establo de Aislamiento, Sector B',
-            sector: 'B'
-          },
-          medications: [
-            {
-              medicationId: 'MED003',
-              medicationName: 'Florfenicol',
-              dosage: '20 mg/kg',
-              frequency: 'Cada 48 horas',
-              route: 'intramuscular',
-              duration: 10,
-              startDay: 1,
-              endDay: 10,
-              instructions: 'Antibiótico de amplio espectro para neumonía',
-              cost: 45.00
-            },
-            {
-              medicationId: 'MED004',
-              medicationName: 'Dexametasona',
-              dosage: '0.1 mg/kg',
-              frequency: 'Una vez al día',
-              route: 'intramuscular',
-              duration: 5,
-              startDay: 1,
-              endDay: 5,
-              instructions: 'Corticoide para reducir inflamación pulmonar',
-              cost: 12.25
-            }
-          ],
-          schedule: [], // Se generaría dinámicamente
-          treatmentGoals: [
-            {
-              goal: 'Normalizar función respiratoria',
-              targetValue: '< 30 rpm',
-              currentValue: '45 rpm',
-              achieved: false,
-              targetDate: new Date('2025-07-15')
-            },
-            {
-              goal: 'Eliminar secreción nasal',
-              targetValue: 'Ausencia de secreción',
-              currentValue: 'Secreción mucopurulenta moderada',
-              achieved: false,
-              targetDate: new Date('2025-07-16')
-            }
-          ],
-          contraindications: ['Insuficiencia renal', 'Gestación avanzada'],
-          sideEffects: ['Inmunodepresión temporal', 'Retención de líquidos'],
-          monitoringParameters: [
-            {
-              parameter: 'Frecuencia respiratoria',
-              frequency: 'Cada 6 horas',
-              normalRange: '15-30 rpm',
-              alertThreshold: '> 50 rpm'
-            },
-            {
-              parameter: 'Temperatura corporal',
-              frequency: 'Cada 8 horas',
-              normalRange: '38.0-39.5°C',
-              alertThreshold: '> 41.0°C'
-            }
-          ],
-          withdrawalPeriod: 21,
-          totalCost: 285.00,
-          effectiveness: 70,
-          compliance: 88,
-          notes: 'Caso severo que requiere monitoreo intensivo. Respuesta inicial lenta.',
-          followUpDate: new Date('2025-07-25'),
-          complications: ['Dificultad respiratoria persistente']
-        }
-      ];
-
-      // Datos de ejemplo para protocolos
-      const mockProtocols: TreatmentProtocol[] = [
-        {
-          id: '1',
-          name: 'Protocolo Estándar Mastitis',
-          description: 'Tratamiento estandarizado para mastitis clínica en ganado lechero',
-          category: 'Infectología',
-          conditions: ['Mastitis clínica', 'Mastitis subclínica'],
-          standardDuration: 7,
-          medications: [
-            {
-              medicationName: 'Penicilina G',
-              dosage: '20,000 UI/kg',
-              frequency: 'Cada 12 horas',
-              route: 'intramuscular',
-              duration: 7,
-              isEssential: true
-            },
-            {
-              medicationName: 'Meloxicam',
-              dosage: '0.5 mg/kg',
-              frequency: 'Una vez al día',
-              route: 'intramuscular',
-              duration: 3,
-              isEssential: false
-            }
-          ],
-          monitoringSchedule: [
-            {
-              parameter: 'Temperatura corporal',
-              frequency: 'Cada 12 horas',
-              criticalValues: '> 40.0°C'
-            },
-            {
-              parameter: 'Calidad de leche',
-              frequency: 'Diario',
-              criticalValues: 'Presencia de grumos o sangre'
-            }
-          ],
-          expectedOutcomes: {
-            successRate: 85,
-            averageRecoveryTime: 5,
-            commonSideEffects: ['Reacción en sitio de inyección', 'Trastornos digestivos leves']
-          },
-          contraindications: ['Alergia a penicilina', 'Insuficiencia renal severa'],
-          cost: 175,
-          isStandard: true,
-          createdBy: 'Dr. García',
-          lastUpdated: new Date('2025-06-15'),
-          timesUsed: 23
         }
       ];
 
@@ -841,39 +1231,10 @@ const TreatmentPlans: React.FC = () => {
           recommendedAction: 'Aplicar dosis inmediatamente y ajustar horario',
           isActive: true,
           createdAt: new Date('2025-07-12T22:00:00')
-        },
-        {
-          id: '2',
-          type: 'monitoring_due',
-          planId: '2',
-          animalName: 'Luna',
-          animalTag: 'TAG-002',
-          priority: 'medium',
-          title: 'Monitoreo de Signos Vitales Pendiente',
-          description: 'Evaluación de frecuencia respiratoria programada',
-          scheduledTime: new Date('2025-07-12T18:00:00'),
-          hoursOverdue: 6,
-          recommendedAction: 'Realizar evaluación respiratoria y registrar en historial',
-          isActive: true,
-          createdAt: new Date('2025-07-13T00:00:00')
-        },
-        {
-          id: '3',
-          type: 'side_effect',
-          planId: '1',
-          animalName: 'Bessie',
-          animalTag: 'TAG-001',
-          priority: 'critical',
-          title: 'Posible Reacción Adversa',
-          description: 'Animal presenta inflamación en sitio de inyección',
-          recommendedAction: 'Evaluar inmediatamente, considerar cambio de medicamento',
-          isActive: true,
-          createdAt: new Date('2025-07-12T15:30:00')
         }
       ];
 
       setTreatmentPlans(mockPlans);
-      setProtocols(mockProtocols);
       setStats(mockStats);
       setTreatmentAlerts(mockAlerts);
     };
@@ -908,15 +1269,10 @@ const TreatmentPlans: React.FC = () => {
               <p className="text-gray-600 mt-1">Gestión integral de tratamientos médicos</p>
             </div>
             <div className="flex items-center gap-3">
-              <Button variant="outline" size="sm">
-                <FileText className="w-4 h-4 mr-2" />
-                Protocolos
-              </Button>
-              <Button variant="outline" size="sm">
-                <Download className="w-4 h-4 mr-2" />
-                Exportar
-              </Button>
-              <Button size="sm">
+              <Button 
+                size="sm"
+                onClick={() => setIsNewPlanModalOpen(true)}
+              >
                 <Plus className="w-4 h-4 mr-2" />
                 Nuevo Plan
               </Button>
@@ -954,157 +1310,95 @@ const TreatmentPlans: React.FC = () => {
           </motion.div>
         )}
 
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-          {/* Estadísticas de Tratamientos */}
-          <motion.div 
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="lg:col-span-12"
-          >
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
-              <Card className="bg-white/80 backdrop-blur-md border-green-200">
-                <CardContent className="p-6">
-                  <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
-                      <Clipboard className="w-6 h-6 text-green-600" />
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium text-gray-600">Planes Activos</p>
-                      <p className="text-2xl font-bold text-gray-900">{stats.totalActivePlans}</p>
-                    </div>
+        {/* Estadísticas de Tratamientos */}
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="mb-6"
+        >
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
+            <Card className="bg-white/80 backdrop-blur-md border-green-200">
+              <CardContent className="p-6">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
+                    <Clipboard className="w-6 h-6 text-green-600" />
                   </div>
-                </CardContent>
-              </Card>
-
-              <Card className="bg-white/80 backdrop-blur-md border-blue-200">
-                <CardContent className="p-6">
-                  <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
-                      <Target className="w-6 h-6 text-blue-600" />
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium text-gray-600">Tasa de Éxito</p>
-                      <p className="text-2xl font-bold text-gray-900">{stats.successRate}%</p>
-                    </div>
+                  <div>
+                    <p className="text-sm font-medium text-gray-600">Planes Activos</p>
+                    <p className="text-2xl font-bold text-gray-900">{stats.totalActivePlans}</p>
                   </div>
-                </CardContent>
-              </Card>
-
-              <Card className="bg-white/80 backdrop-blur-md border-purple-200">
-                <CardContent className="p-6">
-                  <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
-                      <CheckCircle className="w-6 h-6 text-purple-600" />
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium text-gray-600">Cumplimiento</p>
-                      <p className="text-2xl font-bold text-gray-900">{stats.complianceRate}%</p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card className="bg-white/80 backdrop-blur-md border-yellow-200">
-                <CardContent className="p-6">
-                  <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 bg-yellow-100 rounded-lg flex items-center justify-center">
-                      <Clock className="w-6 h-6 text-yellow-600" />
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium text-gray-600">Duración Promedio</p>
-                      <p className="text-2xl font-bold text-gray-900">{stats.averageDuration}</p>
-                      <p className="text-xs text-gray-500">días</p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card className="bg-white/80 backdrop-blur-md border-red-200">
-                <CardContent className="p-6">
-                  <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 bg-red-100 rounded-lg flex items-center justify-center">
-                      <AlertTriangle className="w-6 h-6 text-red-600" />
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium text-gray-600">Alertas Activas</p>
-                      <p className="text-2xl font-bold text-gray-900">{stats.alertsCount}</p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-          </motion.div>
-
-          {/* Mapa de Tratamientos */}
-          <motion.div 
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 }}
-            className="lg:col-span-8"
-          >
-            <Card className="bg-white/80 backdrop-blur-md border-gray-200">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <MapPin className="w-5 h-5 text-blue-600" />
-                  Mapa de Tratamientos Activos
-                </CardTitle>
-                <CardDescription>
-                  Distribución geográfica de planes de tratamiento en curso
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <TreatmentMap />
-              </CardContent>
-            </Card>
-          </motion.div>
-
-          {/* Panel de Control */}
-          <motion.div 
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2 }}
-            className="lg:col-span-4 space-y-6"
-          >
-            {/* Selector de Vista */}
-            <Card className="bg-white/80 backdrop-blur-md border-gray-200">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Settings className="w-5 h-5 text-blue-600" />
-                  Vista
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-1 gap-2">
-                  <Button 
-                    variant={viewMode === 'plans' ? 'default' : 'outline'}
-                    onClick={() => setViewMode('plans')}
-                    className="justify-start"
-                  >
-                    <Clipboard className="w-4 h-4 mr-2" />
-                    Planes Activos
-                  </Button>
-                  <Button 
-                    variant={viewMode === 'protocols' ? 'default' : 'outline'}
-                    onClick={() => setViewMode('protocols')}
-                    className="justify-start"
-                  >
-                    <FileText className="w-4 h-4 mr-2" />
-                    Protocolos
-                  </Button>
-                  <Button 
-                    variant={viewMode === 'schedule' ? 'default' : 'outline'}
-                    onClick={() => setViewMode('schedule')}
-                    className="justify-start"
-                  >
-                    <Calendar className="w-4 h-4 mr-2" />
-                    Cronograma Hoy
-                  </Button>
                 </div>
               </CardContent>
             </Card>
 
-            {/* Filtros */}
-            <Card className="bg-white/80 backdrop-blur-md border-gray-200">
+            <Card className="bg-white/80 backdrop-blur-md border-blue-200">
+              <CardContent className="p-6">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
+                    <Target className="w-6 h-6 text-blue-600" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-gray-600">Tasa de Éxito</p>
+                    <p className="text-2xl font-bold text-gray-900">{stats.successRate}%</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-white/80 backdrop-blur-md border-purple-200">
+              <CardContent className="p-6">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
+                    <CheckCircle className="w-6 h-6 text-purple-600" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-gray-600">Cumplimiento</p>
+                    <p className="text-2xl font-bold text-gray-900">{stats.complianceRate}%</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-white/80 backdrop-blur-md border-yellow-200">
+              <CardContent className="p-6">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 bg-yellow-100 rounded-lg flex items-center justify-center">
+                    <Clock className="w-6 h-6 text-yellow-600" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-gray-600">Duración Promedio</p>
+                    <p className="text-2xl font-bold text-gray-900">{stats.averageDuration}</p>
+                    <p className="text-xs text-gray-500">días</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-white/80 backdrop-blur-md border-red-200">
+              <CardContent className="p-6">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 bg-red-100 rounded-lg flex items-center justify-center">
+                    <AlertTriangle className="w-6 h-6 text-red-600" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-gray-600">Alertas Activas</p>
+                    <p className="text-2xl font-bold text-gray-900">{stats.alertsCount}</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </motion.div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+          {/* Filtros */}
+          <motion.div 
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ delay: 0.1 }}
+            className="lg:col-span-1"
+          >
+            <Card className="bg-white/80 backdrop-blur-md border-gray-200 sticky top-24">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Filter className="w-5 h-5 text-blue-600" />
@@ -1181,347 +1475,226 @@ const TreatmentPlans: React.FC = () => {
                 </div>
               </CardContent>
             </Card>
+          </motion.div>
 
-            {/* Estadísticas Adicionales */}
+          {/* Lista de Planes de Tratamiento */}
+          <motion.div 
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ delay: 0.2 }}
+            className="lg:col-span-3"
+          >
             <Card className="bg-white/80 backdrop-blur-md border-gray-200">
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <BarChart3 className="w-5 h-5 text-green-600" />
-                  Indicadores
+                <CardTitle>
+                  Planes de Tratamiento ({filteredPlans.length})
                 </CardTitle>
+                <CardDescription>
+                  Gestión de planes de tratamiento individualizados
+                </CardDescription>
               </CardHeader>
-              <CardContent className="space-y-3">
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-600">Condición más común:</span>
-                  <span className="font-medium">{stats.mostCommonCondition}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-600">Completados este mes:</span>
-                  <span className="font-medium">{stats.completedThisMonth}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-600">Costo total:</span>
-                  <span className="font-medium">${stats.totalCost.toLocaleString()}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-600">Seguimientos pendientes:</span>
-                  <span className="font-medium text-orange-600">{stats.overdueFollowUps}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-600">Protocolos disponibles:</span>
-                  <span className="font-medium">{stats.protocolsCount}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-600">Efectividad promedio:</span>
-                  <span className="font-medium">{stats.avgEffectiveness}%</span>
+              <CardContent>
+                <div className="space-y-4">
+                  {filteredPlans.map((plan) => (
+                    <motion.div
+                      key={plan.id}
+                      whileHover={{ scale: 1.01 }}
+                      className="border border-gray-200 rounded-lg p-6 hover:shadow-md transition-all duration-200"
+                    >
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-3 mb-3">
+                            <h4 className="text-xl font-semibold text-gray-900">
+                              {plan.animalName} ({plan.animalTag})
+                            </h4>
+                            <Badge variant={plan.status}>
+                              {plan.status === 'planned' ? 'Programado' :
+                               plan.status === 'active' ? 'Activo' :
+                               plan.status === 'paused' ? 'Pausado' :
+                               plan.status === 'completed' ? 'Completado' :
+                               plan.status === 'discontinued' ? 'Discontinuado' : 'Fallido'}
+                            </Badge>
+                            <Badge variant={plan.priority}>
+                              {plan.priority === 'urgent' ? 'Urgente' :
+                               plan.priority === 'high' ? 'Alta' :
+                               plan.priority === 'medium' ? 'Media' : 'Baja'}
+                            </Badge>
+                            <Badge variant={plan.conditionCategory}>
+                              {plan.conditionCategory === 'respiratory' ? 'Respiratorio' :
+                               plan.conditionCategory === 'digestive' ? 'Digestivo' :
+                               plan.conditionCategory === 'reproductive' ? 'Reproductivo' :
+                               plan.conditionCategory === 'metabolic' ? 'Metabólico' :
+                               plan.conditionCategory === 'infectious' ? 'Infeccioso' :
+                               plan.conditionCategory === 'parasitic' ? 'Parasitario' :
+                               plan.conditionCategory === 'injury' ? 'Lesión' : 'Crónico'}
+                            </Badge>
+                            <Badge variant={plan.severity}>
+                              {plan.severity === 'critical' ? 'Crítica' :
+                               plan.severity === 'severe' ? 'Severa' :
+                               plan.severity === 'moderate' ? 'Moderada' : 'Leve'}
+                            </Badge>
+                          </div>
+
+                          <h5 className="text-lg font-medium text-gray-900 mb-2">{plan.planName}</h5>
+                          <p className="text-gray-700 mb-4">{plan.diagnosis}</p>
+
+                          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-sm mb-4">
+                            <div>
+                              <p className="text-gray-600">Veterinario:</p>
+                              <p className="font-medium">{plan.veterinarian}</p>
+                            </div>
+                            <div>
+                              <p className="text-gray-600">Inicio:</p>
+                              <p className="font-medium">{plan.startDate.toLocaleDateString()}</p>
+                            </div>
+                            <div>
+                              <p className="text-gray-600">Duración:</p>
+                              <p className="font-medium">
+                                {Math.ceil((plan.expectedEndDate.getTime() - plan.startDate.getTime()) / (1000 * 60 * 60 * 24))} días
+                              </p>
+                            </div>
+                            <div>
+                              <p className="text-gray-600">Costo total:</p>
+                              <p className="font-medium">${plan.totalCost.toFixed(2)}</p>
+                            </div>
+                          </div>
+
+                          <div className="mb-4">
+                            <h6 className="font-semibold text-gray-900 mb-2">Medicamentos</h6>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                              {plan.medications.map((med, idx) => (
+                                <div key={idx} className="bg-blue-50 rounded-lg p-3">
+                                  <p className="font-medium text-blue-900">{med.medicationName}</p>
+                                  <p className="text-sm text-blue-700">
+                                    {med.dosage} - {med.frequency} ({med.route})
+                                  </p>
+                                  <p className="text-sm text-blue-600">
+                                    Días {med.startDay}-{med.endDay} | ${med.cost}
+                                  </p>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+
+                          <div className="mb-4">
+                            <h6 className="font-semibold text-gray-900 mb-2">Objetivos del Tratamiento</h6>
+                            <div className="space-y-2">
+                              {plan.treatmentGoals.map((goal, idx) => (
+                                <div key={idx} className="flex items-center gap-3">
+                                  {goal.achieved ? (
+                                    <CheckCircle className="w-5 h-5 text-green-600" />
+                                  ) : (
+                                    <Clock className="w-5 h-5 text-yellow-600" />
+                                  )}
+                                  <div className="flex-1">
+                                    <p className="text-sm font-medium">{goal.goal}</p>
+                                    <p className="text-xs text-gray-600">
+                                      Objetivo: {goal.targetValue} | 
+                                      Actual: {goal.currentValue || 'Pendiente'} | 
+                                      Meta: {goal.targetDate.toLocaleDateString()}
+                                    </p>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                            <div>
+                              <p className="text-gray-600">Efectividad:</p>
+                              <div className="flex items-center gap-2">
+                                <div className="flex-1 bg-gray-200 rounded-full h-2">
+                                  <div 
+                                    className="bg-green-600 h-2 rounded-full" 
+                                    style={{ width: `${plan.effectiveness}%` }}
+                                  />
+                                </div>
+                                <span className="font-medium">{plan.effectiveness}%</span>
+                              </div>
+                            </div>
+                            <div>
+                              <p className="text-gray-600">Cumplimiento:</p>
+                              <div className="flex items-center gap-2">
+                                <div className="flex-1 bg-gray-200 rounded-full h-2">
+                                  <div 
+                                    className="bg-blue-600 h-2 rounded-full" 
+                                    style={{ width: `${plan.compliance}%` }}
+                                  />
+                                </div>
+                                <span className="font-medium">{plan.compliance}%</span>
+                              </div>
+                            </div>
+                            <div>
+                              <p className="text-gray-600">Período de retiro:</p>
+                              <p className="font-medium">{plan.withdrawalPeriod} días</p>
+                            </div>
+                          </div>
+
+                          {plan.notes && (
+                            <div className="mt-4 text-sm text-gray-700">
+                              <strong>Notas:</strong> {plan.notes}
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="flex items-center gap-2 ml-4">
+                          <Button 
+                            variant="outline" 
+                            size="sm"
+                            onClick={() => handleViewPlan(plan)}
+                          >
+                            <Eye className="w-4 h-4" />
+                          </Button>
+                          <Button 
+                            variant="outline" 
+                            size="sm"
+                            onClick={() => handleEditPlan(plan)}
+                          >
+                            <Edit className="w-4 h-4" />
+                          </Button>
+                          <Button 
+                            variant="danger" 
+                            size="sm"
+                            onClick={() => handleDeletePlan(plan.id)}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    </motion.div>
+                  ))}
                 </div>
               </CardContent>
             </Card>
           </motion.div>
-
-          {/* Vista Principal */}
-          <motion.div 
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.3 }}
-            className="lg:col-span-12"
-          >
-            <AnimatePresence mode="wait">
-              <motion.div
-                key={viewMode}
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-              >
-                <Card className="bg-white/80 backdrop-blur-md border-gray-200">
-                  <CardHeader>
-                    <CardTitle>
-                      {viewMode === 'plans' ? `Planes de Tratamiento (${filteredPlans.length})` :
-                       viewMode === 'protocols' ? `Protocolos Estándar (${protocols.length})` :
-                       'Cronograma de Hoy'}
-                    </CardTitle>
-                    <CardDescription>
-                      {viewMode === 'plans' ? 'Gestión de planes de tratamiento individualizados' :
-                       viewMode === 'protocols' ? 'Protocolos estandarizados de tratamiento' :
-                       'Tareas y medicaciones programadas para hoy'}
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-4">
-                      {viewMode === 'plans' && filteredPlans.map((plan) => (
-                        <motion.div
-                          key={plan.id}
-                          whileHover={{ scale: 1.01 }}
-                          className="border border-gray-200 rounded-lg p-6 hover:shadow-md transition-all duration-200"
-                        >
-                          <div className="flex items-start justify-between">
-                            <div className="flex-1">
-                              <div className="flex items-center gap-3 mb-3">
-                                <h4 className="text-xl font-semibold text-gray-900">
-                                  {plan.animalName} ({plan.animalTag})
-                                </h4>
-                                <Badge variant={plan.status}>
-                                  {plan.status === 'planned' ? 'Programado' :
-                                   plan.status === 'active' ? 'Activo' :
-                                   plan.status === 'paused' ? 'Pausado' :
-                                   plan.status === 'completed' ? 'Completado' :
-                                   plan.status === 'discontinued' ? 'Discontinuado' : 'Fallido'}
-                                </Badge>
-                                <Badge variant={plan.priority}>
-                                  {plan.priority === 'urgent' ? 'Urgente' :
-                                   plan.priority === 'high' ? 'Alta' :
-                                   plan.priority === 'medium' ? 'Media' : 'Baja'}
-                                </Badge>
-                                <Badge variant={plan.conditionCategory}>
-                                  {plan.conditionCategory === 'respiratory' ? 'Respiratorio' :
-                                   plan.conditionCategory === 'digestive' ? 'Digestivo' :
-                                   plan.conditionCategory === 'reproductive' ? 'Reproductivo' :
-                                   plan.conditionCategory === 'metabolic' ? 'Metabólico' :
-                                   plan.conditionCategory === 'infectious' ? 'Infeccioso' :
-                                   plan.conditionCategory === 'parasitic' ? 'Parasitario' :
-                                   plan.conditionCategory === 'injury' ? 'Lesión' : 'Crónico'}
-                                </Badge>
-                                <Badge variant={plan.severity}>
-                                  {plan.severity === 'critical' ? 'Crítica' :
-                                   plan.severity === 'severe' ? 'Severa' :
-                                   plan.severity === 'moderate' ? 'Moderada' : 'Leve'}
-                                </Badge>
-                              </div>
-
-                              <h5 className="text-lg font-medium text-gray-900 mb-2">{plan.planName}</h5>
-                              <p className="text-gray-700 mb-4">{plan.diagnosis}</p>
-
-                              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-sm mb-4">
-                                <div>
-                                  <p className="text-gray-600">Veterinario:</p>
-                                  <p className="font-medium">{plan.veterinarian}</p>
-                                </div>
-                                <div>
-                                  <p className="text-gray-600">Inicio:</p>
-                                  <p className="font-medium">{plan.startDate.toLocaleDateString()}</p>
-                                </div>
-                                <div>
-                                  <p className="text-gray-600">Duración:</p>
-                                  <p className="font-medium">
-                                    {Math.ceil((plan.expectedEndDate.getTime() - plan.startDate.getTime()) / (1000 * 60 * 60 * 24))} días
-                                  </p>
-                                </div>
-                                <div>
-                                  <p className="text-gray-600">Costo total:</p>
-                                  <p className="font-medium">${plan.totalCost.toFixed(2)}</p>
-                                </div>
-                              </div>
-
-                              <div className="mb-4">
-                                <h6 className="font-semibold text-gray-900 mb-2">Medicamentos</h6>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                  {plan.medications.map((med, idx) => (
-                                    <div key={idx} className="bg-blue-50 rounded-lg p-3">
-                                      <p className="font-medium text-blue-900">{med.medicationName}</p>
-                                      <p className="text-sm text-blue-700">
-                                        {med.dosage} - {med.frequency} ({med.route})
-                                      </p>
-                                      <p className="text-sm text-blue-600">
-                                        Días {med.startDay}-{med.endDay} | ${med.cost}
-                                      </p>
-                                    </div>
-                                  ))}
-                                </div>
-                              </div>
-
-                              <div className="mb-4">
-                                <h6 className="font-semibold text-gray-900 mb-2">Objetivos del Tratamiento</h6>
-                                <div className="space-y-2">
-                                  {plan.treatmentGoals.map((goal, idx) => (
-                                    <div key={idx} className="flex items-center gap-3">
-                                      {goal.achieved ? (
-                                        <CheckCircle className="w-5 h-5 text-green-600" />
-                                      ) : (
-                                        <Clock className="w-5 h-5 text-yellow-600" />
-                                      )}
-                                      <div className="flex-1">
-                                        <p className="text-sm font-medium">{goal.goal}</p>
-                                        <p className="text-xs text-gray-600">
-                                          Objetivo: {goal.targetValue} | 
-                                          Actual: {goal.currentValue || 'Pendiente'} | 
-                                          Meta: {goal.targetDate.toLocaleDateString()}
-                                        </p>
-                                      </div>
-                                    </div>
-                                  ))}
-                                </div>
-                              </div>
-
-                              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-                                <div>
-                                  <p className="text-gray-600">Efectividad:</p>
-                                  <div className="flex items-center gap-2">
-                                    <div className="flex-1 bg-gray-200 rounded-full h-2">
-                                      <div 
-                                        className="bg-green-600 h-2 rounded-full" 
-                                        style={{ width: `${plan.effectiveness}%` }}
-                                      />
-                                    </div>
-                                    <span className="font-medium">{plan.effectiveness}%</span>
-                                  </div>
-                                </div>
-                                <div>
-                                  <p className="text-gray-600">Cumplimiento:</p>
-                                  <div className="flex items-center gap-2">
-                                    <div className="flex-1 bg-gray-200 rounded-full h-2">
-                                      <div 
-                                        className="bg-blue-600 h-2 rounded-full" 
-                                        style={{ width: `${plan.compliance}%` }}
-                                      />
-                                    </div>
-                                    <span className="font-medium">{plan.compliance}%</span>
-                                  </div>
-                                </div>
-                                <div>
-                                  <p className="text-gray-600">Período de retiro:</p>
-                                  <p className="font-medium">{plan.withdrawalPeriod} días</p>
-                                </div>
-                              </div>
-
-                              {plan.notes && (
-                                <div className="mt-4 text-sm text-gray-700">
-                                  <strong>Notas:</strong> {plan.notes}
-                                </div>
-                              )}
-                            </div>
-
-                            <div className="flex items-center gap-2 ml-4">
-                              <Button variant="outline" size="sm">
-                                <Eye className="w-4 h-4" />
-                              </Button>
-                              <Button variant="outline" size="sm">
-                                <Edit className="w-4 h-4" />
-                              </Button>
-                              {plan.status === 'active' && (
-                                <Button variant="warning" size="sm">
-                                  <Pause className="w-4 h-4" />
-                                </Button>
-                              )}
-                              {plan.status === 'paused' && (
-                                <Button variant="success" size="sm">
-                                  <Play className="w-4 h-4" />
-                                </Button>
-                              )}
-                            </div>
-                          </div>
-                        </motion.div>
-                      ))}
-
-                      {viewMode === 'protocols' && protocols.map((protocol) => (
-                        <motion.div
-                          key={protocol.id}
-                          whileHover={{ scale: 1.01 }}
-                          className="border border-gray-200 rounded-lg p-6 hover:shadow-md transition-all duration-200"
-                        >
-                          <div className="flex items-start justify-between">
-                            <div className="flex-1">
-                              <div className="flex items-center gap-3 mb-3">
-                                <h4 className="text-xl font-semibold text-gray-900">{protocol.name}</h4>
-                                {protocol.isStandard && (
-                                  <Badge variant="success">Estándar</Badge>
-                                )}
-                                <span className="text-sm text-gray-600">{protocol.category}</span>
-                              </div>
-
-                              <p className="text-gray-700 mb-4">{protocol.description}</p>
-
-                              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-sm mb-4">
-                                <div>
-                                  <p className="text-gray-600">Duración estándar:</p>
-                                  <p className="font-medium">{protocol.standardDuration} días</p>
-                                </div>
-                                <div>
-                                  <p className="text-gray-600">Tasa de éxito:</p>
-                                  <p className="font-medium">{protocol.expectedOutcomes.successRate}%</p>
-                                </div>
-                                <div>
-                                  <p className="text-gray-600">Tiempo promedio:</p>
-                                  <p className="font-medium">{protocol.expectedOutcomes.averageRecoveryTime} días</p>
-                                </div>
-                                <div>
-                                  <p className="text-gray-600">Costo:</p>
-                                  <p className="font-medium">${protocol.cost}</p>
-                                </div>
-                              </div>
-
-                              <div className="mb-4">
-                                <h6 className="font-semibold text-gray-900 mb-2">Condiciones Tratadas</h6>
-                                <div className="flex flex-wrap gap-1">
-                                  {protocol.conditions.map((condition, idx) => (
-                                    <span key={idx} className="px-2 py-1 bg-green-100 text-green-800 rounded-full text-xs">
-                                      {condition}
-                                    </span>
-                                  ))}
-                                </div>
-                              </div>
-
-                              <div className="mb-4">
-                                <h6 className="font-semibold text-gray-900 mb-2">Medicamentos</h6>
-                                <div className="space-y-2">
-                                  {protocol.medications.map((med, idx) => (
-                                    <div key={idx} className={`p-3 rounded-lg ${med.isEssential ? 'bg-red-50 border border-red-200' : 'bg-gray-50'}`}>
-                                      <div className="flex items-center gap-2">
-                                        <p className="font-medium">{med.medicationName}</p>
-                                        {med.isEssential && (
-                                          <Badge variant="critical">Esencial</Badge>
-                                        )}
-                                      </div>
-                                      <p className="text-sm text-gray-600">
-                                        {med.dosage} - {med.frequency} ({med.route}) por {med.duration} días
-                                      </p>
-                                    </div>
-                                  ))}
-                                </div>
-                              </div>
-
-                              <div className="text-sm text-gray-600">
-                                <p><strong>Usado:</strong> {protocol.timesUsed} veces</p>
-                                <p><strong>Creado por:</strong> {protocol.createdBy}</p>
-                                <p><strong>Última actualización:</strong> {protocol.lastUpdated.toLocaleDateString()}</p>
-                              </div>
-                            </div>
-
-                            <div className="flex items-center gap-2 ml-4">
-                              <Button variant="outline" size="sm">
-                                <Eye className="w-4 h-4" />
-                              </Button>
-                              <Button variant="outline" size="sm">
-                                <Edit className="w-4 h-4" />
-                              </Button>
-                              <Button variant="success" size="sm">
-                                <Zap className="w-4 h-4" />
-                              </Button>
-                            </div>
-                          </div>
-                        </motion.div>
-                      ))}
-
-                      {viewMode === 'schedule' && (
-                        <div className="text-center py-12">
-                          <Calendar className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                          <h3 className="text-lg font-medium text-gray-900 mb-2">Cronograma de Hoy</h3>
-                          <p className="text-gray-600 mb-4">
-                            Vista detallada de todas las tareas programadas para hoy
-                          </p>
-                          <Button>
-                            <Plus className="w-4 h-4 mr-2" />
-                            Ver Cronograma Completo
-                          </Button>
-                        </div>
-                      )}
-                    </div>
-                  </CardContent>
-                </Card>
-              </motion.div>
-            </AnimatePresence>
-          </motion.div>
         </div>
       </div>
+
+      {/* Modales */}
+      <NewTreatmentModal
+        isOpen={isNewPlanModalOpen}
+        onClose={() => setIsNewPlanModalOpen(false)}
+        onSave={handleNewPlan}
+      />
+
+      <ViewTreatmentModal
+        isOpen={isViewModalOpen}
+        onClose={() => {
+          setIsViewModalOpen(false);
+          setSelectedPlan(null);
+        }}
+        plan={selectedPlan}
+      />
+
+      <EditTreatmentModal
+        isOpen={isEditModalOpen}
+        onClose={() => {
+          setIsEditModalOpen(false);
+          setSelectedPlan(null);
+        }}
+        plan={selectedPlan}
+        onSave={handleSaveEdit}
+      />
     </div>
   );
 };

@@ -1,23 +1,13 @@
 import React, { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import {
-  Download,
-  Calendar,
   Filter,
   BarChart3,
-  PieChart,
-  TrendingUp,
-  TrendingDown,
-  Activity,
-  Syringe,
-  Thermometer,
-  DollarSign,
-  Users,
-  Clock,
-  Search,
   Plus,
-  Eye,
-  Share,
+  Search,
+  X,
+  Edit,
+  Trash2,
 } from "lucide-react";
 
 // Interfaces para tipos de datos
@@ -49,29 +39,17 @@ interface HealthReport {
   };
 }
 
-interface ReportMetrics {
-  totalReports: number;
-  pendingReports: number;
-  scheduledReports: number;
-  avgGenerationTime: number;
-  mostRequestedType: string;
-  totalDownloads: number;
-}
-
-interface QuickStat {
+interface NewReportForm {
   title: string;
-  value: string | number;
-  change: number;
-  trend: "up" | "down" | "stable";
-  icon: React.ElementType;
-  color: string;
+  type: string;
+  description: string;
+  dateStart: string;
+  dateEnd: string;
+  format: string;
 }
 
 // Componentes reutilizables
-const Card: React.FC<{ children: React.ReactNode; className?: string }> = ({
-  children,
-  className = "",
-}) => (
+const Card = ({ children, className = "" }: { children: React.ReactNode; className?: string }) => (
   <div
     className={`bg-white rounded-lg shadow-md border border-gray-200 ${className}`}
   >
@@ -79,44 +57,40 @@ const Card: React.FC<{ children: React.ReactNode; className?: string }> = ({
   </div>
 );
 
-const CardHeader: React.FC<{ children: React.ReactNode }> = ({ children }) => (
+const CardHeader = ({ children }: { children: React.ReactNode }) => (
   <div className="px-6 py-4 border-b border-gray-200">{children}</div>
 );
 
-const CardTitle: React.FC<{
-  children: React.ReactNode;
-  className?: string;
-}> = ({ children, className = "" }) => (
+const CardTitle = ({ children, className = "" }: { children: React.ReactNode; className?: string }) => (
   <h3 className={`text-lg font-semibold text-gray-900 ${className}`}>
     {children}
   </h3>
 );
 
-const CardDescription: React.FC<{ children: React.ReactNode }> = ({
-  children,
-}) => <p className="text-sm text-gray-600 mt-1">{children}</p>;
+const CardDescription = ({ children }: { children: React.ReactNode }) => (
+  <p className="text-sm text-gray-600 mt-1">{children}</p>
+);
 
-const CardContent: React.FC<{
-  children: React.ReactNode;
-  className?: string;
-}> = ({ children, className = "" }) => (
+const CardContent = ({ children, className = "" }: { children: React.ReactNode; className?: string }) => (
   <div className={`px-6 py-4 ${className}`}>{children}</div>
 );
 
-const Button: React.FC<{
-  children: React.ReactNode;
-  onClick?: () => void;
-  variant?: "default" | "outline" | "success" | "danger";
-  size?: "sm" | "default";
-  className?: string;
-  disabled?: boolean;
-}> = ({
+const Button = ({
   children,
   onClick,
   variant = "default",
   size = "default",
   className = "",
   disabled = false,
+  type = "button"
+}: {
+  children: React.ReactNode;
+  onClick?: () => void;
+  variant?: "default" | "outline" | "success" | "danger";
+  size?: "sm" | "default";
+  className?: string;
+  disabled?: boolean;
+  type?: "button" | "submit";
 }) => {
   const baseClasses =
     "inline-flex items-center justify-center font-medium rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed";
@@ -134,6 +108,7 @@ const Button: React.FC<{
 
   return (
     <button
+      type={type}
       className={`${baseClasses} ${variantClasses[variant]} ${sizeClasses[size]} ${className}`}
       onClick={onClick}
       disabled={disabled}
@@ -143,11 +118,11 @@ const Button: React.FC<{
   );
 };
 
-const Badge: React.FC<{
+const Badge = ({ children, variant, className = "" }: {
   children: React.ReactNode;
   variant: string;
   className?: string;
-}> = ({ children, variant, className = "" }) => {
+}) => {
   const getVariantClasses = (variant: string) => {
     switch (variant) {
       case "ready":
@@ -184,69 +159,411 @@ const Badge: React.FC<{
   );
 };
 
-// Componente de Gráfico Simple
-const SimpleChart: React.FC<{
-  data: any[];
-  title: string;
-  type: "bar" | "pie";
-}> = ({ data, title, type }) => {
+// Modal para Editar Reporte
+const EditReportModal = ({
+  isOpen,
+  onClose,
+  onSubmit,
+  report,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  onSubmit: (formData: NewReportForm) => void;
+  report: HealthReport | null;
+}) => {
+  const [formData, setFormData] = useState<NewReportForm>({
+    title: "",
+    type: "vaccination",
+    description: "",
+    dateStart: "",
+    dateEnd: "",
+    format: "pdf",
+  });
+
+  useEffect(() => {
+    if (report) {
+      setFormData({
+        title: report.title,
+        type: report.type,
+        description: report.description,
+        dateStart: report.dateRange.start.toISOString().split('T')[0],
+        dateEnd: report.dateRange.end.toISOString().split('T')[0],
+        format: report.format,
+      });
+    }
+  }, [report]);
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    onSubmit(formData);
+    onClose();
+  };
+
+  if (!isOpen || !report) return null;
+
   return (
-    <div className="h-64 bg-gray-50 rounded-lg flex items-center justify-center relative">
-      <div className="absolute top-4 left-4">
-        <h4 className="text-sm font-medium text-gray-700">{title}</h4>
-      </div>
-
-      {type === "bar" && (
-        <div className="flex items-end gap-4 h-32">
-          {data.slice(0, 6).map((item, index) => (
-            <div key={index} className="flex flex-col items-center gap-2">
-              <div
-                className="bg-blue-500 rounded-t min-w-8"
-                style={{
-                  height: `${
-                    (item.value / Math.max(...data.map((d) => d.value))) * 100
-                  }%`,
-                }}
-              />
-              <span className="text-xs text-gray-600 text-center max-w-16 truncate">
-                {item.label}
-              </span>
-            </div>
-          ))}
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-xl font-semibold">Editar Reporte</h2>
+          <Button variant="outline" size="sm" onClick={onClose}>
+            <X className="w-4 h-4" />
+          </Button>
         </div>
-      )}
+        
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Título
+            </label>
+            <input
+              type="text"
+              required
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              value={formData.title}
+              onChange={(e) => setFormData({...formData, title: e.target.value})}
+            />
+          </div>
 
-      {type === "pie" && (
-        <div className="relative">
-          <div className="w-32 h-32 rounded-full bg-gradient-to-r from-blue-400 via-purple-500 to-pink-500"></div>
-          <div className="absolute inset-0 flex items-center justify-center">
-            <div className="text-center">
-              <p className="text-sm font-semibold text-white">100%</p>
-              <p className="text-xs text-white">Total</p>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Tipo
+            </label>
+            <select
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              value={formData.type}
+              onChange={(e) => setFormData({...formData, type: e.target.value})}
+            >
+              <option value="vaccination">Vacunación</option>
+              <option value="disease">Enfermedades</option>
+              <option value="treatment">Tratamientos</option>
+              <option value="reproductive">Reproductiva</option>
+              <option value="financial">Financieros</option>
+              <option value="general">Generales</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Descripción
+            </label>
+            <textarea
+              required
+              rows={3}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              value={formData.description}
+              onChange={(e) => setFormData({...formData, description: e.target.value})}
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Fecha Inicio
+              </label>
+              <input
+                type="date"
+                required
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                value={formData.dateStart}
+                onChange={(e) => setFormData({...formData, dateStart: e.target.value})}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Fecha Fin
+              </label>
+              <input
+                type="date"
+                required
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                value={formData.dateEnd}
+                onChange={(e) => setFormData({...formData, dateEnd: e.target.value})}
+              />
             </div>
           </div>
-        </div>
-      )}
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Formato
+            </label>
+            <select
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              value={formData.format}
+              onChange={(e) => setFormData({...formData, format: e.target.value})}
+            >
+              <option value="pdf">PDF</option>
+              <option value="excel">Excel</option>
+              <option value="csv">CSV</option>
+            </select>
+          </div>
+
+          <div className="flex justify-end gap-2 pt-4">
+            <Button variant="outline" onClick={onClose}>
+              Cancelar
+            </Button>
+            <Button type="submit">
+              Actualizar Reporte
+            </Button>
+          </div>
+        </form>
+      </div>
     </div>
   );
 };
 
-const HealthReports: React.FC = () => {
+// Modal de Confirmación para Eliminar
+const DeleteConfirmModal = ({
+  isOpen,
+  onClose,
+  onConfirm,
+  reportTitle,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  onConfirm: () => void;
+  reportTitle: string;
+}) => {
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="w-10 h-10 bg-red-100 rounded-lg flex items-center justify-center">
+            <Trash2 className="w-5 h-5 text-red-600" />
+          </div>
+          <div>
+            <h2 className="text-lg font-semibold text-gray-900">Eliminar Reporte</h2>
+            <p className="text-sm text-gray-600">Esta acción no se puede deshacer</p>
+          </div>
+        </div>
+        
+        <p className="text-gray-700 mb-6">
+          ¿Estás seguro de que quieres eliminar el reporte{" "}
+          <span className="font-medium">"{reportTitle}"</span>?
+        </p>
+
+        <div className="flex justify-end gap-2">
+          <Button variant="outline" onClick={onClose}>
+            Cancelar
+          </Button>
+          <Button variant="danger" onClick={onConfirm}>
+            Eliminar
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+};
+const NewReportModal = ({
+  isOpen,
+  onClose,
+  onSubmit,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  onSubmit: (formData: NewReportForm) => void;
+}) => {
+  const [formData, setFormData] = useState<NewReportForm>({
+    title: "",
+    type: "vaccination",
+    description: "",
+    dateStart: "",
+    dateEnd: "",
+    format: "pdf",
+  });
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    onSubmit(formData);
+    setFormData({
+      title: "",
+      type: "vaccination",
+      description: "",
+      dateStart: "",
+      dateEnd: "",
+      format: "pdf",
+    });
+    onClose();
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-xl font-semibold">Nuevo Reporte</h2>
+          <Button variant="outline" size="sm" onClick={onClose}>
+            <X className="w-4 h-4" />
+          </Button>
+        </div>
+        
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Título
+            </label>
+            <input
+              type="text"
+              required
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              value={formData.title}
+              onChange={(e) => setFormData({...formData, title: e.target.value})}
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Tipo
+            </label>
+            <select
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              value={formData.type}
+              onChange={(e) => setFormData({...formData, type: e.target.value})}
+            >
+              <option value="vaccination">Vacunación</option>
+              <option value="disease">Enfermedades</option>
+              <option value="treatment">Tratamientos</option>
+              <option value="reproductive">Reproductiva</option>
+              <option value="financial">Financieros</option>
+              <option value="general">Generales</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Descripción
+            </label>
+            <textarea
+              required
+              rows={3}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              value={formData.description}
+              onChange={(e) => setFormData({...formData, description: e.target.value})}
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Fecha Inicio
+              </label>
+              <input
+                type="date"
+                required
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                value={formData.dateStart}
+                onChange={(e) => setFormData({...formData, dateStart: e.target.value})}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Fecha Fin
+              </label>
+              <input
+                type="date"
+                required
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                value={formData.dateEnd}
+                onChange={(e) => setFormData({...formData, dateEnd: e.target.value})}
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Formato
+            </label>
+            <select
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              value={formData.format}
+              onChange={(e) => setFormData({...formData, format: e.target.value})}
+            >
+              <option value="pdf">PDF</option>
+              <option value="excel">Excel</option>
+              <option value="csv">CSV</option>
+            </select>
+          </div>
+
+          <div className="flex justify-end gap-2 pt-4">
+            <Button variant="outline" onClick={onClose}>
+              Cancelar
+            </Button>
+            <Button type="submit">
+              Generar Reporte
+            </Button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+};
+
+// Componente de Gráfico Interactivo
+const InteractiveChart = ({
+  data,
+  title,
+  onTypeClick,
+  selectedType,
+}: {
+  data: any[];
+  title: string;
+  onTypeClick: (type: string) => void;
+  selectedType: string;
+}) => {
+  const maxValue = Math.max(...data.map((d) => d.value));
+
+  return (
+    <div className="h-64 bg-gray-50 rounded-lg p-4">
+      <h4 className="text-sm font-medium text-gray-700 mb-4">{title}</h4>
+      
+      <div className="flex items-end gap-3 h-32">
+        {data.map((item, index) => {
+          const height = (item.value / maxValue) * 100;
+          const isSelected = selectedType === item.type;
+          
+          return (
+            <div 
+              key={index} 
+              className="flex flex-col items-center gap-2 cursor-pointer transition-all hover:opacity-80"
+              onClick={() => onTypeClick(item.type)}
+            >
+              <div
+                className={`${
+                  isSelected ? 'bg-blue-700' : 'bg-blue-500'
+                } rounded-t min-w-8 transition-colors`}
+                style={{ height: `${height}%` }}
+              />
+              <span className={`text-xs text-center max-w-16 truncate ${
+                isSelected ? 'text-blue-700 font-medium' : 'text-gray-600'
+              }`}>
+                {item.label}
+              </span>
+              <span className="text-xs font-medium text-gray-800">
+                {item.value}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
+const HealthReports = () => {
   // Estados del componente
   const [reports, setReports] = useState<HealthReport[]>([]);
-  const [metrics, setMetrics] = useState<ReportMetrics>({
-    totalReports: 0,
-    pendingReports: 0,
-    scheduledReports: 0,
-    avgGenerationTime: 0,
-    mostRequestedType: "",
-    totalDownloads: 0,
-  });
-  const [quickStats, setQuickStats] = useState<QuickStat[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedType, setSelectedType] = useState<string>("all");
   const [selectedStatus, setSelectedStatus] = useState<string>("all");
   const [selectedDateRange, setSelectedDateRange] = useState<string>("30");
+  const [isNewReportModalOpen, setIsNewReportModalOpen] = useState(false);
+  const [isEditReportModalOpen, setIsEditReportModalOpen] = useState(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [editingReport, setEditingReport] = useState<HealthReport | null>(null);
+  const [deletingReport, setDeletingReport] = useState<HealthReport | null>(null);
 
   // Simulación de datos
   useEffect(() => {
@@ -343,55 +660,7 @@ const HealthReports: React.FC = () => {
         },
       ];
 
-      // Métricas de ejemplo
-      const mockMetrics: ReportMetrics = {
-        totalReports: 24,
-        pendingReports: 3,
-        scheduledReports: 8,
-        avgGenerationTime: 4.2,
-        mostRequestedType: "Vacunación",
-        totalDownloads: 187,
-      };
-
-      // Estadísticas rápidas
-      const mockQuickStats: QuickStat[] = [
-        {
-          title: "Animales Monitoreados",
-          value: 156,
-          change: 5.2,
-          trend: "up",
-          icon: Users,
-          color: "blue",
-        },
-        {
-          title: "Vacunaciones Este Mes",
-          value: 89,
-          change: 12.5,
-          trend: "up",
-          icon: Syringe,
-          color: "green",
-        },
-        {
-          title: "Casos de Enfermedad",
-          value: 8,
-          change: -15.3,
-          trend: "down",
-          icon: Thermometer,
-          color: "red",
-        },
-        {
-          title: "Costo Promedio Tratamiento",
-          value: "$2,450",
-          change: -8.1,
-          trend: "down",
-          icon: DollarSign,
-          color: "orange",
-        },
-      ];
-
       setReports(mockReports);
-      setMetrics(mockMetrics);
-      setQuickStats(mockQuickStats);
     };
 
     loadData();
@@ -410,22 +679,110 @@ const HealthReports: React.FC = () => {
   });
 
   // Datos para gráficos
-  const chartData = {
-    reportsByType: [
-      { label: "Vacunación", value: 8 },
-      { label: "Enfermedades", value: 6 },
-      { label: "Reproducción", value: 4 },
-      { label: "Financieros", value: 3 },
-      { label: "Generales", value: 3 },
-    ],
-    monthlyGeneration: [
-      { label: "Ene", value: 15 },
-      { label: "Feb", value: 22 },
-      { label: "Mar", value: 18 },
-      { label: "Abr", value: 25 },
-      { label: "May", value: 32 },
-      { label: "Jun", value: 28 },
-    ],
+  const chartData = [
+    { label: "Vacunación", value: 8, type: "vaccination" },
+    { label: "Enfermedades", value: 6, type: "disease" },
+    { label: "Reproducción", value: 4, type: "reproductive" },
+    { label: "Financieros", value: 3, type: "financial" },
+    { label: "Generales", value: 3, type: "general" },
+  ];
+
+  // Funciones de manejo
+  const handleNewReport = (formData: NewReportForm) => {
+    const newReport: HealthReport = {
+      id: Date.now().toString(),
+      title: formData.title,
+      type: formData.type as any,
+      description: formData.description,
+      dateRange: {
+        start: new Date(formData.dateStart),
+        end: new Date(formData.dateEnd),
+      },
+      generatedAt: new Date(),
+      generatedBy: "Usuario Actual",
+      status: "generating",
+      format: formData.format as any,
+      size: "---",
+      stats: {
+        totalAnimals: 0,
+        dataPoints: 0,
+        recommendations: 0,
+      },
+    };
+
+    setReports([newReport, ...reports]);
+
+    // Simular generación del reporte
+    setTimeout(() => {
+      setReports(prevReports => 
+        prevReports.map(report => 
+          report.id === newReport.id 
+            ? { ...report, status: "ready" as const, size: "1.2 MB" }
+            : report
+        )
+      );
+    }, 3000);
+  };
+
+  const handleEditReport = (formData: NewReportForm) => {
+    if (!editingReport) return;
+
+    const updatedReport: HealthReport = {
+      ...editingReport,
+      title: formData.title,
+      type: formData.type as any,
+      description: formData.description,
+      dateRange: {
+        start: new Date(formData.dateStart),
+        end: new Date(formData.dateEnd),
+      },
+      format: formData.format as any,
+      status: "generating",
+    };
+
+    setReports(prevReports =>
+      prevReports.map(report =>
+        report.id === editingReport.id ? updatedReport : report
+      )
+    );
+
+    // Simular regeneración del reporte
+    setTimeout(() => {
+      setReports(prevReports =>
+        prevReports.map(report =>
+          report.id === editingReport.id
+            ? { ...report, status: "ready" as const, size: "1.3 MB", generatedAt: new Date() }
+            : report
+        )
+      );
+    }, 2000);
+
+    setEditingReport(null);
+  };
+
+  const handleDeleteReport = () => {
+    if (!deletingReport) return;
+
+    setReports(prevReports =>
+      prevReports.filter(report => report.id !== deletingReport.id)
+    );
+
+    setDeletingReport(null);
+    setIsDeleteModalOpen(false);
+  };
+
+  const openEditModal = (report: HealthReport) => {
+    setEditingReport(report);
+    setIsEditReportModalOpen(true);
+  };
+
+  const openDeleteModal = (report: HealthReport) => {
+    setDeletingReport(report);
+    setIsDeleteModalOpen(true);
+  };
+
+  const handleChartTypeClick = (type: string) => {
+    setSelectedType(type);
   };
 
   return (
@@ -447,11 +804,10 @@ const HealthReports: React.FC = () => {
               </p>
             </div>
             <div className="flex items-center gap-3">
-              <Button variant="outline" size="sm">
-                <Calendar className="w-4 h-4 mr-2" />
-                Programar
-              </Button>
-              <Button size="sm">
+              <Button 
+                size="sm"
+                onClick={() => setIsNewReportModalOpen(true)}
+              >
                 <Plus className="w-4 h-4 mr-2" />
                 Nuevo Reporte
               </Button>
@@ -462,114 +818,41 @@ const HealthReports: React.FC = () => {
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-          {/* Estadísticas Rápidas */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="lg:col-span-12"
-          >
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-              {quickStats.map((stat, index) => (
-                <Card
-                  key={index}
-                  className="bg-white/80 backdrop-blur-md border-gray-200"
-                >
-                  <CardContent className="p-6">
-                    <div className="flex items-center gap-4">
-                      <div
-                        className={`w-12 h-12 bg-${stat.color}-100 rounded-lg flex items-center justify-center`}
-                      >
-                        <stat.icon
-                          className={`w-6 h-6 text-${stat.color}-600`}
-                        />
-                      </div>
-                      <div className="flex-1">
-                        <p className="text-sm font-medium text-gray-600">
-                          {stat.title}
-                        </p>
-                        <div className="flex items-center gap-2">
-                          <p className="text-2xl font-bold text-gray-900">
-                            {stat.value}
-                          </p>
-                          <div
-                            className={`flex items-center text-sm ${
-                              stat.trend === "up"
-                                ? "text-green-600"
-                                : stat.trend === "down"
-                                ? "text-red-600"
-                                : "text-gray-600"
-                            }`}
-                          >
-                            {stat.trend === "up" ? (
-                              <TrendingUp className="w-4 h-4" />
-                            ) : stat.trend === "down" ? (
-                              <TrendingDown className="w-4 h-4" />
-                            ) : (
-                              <Activity className="w-4 h-4" />
-                            )}
-                            <span className="ml-1">
-                              {Math.abs(stat.change)}%
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          </motion.div>
-
-          {/* Gráficos de Análisis */}
+          {/* Gráfico de Análisis */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.1 }}
             className="lg:col-span-8"
           >
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-              <Card className="bg-white/80 backdrop-blur-md border-gray-200">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <BarChart3 className="w-5 h-5 text-blue-600" />
-                    Reportes por Tipo
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <SimpleChart
-                    data={chartData.reportsByType}
-                    title=""
-                    type="bar"
-                  />
-                </CardContent>
-              </Card>
-
-              <Card className="bg-white/80 backdrop-blur-md border-gray-200">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <PieChart className="w-5 h-5 text-purple-600" />
-                    Distribución Mensual
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <SimpleChart
-                    data={chartData.monthlyGeneration}
-                    title=""
-                    type="pie"
-                  />
-                </CardContent>
-              </Card>
-            </div>
+            <Card className="bg-white/80 backdrop-blur-md border-gray-200 mb-6">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <BarChart3 className="w-5 h-5 text-blue-600" />
+                  Reportes por Tipo
+                </CardTitle>
+                <CardDescription>
+                  Haz clic en una barra para filtrar reportes por tipo
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <InteractiveChart
+                  data={chartData}
+                  title=""
+                  onTypeClick={handleChartTypeClick}
+                  selectedType={selectedType}
+                />
+              </CardContent>
+            </Card>
           </motion.div>
 
-          {/* Panel de Control */}
+          {/* Panel de Filtros */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.2 }}
-            className="lg:col-span-4 space-y-6"
+            className="lg:col-span-4"
           >
-            {/* Filtros */}
             <Card className="bg-white/80 backdrop-blur-md border-gray-200">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
@@ -648,54 +931,19 @@ const HealthReports: React.FC = () => {
                     <option value="365">Último año</option>
                   </select>
                 </div>
-              </CardContent>
-            </Card>
 
-            {/* Métricas del Sistema */}
-            <Card className="bg-white/80 backdrop-blur-md border-gray-200">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Activity className="w-5 h-5 text-green-600" />
-                  Métricas del Sistema
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-600">
-                    Total de reportes:
-                  </span>
-                  <span className="font-medium">{metrics.totalReports}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-600">En proceso:</span>
-                  <span className="font-medium">{metrics.pendingReports}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-600">Programados:</span>
-                  <span className="font-medium">
-                    {metrics.scheduledReports}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-600">
-                    Tiempo promedio:
-                  </span>
-                  <span className="font-medium">
-                    {metrics.avgGenerationTime} min
-                  </span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-600">Más solicitado:</span>
-                  <span className="font-medium">
-                    {metrics.mostRequestedType}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-600">
-                    Total descargas:
-                  </span>
-                  <span className="font-medium">{metrics.totalDownloads}</span>
-                </div>
+                {selectedType !== "all" && (
+                  <div className="pt-2">
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      onClick={() => setSelectedType("all")}
+                      className="w-full"
+                    >
+                      Limpiar filtro de tipo
+                    </Button>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </motion.div>
@@ -713,7 +961,7 @@ const HealthReports: React.FC = () => {
                   Reportes Generados ({filteredReports.length})
                 </CardTitle>
                 <CardDescription>
-                  Lista de todos los reportes disponibles para descarga
+                  Lista de todos los reportes disponibles
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -796,21 +1044,23 @@ const HealthReports: React.FC = () => {
                         <div className="flex items-center gap-2 ml-4">
                           {report.status === "ready" && (
                             <>
-                              <Button variant="outline" size="sm">
-                                <Eye className="w-4 h-4" />
+                              <Button 
+                                variant="outline" 
+                                size="sm"
+                                onClick={() => openEditModal(report)}
+                                className="hover:bg-blue-50 hover:border-blue-300"
+                              >
+                                <Edit className="w-4 h-4" />
                               </Button>
-                              <Button variant="outline" size="sm">
-                                <Download className="w-4 h-4" />
-                              </Button>
-                              <Button variant="outline" size="sm">
-                                <Share className="w-4 h-4" />
+                              <Button 
+                                variant="outline" 
+                                size="sm"
+                                onClick={() => openDeleteModal(report)}
+                                className="hover:bg-red-50 hover:border-red-300 hover:text-red-600"
+                              >
+                                <Trash2 className="w-4 h-4" />
                               </Button>
                             </>
-                          )}
-                          {report.status === "generating" && (
-                            <Button variant="outline" size="sm" disabled>
-                              <Clock className="w-4 h-4 animate-spin" />
-                            </Button>
                           )}
                         </div>
                       </div>
@@ -822,6 +1072,35 @@ const HealthReports: React.FC = () => {
           </motion.div>
         </div>
       </div>
+
+      {/* Modal para Nuevo Reporte */}
+      <NewReportModal
+        isOpen={isNewReportModalOpen}
+        onClose={() => setIsNewReportModalOpen(false)}
+        onSubmit={handleNewReport}
+      />
+
+      {/* Modal para Editar Reporte */}
+      <EditReportModal
+        isOpen={isEditReportModalOpen}
+        onClose={() => {
+          setIsEditReportModalOpen(false);
+          setEditingReport(null);
+        }}
+        onSubmit={handleEditReport}
+        report={editingReport}
+      />
+
+      {/* Modal de Confirmación para Eliminar */}
+      <DeleteConfirmModal
+        isOpen={isDeleteModalOpen}
+        onClose={() => {
+          setIsDeleteModalOpen(false);
+          setDeletingReport(null);
+        }}
+        onConfirm={handleDeleteReport}
+        reportTitle={deletingReport?.title || ""}
+      />
     </div>
   );
 };
