@@ -435,6 +435,15 @@ const BovineDocuments: React.FC = () => {
   const [documentToDelete, setDocumentToDelete] = useState<DocumentFile | null>(
     null
   );
+  const [showNewDocumentModal, setShowNewDocumentModal] = useState(false);
+  const [newDocumentForm, setNewDocumentForm] = useState({
+    name: "",
+    description: "",
+    category: "OTHER" as DocumentCategory,
+    tags: "",
+    isPublic: false,
+    file: null as File | null,
+  });
 
   // Cargar documentos simulados al montar el componente
   React.useEffect(() => {
@@ -668,6 +677,71 @@ const BovineDocuments: React.FC = () => {
       setShowDeleteModal(false);
       setDocumentToDelete(null);
     }
+  };
+
+  // Manejar nuevo documento
+  const handleNewDocument = () => {
+    setShowNewDocumentModal(true);
+  };
+
+  const handleNewDocumentSubmit = async () => {
+    if (!newDocumentForm.file || !newDocumentForm.name.trim()) {
+      alert("Por favor completa todos los campos obligatorios");
+      return;
+    }
+
+    // Crear nuevo documento
+    const newDocument: DocumentFile = {
+      id: `doc-${Date.now()}`,
+      name: newDocumentForm.name.trim(),
+      type: newDocumentForm.file.type,
+      size: newDocumentForm.file.size,
+      category: newDocumentForm.category,
+      uploadDate: new Date(),
+      lastModified: new Date(),
+      description: newDocumentForm.description.trim(),
+      tags: newDocumentForm.tags
+        .split(",")
+        .map((tag) => tag.trim())
+        .filter((tag) => tag.length > 0),
+      uploadedBy: "Usuario Actual",
+      bovineId: id || "1",
+      url: URL.createObjectURL(newDocumentForm.file),
+      isPublic: newDocumentForm.isPublic,
+      downloadCount: 0,
+      version: 1,
+    };
+
+    // Agregar thumbnail para imágenes
+    if (newDocumentForm.file.type.startsWith("image/")) {
+      newDocument.thumbnailUrl = URL.createObjectURL(newDocumentForm.file);
+    }
+
+    // Agregar documento a la lista
+    setDocuments((prev) => [...prev, newDocument]);
+
+    // Limpiar formulario y cerrar modal
+    setNewDocumentForm({
+      name: "",
+      description: "",
+      category: "OTHER",
+      tags: "",
+      isPublic: false,
+      file: null,
+    });
+    setShowNewDocumentModal(false);
+  };
+
+  const handleCloseNewDocumentModal = () => {
+    setNewDocumentForm({
+      name: "",
+      description: "",
+      category: "OTHER",
+      tags: "",
+      isPublic: false,
+      file: null,
+    });
+    setShowNewDocumentModal(false);
   };
 
   // Obtener estadísticas de documentos
@@ -906,7 +980,10 @@ const BovineDocuments: React.FC = () => {
             <h2 className="text-2xl font-bold text-gray-900">
               Documentos ({filteredDocuments.length})
             </h2>
-            <button className="flex items-center gap-2 px-4 py-2 bg-[#3d8b40] text-white rounded-lg hover:bg-[#2d6e30] transition-colors">
+            <button 
+              onClick={handleNewDocument}
+              className="flex items-center gap-2 px-4 py-2 bg-[#3d8b40] text-white rounded-lg hover:bg-[#2d6e30] transition-colors"
+            >
               <Plus className="w-4 h-4" />
               Nuevo Documento
             </button>
@@ -993,6 +1070,222 @@ const BovineDocuments: React.FC = () => {
                       Eliminar
                     </button>
                   </div>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Modal de nuevo documento */}
+        <AnimatePresence>
+          {showNewDocumentModal && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+            >
+              <motion.div
+                initial={{ scale: 0.9, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.9, opacity: 0 }}
+                className="bg-white rounded-2xl p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto"
+              >
+                <div className="flex items-center justify-between mb-6">
+                  <h3 className="text-2xl font-bold text-gray-900">
+                    Nuevo Documento
+                  </h3>
+                  <button
+                    onClick={handleCloseNewDocumentModal}
+                    className="p-2 text-gray-400 hover:text-gray-600 transition-colors"
+                  >
+                    <Plus className="w-6 h-6 rotate-45" />
+                  </button>
+                </div>
+
+                <div className="space-y-6">
+                  {/* Selección de archivo */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Archivo *
+                    </label>
+                    <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center hover:border-gray-400 transition-colors">
+                      <input
+                        type="file"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0] || null;
+                          setNewDocumentForm((prev) => ({
+                            ...prev,
+                            file,
+                            name: file ? file.name : prev.name,
+                          }));
+                        }}
+                        className="hidden"
+                        id="document-file-input"
+                        accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.gif,.mp4,.mov,.avi"
+                      />
+                      <label
+                        htmlFor="document-file-input"
+                        className="cursor-pointer"
+                      >
+                        <CloudUpload className="w-8 h-8 text-gray-400 mx-auto mb-2" />
+                        <p className="text-sm text-gray-600">
+                          {newDocumentForm.file
+                            ? newDocumentForm.file.name
+                            : "Haz clic para seleccionar un archivo"}
+                        </p>
+                        <p className="text-xs text-gray-500 mt-1">
+                          PDF, DOC, DOCX, JPG, PNG, GIF, MP4, MOV, AVI (máx. 50MB)
+                        </p>
+                      </label>
+                    </div>
+                  </div>
+
+                  {/* Nombre del documento */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Nombre del documento *
+                    </label>
+                    <input
+                      type="text"
+                      value={newDocumentForm.name}
+                      onChange={(e) =>
+                        setNewDocumentForm((prev) => ({
+                          ...prev,
+                          name: e.target.value,
+                        }))
+                      }
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#3d8b40] focus:border-transparent"
+                      placeholder="Ingresa el nombre del documento"
+                    />
+                  </div>
+
+                  {/* Categoría */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Categoría *
+                    </label>
+                    <select
+                      value={newDocumentForm.category}
+                      onChange={(e) =>
+                        setNewDocumentForm((prev) => ({
+                          ...prev,
+                          category: e.target.value as DocumentCategory,
+                        }))
+                      }
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#3d8b40] focus:border-transparent"
+                    >
+                      {Object.entries(documentCategories).map(([key, config]) => (
+                        <option key={key} value={key}>
+                          {config.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Descripción */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Descripción
+                    </label>
+                    <textarea
+                      value={newDocumentForm.description}
+                      onChange={(e) =>
+                        setNewDocumentForm((prev) => ({
+                          ...prev,
+                          description: e.target.value,
+                        }))
+                      }
+                      rows={3}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#3d8b40] focus:border-transparent"
+                      placeholder="Describe el contenido del documento (opcional)"
+                    />
+                  </div>
+
+                  {/* Tags */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Etiquetas
+                    </label>
+                    <input
+                      type="text"
+                      value={newDocumentForm.tags}
+                      onChange={(e) =>
+                        setNewDocumentForm((prev) => ({
+                          ...prev,
+                          tags: e.target.value,
+                        }))
+                      }
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#3d8b40] focus:border-transparent"
+                      placeholder="Separar con comas: vacuna, certificado, IBR"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                      Separa las etiquetas con comas para facilitar la búsqueda
+                    </p>
+                  </div>
+
+                  {/* Visibilidad */}
+                  <div>
+                    <label className="flex items-center gap-3">
+                      <input
+                        type="checkbox"
+                        checked={newDocumentForm.isPublic}
+                        onChange={(e) =>
+                          setNewDocumentForm((prev) => ({
+                            ...prev,
+                            isPublic: e.target.checked,
+                          }))
+                        }
+                        className="w-4 h-4 text-[#3d8b40] border-2 border-gray-300 rounded focus:ring-[#3d8b40] focus:ring-2"
+                      />
+                      <span className="text-sm font-medium text-gray-700">
+                        Documento público
+                      </span>
+                    </label>
+                    <p className="text-xs text-gray-500 mt-1 ml-7">
+                      Los documentos públicos pueden ser vistos por otros usuarios
+                    </p>
+                  </div>
+
+                  {/* Vista previa del archivo */}
+                  {newDocumentForm.file && (
+                    <div className="bg-gray-50 rounded-lg p-4">
+                      <h4 className="font-medium text-gray-900 mb-2">
+                        Vista previa del archivo
+                      </h4>
+                      <div className="flex items-center gap-3">
+                        <FileTypeIcon 
+                          fileType={newDocumentForm.file.type} 
+                          className="w-8 h-8" 
+                        />
+                        <div>
+                          <p className="text-sm font-medium text-gray-900">
+                            {newDocumentForm.file.name}
+                          </p>
+                          <p className="text-xs text-gray-500">
+                            {(newDocumentForm.file.size / 1024 / 1024).toFixed(2)} MB
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Botones de acción */}
+                <div className="flex gap-3 mt-8">
+                  <button
+                    onClick={handleCloseNewDocumentModal}
+                    className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={handleNewDocumentSubmit}
+                    disabled={!newDocumentForm.file || !newDocumentForm.name.trim()}
+                    className="flex-1 px-4 py-2 bg-[#3d8b40] text-white rounded-lg hover:bg-[#2d6e30] transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
+                  >
+                    Crear Documento
+                  </button>
                 </div>
               </motion.div>
             </motion.div>

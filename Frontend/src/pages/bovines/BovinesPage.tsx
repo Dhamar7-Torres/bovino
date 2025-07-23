@@ -276,7 +276,7 @@ const HeaderStats: React.FC = () => {
   ];
 
   return (
-    <div className="flex items-center gap-4">
+    <div className="flex items-center justify-center gap-4">
       {stats.map((stat, index) => {
         const IconComponent = stat.icon;
         return (
@@ -300,65 +300,6 @@ const HeaderStats: React.FC = () => {
       <div className="text-xs text-white/60 ml-4">
         Actualizado: {lastUpdated.toLocaleTimeString("es-MX")}
       </div>
-    </div>
-  );
-};
-
-// Navegación rápida del header
-const QuickActions: React.FC = () => {
-  const navigate = useNavigate();
-  const { refreshData, isLoading } = useBovinesContext();
-
-  const actions = [
-    {
-      label: "Agregar Bovino",
-      icon: Plus,
-      action: () => navigate("/bovines/add"),
-      color: "bg-green-500/80 hover:bg-green-600/80",
-    },
-    {
-      label: "Mapa de Ubicaciones",
-      icon: MapIcon,
-      action: () => navigate("/bovines/map"),
-      color: "bg-blue-500/80 hover:bg-blue-600/80",
-    },
-    {
-      label: "Reportes",
-      icon: BarChart3,
-      action: () => navigate("/bovines/reports"),
-      color: "bg-purple-500/80 hover:bg-purple-600/80",
-    },
-    {
-      label: "Actualizar",
-      icon: RefreshCw,
-      action: refreshData,
-      color: "bg-gray-500/80 hover:bg-gray-600/80",
-      loading: isLoading,
-    },
-  ];
-
-  return (
-    <div className="flex items-center gap-2">
-      {actions.map((action, index) => {
-        const IconComponent = action.icon;
-        return (
-          <motion.button
-            key={action.label}
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ delay: index * 0.1 }}
-            onClick={action.action}
-            disabled={action.loading}
-            className={`${action.color} backdrop-blur-sm rounded-lg px-3 py-2 text-white text-sm font-medium transition-all duration-300 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed`}
-            title={action.label}
-          >
-            <IconComponent
-              className={`w-4 h-4 ${action.loading ? "animate-spin" : ""}`}
-            />
-            <span className="hidden md:inline">{action.label}</span>
-          </motion.button>
-        );
-      })}
     </div>
   );
 };
@@ -502,18 +443,18 @@ const BovinesPage: React.FC = () => {
           </div>
 
           {/* Header principal */}
-          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+          <div className="flex flex-col items-center justify-center gap-4">
             {/* Título y estadísticas */}
-            <div className="flex-1">
+            <div className="flex-1 w-full">
               <motion.div
                 initial={{ opacity: 0, x: -20 }}
                 animate={{ opacity: 1, x: 0 }}
-                className="flex items-center gap-3 mb-3"
+                className="flex items-center justify-center gap-3 mb-3"
               >
                 <div className="w-10 h-10 bg-white/20 backdrop-blur-sm rounded-lg flex items-center justify-center">
                   <Users className="w-6 h-6 text-white" />
                 </div>
-                <div>
+                <div className="text-center">
                   <h1 className="text-2xl md:text-3xl font-bold text-white">
                     Módulo de Gestión Bovina
                   </h1>
@@ -524,12 +465,9 @@ const BovinesPage: React.FC = () => {
               </motion.div>
 
               {/* Estadísticas */}
-              <HeaderStats />
-            </div>
-
-            {/* Acciones rápidas */}
-            <div className="flex-shrink-0">
-              <QuickActions />
+              <div className="flex justify-center">
+                <HeaderStats />
+              </div>
             </div>
           </div>
         </div>

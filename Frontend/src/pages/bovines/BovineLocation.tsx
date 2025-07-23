@@ -1,29 +1,15 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   ArrowLeft,
-  MapPin,
-  Navigation,
-  Satellite,
   Route,
   Clock,
   AlertTriangle,
   CheckCircle,
   Eye,
-  Target,
-  BarChart3,
   TrendingUp,
-  MapIcon,
-  Plus,
-  Edit3,
-  Trash2,
   Bell,
-  Shield,
   Radio,
-  Battery,
-  Signal,
-  Globe,
-  History,
 } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 
@@ -105,71 +91,26 @@ interface BovineLocationData {
   }[];
 }
 
-// Componente del mapa simulado (reemplazaría Leaflet en producción)
-const LocationMap: React.FC<{
+// Componente del mapa simulado
+const LocationMap = ({
+  center,
+  locations,
+  geofences,
+  showRoute,
+  showGeofences,
+}: {
   center: { latitude: number; longitude: number };
   locations: LocationPoint[];
   geofences: GeofenceArea[];
   showRoute: boolean;
   showGeofences: boolean;
-  onLocationClick?: (lat: number, lng: number) => void;
-}> = ({ center, locations, geofences, showRoute, showGeofences }) => {
-  const [mapMode, setMapMode] = useState<"satellite" | "terrain" | "hybrid">(
+}) => {
+  const [mapMode] = useState<"satellite" | "terrain" | "hybrid">(
     "satellite"
   );
 
   return (
     <div className="relative w-full h-96 bg-gradient-to-br from-green-100 to-green-200 rounded-lg overflow-hidden border-2 border-gray-200">
-      {/* Controles del mapa */}
-      <div className="absolute top-4 right-4 z-10 flex flex-col gap-2">
-        <div className="bg-white/90 backdrop-blur-sm rounded-lg p-2 shadow-md">
-          <div className="flex gap-1">
-            <button
-              onClick={() => setMapMode("satellite")}
-              className={`p-2 rounded text-xs ${
-                mapMode === "satellite"
-                  ? "bg-[#3d8b40] text-white"
-                  : "text-gray-600 hover:bg-gray-100"
-              }`}
-              title="Vista satelital"
-            >
-              <Satellite className="w-4 h-4" />
-            </button>
-            <button
-              onClick={() => setMapMode("terrain")}
-              className={`p-2 rounded text-xs ${
-                mapMode === "terrain"
-                  ? "bg-[#3d8b40] text-white"
-                  : "text-gray-600 hover:bg-gray-100"
-              }`}
-              title="Vista terreno"
-            >
-              <MapIcon className="w-4 h-4" />
-            </button>
-            <button
-              onClick={() => setMapMode("hybrid")}
-              className={`p-2 rounded text-xs ${
-                mapMode === "hybrid"
-                  ? "bg-[#3d8b40] text-white"
-                  : "text-gray-600 hover:bg-gray-100"
-              }`}
-              title="Vista híbrida"
-            >
-              <Globe className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Indicador de centro del mapa */}
-      <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-20">
-        <div className="w-6 h-6 bg-red-500 rounded-full border-4 border-white shadow-lg flex items-center justify-center">
-          <div className="w-2 h-2 bg-white rounded-full"></div>
-        </div>
-        <div className="absolute top-8 left-1/2 transform -translate-x-1/2 bg-black/70 text-white px-2 py-1 rounded text-xs whitespace-nowrap">
-          Ubicación Actual
-        </div>
-      </div>
 
       {/* Geofences */}
       {showGeofences &&
@@ -281,23 +222,20 @@ const LocationMap: React.FC<{
           </div>
         </div>
       </div>
-
-      {/* Escala del mapa */}
-      <div className="absolute bottom-4 right-4 bg-white/90 backdrop-blur-sm rounded-lg p-2 shadow-md">
-        <div className="text-xs text-gray-600 mb-1">Escala</div>
-        <div className="w-16 h-1 bg-black"></div>
-        <div className="text-xs text-gray-600 mt-1">100m</div>
-      </div>
     </div>
   );
 };
 
 // Componente para mostrar alertas
-const AlertCard: React.FC<{
+const AlertCard = ({
+  alert,
+  onMarkAsRead,
+  onDismiss,
+}: {
   alert: BovineLocationData["alerts"][0];
   onMarkAsRead: (id: string) => void;
   onDismiss: (id: string) => void;
-}> = ({ alert, onMarkAsRead, onDismiss }) => {
+}) => {
   const getSeverityIcon = () => {
     switch (alert.severity) {
       case "CRITICAL":
@@ -363,85 +301,75 @@ const AlertCard: React.FC<{
 };
 
 // Componente principal de ubicación del bovino
-const BovineLocation: React.FC = () => {
+const BovineLocation = () => {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
 
   // Estados principales
-  const [locationData, setLocationData] = useState<BovineLocationData | null>(
-    null
-  );
+  const [locationData, setLocationData] = useState<BovineLocationData | null>(null);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<
-    "map" | "history" | "geofences" | "analytics"
-  >("map");
+  const [activeTab, setActiveTab] = useState<"map" | "history" | "analytics">("map");
   const [showRoute, setShowRoute] = useState(true);
   const [showGeofences, setShowGeofences] = useState(true);
   const [isTracking, setIsTracking] = useState(false);
-  const [selectedTimeRange, setSelectedTimeRange] = useState<
-    "1h" | "6h" | "24h" | "7d" | "30d"
-  >("24h");
-  const [, setShowNewGeofenceModal] = useState(false);
+  const [selectedTimeRange, setSelectedTimeRange] = useState<"1h" | "6h" | "24h" | "7d" | "30d">("24h");
+  const [availableBovines, setAvailableBovines] = useState<{id: string, name: string, earTag: string}[]>([]);
+  const [selectedBovineId, setSelectedBovineId] = useState<string>(id || "1");
 
   // Cargar datos de ubicación
   useEffect(() => {
     const loadLocationData = async () => {
       try {
         setLoading(true);
-        await new Promise((resolve) => setTimeout(resolve, 1000));
+        await new Promise((resolve) => setTimeout(resolve, 500));
 
-        // Datos simulados
+        // Primero cargar lista de bovinos disponibles
+        const mockBovines = [
+          { id: "1", name: "Lupita", earTag: "MX-001234" },
+          { id: "2", name: "Estrella", earTag: "MX-001235" },
+          { id: "3", name: "Bella", earTag: "MX-001236" },
+          { id: "4", name: "Rosa", earTag: "MX-001237" },
+          { id: "5", name: "Luna", earTag: "MX-001238" },
+        ];
+        setAvailableBovines(mockBovines);
+
+        // Buscar el bovino seleccionado
+        const selectedBovine = mockBovines.find(b => b.id === selectedBovineId) || mockBovines[0];
+
+        // Generar datos simulados para el bovino seleccionado
         const mockData: BovineLocationData = {
-          bovineId: id || "1",
-          earTag: "MX-001234",
-          name: "Lupita",
+          bovineId: selectedBovine.id,
+          earTag: selectedBovine.earTag,
+          name: selectedBovine.name,
           currentLocation: {
             id: "current",
-            latitude: 17.9869,
-            longitude: -92.9303,
-            accuracy: 3.5,
+            latitude: 17.9869 + (Math.random() - 0.5) * 0.01,
+            longitude: -92.9303 + (Math.random() - 0.5) * 0.01,
+            accuracy: 3.5 + Math.random() * 2,
             timestamp: new Date(),
-            speed: 0.2,
-            heading: 135,
+            speed: Math.random() * 0.5,
+            heading: Math.random() * 360,
             source: "GPS",
-            batteryLevel: 87,
-            signalStrength: 4,
+            batteryLevel: 65 + Math.random() * 30,
+            signalStrength: 3 + Math.random() * 2,
           },
           lastUpdate: new Date(),
           isTracking: true,
           deviceStatus: {
-            batteryLevel: 87,
-            signalStrength: 4,
-            isOnline: true,
-            deviceId: "GPS-001234",
+            batteryLevel: Math.floor(65 + Math.random() * 30),
+            signalStrength: Math.floor(3 + Math.random() * 2),
+            isOnline: Math.random() > 0.2, // 80% probabilidad de estar online
+            deviceId: `GPS-${selectedBovine.earTag}`,
             firmwareVersion: "v2.1.4",
           },
-          locationHistory: [
-            {
-              id: "1",
-              latitude: 17.986,
-              longitude: -92.931,
-              accuracy: 4.2,
-              timestamp: new Date(Date.now() - 3600000),
-              source: "GPS",
-            },
-            {
-              id: "2",
-              latitude: 17.9865,
-              longitude: -92.9305,
-              accuracy: 3.8,
-              timestamp: new Date(Date.now() - 1800000),
-              source: "GPS",
-            },
-            {
-              id: "3",
-              latitude: 17.9869,
-              longitude: -92.9303,
-              accuracy: 3.5,
-              timestamp: new Date(),
-              source: "GPS",
-            },
-          ],
+          locationHistory: Array.from({ length: 10 }, (_, i) => ({
+            id: `${i + 1}`,
+            latitude: 17.9869 + (Math.random() - 0.5) * 0.02,
+            longitude: -92.9303 + (Math.random() - 0.5) * 0.02,
+            accuracy: 3 + Math.random() * 3,
+            timestamp: new Date(Date.now() - i * 600000), // Cada 10 minutos
+            source: "GPS" as const,
+          })),
           geofences: [
             {
               id: "1",
@@ -451,7 +379,7 @@ const BovineLocation: React.FC = () => {
               radius: 500,
               isActive: true,
               alertsEnabled: true,
-              violations: 0,
+              violations: Math.floor(Math.random() * 2),
               createdAt: new Date("2024-01-15"),
             },
             {
@@ -473,7 +401,7 @@ const BovineLocation: React.FC = () => {
               radius: 100,
               isActive: true,
               alertsEnabled: true,
-              violations: 2,
+              violations: Math.floor(Math.random() * 5),
               createdAt: new Date("2024-01-20"),
             },
           ],
@@ -481,40 +409,30 @@ const BovineLocation: React.FC = () => {
             {
               id: "1",
               date: new Date(),
-              totalDistance: 2.4,
-              avgSpeed: 0.3,
-              maxSpeed: 1.2,
-              timeInMovement: 180,
-              timeStationary: 1260,
+              totalDistance: 1.5 + Math.random() * 2,
+              avgSpeed: 0.2 + Math.random() * 0.3,
+              maxSpeed: 0.8 + Math.random() * 0.8,
+              timeInMovement: 120 + Math.random() * 240,
+              timeStationary: 1000 + Math.random() * 400,
               areasVisited: ["Zona Segura Principal", "Zona de Alimentación"],
               healthMetrics: {
-                activityLevel: "MODERATE",
-                behaviorPattern: "NORMAL",
-                grazingTime: 420,
-                restingTime: 840,
+                activityLevel: ["LOW", "MODERATE", "HIGH"][Math.floor(Math.random() * 3)] as any,
+                behaviorPattern: ["NORMAL", "RESTLESS", "LETHARGIC"][Math.floor(Math.random() * 3)] as any,
+                grazingTime: 300 + Math.random() * 300,
+                restingTime: 600 + Math.random() * 400,
               },
             },
           ],
-          alerts: [
+          alerts: Math.random() > 0.5 ? [
             {
               id: "1",
-              type: "LOW_BATTERY",
-              message:
-                "El nivel de batería del dispositivo GPS está por debajo del 20%",
-              severity: "WARNING",
-              timestamp: new Date(Date.now() - 1800000),
-              isRead: false,
+              type: ["LOW_BATTERY", "GEOFENCE_VIOLATION", "DEVICE_OFFLINE", "UNUSUAL_MOVEMENT"][Math.floor(Math.random() * 4)] as any,
+              message: `Alerta para ${selectedBovine.name} (${selectedBovine.earTag})`,
+              severity: ["INFO", "WARNING", "CRITICAL"][Math.floor(Math.random() * 3)] as any,
+              timestamp: new Date(Date.now() - Math.random() * 3600000),
+              isRead: Math.random() > 0.5,
             },
-            {
-              id: "2",
-              type: "GEOFENCE_VIOLATION",
-              message:
-                "El bovino salió de la zona segura principal hace 30 minutos",
-              severity: "CRITICAL",
-              timestamp: new Date(Date.now() - 3600000),
-              isRead: true,
-            },
-          ],
+          ] : [],
         };
 
         setLocationData(mockData);
@@ -527,7 +445,17 @@ const BovineLocation: React.FC = () => {
     };
 
     loadLocationData();
-  }, [id]);
+  }, [selectedBovineId]); // Recargar cuando cambie el bovino seleccionado
+
+  // Actualizar coordenadas cuando cambie locationData
+  useEffect(() => {
+    if (locationData?.currentLocation) {
+      setManualCoordinates({
+        latitude: locationData.currentLocation.latitude,
+        longitude: locationData.currentLocation.longitude,
+      });
+    }
+  }, [locationData?.currentLocation]);
 
   // Manejar acciones de alertas
   const handleMarkAsRead = (alertId: string) => {
@@ -561,10 +489,7 @@ const BovineLocation: React.FC = () => {
   // Alternar seguimiento
   const toggleTracking = async () => {
     try {
-      // Simular llamada a API
-      await new Promise((resolve) => setTimeout(resolve, 1000));
       setIsTracking(!isTracking);
-
       if (locationData) {
         setLocationData((prev) =>
           prev
@@ -614,25 +539,37 @@ const BovineLocation: React.FC = () => {
     }
   };
 
-  // Animaciones
-  const containerVariants = {
-    hidden: { opacity: 0 },
-    visible: {
-      opacity: 1,
-      transition: {
-        duration: 0.6,
-        staggerChildren: 0.1,
-      },
-    },
-  };
+  // Estados para ubicación manual
+  const [showManualLocation, setShowManualLocation] = useState(false);
+  const [manualCoordinates, setManualCoordinates] = useState({
+    latitude: locationData?.currentLocation.latitude || 17.9869,
+    longitude: locationData?.currentLocation.longitude || -92.9303,
+  });
 
-  const itemVariants = {
-    hidden: { opacity: 0, y: 20 },
-    visible: {
-      opacity: 1,
-      y: 0,
-      transition: { duration: 0.4 },
-    },
+  // Manejar ubicación manual
+  const handleManualLocationSubmit = () => {
+    const newLocation: LocationPoint = {
+      id: Date.now().toString(),
+      latitude: manualCoordinates.latitude,
+      longitude: manualCoordinates.longitude,
+      accuracy: 0, // Manual no tiene precisión GPS
+      timestamp: new Date(),
+      source: "MANUAL",
+    };
+
+    if (locationData) {
+      setLocationData((prev) =>
+        prev
+          ? {
+              ...prev,
+              currentLocation: newLocation,
+              locationHistory: [...prev.locationHistory, newLocation],
+              lastUpdate: new Date(),
+            }
+          : null
+      );
+    }
+    setShowManualLocation(false);
   };
 
   if (loading) {
@@ -678,21 +615,15 @@ const BovineLocation: React.FC = () => {
     );
   }
 
-  const unreadAlerts = locationData.alerts.filter(
-    (alert) => !alert.isRead
-  ).length;
+  const unreadAlerts = locationData.alerts.filter((alert) => !alert.isRead).length;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#3d8b40] via-[#f2e9d8] to-[#f4ac3a] p-4">
-      <motion.div
-        variants={containerVariants}
-        initial="hidden"
-        animate="visible"
-        className="max-w-7xl mx-auto"
-      >
+      <div className="max-w-7xl mx-auto">
         {/* Header con navegación */}
         <motion.div
-          variants={itemVariants}
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
           className="flex items-center justify-between mb-6"
         >
           <button
@@ -708,9 +639,7 @@ const BovineLocation: React.FC = () => {
             <div className="flex items-center gap-2 px-3 py-2 bg-white/20 backdrop-blur-sm rounded-lg text-white">
               <div
                 className={`w-2 h-2 rounded-full ${
-                  locationData.deviceStatus.isOnline
-                    ? "bg-green-400"
-                    : "bg-red-400"
+                  locationData.deviceStatus.isOnline ? "bg-green-400" : "bg-red-400"
                 }`}
               ></div>
               <span className="text-sm font-medium">
@@ -722,9 +651,11 @@ const BovineLocation: React.FC = () => {
             {unreadAlerts > 0 && (
               <div className="relative px-3 py-2 bg-red-500/80 backdrop-blur-sm rounded-lg text-white">
                 <Bell className="w-4 h-4" />
-                <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-600 rounded-full flex items-center justify-center text-xs font-bold">
-                  {unreadAlerts}
-                </span>
+                {unreadAlerts > 0 && (
+                  <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-600 rounded-full flex items-center justify-center text-xs font-bold">
+                    {unreadAlerts}
+                  </span>
+                )}
               </div>
             )}
 
@@ -746,89 +677,64 @@ const BovineLocation: React.FC = () => {
         </motion.div>
 
         {/* Título y información del bovino */}
-        <motion.div variants={itemVariants} className="text-center mb-8">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1 }}
+          className="text-center mb-8"
+        >
           <h1 className="text-4xl md:text-5xl font-bold text-white mb-4">
             Ubicación de {locationData.name || locationData.earTag}
           </h1>
-          <p className="text-lg text-white/80 max-w-2xl mx-auto">
+          <p className="text-lg text-white/80 max-w-2xl mx-auto mb-6">
             Seguimiento GPS en tiempo real y gestión de geofencing
           </p>
-        </motion.div>
-
-        {/* Estado del dispositivo y métricas */}
-        <motion.div
-          variants={itemVariants}
-          className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6"
-        >
-          <div className="bg-white/90 backdrop-blur-sm rounded-lg p-4 text-center">
-            <div className="flex items-center justify-center mb-2">
-              <Battery className="w-6 h-6 text-green-600" />
+          
+          {/* Selector de bovino */}
+          <div className="flex justify-center">
+            <div className="bg-white/20 backdrop-blur-sm rounded-lg p-4">
+              <label className="block text-sm font-medium text-white mb-2">
+                Seleccionar Bovino para Rastrear:
+              </label>
+              <select
+                value={selectedBovineId}
+                onChange={(e) => setSelectedBovineId(e.target.value)}
+                className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#3d8b40] focus:border-transparent bg-white text-gray-900 min-w-[250px]"
+              >
+                {availableBovines.map((bovine) => (
+                  <option key={bovine.id} value={bovine.id}>
+                    {bovine.name} ({bovine.earTag})
+                  </option>
+                ))}
+              </select>
             </div>
-            <div className="text-2xl font-bold text-gray-900">
-              {locationData.deviceStatus.batteryLevel}%
-            </div>
-            <div className="text-sm text-gray-600">Batería</div>
-          </div>
-
-          <div className="bg-white/90 backdrop-blur-sm rounded-lg p-4 text-center">
-            <div className="flex items-center justify-center mb-2">
-              <Signal className="w-6 h-6 text-blue-600" />
-            </div>
-            <div className="text-2xl font-bold text-gray-900">
-              {locationData.deviceStatus.signalStrength}/5
-            </div>
-            <div className="text-sm text-gray-600">Señal GPS</div>
-          </div>
-
-          <div className="bg-white/90 backdrop-blur-sm rounded-lg p-4 text-center">
-            <div className="flex items-center justify-center mb-2">
-              <Target className="w-6 h-6 text-purple-600" />
-            </div>
-            <div className="text-2xl font-bold text-gray-900">
-              {locationData.currentLocation.accuracy.toFixed(1)}m
-            </div>
-            <div className="text-sm text-gray-600">Precisión</div>
-          </div>
-
-          <div className="bg-white/90 backdrop-blur-sm rounded-lg p-4 text-center">
-            <div className="flex items-center justify-center mb-2">
-              <Clock className="w-6 h-6 text-orange-600" />
-            </div>
-            <div className="text-2xl font-bold text-gray-900">
-              {Math.floor(
-                (Date.now() - locationData.lastUpdate.getTime()) / 60000
-              )}
-              m
-            </div>
-            <div className="text-sm text-gray-600">Últ. Actualización</div>
           </div>
         </motion.div>
 
         {/* Navegación por pestañas */}
         <motion.div
-          variants={itemVariants}
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.3 }}
           className="bg-[#fffdf8]/90 backdrop-blur-sm rounded-t-2xl shadow-xl border border-white/20 overflow-hidden"
         >
           <div className="border-b border-gray-200">
             <nav className="flex space-x-8 px-6">
               {[
-                { id: "map", label: "Mapa en Vivo", icon: MapPin },
-                { id: "history", label: "Historial", icon: History },
-                { id: "geofences", label: "Geofencing", icon: Shield },
-                { id: "analytics", label: "Análisis", icon: BarChart3 },
+                { id: "map", label: "Mapa en Vivo" },
+                { id: "history", label: "Historial" },
+                { id: "analytics", label: "Análisis" },
               ].map((tab) => {
-                const IconComponent = tab.icon;
                 return (
                   <button
                     key={tab.id}
                     onClick={() => setActiveTab(tab.id as any)}
-                    className={`flex items-center gap-2 py-4 border-b-2 font-medium text-sm transition-colors ${
+                    className={`py-4 border-b-2 font-medium text-sm transition-colors ${
                       activeTab === tab.id
                         ? "border-[#3d8b40] text-[#3d8b40]"
                         : "border-transparent text-gray-500 hover:text-gray-700"
                     }`}
                   >
-                    <IconComponent className="w-4 h-4" />
                     {tab.label}
                   </button>
                 );
@@ -884,20 +790,10 @@ const BovineLocation: React.FC = () => {
 
                     <div className="flex items-center gap-2">
                       <button
-                        onClick={getCurrentLocation}
-                        className="flex items-center gap-2 px-3 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors text-sm"
+                        onClick={() => setShowManualLocation(!showManualLocation)}
+                        className="px-3 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors text-sm"
                       >
-                        <Target className="w-4 h-4" />
                         Ubicación Manual
-                      </button>
-                      <button
-                        onClick={() => {
-                          /* Centrar mapa */
-                        }}
-                        className="flex items-center gap-2 px-3 py-2 bg-gray-500 text-white rounded hover:bg-gray-600 transition-colors text-sm"
-                      >
-                        <Navigation className="w-4 h-4" />
-                        Centrar
                       </button>
                     </div>
                   </div>
@@ -911,6 +807,75 @@ const BovineLocation: React.FC = () => {
                     showGeofences={showGeofences}
                   />
 
+                  {/* Panel de ubicación manual */}
+                  <AnimatePresence>
+                    {showManualLocation && (
+                      <motion.div
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: "auto" }}
+                        exit={{ opacity: 0, height: 0 }}
+                        className="mt-6 bg-white border border-gray-300 rounded-lg p-4"
+                      >
+                        <h4 className="font-medium text-gray-900 mb-4">Ubicación Manual</h4>
+                        <div className="grid grid-cols-2 gap-4 mb-4">
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                              Latitud
+                            </label>
+                            <input
+                              type="number"
+                              step="0.000001"
+                              value={manualCoordinates.latitude}
+                              onChange={(e) =>
+                                setManualCoordinates((prev) => ({
+                                  ...prev,
+                                  latitude: parseFloat(e.target.value) || 0,
+                                }))
+                              }
+                              className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-[#3d8b40] focus:border-transparent"
+                              placeholder="17.9869"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                              Longitud
+                            </label>
+                            <input
+                              type="number"
+                              step="0.000001"
+                              value={manualCoordinates.longitude}
+                              onChange={(e) =>
+                                setManualCoordinates((prev) => ({
+                                  ...prev,
+                                  longitude: parseFloat(e.target.value) || 0,
+                                }))
+                              }
+                              className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-[#3d8b40] focus:border-transparent"
+                              placeholder="-92.9303"
+                            />
+                          </div>
+                        </div>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={getCurrentLocation}
+                            className="flex-1 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors text-sm"
+                          >
+                            Usar Ubicación Actual
+                          </button>
+                          <button
+                            onClick={handleManualLocationSubmit}
+                            className="flex-1 px-4 py-2 bg-[#3d8b40] text-white rounded hover:bg-[#2d6e30] transition-colors text-sm"
+                          >
+                            Confirmar Ubicación
+                          </button>
+                        </div>
+                        <div className="text-xs text-gray-500 text-center mt-2">
+                          📍 Tabasco, México (coordenadas por defecto)
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+
                   {/* Información de la ubicación actual */}
                   <div className="mt-6 bg-white rounded-lg p-4 border border-gray-200">
                     <h3 className="text-lg font-semibold text-gray-900 mb-3">
@@ -918,25 +883,19 @@ const BovineLocation: React.FC = () => {
                     </h3>
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                       <div>
-                        <span className="text-sm font-medium text-gray-700">
-                          Latitud:
-                        </span>
+                        <span className="text-sm font-medium text-gray-700">Latitud:</span>
                         <p className="text-gray-900">
                           {locationData.currentLocation.latitude.toFixed(6)}
                         </p>
                       </div>
                       <div>
-                        <span className="text-sm font-medium text-gray-700">
-                          Longitud:
-                        </span>
+                        <span className="text-sm font-medium text-gray-700">Longitud:</span>
                         <p className="text-gray-900">
                           {locationData.currentLocation.longitude.toFixed(6)}
                         </p>
                       </div>
                       <div>
-                        <span className="text-sm font-medium text-gray-700">
-                          Precisión:
-                        </span>
+                        <span className="text-sm font-medium text-gray-700">Precisión:</span>
                         <p className="text-gray-900">
                           {locationData.currentLocation.accuracy.toFixed(1)} m
                         </p>
@@ -968,29 +927,27 @@ const BovineLocation: React.FC = () => {
                       Historial de Ubicaciones
                     </h3>
                     <div className="flex gap-2">
-                      {(["1h", "6h", "24h", "7d", "30d"] as const).map(
-                        (range) => (
-                          <button
-                            key={range}
-                            onClick={() => setSelectedTimeRange(range)}
-                            className={`px-3 py-2 text-sm rounded transition-colors ${
-                              selectedTimeRange === range
-                                ? "bg-[#3d8b40] text-white"
-                                : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                            }`}
-                          >
-                            {range === "1h"
-                              ? "1 Hora"
-                              : range === "6h"
-                              ? "6 Horas"
-                              : range === "24h"
-                              ? "24 Horas"
-                              : range === "7d"
-                              ? "7 Días"
-                              : "30 Días"}
-                          </button>
-                        )
-                      )}
+                      {(["1h", "6h", "24h", "7d", "30d"] as const).map((range) => (
+                        <button
+                          key={range}
+                          onClick={() => setSelectedTimeRange(range)}
+                          className={`px-3 py-2 text-sm rounded transition-colors ${
+                            selectedTimeRange === range
+                              ? "bg-[#3d8b40] text-white"
+                              : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                          }`}
+                        >
+                          {range === "1h"
+                            ? "1 Hora"
+                            : range === "6h"
+                            ? "6 Horas"
+                            : range === "24h"
+                            ? "24 Horas"
+                            : range === "7d"
+                            ? "7 Días"
+                            : "30 Días"}
+                        </button>
+                      ))}
                     </div>
                   </div>
 
@@ -1020,13 +977,11 @@ const BovineLocation: React.FC = () => {
                               ></div>
                               <div>
                                 <p className="font-medium text-gray-900">
-                                  {location.latitude.toFixed(6)},{" "}
-                                  {location.longitude.toFixed(6)}
+                                  {location.latitude.toFixed(6)}, {location.longitude.toFixed(6)}
                                 </p>
                                 <p className="text-sm text-gray-600">
-                                  {location.timestamp.toLocaleString("es-MX")} •
-                                  Precisión: {location.accuracy.toFixed(1)}m •
-                                  Fuente: {location.source}
+                                  {location.timestamp.toLocaleString("es-MX")} • Precisión:{" "}
+                                  {location.accuracy.toFixed(1)}m • Fuente: {location.source}
                                 </p>
                               </div>
                             </div>
@@ -1036,125 +991,6 @@ const BovineLocation: React.FC = () => {
                           </div>
                         </motion.div>
                       ))}
-                  </div>
-                </motion.div>
-              )}
-
-              {activeTab === "geofences" && (
-                <motion.div
-                  key="geofences"
-                  initial={{ opacity: 0, x: 20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: -20 }}
-                  transition={{ duration: 0.3 }}
-                >
-                  {/* Header de geofences */}
-                  <div className="flex items-center justify-between mb-6">
-                    <h3 className="text-xl font-semibold text-gray-900">
-                      Gestión de Geofences
-                    </h3>
-                    <button
-                      onClick={() => setShowNewGeofenceModal(true)}
-                      className="flex items-center gap-2 px-4 py-2 bg-[#3d8b40] text-white rounded-lg hover:bg-[#2d6e30] transition-colors"
-                    >
-                      <Plus className="w-4 h-4" />
-                      Nuevo Geofence
-                    </button>
-                  </div>
-
-                  {/* Lista de geofences */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {locationData.geofences.map((geofence, index) => (
-                      <motion.div
-                        key={geofence.id}
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: index * 0.1 }}
-                        className="bg-white rounded-lg p-6 border border-gray-200 hover:shadow-md transition-shadow"
-                      >
-                        <div className="flex items-start justify-between mb-4">
-                          <div>
-                            <h4 className="font-semibold text-gray-900 mb-1">
-                              {geofence.name}
-                            </h4>
-                            <div className="flex items-center gap-2">
-                              <span
-                                className={`px-2 py-1 rounded-full text-xs font-medium ${
-                                  geofence.type === "SAFE_ZONE"
-                                    ? "bg-green-100 text-green-800"
-                                    : geofence.type === "RESTRICTED"
-                                    ? "bg-red-100 text-red-800"
-                                    : geofence.type === "FEEDING"
-                                    ? "bg-blue-100 text-blue-800"
-                                    : geofence.type === "WATERING"
-                                    ? "bg-cyan-100 text-cyan-800"
-                                    : "bg-purple-100 text-purple-800"
-                                }`}
-                              >
-                                {geofence.type.replace("_", " ")}
-                              </span>
-                              <span
-                                className={`w-2 h-2 rounded-full ${
-                                  geofence.isActive
-                                    ? "bg-green-500"
-                                    : "bg-gray-400"
-                                }`}
-                              ></span>
-                            </div>
-                          </div>
-                          <div className="flex gap-2">
-                            <button className="p-1 text-gray-400 hover:text-blue-600 transition-colors">
-                              <Edit3 className="w-4 h-4" />
-                            </button>
-                            <button className="p-1 text-gray-400 hover:text-red-600 transition-colors">
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </div>
-                        </div>
-
-                        <div className="space-y-2 text-sm">
-                          <div className="flex justify-between">
-                            <span className="text-gray-600">Centro:</span>
-                            <span className="text-gray-900">
-                              {geofence.center.latitude.toFixed(4)},{" "}
-                              {geofence.center.longitude.toFixed(4)}
-                            </span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span className="text-gray-600">Radio:</span>
-                            <span className="text-gray-900">
-                              {geofence.radius}m
-                            </span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span className="text-gray-600">Violaciones:</span>
-                            <span
-                              className={`font-medium ${
-                                geofence.violations > 0
-                                  ? "text-red-600"
-                                  : "text-green-600"
-                              }`}
-                            >
-                              {geofence.violations}
-                            </span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span className="text-gray-600">Alertas:</span>
-                            <span
-                              className={`font-medium ${
-                                geofence.alertsEnabled
-                                  ? "text-green-600"
-                                  : "text-gray-600"
-                              }`}
-                            >
-                              {geofence.alertsEnabled
-                                ? "Habilitadas"
-                                : "Deshabilitadas"}
-                            </span>
-                          </div>
-                        </div>
-                      </motion.div>
-                    ))}
                   </div>
                 </motion.div>
               )}
@@ -1177,9 +1013,7 @@ const BovineLocation: React.FC = () => {
                       <div className="bg-white rounded-lg p-6 border border-gray-200">
                         <div className="flex items-center gap-3 mb-3">
                           <Route className="w-6 h-6 text-blue-500" />
-                          <h4 className="font-semibold text-gray-900">
-                            Distancia Recorrida
-                          </h4>
+                          <h4 className="font-semibold text-gray-900">Distancia Recorrida</h4>
                         </div>
                         <div className="text-3xl font-bold text-blue-600 mb-1">
                           {locationData.movementPatterns[0].totalDistance} km
@@ -1190,32 +1024,22 @@ const BovineLocation: React.FC = () => {
                       <div className="bg-white rounded-lg p-6 border border-gray-200">
                         <div className="flex items-center gap-3 mb-3">
                           <TrendingUp className="w-6 h-6 text-green-500" />
-                          <h4 className="font-semibold text-gray-900">
-                            Actividad
-                          </h4>
+                          <h4 className="font-semibold text-gray-900">Actividad</h4>
                         </div>
                         <div className="text-3xl font-bold text-green-600 mb-1">
-                          {
-                            locationData.movementPatterns[0].healthMetrics
-                              .activityLevel
-                          }
+                          {locationData.movementPatterns[0].healthMetrics.activityLevel}
                         </div>
-                        <p className="text-sm text-gray-600">
-                          Nivel de actividad
-                        </p>
+                        <p className="text-sm text-gray-600">Nivel de actividad</p>
                       </div>
 
                       <div className="bg-white rounded-lg p-6 border border-gray-200">
                         <div className="flex items-center gap-3 mb-3">
                           <Clock className="w-6 h-6 text-purple-500" />
-                          <h4 className="font-semibold text-gray-900">
-                            Tiempo Pastoreo
-                          </h4>
+                          <h4 className="font-semibold text-gray-900">Tiempo Pastoreo</h4>
                         </div>
                         <div className="text-3xl font-bold text-purple-600 mb-1">
                           {Math.round(
-                            locationData.movementPatterns[0].healthMetrics
-                              .grazingTime / 60
+                            locationData.movementPatterns[0].healthMetrics.grazingTime / 60
                           )}{" "}
                           h
                         </div>
@@ -1226,9 +1050,7 @@ const BovineLocation: React.FC = () => {
 
                   {/* Gráfico simulado de actividad diaria */}
                   <div className="bg-white rounded-lg p-6 border border-gray-200">
-                    <h4 className="font-semibold text-gray-900 mb-4">
-                      Actividad Diaria
-                    </h4>
+                    <h4 className="font-semibold text-gray-900 mb-4">Actividad Diaria</h4>
                     <div className="h-40 bg-gradient-to-r from-blue-100 to-green-100 rounded flex items-end justify-around p-4">
                       {Array.from({ length: 24 }, (_, i) => (
                         <div
@@ -1266,9 +1088,7 @@ const BovineLocation: React.FC = () => {
             >
               <div className="flex items-center justify-between mb-4">
                 <h3 className="font-semibold text-gray-900">Alertas</h3>
-                <span className="text-sm text-gray-600">
-                  {unreadAlerts} sin leer
-                </span>
+                <span className="text-sm text-gray-600">{unreadAlerts} sin leer</span>
               </div>
               <div className="space-y-3">
                 {locationData.alerts.map((alert) => (
@@ -1283,7 +1103,7 @@ const BovineLocation: React.FC = () => {
             </motion.div>
           )}
         </AnimatePresence>
-      </motion.div>
+      </div>
     </div>
   );
 };

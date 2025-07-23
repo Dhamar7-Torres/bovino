@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from "react";
-import { motion, AnimatePresence } from "framer-motion";
 import {
   ArrowLeft,
   Plus,
@@ -34,7 +33,6 @@ import {
   Mic,
   RefreshCw,
 } from "lucide-react";
-import { useNavigate, useParams } from "react-router-dom";
 
 // Interfaces para las notas
 interface NoteAttachment {
@@ -231,15 +229,17 @@ const NoteCard: React.FC<{
   };
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: index * 0.05 }}
+    <div
       className={`bg-white rounded-lg shadow-md border-2 transition-all duration-300 hover:shadow-lg ${
         note.isPinned
           ? "border-yellow-300 bg-yellow-50"
           : "border-gray-200 hover:border-gray-300"
       }`}
+      style={{
+        opacity: 1,
+        transform: `translateY(0px)`,
+        transitionDelay: `${index * 50}ms`,
+      }}
     >
       {/* Header */}
       <div className="p-4 border-b border-gray-100">
@@ -256,7 +256,12 @@ const NoteCard: React.FC<{
               </span>
               <PriorityBadge priority={note.priority} />
             </div>
-            <h3 className="font-semibold text-gray-900 text-lg mb-1 line-clamp-2">
+            <h3 className="font-semibold text-gray-900 text-lg mb-1" style={{
+              overflow: "hidden",
+              display: "-webkit-box",
+              WebkitBoxOrient: "vertical",
+              WebkitLineClamp: 2,
+            }}>
               {note.title}
             </h3>
             <div className="flex items-center gap-3 text-sm text-gray-600">
@@ -286,90 +291,94 @@ const NoteCard: React.FC<{
               <MoreVertical className="w-4 h-4" />
             </button>
 
-            <AnimatePresence>
-              {showMenu && (
-                <motion.div
-                  initial={{ opacity: 0, scale: 0.95, y: -10 }}
-                  animate={{ opacity: 1, scale: 1, y: 0 }}
-                  exit={{ opacity: 0, scale: 0.95, y: -10 }}
-                  className="absolute right-0 top-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-10 min-w-[140px]"
+            {showMenu && (
+              <div
+                className="absolute right-0 top-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-10 min-w-[140px]"
+                style={{
+                  opacity: 1,
+                  transform: 'scale(1) translateY(0px)',
+                }}
+              >
+                <button
+                  onClick={() => {
+                    onView(note);
+                    setShowMenu(false);
+                  }}
+                  className="flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 w-full text-left"
                 >
-                  <button
-                    onClick={() => {
-                      onView(note);
-                      setShowMenu(false);
-                    }}
-                    className="flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 w-full text-left"
-                  >
+                  <Eye className="w-4 h-4" />
+                  Ver completa
+                </button>
+                <button
+                  onClick={() => {
+                    onEdit(note);
+                    setShowMenu(false);
+                  }}
+                  className="flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 w-full text-left"
+                >
+                  <Edit3 className="w-4 h-4" />
+                  Editar
+                </button>
+                <button
+                  onClick={() => {
+                    onTogglePin(note.id);
+                    setShowMenu(false);
+                  }}
+                  className="flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 w-full text-left"
+                >
+                  <Pin className="w-4 h-4" />
+                  {note.isPinned ? "Desfijar" : "Fijar"}
+                </button>
+                <button
+                  onClick={() => {
+                    onTogglePrivate(note.id);
+                    setShowMenu(false);
+                  }}
+                  className="flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 w-full text-left"
+                >
+                  {note.isPrivate ? (
                     <Eye className="w-4 h-4" />
-                    Ver completa
-                  </button>
-                  <button
-                    onClick={() => {
-                      onEdit(note);
-                      setShowMenu(false);
-                    }}
-                    className="flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 w-full text-left"
-                  >
-                    <Edit3 className="w-4 h-4" />
-                    Editar
-                  </button>
-                  <button
-                    onClick={() => {
-                      onTogglePin(note.id);
-                      setShowMenu(false);
-                    }}
-                    className="flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 w-full text-left"
-                  >
-                    <Pin className="w-4 h-4" />
-                    {note.isPinned ? "Desfijar" : "Fijar"}
-                  </button>
-                  <button
-                    onClick={() => {
-                      onTogglePrivate(note.id);
-                      setShowMenu(false);
-                    }}
-                    className="flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 w-full text-left"
-                  >
-                    {note.isPrivate ? (
-                      <Eye className="w-4 h-4" />
-                    ) : (
-                      <EyeOff className="w-4 h-4" />
-                    )}
-                    {note.isPrivate ? "Hacer pública" : "Hacer privada"}
-                  </button>
-                  <button
-                    onClick={() => {
-                      navigator.clipboard.writeText(
-                        `${note.title}\n\n${note.content}`
-                      );
-                      setShowMenu(false);
-                    }}
-                    className="flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 w-full text-left"
-                  >
-                    <Copy className="w-4 h-4" />
-                    Copiar
-                  </button>
-                  <button
-                    onClick={() => {
-                      onDelete(note.id);
-                      setShowMenu(false);
-                    }}
-                    className="flex items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50 w-full text-left"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                    Eliminar
-                  </button>
-                </motion.div>
-              )}
-            </AnimatePresence>
+                  ) : (
+                    <EyeOff className="w-4 h-4" />
+                  )}
+                  {note.isPrivate ? "Hacer pública" : "Hacer privada"}
+                </button>
+                <button
+                  onClick={() => {
+                    navigator.clipboard.writeText(
+                      `${note.title}\n\n${note.content}`
+                    );
+                    setShowMenu(false);
+                  }}
+                  className="flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 w-full text-left"
+                >
+                  <Copy className="w-4 h-4" />
+                  Copiar
+                </button>
+                <button
+                  onClick={() => {
+                    onDelete(note.id);
+                    setShowMenu(false);
+                  }}
+                  className="flex items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50 w-full text-left"
+                >
+                  <Trash2 className="w-4 h-4" />
+                  Eliminar
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </div>
 
       {/* Contenido */}
       <div className="p-4">
-        <p className="text-gray-700 mb-3 line-clamp-3">{note.content}</p>
+        <p className="text-gray-700 mb-3" style={{
+          overflow: "hidden",
+          display: "-webkit-box",
+          WebkitBoxOrient: "vertical",
+          WebkitLineClamp: 3,
+        }}>{note.content}</p>
 
         {/* Tags */}
         {note.tags.length > 0 && (
@@ -433,7 +442,7 @@ const NoteCard: React.FC<{
         <div className="flex gap-2 pt-3 border-t border-gray-100">
           <button
             onClick={() => onView(note)}
-            className="flex-1 flex items-center justify-center gap-1 px-3 py-2 text-sm text-[#3d8b40] hover:bg-green-50 rounded transition-colors"
+            className="flex-1 flex items-center justify-center gap-1 px-3 py-2 text-sm text-green-600 hover:bg-green-50 rounded transition-colors"
           >
             <Eye className="w-4 h-4" />
             Ver
@@ -445,18 +454,9 @@ const NoteCard: React.FC<{
             <Edit3 className="w-4 h-4" />
             Editar
           </button>
-          <button
-            onClick={() => {
-              /* Compartir nota */
-            }}
-            className="flex-1 flex items-center justify-center gap-1 px-3 py-2 text-sm text-gray-600 hover:bg-gray-50 rounded transition-colors"
-          >
-            <Share2 className="w-4 h-4" />
-            Compartir
-          </button>
         </div>
       </div>
-    </motion.div>
+    </div>
   );
 };
 
@@ -581,17 +581,16 @@ const NoteModal: React.FC<{
   if (!isOpen) return null;
 
   return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+    <div
+      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+      style={{ opacity: 1 }}
     >
-      <motion.div
-        initial={{ scale: 0.9, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
-        exit={{ scale: 0.9, opacity: 0 }}
+      <div
         className="bg-white rounded-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col"
+        style={{
+          transform: 'scale(1)',
+          opacity: 1,
+        }}
       >
         {/* Header del modal */}
         <div className="p-6 border-b border-gray-200">
@@ -621,7 +620,7 @@ const NoteModal: React.FC<{
                     applyTemplate(e.target.value);
                   }
                 }}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#3d8b40] focus:border-transparent"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
               >
                 <option value="">Seleccionar plantilla...</option>
                 {templates.map((template) => (
@@ -645,7 +644,7 @@ const NoteModal: React.FC<{
                 onChange={(e) =>
                   setFormData((prev) => ({ ...prev, title: e.target.value }))
                 }
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#3d8b40] focus:border-transparent"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
                 placeholder="Título de la nota..."
               />
             </div>
@@ -662,7 +661,7 @@ const NoteModal: React.FC<{
                     category: e.target.value as NoteCategory,
                   }))
                 }
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#3d8b40] focus:border-transparent"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
               >
                 {Object.entries(noteCategories).map(([key, config]) => (
                   <option key={key} value={key}>
@@ -684,7 +683,7 @@ const NoteModal: React.FC<{
                     priority: e.target.value as BovineNote["priority"],
                   }))
                 }
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#3d8b40] focus:border-transparent"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
               >
                 <option value="LOW">Baja</option>
                 <option value="MEDIUM">Media</option>
@@ -704,7 +703,7 @@ const NoteModal: React.FC<{
                       isPinned: e.target.checked,
                     }))
                   }
-                  className="rounded text-[#3d8b40] focus:ring-[#3d8b40]"
+                  className="rounded text-green-600 focus:ring-green-500"
                 />
                 <span className="text-sm text-gray-700">Fijar nota</span>
               </label>
@@ -718,7 +717,7 @@ const NoteModal: React.FC<{
                       isPrivate: e.target.checked,
                     }))
                   }
-                  className="rounded text-[#3d8b40] focus:ring-[#3d8b40]"
+                  className="rounded text-green-600 focus:ring-green-500"
                 />
                 <span className="text-sm text-gray-700">Nota privada</span>
               </label>
@@ -739,7 +738,7 @@ const NoteModal: React.FC<{
                 setFormData((prev) => ({ ...prev, content: e.target.value }))
               }
               rows={8}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#3d8b40] focus:border-transparent resize-none"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent resize-none"
               placeholder="Escribe el contenido de la nota..."
             />
           </div>
@@ -771,7 +770,7 @@ const NoteModal: React.FC<{
                 value={newTag}
                 onChange={(e) => setNewTag(e.target.value)}
                 onKeyPress={(e) => e.key === "Enter" && addTag()}
-                className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#3d8b40] focus:border-transparent"
+                className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
                 placeholder="Agregar etiqueta..."
               />
               <button
@@ -791,7 +790,7 @@ const NoteModal: React.FC<{
               </label>
               <button
                 onClick={() => setShowReminderForm(!showReminderForm)}
-                className="text-sm text-[#3d8b40] hover:text-[#2d6e30] font-medium"
+                className="text-sm text-green-600 hover:text-green-700 font-medium"
               >
                 + Agregar recordatorio
               </button>
@@ -833,46 +832,45 @@ const NoteModal: React.FC<{
             )}
 
             {/* Formulario de nuevo recordatorio */}
-            <AnimatePresence>
-              {showReminderForm && (
-                <motion.div
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: "auto" }}
-                  exit={{ opacity: 0, height: 0 }}
-                  className="overflow-hidden"
-                >
-                  <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg space-y-3">
-                    <input
-                      type="datetime-local"
-                      value={reminderDate}
-                      onChange={(e) => setReminderDate(e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-[#3d8b40] focus:border-transparent"
-                    />
-                    <input
-                      type="text"
-                      value={reminderMessage}
-                      onChange={(e) => setReminderMessage(e.target.value)}
-                      placeholder="Mensaje del recordatorio..."
-                      className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-[#3d8b40] focus:border-transparent"
-                    />
-                    <div className="flex gap-2">
-                      <button
-                        onClick={addReminder}
-                        className="px-4 py-2 bg-[#3d8b40] text-white rounded hover:bg-[#2d6e30] transition-colors"
-                      >
-                        Agregar
-                      </button>
-                      <button
-                        onClick={() => setShowReminderForm(false)}
-                        className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600 transition-colors"
-                      >
-                        Cancelar
-                      </button>
-                    </div>
+            {showReminderForm && (
+              <div
+                className="overflow-hidden"
+                style={{
+                  opacity: 1,
+                  height: 'auto',
+                }}
+              >
+                <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg space-y-3">
+                  <input
+                    type="datetime-local"
+                    value={reminderDate}
+                    onChange={(e) => setReminderDate(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  />
+                  <input
+                    type="text"
+                    value={reminderMessage}
+                    onChange={(e) => setReminderMessage(e.target.value)}
+                    placeholder="Mensaje del recordatorio..."
+                    className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  />
+                  <div className="flex gap-2">
+                    <button
+                      onClick={addReminder}
+                      className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition-colors"
+                    >
+                      Agregar
+                    </button>
+                    <button
+                      onClick={() => setShowReminderForm(false)}
+                      className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600 transition-colors"
+                    >
+                      Cancelar
+                    </button>
                   </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
@@ -887,23 +885,20 @@ const NoteModal: React.FC<{
             </button>
             <button
               onClick={handleSave}
-              className="flex items-center gap-2 px-6 py-2 bg-[#3d8b40] text-white rounded-lg hover:bg-[#2d6e30] transition-colors"
+              className="flex items-center gap-2 px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
             >
               <Save className="w-4 h-4" />
               {note ? "Actualizar" : "Guardar"} Nota
             </button>
           </div>
         </div>
-      </motion.div>
-    </motion.div>
+      </div>
+    </div>
   );
 };
 
 // Componente principal de notas del bovino
 const BovineNotes: React.FC = () => {
-  const navigate = useNavigate();
-  const { id } = useParams<{ id: string }>();
-
   // Estados principales
   const [notes, setNotes] = useState<BovineNote[]>([]);
   const [filteredNotes, setFilteredNotes] = useState<BovineNote[]>([]);
@@ -1066,7 +1061,7 @@ const BovineNotes: React.FC = () => {
     };
 
     loadData();
-  }, [id]);
+  }, []);
 
   // Filtrar notas
   useEffect(() => {
@@ -1220,64 +1215,49 @@ const BovineNotes: React.FC = () => {
 
   const stats = getStats();
 
-  // Animaciones
-  const containerVariants = {
-    hidden: { opacity: 0 },
-    visible: {
-      opacity: 1,
-      transition: {
-        duration: 0.6,
-        staggerChildren: 0.1,
-      },
-    },
-  };
-
-  const itemVariants = {
-    hidden: { opacity: 0, y: 20 },
-    visible: {
-      opacity: 1,
-      y: 0,
-      transition: { duration: 0.4 },
-    },
-  };
-
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-[#3d8b40] via-[#f2e9d8] to-[#f4ac3a] flex items-center justify-center">
-        <motion.div
-          initial={{ opacity: 0, scale: 0.9 }}
-          animate={{ opacity: 1, scale: 1 }}
-          className="bg-white/90 backdrop-blur-sm rounded-2xl p-8 text-center"
+      <div className="min-h-screen bg-gradient-to-br from-green-600 via-yellow-100 to-orange-400 flex items-center justify-center">
+        <div
+          className="bg-white bg-opacity-90 backdrop-blur-sm rounded-2xl p-8 text-center"
+          style={{
+            opacity: 1,
+            transform: 'scale(1)',
+          }}
         >
-          <motion.div
-            animate={{ rotate: 360 }}
-            transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-            className="w-12 h-12 border-4 border-[#3d8b40] border-t-transparent rounded-full mx-auto mb-4"
+          <div
+            className="w-12 h-12 border-4 border-green-600 border-t-transparent rounded-full mx-auto mb-4"
+            style={{
+              animation: 'spin 1s linear infinite',
+            }}
           />
           <p className="text-lg font-medium text-gray-700">
             Cargando notas del bovino...
           </p>
-        </motion.div>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#3d8b40] via-[#f2e9d8] to-[#f4ac3a] p-4">
-      <motion.div
-        variants={containerVariants}
-        initial="hidden"
-        animate="visible"
+    <div className="min-h-screen bg-gradient-to-br from-green-600 via-yellow-100 to-orange-400 p-4">
+      <div
         className="max-w-7xl mx-auto"
+        style={{
+          opacity: 1,
+        }}
       >
         {/* Header */}
-        <motion.div
-          variants={itemVariants}
+        <div
           className="flex items-center justify-between mb-6"
+          style={{
+            opacity: 1,
+            transform: 'translateY(0px)',
+          }}
         >
           <button
-            onClick={() => navigate(`/bovines/detail/${id}`)}
-            className="flex items-center gap-2 px-4 py-2 bg-white/20 backdrop-blur-sm rounded-lg text-white hover:bg-white/30 transition-all duration-300"
+            onClick={() => window.history.back()}
+            className="flex items-center gap-2 px-4 py-2 bg-white bg-opacity-20 backdrop-blur-sm rounded-lg text-white hover:bg-white hover:bg-opacity-30 transition-all duration-300"
           >
             <ArrowLeft className="w-4 h-4" />
             <span className="font-medium">Regresar al Detalle</span>
@@ -1287,7 +1267,7 @@ const BovineNotes: React.FC = () => {
             <button
               onClick={() => setShowFilters(!showFilters)}
               className={`flex items-center gap-2 px-4 py-2 backdrop-blur-sm rounded-lg text-white transition-all duration-300 ${
-                showFilters ? "bg-white/30" : "bg-white/20 hover:bg-white/30"
+                showFilters ? "bg-white bg-opacity-30" : "bg-white bg-opacity-20 hover:bg-white hover:bg-opacity-30"
               }`}
             >
               <Filter className="w-4 h-4" />
@@ -1299,65 +1279,77 @@ const BovineNotes: React.FC = () => {
                 setEditingNote(undefined);
                 setShowModal(true);
               }}
-              className="flex items-center gap-2 px-4 py-2 bg-[#3d8b40]/80 backdrop-blur-sm rounded-lg text-white hover:bg-[#2d6e30]/80 transition-all duration-300"
+              className="flex items-center gap-2 px-4 py-2 bg-green-600 bg-opacity-80 backdrop-blur-sm rounded-lg text-white hover:bg-green-700 hover:bg-opacity-80 transition-all duration-300"
             >
               <Plus className="w-4 h-4" />
               <span className="font-medium">Nueva Nota</span>
             </button>
           </div>
-        </motion.div>
+        </div>
 
         {/* Título */}
-        <motion.div variants={itemVariants} className="text-center mb-8">
+        <div 
+          className="text-center mb-8"
+          style={{
+            opacity: 1,
+            transform: 'translateY(0px)',
+          }}
+        >
           <h1 className="text-4xl md:text-5xl font-bold text-white mb-4">
             Notas y Observaciones
           </h1>
-          <p className="text-lg text-white/80 max-w-2xl mx-auto">
+          <p className="text-lg text-white text-opacity-80 max-w-2xl mx-auto">
             Registra y gestiona todas las observaciones y notas del bovino
           </p>
-        </motion.div>
+        </div>
 
         {/* Estadísticas */}
-        <motion.div
-          variants={itemVariants}
+        <div
           className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6"
+          style={{
+            opacity: 1,
+            transform: 'translateY(0px)',
+          }}
         >
-          <div className="bg-white/90 backdrop-blur-sm rounded-lg p-4 text-center">
+          <div className="bg-white bg-opacity-90 backdrop-blur-sm rounded-lg p-4 text-center">
             <div className="text-2xl font-bold text-gray-900">
               {stats.total}
             </div>
             <div className="text-sm text-gray-600">Total</div>
           </div>
-          <div className="bg-white/90 backdrop-blur-sm rounded-lg p-4 text-center">
+          <div className="bg-white bg-opacity-90 backdrop-blur-sm rounded-lg p-4 text-center">
             <div className="text-2xl font-bold text-yellow-600">
               {stats.pinned}
             </div>
             <div className="text-sm text-gray-600">Fijadas</div>
           </div>
-          <div className="bg-white/90 backdrop-blur-sm rounded-lg p-4 text-center">
+          <div className="bg-white bg-opacity-90 backdrop-blur-sm rounded-lg p-4 text-center">
             <div className="text-2xl font-bold text-gray-600">
               {stats.private}
             </div>
             <div className="text-sm text-gray-600">Privadas</div>
           </div>
-          <div className="bg-white/90 backdrop-blur-sm rounded-lg p-4 text-center">
+          <div className="bg-white bg-opacity-90 backdrop-blur-sm rounded-lg p-4 text-center">
             <div className="text-2xl font-bold text-red-600">
               {stats.urgent}
             </div>
             <div className="text-sm text-gray-600">Urgentes</div>
           </div>
-          <div className="bg-white/90 backdrop-blur-sm rounded-lg p-4 text-center">
+          <div className="bg-white bg-opacity-90 backdrop-blur-sm rounded-lg p-4 text-center">
             <div className="text-2xl font-bold text-blue-600">
               {stats.withReminders}
             </div>
             <div className="text-sm text-gray-600">Con Recordatorios</div>
           </div>
-        </motion.div>
+        </div>
 
         {/* Controles y filtros */}
-        <motion.div
-          variants={itemVariants}
-          className="bg-[#fffdf8]/90 backdrop-blur-sm rounded-2xl shadow-xl border border-white/20 p-6 mb-6"
+        <div
+          className="bg-yellow-50 bg-opacity-90 backdrop-blur-sm rounded-2xl shadow-xl border border-white border-opacity-20 p-6 mb-6"
+          style={{
+            opacity: 1,
+            transform: 'translateY(0px)',
+          }}
         >
           {/* Búsqueda */}
           <div className="flex flex-col lg:flex-row gap-4 mb-4">
@@ -1373,128 +1365,130 @@ const BovineNotes: React.FC = () => {
                     searchTerm: e.target.value,
                   }))
                 }
-                className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#3d8b40] focus:border-transparent"
+                className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
               />
             </div>
           </div>
 
           {/* Filtros expandibles */}
-          <AnimatePresence>
-            {showFilters && (
-              <motion.div
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: "auto" }}
-                exit={{ opacity: 0, height: 0 }}
-                className="border-t border-gray-200 pt-4 overflow-hidden"
-              >
-                <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4 mb-4">
-                  <select
-                    value={filters.category}
-                    onChange={(e) =>
-                      setFilters((prev) => ({
-                        ...prev,
-                        category: e.target.value as FilterOptions["category"],
-                      }))
-                    }
-                    className="px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-[#3d8b40] focus:border-transparent"
-                  >
-                    <option value="ALL">Todas las categorías</option>
-                    {Object.entries(noteCategories).map(([key, config]) => (
-                      <option key={key} value={key}>
-                        {config.label}
-                      </option>
-                    ))}
-                  </select>
+          {showFilters && (
+            <div
+              className="border-t border-gray-200 pt-4 overflow-hidden"
+              style={{
+                opacity: 1,
+                height: 'auto',
+              }}
+            >
+              <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4 mb-4">
+                <select
+                  value={filters.category}
+                  onChange={(e) =>
+                    setFilters((prev) => ({
+                      ...prev,
+                      category: e.target.value as FilterOptions["category"],
+                    }))
+                  }
+                  className="px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                >
+                  <option value="ALL">Todas las categorías</option>
+                  {Object.entries(noteCategories).map(([key, config]) => (
+                    <option key={key} value={key}>
+                      {config.label}
+                    </option>
+                  ))}
+                </select>
 
-                  <select
-                    value={filters.priority}
-                    onChange={(e) =>
-                      setFilters((prev) => ({
-                        ...prev,
-                        priority: e.target.value,
-                      }))
-                    }
-                    className="px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-[#3d8b40] focus:border-transparent"
-                  >
-                    <option value="">Todas las prioridades</option>
-                    <option value="LOW">Baja</option>
-                    <option value="MEDIUM">Media</option>
-                    <option value="HIGH">Alta</option>
-                    <option value="URGENT">Urgente</option>
-                  </select>
+                <select
+                  value={filters.priority}
+                  onChange={(e) =>
+                    setFilters((prev) => ({
+                      ...prev,
+                      priority: e.target.value,
+                    }))
+                  }
+                  className="px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                >
+                  <option value="">Todas las prioridades</option>
+                  <option value="LOW">Baja</option>
+                  <option value="MEDIUM">Media</option>
+                  <option value="HIGH">Alta</option>
+                  <option value="URGENT">Urgente</option>
+                </select>
 
+                <input
+                  type="text"
+                  placeholder="Buscar por autor..."
+                  value={filters.author}
+                  onChange={(e) =>
+                    setFilters((prev) => ({
+                      ...prev,
+                      author: e.target.value,
+                    }))
+                  }
+                  className="px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                />
+
+                <div className="flex items-center gap-2">
                   <input
-                    type="text"
-                    placeholder="Buscar por autor..."
-                    value={filters.author}
+                    type="checkbox"
+                    id="showPinned"
+                    checked={filters.showPinned}
                     onChange={(e) =>
                       setFilters((prev) => ({
                         ...prev,
-                        author: e.target.value,
+                        showPinned: e.target.checked,
                       }))
                     }
-                    className="px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-[#3d8b40] focus:border-transparent"
+                    className="rounded text-green-600 focus:ring-green-500"
                   />
-
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      id="showPinned"
-                      checked={filters.showPinned}
-                      onChange={(e) =>
-                        setFilters((prev) => ({
-                          ...prev,
-                          showPinned: e.target.checked,
-                        }))
-                      }
-                      className="rounded text-[#3d8b40] focus:ring-[#3d8b40]"
-                    />
-                    <label
-                      htmlFor="showPinned"
-                      className="text-sm text-gray-700 cursor-pointer"
-                    >
-                      Solo fijadas
-                    </label>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      id="showPrivate"
-                      checked={filters.showPrivate}
-                      onChange={(e) =>
-                        setFilters((prev) => ({
-                          ...prev,
-                          showPrivate: e.target.checked,
-                        }))
-                      }
-                      className="rounded text-[#3d8b40] focus:ring-[#3d8b40]"
-                    />
-                    <label
-                      htmlFor="showPrivate"
-                      className="text-sm text-gray-700 cursor-pointer"
-                    >
-                      Incluir privadas
-                    </label>
-                  </div>
-
-                  <button
-                    onClick={clearFilters}
-                    className="flex items-center justify-center gap-2 px-3 py-2 text-gray-600 hover:text-gray-800 transition-colors"
+                  <label
+                    htmlFor="showPinned"
+                    className="text-sm text-gray-700 cursor-pointer"
                   >
-                    <RefreshCw className="w-4 h-4" />
-                    Limpiar
-                  </button>
+                    Solo fijadas
+                  </label>
                 </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </motion.div>
+
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="showPrivate"
+                    checked={filters.showPrivate}
+                    onChange={(e) =>
+                      setFilters((prev) => ({
+                        ...prev,
+                        showPrivate: e.target.checked,
+                      }))
+                    }
+                    className="rounded text-green-600 focus:ring-green-500"
+                  />
+                  <label
+                    htmlFor="showPrivate"
+                    className="text-sm text-gray-700 cursor-pointer"
+                  >
+                    Incluir privadas
+                  </label>
+                </div>
+
+                <button
+                  onClick={clearFilters}
+                  className="flex items-center justify-center gap-2 px-3 py-2 text-gray-600 hover:text-gray-800 transition-colors"
+                >
+                  <RefreshCw className="w-4 h-4" />
+                  Limpiar
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
 
         {/* Lista de notas */}
-        <motion.div
-          variants={itemVariants}
-          className="bg-[#fffdf8]/90 backdrop-blur-sm rounded-2xl shadow-xl border border-white/20 p-6"
+        <div
+          className="bg-yellow-50 bg-opacity-90 backdrop-blur-sm rounded-2xl shadow-xl border border-white border-opacity-20 p-6"
+          style={{
+            opacity: 1,
+            transform: 'translateY(0px)',
+          }}
         >
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-2xl font-bold text-gray-900">
@@ -1535,7 +1529,7 @@ const BovineNotes: React.FC = () => {
               filters.priority ? (
                 <button
                   onClick={clearFilters}
-                  className="text-[#3d8b40] hover:text-[#2d6e30] font-medium"
+                  className="text-green-600 hover:text-green-700 font-medium"
                 >
                   Limpiar filtros
                 </button>
@@ -1545,7 +1539,7 @@ const BovineNotes: React.FC = () => {
                     setEditingNote(undefined);
                     setShowModal(true);
                   }}
-                  className="flex items-center gap-2 px-4 py-2 bg-[#3d8b40] text-white rounded-lg hover:bg-[#2d6e30] transition-colors mx-auto"
+                  className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors mx-auto"
                 >
                   <Plus className="w-4 h-4" />
                   Crear primera nota
@@ -1553,171 +1547,174 @@ const BovineNotes: React.FC = () => {
               )}
             </div>
           )}
-        </motion.div>
+        </div>
 
         {/* Modal de nota */}
-        <AnimatePresence>
-          {showModal && (
-            <NoteModal
-              isOpen={showModal}
-              onClose={() => {
-                setShowModal(false);
-                setEditingNote(undefined);
-              }}
-              note={editingNote}
-              onSave={handleSaveNote}
-              templates={templates}
-            />
-          )}
-        </AnimatePresence>
+        {showModal && (
+          <NoteModal
+            isOpen={showModal}
+            onClose={() => {
+              setShowModal(false);
+              setEditingNote(undefined);
+            }}
+            note={editingNote}
+            onSave={handleSaveNote}
+            templates={templates}
+          />
+        )}
 
         {/* Modal de vista de nota */}
-        <AnimatePresence>
-          {viewingNote && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+        {viewingNote && (
+          <div
+            className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+            style={{ opacity: 1 }}
+          >
+            <div
+              className="bg-white rounded-2xl max-w-3xl w-full max-h-[90vh] overflow-hidden flex flex-col"
+              style={{
+                transform: 'scale(1)',
+                opacity: 1,
+              }}
             >
-              <motion.div
-                initial={{ scale: 0.9, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                exit={{ scale: 0.9, opacity: 0 }}
-                className="bg-white rounded-2xl max-w-3xl w-full max-h-[90vh] overflow-hidden flex flex-col"
-              >
-                {/* Header */}
-                <div className="p-6 border-b border-gray-200">
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-2">
-                        {viewingNote.isPinned && (
-                          <Pin className="w-4 h-4 text-yellow-500" />
-                        )}
-                        {viewingNote.isPrivate && (
-                          <EyeOff className="w-4 h-4 text-gray-500" />
-                        )}
+              {/* Header */}
+              <div className="p-6 border-b border-gray-200">
+                <div className="flex items-start justify-between">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-2">
+                      {viewingNote.isPinned && (
+                        <Pin className="w-4 h-4 text-yellow-500" />
+                      )}
+                      {viewingNote.isPrivate && (
+                        <EyeOff className="w-4 h-4 text-gray-500" />
+                      )}
+                      <span
+                        className={`px-2 py-1 rounded-full text-xs font-medium ${
+                          noteCategories[viewingNote.category].color
+                        }`}
+                      >
+                        {noteCategories[viewingNote.category].label}
+                      </span>
+                      <PriorityBadge priority={viewingNote.priority} />
+                    </div>
+                    <h2 className="text-2xl font-bold text-gray-900 mb-2">
+                      {viewingNote.title}
+                    </h2>
+                    <div className="flex items-center gap-4 text-sm text-gray-600">
+                      <div className="flex items-center gap-1">
+                        <User className="w-3 h-3" />
+                        {viewingNote.authorName}
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <Clock className="w-3 h-3" />
+                        {viewingNote.createdAt.toLocaleString("es-MX")}
+                      </div>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setViewingNote(undefined)}
+                    className="p-2 text-gray-400 hover:text-gray-600 transition-colors"
+                  >
+                    <X className="w-6 h-6" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Contenido */}
+              <div className="flex-1 overflow-y-auto p-6">
+                <div className="prose max-w-none">
+                  <p className="text-gray-700 whitespace-pre-wrap">
+                    {viewingNote.content}
+                  </p>
+                </div>
+
+                {/* Tags */}
+                {viewingNote.tags.length > 0 && (
+                  <div className="mt-6">
+                    <h3 className="text-sm font-medium text-gray-700 mb-2">
+                      Etiquetas
+                    </h3>
+                    <div className="flex flex-wrap gap-2">
+                      {viewingNote.tags.map((tag, index) => (
                         <span
-                          className={`px-2 py-1 rounded-full text-xs font-medium ${
-                            noteCategories[viewingNote.category].color
-                          }`}
+                          key={index}
+                          className="inline-flex items-center px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-sm"
                         >
-                          {noteCategories[viewingNote.category].label}
+                          <Tag className="w-3 h-3 mr-1" />
+                          {tag}
                         </span>
-                        <PriorityBadge priority={viewingNote.priority} />
-                      </div>
-                      <h2 className="text-2xl font-bold text-gray-900 mb-2">
-                        {viewingNote.title}
-                      </h2>
-                      <div className="flex items-center gap-4 text-sm text-gray-600">
-                        <div className="flex items-center gap-1">
-                          <User className="w-3 h-3" />
-                          {viewingNote.authorName}
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <Clock className="w-3 h-3" />
-                          {viewingNote.createdAt.toLocaleString("es-MX")}
-                        </div>
-                      </div>
+                      ))}
                     </div>
-                    <button
-                      onClick={() => setViewingNote(undefined)}
-                      className="p-2 text-gray-400 hover:text-gray-600 transition-colors"
-                    >
-                      <X className="w-6 h-6" />
-                    </button>
                   </div>
-                </div>
+                )}
 
-                {/* Contenido */}
-                <div className="flex-1 overflow-y-auto p-6">
-                  <div className="prose max-w-none">
-                    <p className="text-gray-700 whitespace-pre-wrap">
-                      {viewingNote.content}
-                    </p>
-                  </div>
-
-                  {/* Tags */}
-                  {viewingNote.tags.length > 0 && (
-                    <div className="mt-6">
-                      <h3 className="text-sm font-medium text-gray-700 mb-2">
-                        Etiquetas
-                      </h3>
-                      <div className="flex flex-wrap gap-2">
-                        {viewingNote.tags.map((tag, index) => (
-                          <span
-                            key={index}
-                            className="inline-flex items-center px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-sm"
-                          >
-                            <Tag className="w-3 h-3 mr-1" />
-                            {tag}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Recordatorios */}
-                  {viewingNote.reminders.length > 0 && (
-                    <div className="mt-6">
-                      <h3 className="text-sm font-medium text-gray-700 mb-2">
-                        Recordatorios
-                      </h3>
-                      <div className="space-y-2">
-                        {viewingNote.reminders.map((reminder) => (
-                          <div
-                            key={reminder.id}
-                            className="flex items-center justify-between p-3 bg-yellow-50 border border-yellow-200 rounded-lg"
-                          >
-                            <div>
-                              <p className="text-sm font-medium text-gray-900">
-                                {reminder.message}
-                              </p>
-                              <p className="text-xs text-gray-600">
-                                {reminder.date.toLocaleString("es-MX")}
-                              </p>
-                            </div>
-                            <div
-                              className={`w-3 h-3 rounded-full ${
-                                reminder.isCompleted
-                                  ? "bg-green-500"
-                                  : "bg-yellow-500"
-                              }`}
-                            ></div>
+                {/* Recordatorios */}
+                {viewingNote.reminders.length > 0 && (
+                  <div className="mt-6">
+                    <h3 className="text-sm font-medium text-gray-700 mb-2">
+                      Recordatorios
+                    </h3>
+                    <div className="space-y-2">
+                      {viewingNote.reminders.map((reminder) => (
+                        <div
+                          key={reminder.id}
+                          className="flex items-center justify-between p-3 bg-yellow-50 border border-yellow-200 rounded-lg"
+                        >
+                          <div>
+                            <p className="text-sm font-medium text-gray-900">
+                              {reminder.message}
+                            </p>
+                            <p className="text-xs text-gray-600">
+                              {reminder.date.toLocaleString("es-MX")}
+                            </p>
                           </div>
-                        ))}
-                      </div>
+                          <div
+                            className={`w-3 h-3 rounded-full ${
+                              reminder.isCompleted
+                                ? "bg-green-500"
+                                : "bg-yellow-500"
+                            }`}
+                          ></div>
+                        </div>
+                      ))}
                     </div>
-                  )}
-                </div>
-
-                {/* Footer */}
-                <div className="p-6 border-t border-gray-200">
-                  <div className="flex gap-3 justify-end">
-                    <button
-                      onClick={() => setViewingNote(undefined)}
-                      className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
-                    >
-                      Cerrar
-                    </button>
-                    <button
-                      onClick={() => {
-                        setEditingNote(viewingNote);
-                        setViewingNote(undefined);
-                        setShowModal(true);
-                      }}
-                      className="flex items-center gap-2 px-4 py-2 bg-[#3d8b40] text-white rounded-lg hover:bg-[#2d6e30] transition-colors"
-                    >
-                      <Edit3 className="w-4 h-4" />
-                      Editar
-                    </button>
                   </div>
+                )}
+              </div>
+
+              {/* Footer */}
+              <div className="p-6 border-t border-gray-200">
+                <div className="flex gap-3 justify-end">
+                  <button
+                    onClick={() => setViewingNote(undefined)}
+                    className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                  >
+                    Cerrar
+                  </button>
+                  <button
+                    onClick={() => {
+                      setEditingNote(viewingNote);
+                      setViewingNote(undefined);
+                      setShowModal(true);
+                    }}
+                    className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                  >
+                    <Edit3 className="w-4 h-4" />
+                    Editar
+                  </button>
                 </div>
-              </motion.div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </motion.div>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      <style>{`
+        @keyframes spin {
+          to {
+            transform: rotate(360deg);
+          }
+        }
+      `}</style>
     </div>
   );
 };

@@ -219,13 +219,6 @@ const Sidebar: React.FC<SidebarProps> = ({
               color: "text-[#4e9c75]",
             },
             {
-              id: "veterinary-visits",
-              title: "Visitas Veterinarias",
-              href: "/health/veterinary-visits",
-              icon: Stethoscope,
-              color: "text-[#4e9c75]",
-            },
-            {
               id: "disease-tracking",
               title: "Seguimiento de Enfermedades",
               href: "/health/disease-tracking",
