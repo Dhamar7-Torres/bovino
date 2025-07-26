@@ -15,13 +15,13 @@ import {
   Bell,
   FileText,
   MoreVertical,
-  TrendingUp,
   Stethoscope,
   Zap,
   Users,
   DollarSign,
+  Save,
 } from "lucide-react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 
 // Interfaces para TypeScript
 interface BreedingEvent {
@@ -129,6 +129,31 @@ interface BreedingStatistics {
   complications: number;
 }
 
+// Formulario para crear/editar eventos
+interface EventFormData {
+  bovineId: string;
+  bovineName: string;
+  bovineTag: string;
+  eventTypeId: string;
+  status: string;
+  scheduledDate: string;
+  scheduledTime: string;
+  location: {
+    address: string;
+    farm: string;
+    section: string;
+  };
+  notes: string;
+  cost: number;
+  veterinarian: string;
+  // Datos específicos según el tipo
+  breedingMethod?: string;
+  semenBatch?: string;
+  semenProvider?: string;
+  technician?: string;
+  expectedDueDate?: string;
+}
+
 const EventBreeding: React.FC = () => {
   // Estados principales
   const [breedingEvents, setBreedingEvents] = useState<BreedingEvent[]>([]);
@@ -138,17 +163,44 @@ const EventBreeding: React.FC = () => {
   const [selectedEventType, setSelectedEventType] = useState<string>("all");
   const [selectedStatus, setSelectedStatus] = useState<string>("all");
   const [dateFilter, setDateFilter] = useState<string>("all");
-  const [, setShowCreateModal] = useState(false);
+  
+  // Estados para modales
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
-  const [selectedEvent, setSelectedEvent] = useState<BreedingEvent | null>(
-    null
-  );
-  const [] = useState<"grid" | "list" | "calendar">("grid");
+  const [selectedEvent, setSelectedEvent] = useState<BreedingEvent | null>(null);
   const [statistics, setStatistics] = useState<BreedingStatistics | null>(null);
+  
+  // Estados para formulario
+  const [formData, setFormData] = useState<EventFormData>({
+    bovineId: "",
+    bovineName: "",
+    bovineTag: "",
+    eventTypeId: "",
+    status: "scheduled",
+    scheduledDate: "",
+    scheduledTime: "",
+    location: {
+      address: "",
+      farm: "",
+      section: "",
+    },
+    notes: "",
+    cost: 0,
+    veterinarian: "",
+  });
+  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+  const [isSaving, setIsSaving] = useState(false);
 
-  // Hooks de React Router
-  const navigate = useNavigate();
-  const [] = useSearchParams();
+  // Estados para ubicación
+  const [userLocation, setUserLocation] = useState<{
+    latitude: number;
+    longitude: number;
+    address: string;
+  } | null>(null);
+  const [loadingLocation, setLoadingLocation] = useState(false);
+
+  // Hook de navegación
 
   // Tipos de eventos de reproducción
   const breedingEventTypes: BreedingEventType[] = [
@@ -203,6 +255,49 @@ const EventBreeding: React.FC = () => {
       requiresVeterinarian: false,
     },
   ];
+
+  // Función para obtener ubicación actual
+  const getCurrentLocation = async () => {
+    if (!navigator.geolocation) {
+      alert("La geolocalización no es soportada por este navegador");
+      return;
+    }
+
+    setLoadingLocation(true);
+    
+    try {
+      const position = await new Promise<GeolocationPosition>((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(resolve, reject, {
+          enableHighAccuracy: true,
+          timeout: 5000,
+          maximumAge: 0
+        });
+      });
+
+      const { latitude, longitude } = position.coords;
+      
+      // Simular reverse geocoding (en producción usarías una API real)
+      const address = `Lat: ${latitude.toFixed(6)}, Lng: ${longitude.toFixed(6)}`;
+      
+      const location = { latitude, longitude, address };
+      setUserLocation(location);
+      
+      // Actualizar el formulario con la ubicación actual
+      setFormData(prev => ({
+        ...prev,
+        location: {
+          ...prev.location,
+          address: address
+        }
+      }));
+
+    } catch (error) {
+      console.error("Error obteniendo ubicación:", error);
+      alert("No se pudo obtener la ubicación actual");
+    } finally {
+      setLoadingLocation(false);
+    }
+  };
 
   // Cargar datos iniciales
   useEffect(() => {
@@ -279,8 +374,7 @@ const EventBreeding: React.FC = () => {
                 id: "rem_001",
                 type: "notification",
                 timeBeforeEvent: 24,
-                message:
-                  "Recordatorio: Diagnóstico de preñez programado para mañana",
+                message: "Recordatorio: Diagnóstico de preñez programado para mañana",
                 sent: false,
               },
             ],
@@ -385,6 +479,25 @@ const EventBreeding: React.FC = () => {
 
   // Funciones para manejar eventos
   const handleCreateEvent = () => {
+    setFormData({
+      bovineId: "",
+      bovineName: "",
+      bovineTag: "",
+      eventTypeId: "",
+      status: "scheduled",
+      scheduledDate: "",
+      scheduledTime: "",
+      location: {
+        address: "",
+        farm: "",
+        section: "",
+      },
+      notes: "",
+      cost: 0,
+      veterinarian: "",
+    });
+    setFormErrors({});
+    setSelectedEvent(null);
     setShowCreateModal(true);
   };
 
@@ -393,16 +506,187 @@ const EventBreeding: React.FC = () => {
     setShowDetailsModal(true);
   };
 
-  const handleEditEvent = (eventId: string) => {
-    navigate(`/events/breeding/edit/${eventId}`);
+  const handleEditEvent = (event: BreedingEvent) => {
+    const eventDate = new Date(event.scheduledDate);
+    
+    setFormData({
+      bovineId: event.bovineId,
+      bovineName: event.bovineName,
+      bovineTag: event.bovineTag,
+      eventTypeId: event.eventType.id,
+      status: event.status,
+      scheduledDate: eventDate.toISOString().split('T')[0],
+      scheduledTime: eventDate.toTimeString().slice(0, 5),
+      location: {
+        address: event.location.address,
+        farm: event.location.farm || "",
+        section: event.location.section || "",
+      },
+      notes: event.notes || "",
+      cost: event.cost || 0,
+      veterinarian: event.veterinarian || "",
+      breedingMethod: event.breedingData?.method,
+      semenBatch: event.breedingData?.semenBatch,
+      semenProvider: event.breedingData?.semenProvider,
+      technician: event.breedingData?.technician,
+      expectedDueDate: event.breedingData?.expectedDueDate,
+    });
+    setSelectedEvent(event);
+    setFormErrors({});
+    setShowEditModal(true);
   };
 
   const handleDeleteEvent = async (eventId: string) => {
-    if (
-      window.confirm("¿Estás seguro de eliminar este evento de reproducción?")
-    ) {
-      // Implementar lógica de eliminación
-      setBreedingEvents((prev) => prev.filter((event) => event.id !== eventId));
+    if (window.confirm("¿Estás seguro de eliminar este evento de reproducción?")) {
+      try {
+        // Eliminar del estado local inmediatamente para UI responsiva
+        const eventToDelete = breedingEvents.find(event => event.id === eventId);
+        setBreedingEvents((prev) => prev.filter((event) => event.id !== eventId));
+        
+        // Simular llamada a API
+        await new Promise((resolve) => setTimeout(resolve, 500));
+        
+        // Actualizar estadísticas si existen
+        if (statistics) {
+          setStatistics({
+            ...statistics,
+            totalEvents: statistics.totalEvents - 1,
+          });
+        }
+
+        // Mostrar mensaje de éxito
+        alert(`Evento "${eventToDelete?.eventType.name}" eliminado exitosamente`);
+        console.log(`Evento ${eventId} eliminado exitosamente`);
+      } catch (error) {
+        console.error("Error eliminando evento:", error);
+        alert("Error al eliminar el evento");
+        // Revertir la eliminación en caso de error
+        window.location.reload();
+      }
+    }
+  };
+
+  // Validar formulario
+  const validateForm = (): boolean => {
+    const errors: Record<string, string> = {};
+
+    if (!formData.bovineName.trim()) {
+      errors.bovineName = "El nombre del bovino es requerido";
+    }
+
+    if (!formData.bovineTag.trim()) {
+      errors.bovineTag = "El tag del bovino es requerido";
+    }
+
+    if (!formData.eventTypeId) {
+      errors.eventTypeId = "Debe seleccionar un tipo de evento";
+    }
+
+    if (!formData.scheduledDate) {
+      errors.scheduledDate = "La fecha es requerida";
+    }
+
+    if (!formData.scheduledTime) {
+      errors.scheduledTime = "La hora es requerida";
+    }
+
+    if (!formData.location.address) {
+      errors.locationAddress = "La dirección es requerida";
+    }
+
+    setFormErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
+  // Guardar evento (crear o editar)
+  const handleSaveEvent = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!validateForm()) {
+      return;
+    }
+
+    setIsSaving(true);
+
+    try {
+      // Simular llamada a API
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+
+      const eventType = breedingEventTypes.find(type => type.id === formData.eventTypeId);
+      if (!eventType) {
+        alert("Tipo de evento no válido");
+        return;
+      }
+
+      // Generar ID único para el bovino si no existe
+      const bovineId = formData.bovineId || `bovine_${Date.now()}`;
+
+      const eventData: BreedingEvent = {
+        id: selectedEvent ? selectedEvent.id : `event_${Date.now()}`,
+        bovineId: bovineId,
+        bovineName: formData.bovineName,
+        bovineTag: formData.bovineTag,
+        eventType,
+        status: formData.status as any,
+        scheduledDate: new Date(`${formData.scheduledDate}T${formData.scheduledTime}`).toISOString(),
+        location: {
+          latitude: userLocation?.latitude || 17.9869,
+          longitude: userLocation?.longitude || -92.9303,
+          address: formData.location.address,
+          farm: formData.location.farm,
+          section: formData.location.section,
+        },
+        notes: formData.notes,
+        cost: formData.cost,
+        veterinarian: formData.veterinarian,
+        reminders: [],
+        attachments: [],
+        createdAt: selectedEvent ? selectedEvent.createdAt : new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        createdBy: "user_001",
+      };
+
+      // Agregar datos específicos según el tipo
+      if (eventType.category === "breeding") {
+        eventData.breedingData = {
+          method: formData.breedingMethod as any,
+          semenBatch: formData.semenBatch,
+          semenProvider: formData.semenProvider,
+          technician: formData.technician,
+          expectedDueDate: formData.expectedDueDate,
+        };
+      }
+
+      if (selectedEvent) {
+        // Editar evento existente
+        setBreedingEvents(prev => 
+          prev.map(event => event.id === selectedEvent.id ? eventData : event)
+        );
+        setShowEditModal(false);
+        alert("Evento actualizado exitosamente");
+      } else {
+        // Crear nuevo evento
+        setBreedingEvents(prev => [...prev, eventData]);
+        
+        // Actualizar estadísticas
+        if (statistics) {
+          setStatistics({
+            ...statistics,
+            totalEvents: statistics.totalEvents + 1,
+          });
+        }
+        
+        setShowCreateModal(false);
+        alert("Evento creado exitosamente");
+      }
+
+      setSelectedEvent(null);
+      
+    } catch (error) {
+      console.error("Error guardando evento:", error);
+      alert("Error al guardar el evento");
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -432,10 +716,7 @@ const EventBreeding: React.FC = () => {
   // Animaciones
   const itemVariants = {
     hidden: { y: 20, opacity: 0 },
-    visible: {
-      y: 0,
-      opacity: 1,
-    },
+    visible: { y: 0, opacity: 1 },
   };
 
   if (loading) {
@@ -498,96 +779,11 @@ const EventBreeding: React.FC = () => {
         </div>
       </motion.div>
 
-      {/* Estadísticas */}
-      {statistics && (
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
-          className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6"
-        >
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-            <motion.div className="bg-white/70 backdrop-blur-sm rounded-2xl p-6 border border-gray-200 hover:shadow-lg transition-all">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-600">
-                    Tasa de Preñez
-                  </p>
-                  <p className="text-3xl font-bold text-green-600">
-                    {statistics.pregnancyRate}%
-                  </p>
-                </div>
-                <div className="p-3 bg-green-100 rounded-xl">
-                  <TrendingUp className="h-8 w-8 text-green-600" />
-                </div>
-              </div>
-            </motion.div>
-
-            <motion.div
-              variants={itemVariants}
-              className="bg-white/70 backdrop-blur-sm rounded-2xl p-6 border border-gray-200 hover:shadow-lg transition-all"
-            >
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-600">
-                    Actualmente Preñadas
-                  </p>
-                  <p className="text-3xl font-bold text-purple-600">
-                    {statistics.currentPregnant}
-                  </p>
-                </div>
-                <div className="p-3 bg-purple-100 rounded-xl">
-                  <Heart className="h-8 w-8 text-purple-600" />
-                </div>
-              </div>
-            </motion.div>
-
-            <motion.div
-              variants={itemVariants}
-              className="bg-white/70 backdrop-blur-sm rounded-2xl p-6 border border-gray-200 hover:shadow-lg transition-all"
-            >
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-600">
-                    Partos Esperados
-                  </p>
-                  <p className="text-3xl font-bold text-blue-600">
-                    {statistics.expectedCalvings}
-                  </p>
-                </div>
-                <div className="p-3 bg-blue-100 rounded-xl">
-                  <Baby className="h-8 w-8 text-blue-600" />
-                </div>
-              </div>
-            </motion.div>
-
-            <motion.div
-              variants={itemVariants}
-              className="bg-white/70 backdrop-blur-sm rounded-2xl p-6 border border-gray-200 hover:shadow-lg transition-all"
-            >
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-600">
-                    Terneros Destetados
-                  </p>
-                  <p className="text-3xl font-bold text-orange-600">
-                    {statistics.weanedCalves}
-                  </p>
-                </div>
-                <div className="p-3 bg-orange-100 rounded-xl">
-                  <Users className="h-8 w-8 text-orange-600" />
-                </div>
-              </div>
-            </motion.div>
-          </div>
-        </motion.div>
-      )}
-
       {/* Filtros y Búsqueda */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.2 }}
+        transition={{ delay: 0.1 }}
         className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-6"
       >
         <div className="bg-white/70 backdrop-blur-sm rounded-2xl p-6 border border-gray-200">
@@ -651,7 +847,7 @@ const EventBreeding: React.FC = () => {
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.3 }}
+        transition={{ delay: 0.2 }}
         className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-8"
       >
         {filteredEvents.length === 0 ? (
@@ -688,8 +884,7 @@ const EventBreeding: React.FC = () => {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 whileHover={{ scale: 1.02 }}
-                className="bg-white/70 backdrop-blur-sm rounded-2xl p-6 border border-gray-200 hover:shadow-lg transition-all cursor-pointer"
-                onClick={() => handleViewEvent(event)}
+                className="bg-white/70 backdrop-blur-sm rounded-2xl p-6 border border-gray-200 hover:shadow-lg transition-all"
               >
                 {/* Header del evento */}
                 <div className="flex items-start justify-between mb-4">
@@ -738,10 +933,6 @@ const EventBreeding: React.FC = () => {
                     <motion.button
                       whileHover={{ scale: 1.1 }}
                       whileTap={{ scale: 0.9 }}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        // Mostrar menú de opciones
-                      }}
                       className="p-1 hover:bg-gray-100 rounded-lg transition-colors"
                     >
                       <MoreVertical className="h-4 w-4 text-gray-400" />
@@ -809,10 +1000,7 @@ const EventBreeding: React.FC = () => {
                     <motion.button
                       whileHover={{ scale: 1.1 }}
                       whileTap={{ scale: 0.9 }}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleViewEvent(event);
-                      }}
+                      onClick={() => handleViewEvent(event)}
                       className="p-2 hover:bg-blue-100 rounded-lg transition-colors text-blue-600"
                     >
                       <Eye className="h-4 w-4" />
@@ -821,10 +1009,7 @@ const EventBreeding: React.FC = () => {
                     <motion.button
                       whileHover={{ scale: 1.1 }}
                       whileTap={{ scale: 0.9 }}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleEditEvent(event.id);
-                      }}
+                      onClick={() => handleEditEvent(event)}
                       className="p-2 hover:bg-yellow-100 rounded-lg transition-colors text-yellow-600"
                     >
                       <Edit3 className="h-4 w-4" />
@@ -833,10 +1018,7 @@ const EventBreeding: React.FC = () => {
                     <motion.button
                       whileHover={{ scale: 1.1 }}
                       whileTap={{ scale: 0.9 }}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleDeleteEvent(event.id);
-                      }}
+                      onClick={() => handleDeleteEvent(event.id)}
                       className="p-2 hover:bg-red-100 rounded-lg transition-colors text-red-600"
                     >
                       <Trash2 className="h-4 w-4" />
@@ -848,6 +1030,760 @@ const EventBreeding: React.FC = () => {
           </div>
         )}
       </motion.div>
+
+      {/* Modal de crear evento */}
+      <AnimatePresence>
+        {showCreateModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+            onClick={() => setShowCreateModal(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.8, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.8, opacity: 0 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-white rounded-2xl p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto"
+            >
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-2xl font-bold text-gray-900">
+                  Crear Nuevo Evento de Reproducción
+                </h2>
+                <motion.button
+                  whileHover={{ scale: 1.1 }}
+                  whileTap={{ scale: 0.9 }}
+                  onClick={() => setShowCreateModal(false)}
+                  className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  <X className="h-6 w-6" />
+                </motion.button>
+              </div>
+
+              <form onSubmit={handleSaveEvent} className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Nombre del bovino */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Nombre del Bovino *
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Ej: Esperanza"
+                      value={formData.bovineName}
+                      onChange={(e) => setFormData(prev => ({ ...prev, bovineName: e.target.value }))}
+                      className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                        formErrors.bovineName ? "border-red-500" : "border-gray-300"
+                      }`}
+                    />
+                    {formErrors.bovineName && (
+                      <p className="text-red-500 text-sm mt-1">{formErrors.bovineName}</p>
+                    )}
+                  </div>
+
+                  {/* Tag del bovino */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Tag del Bovino *
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Ej: ESP-001"
+                      value={formData.bovineTag}
+                      onChange={(e) => setFormData(prev => ({ ...prev, bovineTag: e.target.value }))}
+                      className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                        formErrors.bovineTag ? "border-red-500" : "border-gray-300"
+                      }`}
+                    />
+                    {formErrors.bovineTag && (
+                      <p className="text-red-500 text-sm mt-1">{formErrors.bovineTag}</p>
+                    )}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Tipo de evento */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Tipo de Evento *
+                    </label>
+                    <select
+                      value={formData.eventTypeId}
+                      onChange={(e) => setFormData(prev => ({ ...prev, eventTypeId: e.target.value }))}
+                      className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                        formErrors.eventTypeId ? "border-red-500" : "border-gray-300"
+                      }`}
+                    >
+                      <option value="">Seleccionar tipo</option>
+                      {breedingEventTypes.map((type) => (
+                        <option key={type.id} value={type.id}>
+                          {type.name}
+                        </option>
+                      ))}
+                    </select>
+                    {formErrors.eventTypeId && (
+                      <p className="text-red-500 text-sm mt-1">{formErrors.eventTypeId}</p>
+                    )}
+                  </div>
+
+                  {/* Estado */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Estado
+                    </label>
+                    <select
+                      value={formData.status}
+                      onChange={(e) => setFormData(prev => ({ ...prev, status: e.target.value }))}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    >
+                      <option value="scheduled">Programado</option>
+                      <option value="completed">Completado</option>
+                      <option value="pending">Pendiente</option>
+                      <option value="cancelled">Cancelado</option>
+                      <option value="failed">Fallido</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Fecha */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Fecha *
+                    </label>
+                    <input
+                      type="date"
+                      value={formData.scheduledDate}
+                      onChange={(e) => setFormData(prev => ({ ...prev, scheduledDate: e.target.value }))}
+                      className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                        formErrors.scheduledDate ? "border-red-500" : "border-gray-300"
+                      }`}
+                    />
+                    {formErrors.scheduledDate && (
+                      <p className="text-red-500 text-sm mt-1">{formErrors.scheduledDate}</p>
+                    )}
+                  </div>
+
+                  {/* Hora */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Hora *
+                    </label>
+                    <input
+                      type="time"
+                      value={formData.scheduledTime}
+                      onChange={(e) => setFormData(prev => ({ ...prev, scheduledTime: e.target.value }))}
+                      className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                        formErrors.scheduledTime ? "border-red-500" : "border-gray-300"
+                      }`}
+                    />
+                    {formErrors.scheduledTime && (
+                      <p className="text-red-500 text-sm mt-1">{formErrors.scheduledTime}</p>
+                    )}
+                  </div>
+                </div>
+
+                {/* Ubicación */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Ubicación *
+                  </label>
+                  <div className="flex space-x-2">
+                    <input
+                      type="text"
+                      placeholder="Dirección del evento"
+                      value={formData.location.address}
+                      onChange={(e) => setFormData(prev => ({ 
+                        ...prev, 
+                        location: { ...prev.location, address: e.target.value }
+                      }))}
+                      className={`flex-1 px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                        formErrors.locationAddress ? "border-red-500" : "border-gray-300"
+                      }`}
+                    />
+                    <motion.button
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                      type="button"
+                      onClick={getCurrentLocation}
+                      disabled={loadingLocation}
+                      className="flex items-center space-x-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50"
+                    >
+                      {loadingLocation ? (
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                      ) : (
+                        <MapPin className="h-4 w-4" />
+                      )}
+                      <span className="hidden sm:inline">
+                        {loadingLocation ? "Obteniendo..." : "Mi Ubicación"}
+                      </span>
+                    </motion.button>
+                  </div>
+                  {formErrors.locationAddress && (
+                    <p className="text-red-500 text-sm mt-1">{formErrors.locationAddress}</p>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Rancho */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Rancho
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Nombre del rancho"
+                      value={formData.location.farm}
+                      onChange={(e) => setFormData(prev => ({ 
+                        ...prev, 
+                        location: { ...prev.location, farm: e.target.value }
+                      }))}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                  </div>
+
+                  {/* Sección */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Sección
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Sección del rancho"
+                      value={formData.location.section}
+                      onChange={(e) => setFormData(prev => ({ 
+                        ...prev, 
+                        location: { ...prev.location, section: e.target.value }
+                      }))}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                  </div>
+                </div>
+
+                {/* Campos específicos para inseminación artificial */}
+                {formData.eventTypeId === "artificial_insemination" && (
+                  <div className="border-t pt-4">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-4">
+                      Datos de Inseminación Artificial
+                    </h3>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Lote de Semen
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="Código del lote"
+                          value={formData.semenBatch || ""}
+                          onChange={(e) => setFormData(prev => ({ ...prev, semenBatch: e.target.value }))}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Proveedor de Semen
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="Empresa proveedora"
+                          value={formData.semenProvider || ""}
+                          onChange={(e) => setFormData(prev => ({ ...prev, semenProvider: e.target.value }))}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Técnico
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="Nombre del técnico"
+                          value={formData.technician || ""}
+                          onChange={(e) => setFormData(prev => ({ ...prev, technician: e.target.value }))}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Fecha Esperada de Parto
+                        </label>
+                        <input
+                          type="date"
+                          value={formData.expectedDueDate || ""}
+                          onChange={(e) => setFormData(prev => ({ ...prev, expectedDueDate: e.target.value }))}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Veterinario */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Veterinario
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Nombre del veterinario"
+                      value={formData.veterinarian}
+                      onChange={(e) => setFormData(prev => ({ ...prev, veterinarian: e.target.value }))}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                  </div>
+
+                  {/* Costo */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Costo ($)
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      placeholder="0.00"
+                      value={formData.cost}
+                      onChange={(e) => setFormData(prev => ({ ...prev, cost: parseFloat(e.target.value) || 0 }))}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                  </div>
+                </div>
+
+                {/* Notas */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Notas
+                  </label>
+                  <textarea
+                    rows={3}
+                    placeholder="Observaciones adicionales..."
+                    value={formData.notes}
+                    onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+
+                {/* Botones */}
+                <div className="flex items-center justify-end space-x-3 pt-6 border-t border-gray-200">
+                  <motion.button
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    type="button"
+                    onClick={() => setShowCreateModal(false)}
+                    className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                  >
+                    Cancelar
+                  </motion.button>
+
+                  <motion.button
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    type="submit"
+                    disabled={isSaving}
+                    className="flex items-center space-x-2 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
+                  >
+                    {isSaving ? (
+                      <>
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                        <span>Guardando...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Save className="h-4 w-4" />
+                        <span>Crear Evento</span>
+                      </>
+                    )}
+                  </motion.button>
+                </div>
+              </form>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Modal de editar evento */}
+      <AnimatePresence>
+        {showEditModal && selectedEvent && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+            onClick={() => setShowEditModal(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.8, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.8, opacity: 0 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-white rounded-2xl p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto"
+            >
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-2xl font-bold text-gray-900">
+                  Editar Evento de Reproducción
+                </h2>
+                <motion.button
+                  whileHover={{ scale: 1.1 }}
+                  whileTap={{ scale: 0.9 }}
+                  onClick={() => setShowEditModal(false)}
+                  className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  <X className="h-6 w-6" />
+                </motion.button>
+              </div>
+
+              <form onSubmit={handleSaveEvent} className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Nombre del bovino */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Nombre del Bovino *
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Ej: Esperanza"
+                      value={formData.bovineName}
+                      onChange={(e) => setFormData(prev => ({ ...prev, bovineName: e.target.value }))}
+                      className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                        formErrors.bovineName ? "border-red-500" : "border-gray-300"
+                      }`}
+                    />
+                    {formErrors.bovineName && (
+                      <p className="text-red-500 text-sm mt-1">{formErrors.bovineName}</p>
+                    )}
+                  </div>
+
+                  {/* Tag del bovino */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Tag del Bovino *
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Ej: ESP-001"
+                      value={formData.bovineTag}
+                      onChange={(e) => setFormData(prev => ({ ...prev, bovineTag: e.target.value }))}
+                      className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                        formErrors.bovineTag ? "border-red-500" : "border-gray-300"
+                      }`}
+                    />
+                    {formErrors.bovineTag && (
+                      <p className="text-red-500 text-sm mt-1">{formErrors.bovineTag}</p>
+                    )}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Tipo de evento */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Tipo de Evento *
+                    </label>
+                    <select
+                      value={formData.eventTypeId}
+                      onChange={(e) => setFormData(prev => ({ ...prev, eventTypeId: e.target.value }))}
+                      className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                        formErrors.eventTypeId ? "border-red-500" : "border-gray-300"
+                      }`}
+                    >
+                      <option value="">Seleccionar tipo</option>
+                      {breedingEventTypes.map((type) => (
+                        <option key={type.id} value={type.id}>
+                          {type.name}
+                        </option>
+                      ))}
+                    </select>
+                    {formErrors.eventTypeId && (
+                      <p className="text-red-500 text-sm mt-1">{formErrors.eventTypeId}</p>
+                    )}
+                  </div>
+
+                  {/* Estado */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Estado
+                    </label>
+                    <select
+                      value={formData.status}
+                      onChange={(e) => setFormData(prev => ({ ...prev, status: e.target.value }))}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    >
+                      <option value="scheduled">Programado</option>
+                      <option value="completed">Completado</option>
+                      <option value="pending">Pendiente</option>
+                      <option value="cancelled">Cancelado</option>
+                      <option value="failed">Fallido</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Fecha */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Fecha *
+                    </label>
+                    <input
+                      type="date"
+                      value={formData.scheduledDate}
+                      onChange={(e) => setFormData(prev => ({ ...prev, scheduledDate: e.target.value }))}
+                      className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                        formErrors.scheduledDate ? "border-red-500" : "border-gray-300"
+                      }`}
+                    />
+                    {formErrors.scheduledDate && (
+                      <p className="text-red-500 text-sm mt-1">{formErrors.scheduledDate}</p>
+                    )}
+                  </div>
+
+                  {/* Hora */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Hora *
+                    </label>
+                    <input
+                      type="time"
+                      value={formData.scheduledTime}
+                      onChange={(e) => setFormData(prev => ({ ...prev, scheduledTime: e.target.value }))}
+                      className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                        formErrors.scheduledTime ? "border-red-500" : "border-gray-300"
+                      }`}
+                    />
+                    {formErrors.scheduledTime && (
+                      <p className="text-red-500 text-sm mt-1">{formErrors.scheduledTime}</p>
+                    )}
+                  </div>
+                </div>
+
+                {/* Ubicación */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Ubicación *
+                  </label>
+                  <div className="flex space-x-2">
+                    <input
+                      type="text"
+                      placeholder="Dirección del evento"
+                      value={formData.location.address}
+                      onChange={(e) => setFormData(prev => ({ 
+                        ...prev, 
+                        location: { ...prev.location, address: e.target.value }
+                      }))}
+                      className={`flex-1 px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                        formErrors.locationAddress ? "border-red-500" : "border-gray-300"
+                      }`}
+                    />
+                    <motion.button
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                      type="button"
+                      onClick={getCurrentLocation}
+                      disabled={loadingLocation}
+                      className="flex items-center space-x-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50"
+                    >
+                      {loadingLocation ? (
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                      ) : (
+                        <MapPin className="h-4 w-4" />
+                      )}
+                      <span className="hidden sm:inline">
+                        {loadingLocation ? "Obteniendo..." : "Mi Ubicación"}
+                      </span>
+                    </motion.button>
+                  </div>
+                  {formErrors.locationAddress && (
+                    <p className="text-red-500 text-sm mt-1">{formErrors.locationAddress}</p>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Rancho */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Rancho
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Nombre del rancho"
+                      value={formData.location.farm}
+                      onChange={(e) => setFormData(prev => ({ 
+                        ...prev, 
+                        location: { ...prev.location, farm: e.target.value }
+                      }))}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                  </div>
+
+                  {/* Sección */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Sección
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Sección del rancho"
+                      value={formData.location.section}
+                      onChange={(e) => setFormData(prev => ({ 
+                        ...prev, 
+                        location: { ...prev.location, section: e.target.value }
+                      }))}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                  </div>
+                </div>
+
+                {/* Campos específicos para inseminación artificial */}
+                {formData.eventTypeId === "artificial_insemination" && (
+                  <div className="border-t pt-4">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-4">
+                      Datos de Inseminación Artificial
+                    </h3>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Lote de Semen
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="Código del lote"
+                          value={formData.semenBatch || ""}
+                          onChange={(e) => setFormData(prev => ({ ...prev, semenBatch: e.target.value }))}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Proveedor de Semen
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="Empresa proveedora"
+                          value={formData.semenProvider || ""}
+                          onChange={(e) => setFormData(prev => ({ ...prev, semenProvider: e.target.value }))}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Técnico
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="Nombre del técnico"
+                          value={formData.technician || ""}
+                          onChange={(e) => setFormData(prev => ({ ...prev, technician: e.target.value }))}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Fecha Esperada de Parto
+                        </label>
+                        <input
+                          type="date"
+                          value={formData.expectedDueDate || ""}
+                          onChange={(e) => setFormData(prev => ({ ...prev, expectedDueDate: e.target.value }))}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Veterinario */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Veterinario
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Nombre del veterinario"
+                      value={formData.veterinarian}
+                      onChange={(e) => setFormData(prev => ({ ...prev, veterinarian: e.target.value }))}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                  </div>
+
+                  {/* Costo */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Costo ($)
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      placeholder="0.00"
+                      value={formData.cost}
+                      onChange={(e) => setFormData(prev => ({ ...prev, cost: parseFloat(e.target.value) || 0 }))}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                  </div>
+                </div>
+
+                {/* Notas */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Notas
+                  </label>
+                  <textarea
+                    rows={3}
+                    placeholder="Observaciones adicionales..."
+                    value={formData.notes}
+                    onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+
+                {/* Botones */}
+                <div className="flex items-center justify-end space-x-3 pt-6 border-t border-gray-200">
+                  <motion.button
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    type="button"
+                    onClick={() => setShowEditModal(false)}
+                    className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                  >
+                    Cancelar
+                  </motion.button>
+
+                  <motion.button
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    type="submit"
+                    disabled={isSaving}
+                    className="flex items-center space-x-2 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
+                  >
+                    {isSaving ? (
+                      <>
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                        <span>Guardando...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Save className="h-4 w-4" />
+                        <span>Actualizar Evento</span>
+                      </>
+                    )}
+                  </motion.button>
+                </div>
+              </form>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Modal de detalles del evento */}
       <AnimatePresence>
@@ -978,60 +1914,6 @@ const EventBreeding: React.FC = () => {
                   </div>
                 )}
 
-                {/* Datos específicos del evento */}
-                {selectedEvent.breedingData && (
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-3">
-                      Datos de Reproducción
-                    </label>
-                    <div className="bg-gray-50 rounded-lg p-4 space-y-2">
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div>
-                          <span className="text-sm text-gray-600">Método:</span>
-                          <p className="font-medium">
-                            {selectedEvent.breedingData.method ===
-                            "artificial_insemination"
-                              ? "Inseminación Artificial"
-                              : "Monta Natural"}
-                          </p>
-                        </div>
-                        {selectedEvent.breedingData.semenBatch && (
-                          <div>
-                            <span className="text-sm text-gray-600">
-                              Lote de Semen:
-                            </span>
-                            <p className="font-medium">
-                              {selectedEvent.breedingData.semenBatch}
-                            </p>
-                          </div>
-                        )}
-                        {selectedEvent.breedingData.technician && (
-                          <div>
-                            <span className="text-sm text-gray-600">
-                              Técnico:
-                            </span>
-                            <p className="font-medium">
-                              {selectedEvent.breedingData.technician}
-                            </p>
-                          </div>
-                        )}
-                        {selectedEvent.breedingData.expectedDueDate && (
-                          <div>
-                            <span className="text-sm text-gray-600">
-                              Fecha Esperada de Parto:
-                            </span>
-                            <p className="font-medium">
-                              {new Date(
-                                selectedEvent.breedingData.expectedDueDate
-                              ).toLocaleDateString("es-ES")}
-                            </p>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                )}
-
                 {/* Notas */}
                 {selectedEvent.notes && (
                   <div>
@@ -1051,7 +1933,7 @@ const EventBreeding: React.FC = () => {
                     whileTap={{ scale: 0.95 }}
                     onClick={() => {
                       setShowDetailsModal(false);
-                      handleEditEvent(selectedEvent.id);
+                      handleEditEvent(selectedEvent);
                     }}
                     className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
                   >

@@ -4,13 +4,6 @@
 // Página principal del módulo
 export { default as EventPage } from "./EventsPage";
 
-// Páginas principales de eventos
-export { default as EventList } from "./EventList";
-export { default as EventTimeline } from "./EventTimeline";
-export { default as EventDetail } from "./EventDetail";
-export { default as EventCreate } from "./EventCreate";
-export { default as EventEdit } from "./EventEdit";
-
 // Eventos específicos por tipo
 export { default as EventVaccination } from "./EventVaccination";
 export { default as EventPurchase } from "./EventPurchase";

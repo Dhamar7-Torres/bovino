@@ -1,9 +1,6 @@
 import React from "react";
-
 import { Routes, Route, useLocation, useNavigate } from "react-router-dom";
-
 import { motion, AnimatePresence } from "framer-motion";
-
 import {
   Activity,
   Plus,
@@ -23,11 +20,6 @@ import {
 } from "lucide-react";
 
 // Importar componentes de eventos
-import EventList from "./EventList";
-import EventTimeline from "./EventTimeline";
-import EventDetail from "./EventDetail";
-import EventCreate from "./EventCreate";
-import EventEdit from "./EventEdit";
 import EventVaccination from "./EventVaccination";
 import EventPurchase from "./EventPurchase";
 import EventSales from "./EventSales";
@@ -36,7 +28,7 @@ import EventBreeding from "./EventBreeding";
 import EventHealth from "./EventHealth";
 import EventFeeding from "./EventFeeding";
 
-// Componentes temporales para rutas no implementadas
+// Componente para páginas próximamente
 const ComingSoonPage: React.FC<{
   title: string;
   description: string;
@@ -58,7 +50,7 @@ const ComingSoonPage: React.FC<{
   </div>
 );
 
-// Componente de navegación secundaria mejorado
+// Componente de navegación secundaria
 const EventNavigation: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -108,14 +100,14 @@ const EventNavigation: React.FC = () => {
   );
 };
 
-// Wrapper para páginas internas con fondo consistente
+// Wrapper para páginas internas
 const PageWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => (
   <div className="min-h-screen bg-gradient-to-br from-[#3d8b40] via-[#f2e9d8] to-[#f4ac3a]">
     <div className="relative z-10">{children}</div>
   </div>
 );
 
-// Animaciones de transición de página
+// Animaciones de transición
 const pageTransition = {
   initial: { opacity: 0, y: 20 },
   animate: { opacity: 1, y: 0 },
@@ -123,14 +115,14 @@ const pageTransition = {
   transition: { duration: 0.3 },
 };
 
-// Componente principal EventPage
+// Componente principal EventsPage
 const EventsPage: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#3d8b40] via-[#f2e9d8] to-[#f4ac3a]">
-      {/* Header principal del módulo estilo referencia */}
+      {/* Header principal del módulo */}
       <div className="bg-[#4a9d4f] text-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           {/* Breadcrumbs */}
@@ -164,8 +156,7 @@ const EventsPage: React.FC = () => {
                     Módulo de Gestión de Eventos
                   </h1>
                   <p className="text-white/90">
-                    Sistema integral para la administración de eventos del
-                    ganado
+                    Sistema integral para la administración de eventos del ganado
                   </p>
                 </div>
               </motion.div>
@@ -176,7 +167,10 @@ const EventsPage: React.FC = () => {
                 animate={{ opacity: 1, x: 0 }}
                 className="flex items-center space-x-3"
               >
-                <button className="flex items-center space-x-2 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg transition-colors">
+                <button 
+                  onClick={() => navigate("/events/create")}
+                  className="flex items-center space-x-2 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg transition-colors"
+                >
                   <Plus className="w-4 h-4" />
                   <span>Agregar Evento</span>
                 </button>
@@ -184,7 +178,10 @@ const EventsPage: React.FC = () => {
                   <Bell className="w-4 h-4" />
                   <span>Mapa de Ubicaciones</span>
                 </button>
-                <button className="flex items-center space-x-2 bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg transition-colors">
+                <button 
+                  onClick={() => navigate("/events/reports")}
+                  className="flex items-center space-x-2 bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg transition-colors"
+                >
                   <FileText className="w-4 h-4" />
                   <span>Reportes</span>
                 </button>
@@ -203,48 +200,37 @@ const EventsPage: React.FC = () => {
               className="mt-8"
             >
               <div className="flex flex-wrap items-center gap-6">
-                {/* Total */}
                 <div className="flex items-center space-x-3 bg-white/10 backdrop-blur-sm rounded-xl px-6 py-4">
                   <Users className="w-8 h-8 text-white" />
                   <div>
                     <div className="text-3xl font-bold text-white">247</div>
-                    <div className="text-white/90 text-sm font-medium">
-                      Total
-                    </div>
+                    <div className="text-white/90 text-sm font-medium">Total</div>
                   </div>
                 </div>
 
-                {/* Programados */}
                 <div className="flex items-center space-x-3 bg-white/10 backdrop-blur-sm rounded-xl px-6 py-4">
                   <Heart className="w-8 h-8 text-green-200" />
                   <div>
                     <div className="text-3xl font-bold text-green-200">42</div>
-                    <div className="text-white/90 text-sm font-medium">
-                      Programados
-                    </div>
+                    <div className="text-white/90 text-sm font-medium">Programados</div>
                   </div>
                 </div>
 
-                {/* En Progreso */}
                 <div className="flex items-center space-x-3 bg-white/10 backdrop-blur-sm rounded-xl px-6 py-4">
                   <Clock className="w-8 h-8 text-yellow-200" />
                   <div>
                     <div className="text-3xl font-bold text-yellow-200">15</div>
-                    <div className="text-white/90 text-sm font-medium">
-                      En Progreso
-                    </div>
+                    <div className="text-white/90 text-sm font-medium">En Progreso</div>
                   </div>
                 </div>
 
-                {/* Completados */}
                 <div className="flex items-center space-x-3 bg-white/10 backdrop-blur-sm rounded-xl px-6 py-4">
-                  <div className="text-3xl font-bold text-blue-200">232</div>
-                  <div className="text-white/90 text-sm font-medium">
-                    Completados
+                  <div>
+                    <div className="text-3xl font-bold text-blue-200">232</div>
+                    <div className="text-white/90 text-sm font-medium">Completados</div>
                   </div>
                 </div>
 
-                {/* Actualizado */}
                 <div className="ml-auto text-right">
                   <div className="text-white/80 text-sm">
                     Actualizado:{" "}
@@ -261,10 +247,10 @@ const EventsPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Navegación secundaria con acciones rápidas */}
+      {/* Navegación secundaria */}
       <EventNavigation />
 
-      {/* Acciones rápidas debajo de la navegación */}
+      {/* Acciones rápidas */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -351,7 +337,7 @@ const EventsPage: React.FC = () => {
         </div>
       </motion.div>
 
-      {/* Contenido principal con animaciones y fondo consistente */}
+      {/* Contenido principal con animaciones */}
       <div className="relative bg-gradient-to-br from-[#3d8b40] via-[#f2e9d8] to-[#f4ac3a] min-h-screen">
         <AnimatePresence mode="wait">
           <motion.div
@@ -362,58 +348,13 @@ const EventsPage: React.FC = () => {
             variants={pageTransition}
           >
             <Routes>
-              {/* Ruta principal - Lista de eventos */}
-              <Route
-                index
-                element={
-                  <PageWrapper>
-                    <EventList />
-                  </PageWrapper>
-                }
-              />
-
               {/* Rutas principales de eventos */}
               <Route
-                path="list"
-                element={
-                  <PageWrapper>
-                    <EventList />
-                  </PageWrapper>
-                }
               />
               <Route
-                path="timeline"
-                element={
-                  <PageWrapper>
-                    <EventTimeline />
-                  </PageWrapper>
-                }
               />
               <Route
-                path="detail/:id"
-                element={
-                  <PageWrapper>
-                    <EventDetail />
-                  </PageWrapper>
-                }
               />
-              <Route
-                path="create"
-                element={
-                  <PageWrapper>
-                    <EventCreate />
-                  </PageWrapper>
-                }
-              />
-              <Route
-                path="edit/:id"
-                element={
-                  <PageWrapper>
-                    <EventEdit />
-                  </PageWrapper>
-                }
-              />
-
               {/* Rutas específicas por tipo de evento */}
               <Route
                 path="vaccination"
@@ -519,16 +460,6 @@ const EventsPage: React.FC = () => {
                       <FileText className="w-12 h-12 text-gray-600 mx-auto" />
                     }
                   />
-                }
-              />
-
-              {/* Ruta por defecto - Redirige a la lista */}
-              <Route
-                path="*"
-                element={
-                  <PageWrapper>
-                    <EventList />
-                  </PageWrapper>
                 }
               />
             </Routes>
