@@ -1,6 +1,6 @@
 // BullManagement.tsx
 // Página para gestión integral de toros y tabla de empadre (CRUD completo)
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { motion, AnimatePresence, Variants } from "framer-motion";
 import {
   Calendar,
@@ -22,11 +22,13 @@ import {
   Zap,
   Target,
   Crown,
-  MapPinIcon,
   Syringe,
   Microscope,
   XCircle,
-  Timer
+  Timer,
+  X,
+  Save,
+  Info,
 } from "lucide-react";
 
 // Interfaces para gestión de toros
@@ -79,7 +81,7 @@ interface Bull {
   };
   nutrition: {
     diet: string;
-    dailyFeed: number; // kg
+    dailyFeed: number;
     supplements: string[];
     lastWeightDate: string;
   };
@@ -172,11 +174,33 @@ interface MatingFilters {
   assistedBy: string;
 }
 
+// Interface para formulario de toro
+interface BullFormData {
+  name: string;
+  earTag: string;
+  registrationNumber: string;
+  breed: string;
+  birthDate: string;
+  weight: number;
+  height: number;
+  address: string;
+  paddock: string;
+  lat: number;
+  lng: number;
+  healthStatus: "excellent" | "good" | "fair" | "poor" | "quarantine";
+  reproductiveStatus: "active" | "resting" | "retired" | "testing";
+  diet: string;
+  dailyFeed: number;
+  supplements: string;
+  veterinarian: string;
+  notes: string;
+}
+
 // Componente AnimatedText para animaciones de texto
-const AnimatedText: React.FC<{ children: React.ReactNode; className?: string }> = ({ 
-  children, 
-  className = "" 
-}) => (
+const AnimatedText: React.FC<{ 
+  children: React.ReactNode; 
+  className?: string;
+}> = ({ children, className = "" }) => (
   <motion.span
     className={className}
     initial={{ opacity: 0, y: 20 }}
@@ -211,7 +235,846 @@ const itemVariants: Variants = {
   },
 };
 
-// Componente principal
+const modalVariants: Variants = {
+  hidden: { opacity: 0, scale: 0.95 },
+  visible: { opacity: 1, scale: 1 },
+  exit: { opacity: 0, scale: 0.95 },
+};
+
+// Componente Modal Base
+const Modal: React.FC<{
+  isOpen: boolean;
+  onClose: () => void;
+  title: string;
+  children: React.ReactNode;
+  size?: "sm" | "md" | "lg" | "xl";
+}> = ({ isOpen, onClose, title, children, size = "md" }) => {
+  if (!isOpen) return null;
+
+  const sizeClasses = {
+    sm: "max-w-md",
+    md: "max-w-2xl",
+    lg: "max-w-4xl",
+    xl: "max-w-6xl",
+  };
+
+  return (
+    <AnimatePresence>
+      <motion.div
+        className="fixed inset-0 z-50 flex items-center justify-center p-4"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+      >
+        {/* Overlay */}
+        <motion.div
+          className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          onClick={onClose}
+        />
+        
+        {/* Modal Content */}
+        <motion.div
+          className={`relative bg-white rounded-2xl shadow-2xl w-full ${sizeClasses[size]} max-h-[90vh] overflow-hidden`}
+          variants={modalVariants}
+          initial="hidden"
+          animate="visible"
+          exit="exit"
+        >
+          {/* Header */}
+          <div className="flex items-center justify-between p-6 border-b border-gray-200">
+            <h2 className="text-2xl font-bold text-gray-900">{title}</h2>
+            <button
+              onClick={onClose}
+              className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+          
+          {/* Content */}
+          <div className="overflow-y-auto max-h-[calc(90vh-80px)]">
+            {children}
+          </div>
+        </motion.div>
+      </motion.div>
+    </AnimatePresence>
+  );
+};
+
+// Componente para ver detalles del toro
+const BullDetailModal: React.FC<{
+  bull: Bull;
+  isOpen: boolean;
+  onClose: () => void;
+}> = ({ bull, isOpen, onClose }) => {
+  const age = new Date().getFullYear() - new Date(bull.birthDate).getFullYear();
+
+  return (
+    <Modal isOpen={isOpen} onClose={onClose} title={`Detalles de ${bull.name}`} size="lg">
+      <div className="p-6 space-y-6">
+        {/* Información básica */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="space-y-4">
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900 mb-3">Información Básica</h3>
+              <div className="space-y-2">
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Nombre:</span>
+                  <span className="font-medium">{bull.name}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Arete:</span>
+                  <span className="font-medium">{bull.earTag}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Registro:</span>
+                  <span className="font-medium">{bull.registrationNumber}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Raza:</span>
+                  <span className="font-medium">{bull.breed}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Edad:</span>
+                  <span className="font-medium">{age} años</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Peso:</span>
+                  <span className="font-medium">{bull.weight} kg</span>
+                </div>
+                {bull.height && (
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Altura:</span>
+                    <span className="font-medium">{bull.height} cm</span>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900 mb-3">Estados</h3>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-gray-600">Estado de Salud:</span>
+                  <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                    bull.healthStatus === "excellent" ? "bg-green-100 text-green-800" :
+                    bull.healthStatus === "good" ? "bg-blue-100 text-blue-800" :
+                    bull.healthStatus === "fair" ? "bg-yellow-100 text-yellow-800" :
+                    bull.healthStatus === "poor" ? "bg-orange-100 text-orange-800" :
+                    "bg-red-100 text-red-800"
+                  }`}>
+                    {bull.healthStatus === "excellent" ? "Excelente" :
+                     bull.healthStatus === "good" ? "Bueno" :
+                     bull.healthStatus === "fair" ? "Regular" :
+                     bull.healthStatus === "poor" ? "Malo" : "Cuarentena"}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-gray-600">Estado Reproductivo:</span>
+                  <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                    bull.reproductiveStatus === "active" ? "bg-green-100 text-green-800" :
+                    bull.reproductiveStatus === "resting" ? "bg-blue-100 text-blue-800" :
+                    bull.reproductiveStatus === "retired" ? "bg-gray-100 text-gray-800" :
+                    "bg-purple-100 text-purple-800"
+                  }`}>
+                    {bull.reproductiveStatus === "active" ? "Activo" :
+                     bull.reproductiveStatus === "resting" ? "Descanso" :
+                     bull.reproductiveStatus === "retired" ? "Retirado" : "Prueba"}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900 mb-3">Ubicación</h3>
+              <div className="space-y-2">
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Potrero:</span>
+                  <span className="font-medium">{bull.currentLocation.paddock}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Dirección:</span>
+                  <span className="font-medium text-right">{bull.currentLocation.address}</span>
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900 mb-3">Rendimiento</h3>
+              <div className="space-y-2">
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Total Montas:</span>
+                  <span className="font-medium">{bull.performance.totalMating}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Exitosas:</span>
+                  <span className="font-medium">{bull.performance.successfulMating}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Crías:</span>
+                  <span className="font-medium">{bull.performance.offspring}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Tasa de Preñez:</span>
+                  <span className="font-medium">{bull.performance.pregnancyRate}%</span>
+                </div>
+                {bull.performance.lastMatingDate && (
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Última Monta:</span>
+                    <span className="font-medium">
+                      {new Date(bull.performance.lastMatingDate).toLocaleDateString('es-MX')}
+                    </span>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Sección de Genética */}
+        <div>
+          <h3 className="text-lg font-semibold text-gray-900 mb-3">Información Genética</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <span className="text-gray-600">Padre:</span>
+              <span className="font-medium ml-2">{bull.genetics.sireName || "No especificado"}</span>
+            </div>
+            <div>
+              <span className="text-gray-600">Madre:</span>
+              <span className="font-medium ml-2">{bull.genetics.damName || "No especificado"}</span>
+            </div>
+          </div>
+          {bull.genetics.genealogy.length > 0 && (
+            <div className="mt-2">
+              <span className="text-gray-600">Línea Genética:</span>
+              <div className="flex flex-wrap gap-2 mt-1">
+                {bull.genetics.genealogy.map((line, index) => (
+                  <span key={index} className="px-2 py-1 bg-blue-100 text-blue-800 rounded-md text-sm">
+                    {line}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Sección de Salud */}
+        <div>
+          <h3 className="text-lg font-semibold text-gray-900 mb-3">Información de Salud</h3>
+          <div className="space-y-2">
+            <div className="flex justify-between">
+              <span className="text-gray-600">Último Chequeo:</span>
+              <span className="font-medium">
+                {new Date(bull.health.lastCheckupDate).toLocaleDateString('es-MX')}
+              </span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-gray-600">Veterinario:</span>
+              <span className="font-medium">{bull.health.veterinarian}</span>
+            </div>
+          </div>
+
+          {bull.health.vaccinations.length > 0 && (
+            <div className="mt-4">
+              <h4 className="font-medium text-gray-900 mb-2">Vacunas Recientes</h4>
+              <div className="space-y-2">
+                {bull.health.vaccinations.slice(0, 3).map((vaccination, index) => (
+                  <div key={index} className="flex justify-between text-sm">
+                    <span>{vaccination.vaccine}</span>
+                    <span className="text-gray-600">
+                      {new Date(vaccination.date).toLocaleDateString('es-MX')}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Sección de Nutrición */}
+        <div>
+          <h3 className="text-lg font-semibold text-gray-900 mb-3">Nutrición</h3>
+          <div className="space-y-2">
+            <div className="flex justify-between">
+              <span className="text-gray-600">Dieta:</span>
+              <span className="font-medium">{bull.nutrition.diet}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-gray-600">Alimento Diario:</span>
+              <span className="font-medium">{bull.nutrition.dailyFeed} kg</span>
+            </div>
+            {bull.nutrition.supplements.length > 0 && (
+              <div>
+                <span className="text-gray-600">Suplementos:</span>
+                <div className="flex flex-wrap gap-1 mt-1">
+                  {bull.nutrition.supplements.map((supplement, index) => (
+                    <span key={index} className="px-2 py-1 bg-green-100 text-green-800 rounded-md text-sm">
+                      {supplement}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Notas */}
+        {bull.notes && (
+          <div>
+            <h3 className="text-lg font-semibold text-gray-900 mb-3">Notas</h3>
+            <p className="text-gray-700 bg-gray-50 p-3 rounded-lg">{bull.notes}</p>
+          </div>
+        )}
+      </div>
+    </Modal>
+  );
+};
+
+// Componente para formulario de toro (crear/editar)
+const BullFormModal: React.FC<{
+  bull?: Bull;
+  isOpen: boolean;
+  onClose: () => void;
+  onSave: (formData: BullFormData) => void;
+}> = ({ bull, isOpen, onClose, onSave }) => {
+  const [formData, setFormData] = useState<BullFormData>({
+    name: "",
+    earTag: "",
+    registrationNumber: "",
+    breed: "",
+    birthDate: "",
+    weight: 0,
+    height: 0,
+    address: "",
+    paddock: "",
+    lat: 0,
+    lng: 0,
+    healthStatus: "good",
+    reproductiveStatus: "active",
+    diet: "",
+    dailyFeed: 0,
+    supplements: "",
+    veterinarian: "",
+    notes: "",
+  });
+
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [isGettingLocation, setIsGettingLocation] = useState(false);
+
+  useEffect(() => {
+    if (bull) {
+      setFormData({
+        name: bull.name,
+        earTag: bull.earTag,
+        registrationNumber: bull.registrationNumber || "",
+        breed: bull.breed,
+        birthDate: bull.birthDate,
+        weight: bull.weight,
+        height: bull.height || 0,
+        address: bull.currentLocation.address,
+        paddock: bull.currentLocation.paddock,
+        lat: bull.currentLocation.lat,
+        lng: bull.currentLocation.lng,
+        healthStatus: bull.healthStatus,
+        reproductiveStatus: bull.reproductiveStatus,
+        diet: bull.nutrition.diet,
+        dailyFeed: bull.nutrition.dailyFeed,
+        supplements: bull.nutrition.supplements.join(", "),
+        veterinarian: bull.health.veterinarian,
+        notes: bull.notes,
+      });
+    } else {
+      setFormData({
+        name: "",
+        earTag: "",
+        registrationNumber: "",
+        breed: "",
+        birthDate: "",
+        weight: 0,
+        height: 0,
+        address: "",
+        paddock: "",
+        lat: 0,
+        lng: 0,
+        healthStatus: "good",
+        reproductiveStatus: "active",
+        diet: "",
+        dailyFeed: 0,
+        supplements: "",
+        veterinarian: "",
+        notes: "",
+      });
+    }
+    setErrors({});
+  }, [bull, isOpen]);
+
+  // Función para obtener ubicación actual
+  const getCurrentLocation = () => {
+    setIsGettingLocation(true);
+    
+    if (!navigator.geolocation) {
+      alert("La geolocalización no está soportada por este navegador.");
+      setIsGettingLocation(false);
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const { latitude, longitude } = position.coords;
+        
+        setFormData(prev => ({
+          ...prev,
+          lat: latitude,
+          lng: longitude,
+        }));
+
+        // Obtener dirección desde coordenadas (opcional)
+        getAddressFromCoords(latitude, longitude);
+        setIsGettingLocation(false);
+      },
+      (error) => {
+        console.error("Error obteniendo ubicación:", error);
+        let errorMessage = "Error obteniendo ubicación.";
+        
+        switch(error.code) {
+          case error.PERMISSION_DENIED:
+            errorMessage = "Permiso de ubicación denegado.";
+            break;
+          case error.POSITION_UNAVAILABLE:
+            errorMessage = "Ubicación no disponible.";
+            break;
+          case error.TIMEOUT:
+            errorMessage = "Tiempo de espera agotado.";
+            break;
+        }
+        
+        alert(errorMessage);
+        setIsGettingLocation(false);
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 0
+      }
+    );
+  };
+
+  // Función para obtener dirección desde coordenadas (usando API de geocodificación)
+  const getAddressFromCoords = async (lat: number, lng: number) => {
+    try {
+      // Usar un servicio gratuito de geocodificación inversa
+      const response = await fetch(
+        `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lng}&localityLanguage=es`
+      );
+      const data = await response.json();
+      
+      if (data && data.locality) {
+        const address = `${data.locality}, ${data.principalSubdivision}, ${data.countryName}`;
+        setFormData(prev => ({
+          ...prev,
+          address: address,
+        }));
+      }
+    } catch (error) {
+      console.error("Error obteniendo dirección:", error);
+    }
+  };
+
+  const validateForm = () => {
+    const newErrors: Record<string, string> = {};
+
+    if (!formData.name.trim()) newErrors.name = "El nombre es requerido";
+    if (!formData.earTag.trim()) newErrors.earTag = "El arete es requerido";
+    if (!formData.breed.trim()) newErrors.breed = "La raza es requerida";
+    if (!formData.birthDate) newErrors.birthDate = "La fecha de nacimiento es requerida";
+    if (formData.weight <= 0) newErrors.weight = "El peso debe ser mayor a 0";
+    if (!formData.paddock.trim()) newErrors.paddock = "El potrero es requerido";
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (validateForm()) {
+      onSave(formData);
+    }
+  };
+
+  const handleInputChange = (field: keyof BullFormData, value: any) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
+    if (errors[field]) {
+      setErrors(prev => ({ ...prev, [field]: "" }));
+    }
+  };
+
+  return (
+    <Modal 
+      isOpen={isOpen} 
+      onClose={onClose} 
+      title={bull ? `Editar ${bull.name}` : "Nuevo Toro"} 
+      size="lg"
+    >
+      <div className="p-6 space-y-6">
+        {/* Información Básica */}
+        <div>
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">Información Básica</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Nombre *
+              </label>
+              <input
+                type="text"
+                value={formData.name}
+                onChange={(e) => handleInputChange("name", e.target.value)}
+                className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent ${
+                  errors.name ? "border-red-500" : "border-gray-300"
+                }`}
+                placeholder="Nombre del toro"
+              />
+              {errors.name && <p className="text-red-500 text-xs mt-1">{errors.name}</p>}
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Arete *
+              </label>
+              <input
+                type="text"
+                value={formData.earTag}
+                onChange={(e) => handleInputChange("earTag", e.target.value)}
+                className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent ${
+                  errors.earTag ? "border-red-500" : "border-gray-300"
+                }`}
+                placeholder="Número de arete"
+              />
+              {errors.earTag && <p className="text-red-500 text-xs mt-1">{errors.earTag}</p>}
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Número de Registro
+              </label>
+              <input
+                type="text"
+                value={formData.registrationNumber}
+                onChange={(e) => handleInputChange("registrationNumber", e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
+                placeholder="Número de registro"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Raza *
+              </label>
+              <select
+                value={formData.breed}
+                onChange={(e) => handleInputChange("breed", e.target.value)}
+                className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent ${
+                  errors.breed ? "border-red-500" : "border-gray-300"
+                }`}
+              >
+                <option value="">Seleccionar raza</option>
+                <option value="Brahman">Brahman</option>
+                <option value="Angus">Angus</option>
+                <option value="Charolais">Charolais</option>
+                <option value="Simmental">Simmental</option>
+                <option value="Limousin">Limousin</option>
+                <option value="Hereford">Hereford</option>
+                <option value="Brangus">Brangus</option>
+                <option value="Nelore">Nelore</option>
+              </select>
+              {errors.breed && <p className="text-red-500 text-xs mt-1">{errors.breed}</p>}
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Fecha de Nacimiento *
+              </label>
+              <input
+                type="date"
+                value={formData.birthDate}
+                onChange={(e) => handleInputChange("birthDate", e.target.value)}
+                className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent ${
+                  errors.birthDate ? "border-red-500" : "border-gray-300"
+                }`}
+              />
+              {errors.birthDate && <p className="text-red-500 text-xs mt-1">{errors.birthDate}</p>}
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Peso (kg) *
+              </label>
+              <input
+                type="number"
+                value={formData.weight}
+                onChange={(e) => handleInputChange("weight", Number(e.target.value))}
+                className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent ${
+                  errors.weight ? "border-red-500" : "border-gray-300"
+                }`}
+                placeholder="Peso en kilogramos"
+                min="0"
+              />
+              {errors.weight && <p className="text-red-500 text-xs mt-1">{errors.weight}</p>}
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Altura (cm)
+              </label>
+              <input
+                type="number"
+                value={formData.height}
+                onChange={(e) => handleInputChange("height", Number(e.target.value))}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
+                placeholder="Altura en centímetros"
+                min="0"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Potrero *
+              </label>
+              <input
+                type="text"
+                value={formData.paddock}
+                onChange={(e) => handleInputChange("paddock", e.target.value)}
+                className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent ${
+                  errors.paddock ? "border-red-500" : "border-gray-300"
+                }`}
+                placeholder="Nombre del potrero"
+              />
+              {errors.paddock && <p className="text-red-500 text-xs mt-1">{errors.paddock}</p>}
+            </div>
+          </div>
+        </div>
+
+        {/* Estados */}
+        <div>
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">Estados</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Estado de Salud
+              </label>
+              <select
+                value={formData.healthStatus}
+                onChange={(e) => handleInputChange("healthStatus", e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
+              >
+                <option value="excellent">Excelente</option>
+                <option value="good">Bueno</option>
+                <option value="fair">Regular</option>
+                <option value="poor">Malo</option>
+                <option value="quarantine">Cuarentena</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Estado Reproductivo
+              </label>
+              <select
+                value={formData.reproductiveStatus}
+                onChange={(e) => handleInputChange("reproductiveStatus", e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
+              >
+                <option value="active">Activo</option>
+                <option value="resting">Descanso</option>
+                <option value="testing">Prueba</option>
+                <option value="retired">Retirado</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        {/* Nutrición */}
+        <div>
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">Nutrición</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Dieta
+              </label>
+              <input
+                type="text"
+                value={formData.diet}
+                onChange={(e) => handleInputChange("diet", e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
+                placeholder="Descripción de la dieta"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Alimento Diario (kg)
+              </label>
+              <input
+                type="number"
+                value={formData.dailyFeed}
+                onChange={(e) => handleInputChange("dailyFeed", Number(e.target.value))}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
+                placeholder="Cantidad diaria de alimento"
+                min="0"
+                step="0.1"
+              />
+            </div>
+
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Suplementos
+              </label>
+              <input
+                type="text"
+                value={formData.supplements}
+                onChange={(e) => handleInputChange("supplements", e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
+                placeholder="Suplementos separados por comas"
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Información adicional */}
+        <div>
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">Ubicación</h3>
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Dirección
+              </label>
+              <input
+                type="text"
+                value={formData.address}
+                onChange={(e) => handleInputChange("address", e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
+                placeholder="Dirección completa"
+              />
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Latitud
+                </label>
+                <input
+                  type="number"
+                  value={formData.lat}
+                  onChange={(e) => handleInputChange("lat", Number(e.target.value))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
+                  placeholder="Latitud"
+                  step="any"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Longitud
+                </label>
+                <input
+                  type="number"
+                  value={formData.lng}
+                  onChange={(e) => handleInputChange("lng", Number(e.target.value))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
+                  placeholder="Longitud"
+                  step="any"
+                />
+              </div>
+            </div>
+
+            <div>
+              <button
+                type="button"
+                onClick={getCurrentLocation}
+                disabled={isGettingLocation}
+                className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-blue-300 transition-colors"
+              >
+                {isGettingLocation ? (
+                  <>
+                    <motion.div
+                      animate={{ rotate: 360 }}
+                      transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                      className="w-4 h-4 border-2 border-white border-t-transparent rounded-full mr-2"
+                    />
+                    Obteniendo ubicación...
+                  </>
+                ) : (
+                  <>
+                    <MapPin className="w-4 h-4 mr-2" />
+                    Usar mi ubicación actual
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Información adicional */}
+        <div>
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">Información Adicional</h3>
+          <div className="space-y-4">
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Veterinario
+              </label>
+              <input
+                type="text"
+                value={formData.veterinarian}
+                onChange={(e) => handleInputChange("veterinarian", e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
+                placeholder="Nombre del veterinario"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Notas
+              </label>
+              <textarea
+                value={formData.notes}
+                onChange={(e) => handleInputChange("notes", e.target.value)}
+                rows={3}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
+                placeholder="Notas adicionales sobre el toro"
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Botones */}
+        <div className="flex justify-end space-x-3 pt-6 border-t border-gray-200">
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-4 py-2 text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+          >
+            Cancelar
+          </button>
+          <button
+            type="button"
+            onClick={handleSubmit}
+            className="inline-flex items-center px-4 py-2 bg-[#519a7c] text-white rounded-lg hover:bg-[#4a8970] transition-colors"
+          >
+            <Save className="w-4 h-4 mr-2" />
+            {bull ? "Actualizar" : "Crear"} Toro
+          </button>
+        </div>
+      </div>
+    </Modal>
+  );
+};
+
 const BullManagement: React.FC = () => {
   // Estados principales
   const [activeTab, setActiveTab] = useState<"bulls" | "mating">("bulls");
@@ -221,14 +1084,22 @@ const BullManagement: React.FC = () => {
   const [filteredBulls, setFilteredBulls] = useState<Bull[]>([]);
   const [filteredMatingRecords, setFilteredMatingRecords] = useState<MatingRecord[]>([]);
   
-  // Estados de UI
-  const [, setShowBullForm] = useState(false);
+  // Estados de UI para modales
+  const [showBullDetail, setShowBullDetail] = useState(false);
+  const [showBullForm, setShowBullForm] = useState(false);
   const [, setShowMatingForm] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
-  const [, setSelectedBull] = useState<Bull | null>(null);
+  const [selectedBull, setSelectedBull] = useState<Bull | null>(null);
   const [, setSelectedMating] = useState<MatingRecord | null>(null);
-  const [, setEditingBull] = useState<Bull | null>(null);
+  const [editingBull, setEditingBull] = useState<Bull | null>(null);
   const [, setEditingMating] = useState<MatingRecord | null>(null);
+
+  // Estado para notificaciones
+  const [notification, setNotification] = useState<{
+    message: string;
+    type: "success" | "error" | "info";
+    show: boolean;
+  }>({ message: "", type: "success", show: false });
   
   // Estados de filtros
   const [bullFilters, setBullFilters] = useState<BullFilters>({
@@ -251,10 +1122,227 @@ const BullManagement: React.FC = () => {
     assistedBy: "",
   });
 
+  // Función para mostrar notificaciones
+  const showNotification = useCallback((message: string, type: "success" | "error" | "info" = "success") => {
+    setNotification({ message, type, show: true });
+    
+    // Auto-ocultar después de 3 segundos
+    setTimeout(() => {
+      setNotification(prev => ({ ...prev, show: false }));
+    }, 3000);
+  }, []);
+
+  // Funciones para manejar acciones de toros
+  const handleViewBull = useCallback((bull: Bull) => {
+    setSelectedBull(bull);
+    setShowBullDetail(true);
+  }, []);
+
+  const handleNewBull = useCallback(() => {
+    setEditingBull(null);
+    setShowBullForm(true);
+  }, []);
+
+  const handleEditBull = useCallback((bull: Bull) => {
+    setEditingBull(bull);
+    setShowBullForm(true);
+  }, []);
+
+  // FUNCIÓN DE ELIMINACIÓN CORREGIDA
+  const handleDeleteBull = useCallback((bullId: string) => {
+    // Buscar el toro en el estado actual
+    const bullToDelete = bulls.find(bull => bull.id === bullId);
+    
+    if (!bullToDelete) {
+      showNotification("Toro no encontrado", "error");
+      return;
+    }
+
+    // Mostrar confirmación
+    const confirmMessage = `¿Está seguro de que desea eliminar el toro "${bullToDelete.name}" (${bullToDelete.earTag})?\n\nEsta acción también eliminará todos los registros de empadre relacionados y no se puede deshacer.`;
+    
+    if (!window.confirm(confirmMessage)) {
+      return;
+    }
+
+    try {
+      // Eliminar el toro del estado
+      setBulls(prevBulls => {
+        const newBulls = prevBulls.filter(bull => bull.id !== bullId);
+        return newBulls;
+      });
+
+      // Eliminar registros de empadre relacionados
+      setMatingRecords(prevRecords => {
+        const relatedRecordsCount = prevRecords.filter(record => record.bullId === bullId).length;
+        const newRecords = prevRecords.filter(record => record.bullId !== bullId);
+        
+        // Mostrar notificación de éxito
+        const message = relatedRecordsCount > 0 
+          ? `Toro "${bullToDelete.name}" eliminado exitosamente junto con ${relatedRecordsCount} registro(s) de empadre relacionado(s).`
+          : `Toro "${bullToDelete.name}" eliminado exitosamente.`;
+        
+        showNotification(message, "success");
+        
+        return newRecords;
+      });
+      
+    } catch (error) {
+      console.error("Error al eliminar el toro:", error);
+      showNotification("Error al eliminar el toro. Por favor, inténtelo de nuevo.", "error");
+    }
+  }, [bulls, showNotification]);
+
+  const handleSaveBull = useCallback((formData: BullFormData) => {
+    try {
+      if (editingBull) {
+        // Actualizar toro existente
+        setBulls(prev => {
+          const updated = prev.map(bull => 
+            bull.id === editingBull.id 
+              ? {
+                  ...bull,
+                  name: formData.name,
+                  earTag: formData.earTag,
+                  registrationNumber: formData.registrationNumber,
+                  breed: formData.breed,
+                  birthDate: formData.birthDate,
+                  weight: formData.weight,
+                  height: formData.height,
+                  currentLocation: {
+                    lat: formData.lat || bull.currentLocation.lat,
+                    lng: formData.lng || bull.currentLocation.lng,
+                    address: formData.address,
+                    paddock: formData.paddock,
+                  },
+                  healthStatus: formData.healthStatus,
+                  reproductiveStatus: formData.reproductiveStatus,
+                  nutrition: {
+                    ...bull.nutrition,
+                    diet: formData.diet,
+                    dailyFeed: formData.dailyFeed,
+                    supplements: formData.supplements.split(',').map(s => s.trim()).filter(s => s),
+                  },
+                  health: {
+                    ...bull.health,
+                    veterinarian: formData.veterinarian,
+                  },
+                  notes: formData.notes,
+                  updatedAt: new Date().toISOString(),
+                }
+              : bull
+          );
+          return updated;
+        });
+        
+        showNotification(`Toro ${editingBull.name} actualizado exitosamente`, "success");
+      } else {
+        // Crear nuevo toro
+        const newBull: Bull = {
+          id: Date.now().toString(),
+          name: formData.name,
+          earTag: formData.earTag,
+          registrationNumber: formData.registrationNumber,
+          breed: formData.breed,
+          birthDate: formData.birthDate,
+          weight: formData.weight,
+          height: formData.height,
+          currentLocation: {
+            lat: formData.lat || 17.9869, // Coordenadas por defecto de Villahermosa, Tabasco
+            lng: formData.lng || -92.9303,
+            address: formData.address || "Villahermosa, Tabasco",
+            paddock: formData.paddock,
+          },
+          healthStatus: formData.healthStatus,
+          reproductiveStatus: formData.reproductiveStatus,
+          genetics: {
+            genealogy: [],
+          },
+          performance: {
+            totalMating: 0,
+            successfulMating: 0,
+            offspring: 0,
+            pregnancyRate: 0,
+          },
+          health: {
+            lastCheckupDate: new Date().toISOString().split('T')[0],
+            veterinarian: formData.veterinarian,
+            vaccinations: [],
+            treatments: [],
+          },
+          nutrition: {
+            diet: formData.diet,
+            dailyFeed: formData.dailyFeed,
+            supplements: formData.supplements.split(',').map(s => s.trim()).filter(s => s),
+            lastWeightDate: new Date().toISOString().split('T')[0],
+          },
+          acquisition: {
+            date: new Date().toISOString().split('T')[0],
+            source: "Registro manual",
+            cost: 0,
+            purpose: "breeding",
+          },
+          notes: formData.notes,
+          photos: [],
+          active: true,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        };
+        
+        setBulls(prev => [...prev, newBull]);
+        showNotification(`Nuevo toro ${formData.name} creado exitosamente`, "success");
+      }
+      
+      // Cerrar modal
+      setShowBullForm(false);
+      setEditingBull(null);
+      
+    } catch (error) {
+      console.error("Error al guardar el toro:", error);
+      showNotification("Error al guardar el toro. Por favor, inténtelo de nuevo.", "error");
+    }
+  }, [editingBull, showNotification]);
+
+  // Funciones para manejar acciones de empadre
+  const handleNewMating = useCallback(() => {
+    setEditingMating(null);
+    setShowMatingForm(true);
+  }, []);
+
+  const handleEditMating = useCallback((record: MatingRecord) => {
+    setEditingMating(record);
+    setShowMatingForm(true);
+  }, []);
+
+  const handleDeleteMating = useCallback((recordId: string) => {
+    const recordToDelete = matingRecords.find(record => record.id === recordId);
+    if (!recordToDelete) {
+      showNotification("Registro de empadre no encontrado", "error");
+      return;
+    }
+
+    const confirmMessage = `¿Está seguro de que desea eliminar el registro de empadre entre "${recordToDelete.bullName}" y "${recordToDelete.cowName}" del ${new Date(recordToDelete.matingDate).toLocaleDateString('es-MX')}?\n\nEsta acción no se puede deshacer.`;
+    
+    if (window.confirm(confirmMessage)) {
+      try {
+        setMatingRecords(prev => prev.filter(record => record.id !== recordId));
+        showNotification("Registro de empadre eliminado exitosamente", "success");
+        
+      } catch (error) {
+        console.error("Error al eliminar el registro:", error);
+        showNotification("Error al eliminar el registro. Por favor, inténtelo de nuevo.", "error");
+      }
+    }
+  }, [matingRecords, showNotification]);
+
+  const handleExport = useCallback(() => {
+    console.log("Exportar datos");
+    // Aquí implementarías la lógica para exportar
+  }, []);
+
   // Datos mock para desarrollo
   useEffect(() => {
-    // Simular carga de datos
-    setTimeout(() => {
+    const loadData = setTimeout(() => {
       setBulls([
         {
           id: "1",
@@ -476,6 +1564,8 @@ const BullManagement: React.FC = () => {
 
       setIsLoading(false);
     }, 1500);
+
+    return () => clearTimeout(loadData);
   }, []);
 
   // Efectos para filtros
@@ -488,10 +1578,9 @@ const BullManagement: React.FC = () => {
   }, [matingRecords, matingFilters]);
 
   // Función para aplicar filtros de toros
-  const applyBullFilters = () => {
+  const applyBullFilters = useCallback(() => {
     let filtered = [...bulls];
 
-    // Filtro por término de búsqueda
     if (bullFilters.searchTerm) {
       const searchLower = bullFilters.searchTerm.toLowerCase();
       filtered = filtered.filter(
@@ -502,27 +1591,22 @@ const BullManagement: React.FC = () => {
       );
     }
 
-    // Filtro por raza
     if (bullFilters.breed.length > 0) {
       filtered = filtered.filter(bull => bullFilters.breed.includes(bull.breed));
     }
 
-    // Filtro por estado de salud
     if (bullFilters.healthStatus.length > 0) {
       filtered = filtered.filter(bull => bullFilters.healthStatus.includes(bull.healthStatus));
     }
 
-    // Filtro por estado reproductivo
     if (bullFilters.reproductiveStatus.length > 0) {
       filtered = filtered.filter(bull => bullFilters.reproductiveStatus.includes(bull.reproductiveStatus));
     }
 
-    // Filtro por solo activos
     if (bullFilters.activeOnly) {
       filtered = filtered.filter(bull => bull.active);
     }
 
-    // Filtro por rango de edad
     const currentYear = new Date().getFullYear();
     if (bullFilters.ageRange.min > 0 || bullFilters.ageRange.max < 20) {
       filtered = filtered.filter(bull => {
@@ -532,7 +1616,6 @@ const BullManagement: React.FC = () => {
       });
     }
 
-    // Filtro por rango de peso
     if (bullFilters.weightRange.min > 0 || bullFilters.weightRange.max < 2000) {
       filtered = filtered.filter(bull => 
         bull.weight >= bullFilters.weightRange.min && 
@@ -541,13 +1624,12 @@ const BullManagement: React.FC = () => {
     }
 
     setFilteredBulls(filtered);
-  };
+  }, [bulls, bullFilters]);
 
   // Función para aplicar filtros de empadre
-  const applyMatingFilters = () => {
+  const applyMatingFilters = useCallback(() => {
     let filtered = [...matingRecords];
 
-    // Filtro por término de búsqueda
     if (matingFilters.searchTerm) {
       const searchLower = matingFilters.searchTerm.toLowerCase();
       filtered = filtered.filter(
@@ -558,7 +1640,6 @@ const BullManagement: React.FC = () => {
       );
     }
 
-    // Filtro por rango de fechas
     if (matingFilters.dateRange.start && matingFilters.dateRange.end) {
       filtered = filtered.filter(record => {
         const recordDate = new Date(record.matingDate);
@@ -568,28 +1649,25 @@ const BullManagement: React.FC = () => {
       });
     }
 
-    // Filtro por tipo de monta
     if (matingFilters.matingType.length > 0) {
       filtered = filtered.filter(record => matingFilters.matingType.includes(record.matingType));
     }
 
-    // Filtro por resultado de gestación
     if (matingFilters.pregnancyResult.length > 0) {
       filtered = filtered.filter(record => 
         record.pregnancyResult && matingFilters.pregnancyResult.includes(record.pregnancyResult)
       );
     }
 
-    // Filtro por toro específico
     if (matingFilters.bullId) {
       filtered = filtered.filter(record => record.bullId === matingFilters.bullId);
     }
 
     setFilteredMatingRecords(filtered);
-  };
+  }, [matingRecords, matingFilters]);
 
   // Funciones para obtener estilos de estados
-  const getHealthStatusColor = (status: string) => {
+  const getHealthStatusColor = useCallback((status: string) => {
     const colors = {
       excellent: "bg-green-100 text-green-800 border-green-200",
       good: "bg-blue-100 text-blue-800 border-blue-200",
@@ -598,9 +1676,9 @@ const BullManagement: React.FC = () => {
       quarantine: "bg-red-100 text-red-800 border-red-200",
     };
     return colors[status as keyof typeof colors] || colors.fair;
-  };
+  }, []);
 
-  const getReproductiveStatusColor = (status: string) => {
+  const getReproductiveStatusColor = useCallback((status: string) => {
     const colors = {
       active: "bg-green-100 text-green-800 border-green-200",
       resting: "bg-blue-100 text-blue-800 border-blue-200",
@@ -608,16 +1686,16 @@ const BullManagement: React.FC = () => {
       testing: "bg-purple-100 text-purple-800 border-purple-200",
     };
     return colors[status as keyof typeof colors] || colors.active;
-  };
+  }, []);
 
-  const getPregnancyResultColor = (result?: string) => {
+  const getPregnancyResultColor = useCallback((result?: string) => {
     const colors = {
       pregnant: "bg-emerald-100 text-emerald-800 border-emerald-200",
       not_pregnant: "bg-red-100 text-red-800 border-red-200",
       pending: "bg-blue-100 text-blue-800 border-blue-200",
     };
     return result ? colors[result as keyof typeof colors] || colors.pending : colors.pending;
-  };
+  }, []);
 
   // Calcular estadísticas
   const bullStatistics = useMemo(() => {
@@ -647,7 +1725,6 @@ const BullManagement: React.FC = () => {
     const successRate = totalMating > 0 ? Math.round((successful / totalMating) * 100) : 0;
     const pregnancyRate = totalMating > 0 ? Math.round((pregnant / totalMating) * 100) : 0;
     
-    // Registros de este mes
     const currentMonth = new Date().getMonth();
     const currentYear = new Date().getFullYear();
     const thisMonth = matingRecords.filter(record => {
@@ -676,12 +1753,12 @@ const BullManagement: React.FC = () => {
   }> = ({ title, value, icon, color = "", subtitle }) => (
     <motion.div
       variants={itemVariants}
-      className={`bg-white/95 backdrop-blur-sm rounded-xl p-6 shadow-lg border border-white/20 ${color}`}
+      className={`bg-white rounded-xl p-4 shadow-md border border-gray-200 ${color}`}
     >
       <div className="flex items-center justify-between">
         <div>
           <p className="text-sm font-medium text-gray-600">{title}</p>
-          <p className="text-3xl font-bold text-gray-900 mt-1">{value}</p>
+          <p className="text-2xl font-bold text-gray-900 mt-1">{value}</p>
           {subtitle && (
             <p className="text-sm text-gray-500 mt-1">{subtitle}</p>
           )}
@@ -691,16 +1768,15 @@ const BullManagement: React.FC = () => {
     </motion.div>
   );
 
-  // Componente de tarjeta de toro
+  // Componente de tarjeta de toro CORREGIDO
   const BullCard: React.FC<{ bull: Bull }> = ({ bull }) => {
     const age = new Date().getFullYear() - new Date(bull.birthDate).getFullYear();
     
     return (
       <motion.div
         variants={itemVariants}
-        className="bg-white/95 backdrop-blur-sm rounded-xl p-6 shadow-lg border border-white/20 hover:shadow-xl transition-all duration-300"
+        className="bg-white rounded-xl p-6 shadow-md border border-gray-200 hover:shadow-lg transition-all duration-300"
       >
-        {/* Header de la tarjeta */}
         <div className="flex justify-between items-start mb-4">
           <div>
             <div className="flex items-center space-x-2 mb-1">
@@ -727,7 +1803,6 @@ const BullManagement: React.FC = () => {
           </div>
         </div>
 
-        {/* Información básica */}
         <div className="grid grid-cols-2 gap-4 mb-4">
           <div>
             <p className="text-xs text-gray-500">Raza</p>
@@ -747,7 +1822,6 @@ const BullManagement: React.FC = () => {
           </div>
         </div>
 
-        {/* Estadísticas de rendimiento */}
         <div className="bg-gray-50 rounded-lg p-3 mb-4">
           <h4 className="text-xs font-medium text-gray-600 mb-2">Rendimiento Reproductivo</h4>
           <div className="grid grid-cols-2 gap-2 text-xs">
@@ -770,25 +1844,27 @@ const BullManagement: React.FC = () => {
           </div>
         </div>
 
-        {/* Acciones */}
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-2">
             <button
-              onClick={() => setSelectedBull(bull)}
+              type="button"
+              onClick={() => handleViewBull(bull)}
               className="p-2 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
               title="Ver detalles"
             >
               <Eye className="w-4 h-4" />
             </button>
             <button
-              onClick={() => setEditingBull(bull)}
+              type="button"
+              onClick={() => handleEditBull(bull)}
               className="p-2 text-gray-600 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors"
               title="Editar"
             >
               <Edit className="w-4 h-4" />
             </button>
             <button
-              onClick={() => {/* Función para eliminar */}}
+              type="button"
+              onClick={() => handleDeleteBull(bull.id)}
               className="p-2 text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
               title="Eliminar"
             >
@@ -876,7 +1952,7 @@ const BullManagement: React.FC = () => {
       </td>
       <td className="px-6 py-4">
         <div className="flex items-center space-x-1">
-          <MapPinIcon className="w-4 h-4 text-gray-400" />
+          <MapPin className="w-4 h-4 text-gray-400" />
           <span className="text-sm text-gray-600">{record.location.paddock}</span>
         </div>
       </td>
@@ -890,14 +1966,14 @@ const BullManagement: React.FC = () => {
             <Eye className="w-4 h-4" />
           </button>
           <button
-            onClick={() => setEditingMating(record)}
+            onClick={() => handleEditMating(record)}
             className="p-1 text-gray-600 hover:text-green-600 hover:bg-green-50 rounded transition-colors"
             title="Editar"
           >
             <Edit className="w-4 h-4" />
           </button>
           <button
-            onClick={() => {/* Función para eliminar */}}
+            onClick={() => handleDeleteMating(record.id)}
             className="p-1 text-gray-600 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
             title="Eliminar"
           >
@@ -911,9 +1987,9 @@ const BullManagement: React.FC = () => {
   // Pantalla de carga
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-[#519a7c] via-[#f2e9d8] to-[#f4ac3a] flex items-center justify-center">
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <motion.div
-          className="bg-white/90 backdrop-blur-sm rounded-2xl p-8 shadow-xl"
+          className="bg-white rounded-2xl p-8 shadow-xl"
           initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ duration: 0.5 }}
@@ -931,17 +2007,18 @@ const BullManagement: React.FC = () => {
     );
   }
 
+  // LAYOUT CORREGIDO - SIN ESPACIOS VACÍOS
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#519a7c] via-[#f2e9d8] to-[#f4ac3a] p-6">
+    <div className="min-h-screen bg-gray-50">
       <motion.div
-        className="max-w-7xl mx-auto"
+        className="max-w-7xl mx-auto p-4"
         variants={containerVariants}
         initial="hidden"
         animate="visible"
       >
         {/* Header */}
         <motion.div
-          className="bg-white/95 backdrop-blur-sm rounded-2xl shadow-xl p-6 mb-6 border border-white/20"
+          className="bg-white rounded-xl shadow-md p-6 mb-6 border border-gray-200"
           variants={itemVariants}
         >
           <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
@@ -972,7 +2049,7 @@ const BullManagement: React.FC = () => {
                 <span>Filtros</span>
               </button>
               <button
-                onClick={() => {/* Función para exportar */}}
+                onClick={handleExport}
                 className="px-4 py-2 bg-white text-gray-700 rounded-xl border-2 border-gray-300 hover:border-blue-400 transition-colors flex items-center space-x-2"
               >
                 <Download className="w-4 h-4" />
@@ -1024,7 +2101,7 @@ const BullManagement: React.FC = () => {
               className="space-y-6"
             >
               {/* Estadísticas de toros */}
-              <motion.div variants={itemVariants} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
+              <motion.div variants={itemVariants} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
                 <StatCard
                   title="Total Toros"
                   value={bullStatistics.total}
@@ -1058,7 +2135,7 @@ const BullManagement: React.FC = () => {
               </motion.div>
 
               {/* Controles para toros */}
-              <motion.div variants={itemVariants} className="bg-white/95 backdrop-blur-sm rounded-xl p-6 shadow-lg border border-white/20">
+              <motion.div variants={itemVariants} className="bg-white rounded-xl p-6 shadow-md border border-gray-200">
                 <div className="flex flex-col md:flex-row md:items-center md:justify-between space-y-4 md:space-y-0">
                   <div className="relative flex-1 md:max-w-md">
                     <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
@@ -1074,7 +2151,8 @@ const BullManagement: React.FC = () => {
                   </div>
                   <div className="flex items-center space-x-3">
                     <button
-                      onClick={() => setShowBullForm(true)}
+                      type="button"
+                      onClick={handleNewBull}
                       className="inline-flex items-center px-4 py-2 bg-[#519a7c] text-white rounded-lg hover:bg-[#4a8970] transition-colors"
                     >
                       <Plus className="w-4 h-4 mr-2" />
@@ -1087,7 +2165,7 @@ const BullManagement: React.FC = () => {
               {/* Grid de toros */}
               <motion.div variants={itemVariants}>
                 {filteredBulls.length === 0 ? (
-                  <div className="bg-white/95 backdrop-blur-sm rounded-xl p-12 text-center shadow-lg border border-white/20">
+                  <div className="bg-white rounded-xl p-12 text-center shadow-md border border-gray-200">
                     <Crown className="w-16 h-16 text-gray-400 mx-auto mb-4" />
                     <h3 className="text-xl font-semibold text-gray-900 mb-2">
                       No se encontraron toros
@@ -1096,7 +2174,8 @@ const BullManagement: React.FC = () => {
                       No hay toros que coincidan con los filtros aplicados.
                     </p>
                     <button
-                      onClick={() => setShowBullForm(true)}
+                      type="button"
+                      onClick={handleNewBull}
                       className="inline-flex items-center px-6 py-3 bg-[#519a7c] text-white rounded-xl hover:bg-[#4a8970] transition-colors"
                     >
                       <Plus className="w-5 h-5 mr-2" />
@@ -1124,7 +2203,7 @@ const BullManagement: React.FC = () => {
               className="space-y-6"
             >
               {/* Estadísticas de empadre */}
-              <motion.div variants={itemVariants} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-6">
+              <motion.div variants={itemVariants} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
                 <StatCard
                   title="Total Empadres"
                   value={matingStatistics.total}
@@ -1164,7 +2243,7 @@ const BullManagement: React.FC = () => {
               </motion.div>
 
               {/* Controles para tabla de empadre */}
-              <motion.div variants={itemVariants} className="bg-white/95 backdrop-blur-sm rounded-xl p-6 shadow-lg border border-white/20">
+              <motion.div variants={itemVariants} className="bg-white rounded-xl p-6 shadow-md border border-gray-200">
                 <div className="flex flex-col md:flex-row md:items-center md:justify-between space-y-4 md:space-y-0">
                   <div className="relative flex-1 md:max-w-md">
                     <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
@@ -1180,7 +2259,7 @@ const BullManagement: React.FC = () => {
                   </div>
                   <div className="flex items-center space-x-3">
                     <button
-                      onClick={() => setShowMatingForm(true)}
+                      onClick={handleNewMating}
                       className="inline-flex items-center px-4 py-2 bg-[#519a7c] text-white rounded-lg hover:bg-[#4a8970] transition-colors"
                     >
                       <Plus className="w-4 h-4 mr-2" />
@@ -1191,7 +2270,7 @@ const BullManagement: React.FC = () => {
               </motion.div>
 
               {/* Tabla de empadre */}
-              <motion.div variants={itemVariants} className="bg-white/95 backdrop-blur-sm rounded-xl shadow-lg border border-white/20 overflow-hidden">
+              <motion.div variants={itemVariants} className="bg-white rounded-xl shadow-md border border-gray-200 overflow-hidden">
                 {filteredMatingRecords.length === 0 ? (
                   <div className="p-12 text-center">
                     <Heart className="w-16 h-16 text-gray-400 mx-auto mb-4" />
@@ -1202,7 +2281,7 @@ const BullManagement: React.FC = () => {
                       No hay registros de empadre que coincidan con los filtros aplicados.
                     </p>
                     <button
-                      onClick={() => setShowMatingForm(true)}
+                      onClick={handleNewMating}
                       className="inline-flex items-center px-6 py-3 bg-[#519a7c] text-white rounded-xl hover:bg-[#4a8970] transition-colors"
                     >
                       <Plus className="w-5 h-5 mr-2" />
@@ -1250,9 +2329,71 @@ const BullManagement: React.FC = () => {
           )}
         </AnimatePresence>
 
-        {/* Modales y formularios serían implementados aquí */}
-        {/* FormModal components would go here for create/edit operations */}
-        
+        {/* Modales */}
+        {selectedBull && (
+          <BullDetailModal
+            bull={selectedBull}
+            isOpen={showBullDetail}
+            onClose={() => {
+              setShowBullDetail(false);
+              setSelectedBull(null);
+            }}
+          />
+        )}
+
+        <BullFormModal
+          bull={editingBull || undefined}
+          isOpen={showBullForm}
+          onClose={() => {
+            setShowBullForm(false);
+            setEditingBull(null);
+          }}
+          onSave={handleSaveBull}
+        />
+
+        {/* Componente de notificación */}
+        <AnimatePresence>
+          {notification.show && (
+            <motion.div
+              className="fixed top-4 right-4 z-50"
+              initial={{ opacity: 0, x: 300 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: 300 }}
+              transition={{ duration: 0.3 }}
+            >
+              <div className={`
+                px-6 py-4 rounded-lg shadow-lg border-l-4 min-w-80 max-w-96
+                ${notification.type === "success" ? "bg-green-50 border-green-400 text-green-800" :
+                  notification.type === "error" ? "bg-red-50 border-red-400 text-red-800" :
+                  "bg-blue-50 border-blue-400 text-blue-800"}
+              `}>
+                <div className="flex items-center">
+                  <div className="flex-shrink-0">
+                    {notification.type === "success" && <CheckCircle className="w-5 h-5 text-green-400" />}
+                    {notification.type === "error" && <XCircle className="w-5 h-5 text-red-400" />}
+                    {notification.type === "info" && <Info className="w-5 h-5 text-blue-400" />}
+                  </div>
+                  <div className="ml-3">
+                    <p className="text-sm font-medium">{notification.message}</p>
+                  </div>
+                  <div className="ml-auto pl-3">
+                    <button
+                      onClick={() => setNotification(prev => ({ ...prev, show: false }))}
+                      className={`
+                        inline-flex rounded-md p-1.5 hover:bg-opacity-20 focus:outline-none
+                        ${notification.type === "success" ? "text-green-500 hover:bg-green-100" :
+                          notification.type === "error" ? "text-red-500 hover:bg-red-100" :
+                          "text-blue-500 hover:bg-blue-100"}
+                      `}
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </motion.div>
     </div>
   );

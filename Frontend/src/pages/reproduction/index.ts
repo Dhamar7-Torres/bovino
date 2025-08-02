@@ -36,8 +36,6 @@ export { default as ArtificialInsemination } from './ArtificialInsemination';
 export { default as PregnancyTracking } from './PregnancyTracking';
 export { default as BirthRecords } from './BirthRecords';
 
-// Dashboard y reportes - POR DESARROLLAR
-export { default as ReproductionDashboard } from './ReproductionDashboard';
 
 // =================================================================
 // EXPORTACIONES ALTERNATIVAS PARA FLEXIBILIDAD
@@ -765,7 +763,6 @@ const ReproductionModule = {
   ArtificialInsemination: () => import('./ArtificialInsemination'),
   PregnancyTracking: () => import('./PregnancyTracking'),
   BirthRecords: () => import('./BirthRecords'),
-  ReproductionDashboard: () => import('./ReproductionDashboard'),
   
   // Utilidades
   utils: {

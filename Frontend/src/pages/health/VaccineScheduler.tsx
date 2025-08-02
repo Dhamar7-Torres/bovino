@@ -179,6 +179,31 @@ enum Priority {
   URGENT = "urgent",
 }
 
+// Listas de opciones predefinidas para sugerencias
+const VACCINE_SUGGESTIONS = [
+  "Triple Viral Bovina",
+  "Vacuna contra Brucelosis",
+  "Vacuna Pentavalente",
+  "Vacuna contra Fiebre Aftosa",
+  "Vacuna contra Rabia",
+  "Vacuna contra Carbón Bacteriano",
+  "Vacuna contra Leptospirosis",
+  "Vacuna contra Salmonella",
+  "Vacuna contra Pasterelosis",
+  "Vacuna contra IBR/DVB",
+];
+
+const VETERINARIAN_SUGGESTIONS = [
+  "Dr. María García",
+  "Dr. Carlos Rodríguez", 
+  "Dr. Ana López",
+  "Dr. José Martínez",
+  "Dra. Laura Fernández",
+  "Dr. Roberto Herrera",
+  "Dra. Isabel Morales",
+  "Dr. Miguel Ángel Torres",
+];
+
 // Componente del formulario de programación (crear/editar)
 const ScheduleForm: React.FC<{
   isOpen: boolean;
@@ -354,10 +379,10 @@ const ScheduleForm: React.FC<{
     if (!formData.bovineId) newErrors.bovineId = "ID del bovino es requerido";
     if (!formData.bovineName) newErrors.bovineName = "Nombre del bovino es requerido";
     if (!formData.bovineTag) newErrors.bovineTag = "Etiqueta del bovino es requerida";
-    if (!formData.vaccineId) newErrors.vaccineId = "Vacuna es requerida";
+    if (!formData.vaccineName.trim()) newErrors.vaccineName = "Nombre de la vacuna es requerido";
     if (!formData.scheduledDate) newErrors.scheduledDate = "Fecha programada es requerida";
     if (!formData.scheduledTime) newErrors.scheduledTime = "Hora programada es requerida";
-    if (!formData.veterinarian) newErrors.veterinarian = "Veterinario es requerido";
+    if (!formData.veterinarian.trim()) newErrors.veterinarian = "Veterinario es requerido";
     if (formData.cost < 0) newErrors.cost = "El costo no puede ser negativo";
     if (formData.doseNumber < 1) newErrors.doseNumber = "El número de dosis debe ser mayor a 0";
     if (formData.totalDoses < 1) newErrors.totalDoses = "El total de dosis debe ser mayor a 0";
@@ -369,7 +394,12 @@ const ScheduleForm: React.FC<{
 
   const handleSubmit = () => {
     if (validateForm()) {
-      onSave(formData);
+      // Generar ID de vacuna si no existe
+      const vaccineId = formData.vaccineId || `vac-${Date.now()}`;
+      onSave({
+        ...formData,
+        vaccineId
+      });
       onClose();
     }
   };
@@ -462,58 +492,52 @@ const ScheduleForm: React.FC<{
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Vacuna *
+                Nombre de la Vacuna *
               </label>
-              <select
-                value={formData.vaccineId}
-                onChange={(e) => {
-                  const selectedValue = e.target.value;
-                  handleInputChange('vaccineId', selectedValue);
-                  
-                  const vaccineNames: Record<string, string> = {
-                    'vac-001': 'Triple Viral Bovina',
-                    'vac-002': 'Vacuna contra Brucelosis',
-                    'vac-003': 'Vacuna Pentavalente',
-                    'vac-004': 'Vacuna contra Fiebre Aftosa',
-                    'vac-005': 'Vacuna contra Rabia'
-                  };
-                  
-                  if (vaccineNames[selectedValue]) {
-                    handleInputChange('vaccineName', vaccineNames[selectedValue]);
-                  }
-                }}
+              <input
+                type="text"
+                list="vaccine-suggestions"
+                value={formData.vaccineName}
+                onChange={(e) => handleInputChange('vaccineName', e.target.value)}
                 className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 ${
-                  errors.vaccineId ? 'border-red-500' : 'border-gray-300'
+                  errors.vaccineName ? 'border-red-500' : 'border-gray-300'
                 }`}
-              >
-                <option value="">Seleccionar vacuna</option>
-                <option value="vac-001">Triple Viral Bovina</option>
-                <option value="vac-002">Vacuna contra Brucelosis</option>
-                <option value="vac-003">Vacuna Pentavalente</option>
-                <option value="vac-004">Vacuna contra Fiebre Aftosa</option>
-                <option value="vac-005">Vacuna contra Rabia</option>
-              </select>
-              {errors.vaccineId && <p className="text-red-500 text-xs mt-1">{errors.vaccineId}</p>}
+                placeholder="Escribe o selecciona una vacuna"
+              />
+              <datalist id="vaccine-suggestions">
+                {VACCINE_SUGGESTIONS.map((vaccine, index) => (
+                  <option key={index} value={vaccine} />
+                ))}
+              </datalist>
+              {errors.vaccineName && <p className="text-red-500 text-xs mt-1">{errors.vaccineName}</p>}
+              <p className="text-xs text-gray-500 mt-1">
+                Puedes escribir manualmente o seleccionar de las opciones sugeridas
+              </p>
             </div>
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Veterinario *
               </label>
-              <select
+              <input
+                type="text"
+                list="veterinarian-suggestions"
                 value={formData.veterinarian}
                 onChange={(e) => handleInputChange('veterinarian', e.target.value)}
                 className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 ${
                   errors.veterinarian ? 'border-red-500' : 'border-gray-300'
                 }`}
-              >
-                <option value="">Seleccionar veterinario</option>
-                <option value="Dr. María García">Dr. María García</option>
-                <option value="Dr. Carlos Rodríguez">Dr. Carlos Rodríguez</option>
-                <option value="Dr. Ana López">Dr. Ana López</option>
-                <option value="Dr. José Martínez">Dr. José Martínez</option>
-              </select>
+                placeholder="Escribe o selecciona un veterinario"
+              />
+              <datalist id="veterinarian-suggestions">
+                {VETERINARIAN_SUGGESTIONS.map((vet, index) => (
+                  <option key={index} value={vet} />
+                ))}
+              </datalist>
               {errors.veterinarian && <p className="text-red-500 text-xs mt-1">{errors.veterinarian}</p>}
+              <p className="text-xs text-gray-500 mt-1">
+                Puedes escribir manualmente o seleccionar de la lista
+              </p>
             </div>
           </div>
 
@@ -835,12 +859,12 @@ const VaccineScheduler: React.FC = () => {
             costPerDose: 45.5,
             isGovernmentRequired: true,
           },
-          scheduledDate: "2025-07-25",
+          scheduledDate: "2025-08-15",
           scheduledTime: "09:00",
           status: ScheduleStatus.SCHEDULED,
           doseNumber: 1,
           totalDoses: 2,
-          nextDueDate: "2025-08-15",
+          nextDueDate: "2025-09-15",
           veterinarian: "Dr. María García",
           location: {
             latitude: 17.9889,
@@ -881,7 +905,7 @@ const VaccineScheduler: React.FC = () => {
             costPerDose: 65.0,
             isGovernmentRequired: true,
           },
-          scheduledDate: "2025-07-28",
+          scheduledDate: "2025-08-20",
           scheduledTime: "14:30",
           status: ScheduleStatus.SCHEDULED,
           doseNumber: 1,
@@ -926,7 +950,7 @@ const VaccineScheduler: React.FC = () => {
             costPerDose: 58.75,
             isGovernmentRequired: false,
           },
-          scheduledDate: "2025-07-20",
+          scheduledDate: "2025-07-25",
           scheduledTime: "11:00",
           status: ScheduleStatus.OVERDUE,
           doseNumber: 2,
@@ -1046,7 +1070,7 @@ const VaccineScheduler: React.FC = () => {
         vaccineType: {
           id: formData.vaccineId,
           name: formData.vaccineName,
-          manufacturer: "Zoetis",
+          manufacturer: "Fabricante",
           category: VaccineCategory.VIRAL,
           description: "Vacuna programada",
           dosageInstructions: "Según protocolo",

@@ -136,6 +136,7 @@ interface NewInfestationForm {
   animalName: string;
   animalTag: string;
   parasiteId: string;
+  parasiteName: string; // Agregado para permitir entrada manual
   detectionDate: string;
   detectionMethod: string;
   severity: string;
@@ -151,6 +152,30 @@ interface NewInfestationForm {
   testMethod?: string;
   testDate?: string;
 }
+
+// Lista de sugerencias de parásitos
+const PARASITE_SUGGESTIONS = [
+  "Garrapata del Ganado",
+  "Lombriz Intestinal", 
+  "Mosca del Cuerno",
+  "Tenia del Ganado",
+  "Fasciola Hepática",
+  "Áscaris Bovino",
+  "Tricocéfalo",
+  "Oesophagostomum",
+  "Dictyocaulus",
+  "Piojos del Ganado",
+  "Ácaros de la Sarna",
+  "Moscas de los Cuernos",
+  "Garrapata de la Oreja",
+  "Coccidios",
+  "Cryptosporidium",
+  "Giardia",
+  "Eimeria",
+  "Neospora",
+  "Babesia",
+  "Anaplasmosis"
+];
 
 // Componentes reutilizables
 const Card: React.FC<{ children: React.ReactNode; className?: string }> = ({ children, className = '' }) => (
@@ -260,6 +285,7 @@ const NewInfestationModal: React.FC<{
     animalName: '',
     animalTag: '',
     parasiteId: '',
+    parasiteName: '', // Agregado para entrada manual
     detectionDate: new Date().toISOString().split('T')[0],
     detectionMethod: 'clinical',
     severity: 'mild',
@@ -282,6 +308,7 @@ const NewInfestationModal: React.FC<{
         animalName: editingInfestation.animalName,
         animalTag: editingInfestation.animalTag,
         parasiteId: editingInfestation.parasiteId,
+        parasiteName: editingInfestation.parasiteName, // Usar el nombre almacenado
         detectionDate: editingInfestation.detectionDate.toISOString().split('T')[0],
         detectionMethod: editingInfestation.detectionMethod,
         severity: editingInfestation.severity,
@@ -303,6 +330,7 @@ const NewInfestationModal: React.FC<{
         animalName: '',
         animalTag: '',
         parasiteId: '',
+        parasiteName: '',
         detectionDate: new Date().toISOString().split('T')[0],
         detectionMethod: 'clinical',
         severity: 'mild',
@@ -356,9 +384,14 @@ const NewInfestationModal: React.FC<{
 
   const handleSubmit = () => {
     // Validación básica
-    if (!formData.animalId || !formData.animalName || !formData.animalTag || !formData.parasiteId || !formData.veterinarian) {
+    if (!formData.animalId || !formData.animalName || !formData.animalTag || !formData.parasiteName.trim() || !formData.veterinarian) {
       alert('Por favor, complete todos los campos obligatorios marcados con *');
       return;
+    }
+    
+    // Generar ID si no existe o si es un parásito nuevo
+    if (!formData.parasiteId) {
+      formData.parasiteId = `parasite-${Date.now()}`;
     }
     
     onSave(formData);
@@ -420,18 +453,34 @@ const NewInfestationModal: React.FC<{
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Parásito *</label>
-              <select
+              <label className="block text-sm font-medium text-gray-700 mb-2">Nombre del Parásito *</label>
+              <input
+                type="text"
+                list="parasite-suggestions"
                 required
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                value={formData.parasiteId}
-                onChange={(e) => setFormData({ ...formData, parasiteId: e.target.value })}
-              >
-                <option value="">Seleccionar parásito</option>
-                {parasites.map(parasite => (
-                  <option key={parasite.id} value={parasite.id}>{parasite.name}</option>
+                value={formData.parasiteName}
+                onChange={(e) => {
+                  const selectedParasite = parasites.find(p => p.name === e.target.value);
+                  setFormData({ 
+                    ...formData, 
+                    parasiteName: e.target.value,
+                    parasiteId: selectedParasite ? selectedParasite.id : ''
+                  });
+                }}
+                placeholder="Escribe o selecciona un parásito"
+              />
+              <datalist id="parasite-suggestions">
+                {PARASITE_SUGGESTIONS.map((parasite, index) => (
+                  <option key={index} value={parasite} />
                 ))}
-              </select>
+                {parasites.map(parasite => (
+                  <option key={parasite.id} value={parasite.name} />
+                ))}
+              </datalist>
+              <p className="text-xs text-gray-500 mt-1">
+                Puedes escribir manualmente o seleccionar de las opciones sugeridas
+              </p>
             </div>
 
             <div>
@@ -1071,8 +1120,8 @@ const ParasitePatrol: React.FC = () => {
         animalId: infestationData.animalId,
         animalName: infestationData.animalName,
         animalTag: infestationData.animalTag,
-        parasiteId: infestationData.parasiteId,
-        parasiteName: parasites.find(p => p.id === infestationData.parasiteId)?.name || '',
+        parasiteId: infestationData.parasiteId || `parasite-${Date.now()}`,
+        parasiteName: infestationData.parasiteName, // Usar el nombre ingresado manualmente
         detectionDate: new Date(infestationData.detectionDate),
         detectionMethod: infestationData.detectionMethod as any,
         severity: infestationData.severity as any,
@@ -1102,8 +1151,8 @@ const ParasitePatrol: React.FC = () => {
         animalId: infestationData.animalId,
         animalName: infestationData.animalName,
         animalTag: infestationData.animalTag,
-        parasiteId: infestationData.parasiteId,
-        parasiteName: parasites.find(p => p.id === infestationData.parasiteId)?.name || '',
+        parasiteId: infestationData.parasiteId || `parasite-${Date.now()}`,
+        parasiteName: infestationData.parasiteName, // Usar el nombre ingresado manualmente
         detectionDate: new Date(infestationData.detectionDate),
         detectionMethod: infestationData.detectionMethod as any,
         severity: infestationData.severity as any,
@@ -1279,41 +1328,7 @@ const ParasitePatrol: React.FC = () => {
       ];
 
       // Inicializar con casos de ejemplo (comentado para empezar sin casos)
-      const mockInfestations: ParasiteInfestation[] = [
-        // {
-        //   id: '1',
-        //   animalId: 'COW001',
-        //   animalName: 'Bessie',
-        //   animalTag: 'TAG-001',
-        //   parasiteId: '1',
-        //   parasiteName: 'Garrapata del Ganado',
-        //   detectionDate: new Date('2025-07-08'),
-        //   detectionMethod: 'clinical',
-        //   severity: 'moderate',
-        //   parasiteLoad: 'medium',
-        //   location: {
-        //     lat: 17.9869,
-        //     lng: -92.9303,
-        //     address: 'Pastizal Norte, Sector A, Villahermosa, Tabasco',
-        //     sector: 'A'
-        //   },
-        //   clinicalSigns: ['Presencia visible de garrapatas', 'Irritación de piel', 'Rascado excesivo'],
-        //   veterinarian: 'Dr. García',
-        //   treatment: {
-        //     medicationId: 'MED001',
-        //     medicationName: 'Fipronil Pour-On',
-        //     startDate: new Date('2025-07-08'),
-        //     endDate: new Date('2025-07-15'),
-        //     dosage: '1ml/10kg',
-        //     frequency: 'Aplicación única',
-        //     route: 'Tópica',
-        //     cost: 45.50
-        //   },
-        //   status: 'treating',
-        //   followUpDate: new Date('2025-07-22'),
-        //   notes: 'Aplicación tópica realizada. Monitorear efectividad en 14 días.'
-        // }
-      ];
+      const mockInfestations: ParasiteInfestation[] = [];
 
       // Estadísticas iniciales (empezar en 0)
       const initialStats: ParasiteStats = {

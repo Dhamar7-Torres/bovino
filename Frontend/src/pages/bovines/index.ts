@@ -16,18 +16,12 @@ export { default as BovinesPage } from "./BovinesPage";
 
 // Gestión de bovinos individuales
 export { default as BovineAdd } from "./BovineAdd";
-export { default as BovineDetail } from "./BovineDetail";
-export { default as BovineEdit } from "./BovineEdit";
-export { default as BovineList } from "./BovineList";
 
 // Gestión de documentos y archivos
 export { default as BovineDocuments } from "./BovineDocuments";
 
 // Seguimiento y geolocalización
 export { default as BovineLocation } from "./BovineLocation";
-
-// Notas y observaciones
-export { default as BovineNotes } from "./BovineNotes";
 
 // =================================================================
 // EXPORTACIONES ADICIONALES

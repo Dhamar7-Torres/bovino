@@ -34,8 +34,6 @@ import PregnancyTracking from './PregnancyTracking';
 import BirthRecords from './BirthRecords';
 import BullManagement from './BullManagement';
 import CowManagement from './CowManagement';
-import ReproductionDashboard from './ReproductionDashboard';
-
 // Tipos para navegación y módulos
 interface NavigationItem {
   id: string;

@@ -12,9 +12,6 @@
 // Exportación del componente principal de routing interno
 export { default as ProductionPage } from './ProductionPage';
 
-// Exportación del dashboard general de producción
-export { default as ProductionDashboard } from './ProductionDashboard';
-
 // Exportación de los módulos especializados de producción
 export { default as MilkProduction } from './MilkProduction';
 export { default as MeatProduction } from './MeatProduction';
@@ -26,7 +23,6 @@ export { default as BreedingProduction } from './BreedingProduction';
 
 // Alias alternativos para importación más semántica
 export { default as ProductionRouter } from './ProductionPage';
-export { default as ProductionMain } from './ProductionDashboard';
 export { default as LecheProd } from './MilkProduction';
 export { default as CarneProd } from './MeatProduction';
 export { default as CriaProd } from './BreedingProduction';

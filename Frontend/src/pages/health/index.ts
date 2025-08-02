@@ -35,7 +35,6 @@ export { default as MedicationInventory } from "./MedicationInventory";
 // =================================================================
 // COMPONENTES DE REPORTES Y ANÁLISIS
 // =================================================================
-export { default as HealthReports } from "./HealthReports";
 export { default as PostMortemReports } from "./PostMortemReports";
 
 // =================================================================

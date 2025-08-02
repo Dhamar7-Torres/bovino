@@ -29,13 +29,9 @@ import {
 } from "lucide-react";
 
 // Importar componentes del módulo bovinos
-import BovineList from "./BovineList";
 import BovineAdd from "./BovineAdd";
-import BovineDetail from "./BovineDetail";
-import BovineEdit from "./BovineEdit";
 import BovineDocuments from "./BovineDocuments";
 import BovineLocation from "./BovineLocation";
-import BovineNotes from "./BovineNotes";
 
 // Contexto para el módulo de bovinos
 interface BovinesContextType {
@@ -485,25 +481,15 @@ const BovinesPage: React.FC = () => {
           >
             <Routes>
               {/* Ruta principal - Lista de bovinos */}
-              <Route index element={<BovineList />} />
-
+              
               {/* Agregar nuevo bovino */}
               <Route path="add" element={<BovineAdd />} />
-
-              {/* Detalles del bovino */}
-              <Route path="detail/:id" element={<BovineDetail />} />
-
-              {/* Editar bovino */}
-              <Route path="edit/:id" element={<BovineEdit />} />
 
               {/* Documentos del bovino */}
               <Route path="documents/:id" element={<BovineDocuments />} />
 
               {/* Ubicación del bovino */}
               <Route path="location/:id" element={<BovineLocation />} />
-
-              {/* Notas del bovino */}
-              <Route path="notes/:id" element={<BovineNotes />} />
 
               {/* Rutas adicionales del módulo */}
               <Route

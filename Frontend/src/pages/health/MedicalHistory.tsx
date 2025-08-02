@@ -1,60 +1,48 @@
 import React, { useState, useEffect } from "react";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   Stethoscope,
   Calendar,
   Search,
-  Filter,
   Plus,
   MapPin,
-  FileText,
   Syringe,
   Thermometer,
-  Pill,
-  Activity,
-  Eye,
-  User,
-  Tag,
   TrendingUp,
   History,
   X,
   Save,
+  Edit,
+  Trash2,
+  AlertTriangle,
+  Eye,
 } from "lucide-react";
+
+// Tipos para eventos médicos
+type EventType = "vaccination" | "illness" | "treatment" | "checkup" | "surgery" | "medication" | "exam" | "observation";
+type EventStatus = "active" | "completed" | "ongoing" | "cancelled";
+type EventSeverity = "low" | "medium" | "high" | "critical";
 
 // Interfaces para tipos de datos
 interface MedicalEvent {
   id: string;
-  animalId: string;
   animalName: string;
   animalTag: string;
-  eventType:
-    | "vaccination"
-    | "illness"
-    | "treatment"
-    | "checkup"
-    | "surgery"
-    | "medication"
-    | "exam"
-    | "observation";
+  eventType: EventType;
   title: string;
   description: string;
-  date: Date;
+  date: string;
   veterinarian: string;
-  location: {
-    lat: number;
-    lng: number;
-    address: string;
-    facility: string;
-  };
-  severity?: "low" | "medium" | "high" | "critical";
-  status: "active" | "completed" | "ongoing" | "cancelled";
+  location: string;
+  severity?: EventSeverity;
+  status: EventStatus;
   medications?: string[];
   diagnosis?: string;
   treatment?: string;
-  followUpDate?: Date;
+  followUpDate?: string;
   cost: number;
-  attachments: string[];
   notes: string;
+  createdAt: string;
   vitalSigns?: {
     temperature: number;
     heartRate: number;
@@ -63,40 +51,25 @@ interface MedicalEvent {
   };
 }
 
-interface AnimalProfile {
-  id: string;
-  name: string;
-  tag: string;
-  breed: string;
-  birthDate: Date;
-  gender: "male" | "female";
-  currentWeight: number;
-  healthStatus: "healthy" | "sick" | "recovering" | "critical";
-  lastCheckup: Date;
-  totalEvents: number;
-  chronicConditions: string[];
-  allergies: string[];
-}
-
 interface HealthStats {
   totalEvents: number;
   vaccinationsCount: number;
   illnessesCount: number;
   treatmentsCount: number;
-  averageRecoveryTime: number;
   healthScore: number;
-  lastEventDate: Date;
 }
 
 interface NewEventForm {
-  animalId: string;
-  eventType: string;
+  animalName: string;
+  animalTag: string;
+  eventType: EventType;
   title: string;
   description: string;
   date: string;
   veterinarian: string;
-  severity?: string;
-  status: string;
+  location: string;
+  severity?: EventSeverity;
+  status: EventStatus;
   medications: string;
   diagnosis: string;
   treatment: string;
@@ -111,194 +84,178 @@ interface NewEventForm {
   };
 }
 
-// Componentes reutilizables
-const Card: React.FC<{ children: React.ReactNode; className?: string }> = ({
-  children,
-  className = "",
-}) => (
-  <div
-    className={`bg-white rounded-lg shadow-md border border-gray-200 ${className}`}
-  >
-    {children}
-  </div>
-);
+const MedicalHistory: React.FC = () => {
+  const [events, setEvents] = useState<MedicalEvent[]>([]);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string>("");
+  
+  // Estados para modales y formularios
+  const [showForm, setShowForm] = useState<boolean>(false);
+  const [showDetailsModal, setShowDetailsModal] = useState<boolean>(false);
+  const [showDeleteModal, setShowDeleteModal] = useState<boolean>(false);
+  const [selectedEvent, setSelectedEvent] = useState<MedicalEvent | null>(null);
+  const [editingEvent, setEditingEvent] = useState<MedicalEvent | null>(null);
+  const [eventToDelete, setEventToDelete] = useState<MedicalEvent | null>(null);
+  
+  // Estados para formulario
+  const [formData, setFormData] = useState<Partial<NewEventForm>>({});
+  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+  
+  // Estados para filtros
+  const [searchTerm, setSearchTerm] = useState("");
+  const [selectedEventType, setSelectedEventType] = useState<string>("all");
+  const [selectedVeterinarian, setSelectedVeterinarian] = useState<string>("all");
 
-const CardHeader: React.FC<{ children: React.ReactNode; className?: string }> = ({ 
-  children, 
-  className = "" 
-}) => (
-  <div className={`px-4 sm:px-6 py-4 border-b border-gray-200 ${className}`}>
-    {children}
-  </div>
-);
-
-const CardTitle: React.FC<{
-  children: React.ReactNode;
-  className?: string;
-}> = ({ children, className = "" }) => (
-  <h3 className={`text-lg font-semibold text-gray-900 ${className}`}>
-    {children}
-  </h3>
-);
-
-const CardDescription: React.FC<{ children: React.ReactNode; className?: string }> = ({
-  children,
-  className = "",
-}) => (
-  <p className={`text-sm text-gray-600 mt-1 ${className}`}>
-    {children}
-  </p>
-);
-
-const CardContent: React.FC<{
-  children: React.ReactNode;
-  className?: string;
-}> = ({ children, className = "" }) => (
-  <div className={`px-4 sm:px-6 py-4 ${className}`}>{children}</div>
-);
-
-const Button: React.FC<{
-  children: React.ReactNode;
-  onClick?: () => void;
-  variant?: "default" | "outline" | "success" | "danger";
-  size?: "sm" | "default";
-  className?: string;
-  type?: "button" | "submit";
-  disabled?: boolean;
-}> = ({
-  children,
-  onClick,
-  variant = "default",
-  size = "default",
-  className = "",
-  type = "button",
-  disabled = false,
-}) => {
-  const baseClasses =
-    "inline-flex items-center justify-center font-medium rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed";
-  const variantClasses = {
-    default: "bg-blue-600 text-white hover:bg-blue-700 focus:ring-blue-500",
-    outline:
-      "border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 focus:ring-blue-500",
-    success: "bg-green-600 text-white hover:bg-green-700 focus:ring-green-500",
-    danger: "bg-red-600 text-white hover:bg-red-700 focus:ring-red-500",
-  };
-  const sizeClasses = {
-    sm: "px-3 py-2 text-sm",
-    default: "px-4 py-2 text-sm",
-  };
-
-  return (
-    <button
-      type={type}
-      disabled={disabled}
-      className={`${baseClasses} ${variantClasses[variant]} ${sizeClasses[size]} ${className}`}
-      onClick={onClick}
-    >
-      {children}
-    </button>
-  );
-};
-
-const Badge: React.FC<{
-  children: React.ReactNode;
-  variant: string;
-  className?: string;
-}> = ({ children, variant, className = "" }) => {
-  const getVariantClasses = (variant: string) => {
-    switch (variant) {
-      case "healthy":
-        return "bg-green-100 text-green-800 border-green-200";
-      case "sick":
-        return "bg-red-100 text-red-800 border-red-200";
-      case "recovering":
-        return "bg-yellow-100 text-yellow-800 border-yellow-200";
-      case "critical":
-        return "bg-red-100 text-red-800 border-red-200";
-      case "vaccination":
-        return "bg-purple-100 text-purple-800 border-purple-200";
-      case "illness":
-        return "bg-red-100 text-red-800 border-red-200";
-      case "treatment":
-        return "bg-blue-100 text-blue-800 border-blue-200";
-      case "checkup":
-        return "bg-green-100 text-green-800 border-green-200";
-      case "surgery":
-        return "bg-orange-100 text-orange-800 border-orange-200";
-      case "medication":
-        return "bg-indigo-100 text-indigo-800 border-indigo-200";
-      case "exam":
-        return "bg-cyan-100 text-cyan-800 border-cyan-200";
-      case "observation":
-        return "bg-gray-100 text-gray-800 border-gray-200";
-      case "active":
-        return "bg-red-100 text-red-800 border-red-200";
-      case "completed":
-        return "bg-green-100 text-green-800 border-green-200";
-      case "ongoing":
-        return "bg-blue-100 text-blue-800 border-blue-200";
-      case "cancelled":
-        return "bg-gray-100 text-gray-800 border-gray-200";
-      default:
-        return "bg-gray-100 text-gray-800 border-gray-200";
-    }
-  };
-
-  return (
-    <span
-      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${getVariantClasses(
-        variant
-      )} ${className}`}
-    >
-      {children}
-    </span>
-  );
-};
-
-// Modal para crear nuevo evento
-const NewEventModal: React.FC<{
-  isOpen: boolean;
-  onClose: () => void;
-  onSave: (event: NewEventForm) => void;
-  animals: AnimalProfile[];
-}> = ({ isOpen, onClose, onSave, animals }) => {
-  const [formData, setFormData] = useState<NewEventForm>({
-    animalId: "",
-    eventType: "vaccination",
-    title: "",
-    description: "",
-    date: new Date().toISOString().split("T")[0],
-    veterinarian: "",
-    severity: "low",
-    status: "active",
-    medications: "",
-    diagnosis: "",
-    treatment: "",
-    followUpDate: "",
-    cost: 0,
-    notes: "",
-    vitalSigns: {
-      temperature: 0,
-      heartRate: 0,
-      respiratoryRate: 0,
-      weight: 0,
+  // Datos de ejemplo
+  const mockEvents: MedicalEvent[] = [
+    {
+      id: "1",
+      animalName: "Bessie",
+      animalTag: "TAG-001",
+      eventType: "checkup",
+      title: "Chequeo Mensual de Rutina",
+      description: "Examen de salud general y evaluación reproductiva",
+      date: "2025-07-01",
+      veterinarian: "Dr. García",
+      location: "Establo Principal",
+      status: "completed",
+      cost: 150,
+      notes: "Animal en excelente estado de salud. Todos los parámetros normales.",
+      createdAt: "2025-07-01T10:00:00.000Z",
+      vitalSigns: {
+        temperature: 38.5,
+        heartRate: 72,
+        respiratoryRate: 24,
+        weight: 580,
+      },
     },
+    {
+      id: "2",
+      animalName: "Bessie",
+      animalTag: "TAG-001",
+      eventType: "vaccination",
+      title: "Vacuna Antiaftosa",
+      description: "Aplicación de vacuna contra fiebre aftosa - dosis anual",
+      date: "2025-06-15",
+      veterinarian: "Dr. Martínez",
+      location: "Establo Principal",
+      status: "completed",
+      medications: ["Vacuna Antiaftosa"],
+      cost: 85,
+      notes: "Vacunación sin complicaciones. Próxima dosis en 12 meses.",
+      createdAt: "2025-06-15T09:00:00.000Z",
+    },
+    {
+      id: "3",
+      animalName: "Luna",
+      animalTag: "TAG-002",
+      eventType: "illness",
+      title: "Mastitis Clínica",
+      description: "Inflamación aguda de la glándula mamaria",
+      date: "2025-07-08",
+      veterinarian: "Dr. López",
+      location: "Establo Norte",
+      severity: "medium",
+      status: "ongoing",
+      diagnosis: "Mastitis clínica en cuarto anterior derecho",
+      treatment: "Antibioterapia sistémica y tratamiento intramamario",
+      medications: ["Ceftriaxona", "Antiinflamatorio"],
+      cost: 320,
+      notes: "Respuesta favorable al tratamiento. Continuar terapia por 5 días más.",
+      createdAt: "2025-07-08T14:30:00.000Z",
+      vitalSigns: {
+        temperature: 39.2,
+        heartRate: 85,
+        respiratoryRate: 28,
+        weight: 425,
+      },
+    },
+  ];
+
+  // Estadísticas calculadas
+  const [healthStats, setHealthStats] = useState<HealthStats>({
+    totalEvents: 0,
+    vaccinationsCount: 0,
+    illnessesCount: 0,
+    treatmentsCount: 0,
+    healthScore: 92,
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    onSave(formData);
-    onClose();
-    // Resetear formulario
+  // Cargar datos
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        setIsLoading(true);
+        setError("");
+        
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
+        setEvents(mockEvents);
+        
+        // Calcular estadísticas
+        setHealthStats({
+          totalEvents: mockEvents.length,
+          vaccinationsCount: mockEvents.filter(e => e.eventType === "vaccination").length,
+          illnessesCount: mockEvents.filter(e => e.eventType === "illness").length,
+          treatmentsCount: mockEvents.filter(e => e.eventType === "treatment").length,
+          healthScore: 92,
+        });
+        
+      } catch (err) {
+        setError("Error al cargar los eventos médicos");
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadData();
+  }, []);
+
+  // Validar formulario
+  const validateForm = (data: Partial<NewEventForm>): Record<string, string> => {
+    const errors: Record<string, string> = {};
+
+    if (!data.animalName?.trim()) {
+      errors.animalName = "El nombre del animal es obligatorio";
+    }
+    if (!data.eventType) {
+      errors.eventType = "El tipo de evento es obligatorio";
+    }
+    if (!data.title?.trim()) {
+      errors.title = "El título es obligatorio";
+    }
+    if (!data.description?.trim()) {
+      errors.description = "La descripción es obligatoria";
+    }
+    if (!data.date) {
+      errors.date = "La fecha es obligatoria";
+    }
+    if (!data.veterinarian?.trim()) {
+      errors.veterinarian = "El veterinario es obligatorio";
+    }
+    if (!data.location?.trim()) {
+      errors.location = "La ubicación es obligatoria";
+    }
+
+    return errors;
+  };
+
+  // Resetear formulario
+  const resetForm = () => {
+    const now = new Date();
+    const today = now.toISOString().substr(0, 10);
+    
     setFormData({
-      animalId: "",
-      eventType: "vaccination",
+      animalName: "",
+      animalTag: "",
+      eventType: "vaccination" as EventType,
       title: "",
       description: "",
-      date: new Date().toISOString().split("T")[0],
+      date: today,
       veterinarian: "",
-      severity: "low",
-      status: "active",
+      location: "",
+      severity: "low" as EventSeverity,
+      status: "active" as EventStatus,
       medications: "",
       diagnosis: "",
       treatment: "",
@@ -312,889 +269,238 @@ const NewEventModal: React.FC<{
         weight: 0,
       },
     });
+    setFormErrors({});
   };
 
-  if (!isOpen) return null;
-
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <motion.div
-        initial={{ opacity: 0, scale: 0.95 }}
-        animate={{ opacity: 1, scale: 1 }}
-        exit={{ opacity: 0, scale: 0.95 }}
-        className="bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-screen overflow-y-auto"
-      >
-        <div className="sticky top-0 bg-white px-6 py-4 border-b border-gray-200 flex items-center justify-between">
-          <h2 className="text-xl font-semibold text-gray-900">
-            Nuevo Evento Médico
-          </h2>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-gray-600"
-          >
-            <X className="w-6 h-6" />
-          </button>
-        </div>
-
-        <form onSubmit={handleSubmit} className="p-6 space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Animal */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Animal *
-              </label>
-              <select
-                required
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                value={formData.animalId}
-                onChange={(e) =>
-                  setFormData({ ...formData, animalId: e.target.value })
-                }
-              >
-                <option value="">Seleccionar animal</option>
-                {animals.map((animal) => (
-                  <option key={animal.id} value={animal.id}>
-                    {animal.name} ({animal.tag})
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Tipo de evento */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Tipo de Evento *
-              </label>
-              <select
-                required
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                value={formData.eventType}
-                onChange={(e) =>
-                  setFormData({ ...formData, eventType: e.target.value })
-                }
-              >
-                <option value="vaccination">Vacunación</option>
-                <option value="illness">Enfermedad</option>
-                <option value="treatment">Tratamiento</option>
-                <option value="checkup">Chequeo</option>
-                <option value="surgery">Cirugía</option>
-                <option value="medication">Medicamento</option>
-                <option value="exam">Examen</option>
-                <option value="observation">Observación</option>
-              </select>
-            </div>
-
-            {/* Título */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Título *
-              </label>
-              <input
-                type="text"
-                required
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                value={formData.title}
-                onChange={(e) =>
-                  setFormData({ ...formData, title: e.target.value })
-                }
-              />
-            </div>
-
-            {/* Veterinario */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Veterinario *
-              </label>
-              <input
-                type="text"
-                required
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                value={formData.veterinarian}
-                onChange={(e) =>
-                  setFormData({ ...formData, veterinarian: e.target.value })
-                }
-              />
-            </div>
-
-            {/* Fecha */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Fecha *
-              </label>
-              <input
-                type="date"
-                required
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                value={formData.date}
-                onChange={(e) =>
-                  setFormData({ ...formData, date: e.target.value })
-                }
-              />
-            </div>
-
-            {/* Status */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Estado
-              </label>
-              <select
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                value={formData.status}
-                onChange={(e) =>
-                  setFormData({ ...formData, status: e.target.value })
-                }
-              >
-                <option value="active">Activo</option>
-                <option value="completed">Completado</option>
-                <option value="ongoing">En progreso</option>
-                <option value="cancelled">Cancelado</option>
-              </select>
-            </div>
-
-            {/* Severidad */}
-            {["illness", "surgery"].includes(formData.eventType) && (
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Severidad
-                </label>
-                <select
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  value={formData.severity}
-                  onChange={(e) =>
-                    setFormData({ ...formData, severity: e.target.value })
-                  }
-                >
-                  <option value="low">Baja</option>
-                  <option value="medium">Media</option>
-                  <option value="high">Alta</option>
-                  <option value="critical">Crítica</option>
-                </select>
-              </div>
-            )}
-
-            {/* Costo */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Costo ($)
-              </label>
-              <input
-                type="number"
-                min="0"
-                step="0.01"
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                value={formData.cost}
-                onChange={(e) =>
-                  setFormData({ ...formData, cost: parseFloat(e.target.value) || 0 })
-                }
-              />
-            </div>
-          </div>
-
-          {/* Descripción */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Descripción *
-            </label>
-            <textarea
-              required
-              rows={3}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              value={formData.description}
-              onChange={(e) =>
-                setFormData({ ...formData, description: e.target.value })
-              }
-            />
-          </div>
-
-          {/* Signos vitales */}
-          <div>
-            <h3 className="text-lg font-medium text-gray-900 mb-3">
-              Signos Vitales
-            </h3>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Temperatura (°C)
-                </label>
-                <input
-                  type="number"
-                  step="0.1"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  value={formData.vitalSigns.temperature}
-                  onChange={(e) =>
-                    setFormData({
-                      ...formData,
-                      vitalSigns: {
-                        ...formData.vitalSigns,
-                        temperature: parseFloat(e.target.value) || 0,
-                      },
-                    })
-                  }
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Pulso (bpm)
-                </label>
-                <input
-                  type="number"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  value={formData.vitalSigns.heartRate}
-                  onChange={(e) =>
-                    setFormData({
-                      ...formData,
-                      vitalSigns: {
-                        ...formData.vitalSigns,
-                        heartRate: parseInt(e.target.value) || 0,
-                      },
-                    })
-                  }
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Respiración (rpm)
-                </label>
-                <input
-                  type="number"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  value={formData.vitalSigns.respiratoryRate}
-                  onChange={(e) =>
-                    setFormData({
-                      ...formData,
-                      vitalSigns: {
-                        ...formData.vitalSigns,
-                        respiratoryRate: parseInt(e.target.value) || 0,
-                      },
-                    })
-                  }
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Peso (kg)
-                </label>
-                <input
-                  type="number"
-                  step="0.1"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  value={formData.vitalSigns.weight}
-                  onChange={(e) =>
-                    setFormData({
-                      ...formData,
-                      vitalSigns: {
-                        ...formData.vitalSigns,
-                        weight: parseFloat(e.target.value) || 0,
-                      },
-                    })
-                  }
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Medicamentos */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Medicamentos (separados por comas)
-            </label>
-            <input
-              type="text"
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              value={formData.medications}
-              onChange={(e) =>
-                setFormData({ ...formData, medications: e.target.value })
-              }
-              placeholder="Ej: Antibiótico, Antiinflamatorio"
-            />
-          </div>
-
-          {/* Diagnóstico */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Diagnóstico
-            </label>
-            <textarea
-              rows={3}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              value={formData.diagnosis}
-              onChange={(e) =>
-                setFormData({ ...formData, diagnosis: e.target.value })
-              }
-            />
-          </div>
-
-          {/* Tratamiento */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Tratamiento
-            </label>
-            <textarea
-              rows={3}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              value={formData.treatment}
-              onChange={(e) =>
-                setFormData({ ...formData, treatment: e.target.value })
-              }
-            />
-          </div>
-
-          {/* Notas */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Notas Adicionales
-            </label>
-            <textarea
-              rows={3}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              value={formData.notes}
-              onChange={(e) =>
-                setFormData({ ...formData, notes: e.target.value })
-              }
-            />
-          </div>
-
-          {/* Fecha de seguimiento */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Fecha de Seguimiento
-            </label>
-            <input
-              type="date"
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              value={formData.followUpDate}
-              onChange={(e) =>
-                setFormData({ ...formData, followUpDate: e.target.value })
-              }
-            />
-          </div>
-
-          {/* Botones */}
-          <div className="flex items-center justify-end gap-3 pt-6 border-t border-gray-200">
-            <Button variant="outline" onClick={onClose}>
-              Cancelar
-            </Button>
-            <Button type="submit">
-              <Save className="w-4 h-4 mr-2" />
-              Guardar Evento
-            </Button>
-          </div>
-        </form>
-      </motion.div>
-    </div>
-  );
-};
-
-// Componente de Timeline de Eventos
-const EventTimeline: React.FC<{ events: MedicalEvent[] }> = ({ events }) => {
-  const getEventIcon = (eventType: string) => {
-    switch (eventType) {
-      case "vaccination":
-        return Syringe;
-      case "illness":
-        return Thermometer;
-      case "treatment":
-        return Pill;
-      case "checkup":
-        return Stethoscope;
-      case "surgery":
-        return Activity;
-      case "medication":
-        return Pill;
-      case "exam":
-        return FileText;
-      case "observation":
-        return Eye;
-      default:
-        return Activity;
+  // Crear nuevo evento
+  const handleCreate = () => {
+    const errors = validateForm(formData);
+    if (Object.keys(errors).length > 0) {
+      setFormErrors(errors);
+      return;
     }
-  };
-
-  const getEventColor = (eventType: string) => {
-    switch (eventType) {
-      case "vaccination":
-        return "purple";
-      case "illness":
-        return "red";
-      case "treatment":
-        return "blue";
-      case "checkup":
-        return "green";
-      case "surgery":
-        return "orange";
-      case "medication":
-        return "indigo";
-      case "exam":
-        return "cyan";
-      case "observation":
-        return "gray";
-      default:
-        return "gray";
-    }
-  };
-
-  return (
-    <div className="space-y-4 sm:space-y-6">
-      {events.map((event, index) => {
-        const Icon = getEventIcon(event.eventType);
-        const color = getEventColor(event.eventType);
-
-        return (
-          <motion.div
-            key={event.id}
-            initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: index * 0.1 }}
-            className="flex gap-3 sm:gap-4"
-          >
-            {/* Timeline indicator */}
-            <div className="flex flex-col items-center flex-shrink-0">
-              <div
-                className={`w-8 h-8 sm:w-10 sm:h-10 bg-${color}-100 rounded-full flex items-center justify-center border-2 border-${color}-200`}
-              >
-                <Icon className={`w-4 h-4 sm:w-5 sm:h-5 text-${color}-600`} />
-              </div>
-              {index < events.length - 1 && (
-                <div className="w-0.5 h-12 sm:h-16 bg-gray-200 mt-2"></div>
-              )}
-            </div>
-
-            {/* Event content */}
-            <div className="flex-1 min-w-0">
-              <motion.div
-                whileHover={{ scale: 1.01 }}
-                className="bg-white rounded-lg border border-gray-200 p-3 sm:p-4 hover:shadow-md transition-all duration-200"
-              >
-                <div className="flex items-start justify-between mb-2 flex-wrap gap-2">
-                  <div className="min-w-0 flex-1">
-                    <h4 className="text-base sm:text-lg font-semibold text-gray-900 break-words">
-                      {event.title}
-                    </h4>
-                    <div className="flex items-center gap-1 sm:gap-2 mt-1 flex-wrap">
-                      <Badge variant={event.eventType}>
-                        {event.eventType === "vaccination"
-                          ? "Vacunación"
-                          : event.eventType === "illness"
-                          ? "Enfermedad"
-                          : event.eventType === "treatment"
-                          ? "Tratamiento"
-                          : event.eventType === "checkup"
-                          ? "Chequeo"
-                          : event.eventType === "surgery"
-                          ? "Cirugía"
-                          : event.eventType === "medication"
-                          ? "Medicamento"
-                          : event.eventType === "exam"
-                          ? "Examen"
-                          : "Observación"}
-                      </Badge>
-                      <Badge variant={event.status}>
-                        {event.status === "active"
-                          ? "Activo"
-                          : event.status === "completed"
-                          ? "Completado"
-                          : event.status === "ongoing"
-                          ? "En progreso"
-                          : "Cancelado"}
-                      </Badge>
-                      {event.severity && (
-                        <Badge variant={event.severity}>
-                          {event.severity === "critical"
-                            ? "Crítico"
-                            : event.severity === "high"
-                            ? "Alto"
-                            : event.severity === "medium"
-                            ? "Medio"
-                            : "Bajo"}
-                        </Badge>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                <p className="text-gray-600 mb-3 text-sm sm:text-base">
-                  {event.description}
-                </p>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-4 text-xs sm:text-sm mb-3">
-                  <div className="flex items-center gap-2">
-                    <Calendar className="w-3 h-3 sm:w-4 sm:h-4 text-gray-400 flex-shrink-0" />
-                    <span className="truncate">{event.date.toLocaleDateString()}</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <User className="w-3 h-3 sm:w-4 sm:h-4 text-gray-400 flex-shrink-0" />
-                    <span className="truncate">{event.veterinarian}</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <MapPin className="w-3 h-3 sm:w-4 sm:h-4 text-gray-400 flex-shrink-0" />
-                    <span className="truncate">{event.location.facility}</span>
-                  </div>
-                </div>
-
-                {event.vitalSigns && (
-                  <div className="bg-gray-50 rounded-lg p-2 sm:p-3 mb-3">
-                    <h5 className="font-medium text-gray-900 mb-2 text-sm sm:text-base">
-                      Signos Vitales
-                    </h5>
-                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3 text-xs sm:text-sm">
-                      <div>
-                        <span className="text-gray-600">Temperatura:</span>
-                        <span className="ml-1 font-medium">
-                          {event.vitalSigns.temperature}°C
-                        </span>
-                      </div>
-                      <div>
-                        <span className="text-gray-600">Pulso:</span>
-                        <span className="ml-1 font-medium">
-                          {event.vitalSigns.heartRate} bpm
-                        </span>
-                      </div>
-                      <div>
-                        <span className="text-gray-600">Respiración:</span>
-                        <span className="ml-1 font-medium">
-                          {event.vitalSigns.respiratoryRate} rpm
-                        </span>
-                      </div>
-                      <div>
-                        <span className="text-gray-600">Peso:</span>
-                        <span className="ml-1 font-medium">
-                          {event.vitalSigns.weight} kg
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {event.medications && event.medications.length > 0 && (
-                  <div className="mb-3">
-                    <h5 className="font-medium text-gray-900 mb-2 text-sm sm:text-base">
-                      Medicamentos
-                    </h5>
-                    <div className="flex flex-wrap gap-1">
-                      {event.medications.map((med, idx) => (
-                        <span
-                          key={idx}
-                          className="px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-xs"
-                        >
-                          {med}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {event.diagnosis && (
-                  <div className="mb-3">
-                    <h5 className="font-medium text-gray-900 mb-1 text-sm sm:text-base">
-                      Diagnóstico
-                    </h5>
-                    <p className="text-gray-700 text-xs sm:text-sm">{event.diagnosis}</p>
-                  </div>
-                )}
-
-                {event.treatment && (
-                  <div className="mb-3">
-                    <h5 className="font-medium text-gray-900 mb-1 text-sm sm:text-base">
-                      Tratamiento
-                    </h5>
-                    <p className="text-gray-700 text-xs sm:text-sm">{event.treatment}</p>
-                  </div>
-                )}
-
-                {event.notes && (
-                  <div className="mb-3">
-                    <h5 className="font-medium text-gray-900 mb-1 text-sm sm:text-base">Notas</h5>
-                    <p className="text-gray-700 text-xs sm:text-sm">{event.notes}</p>
-                  </div>
-                )}
-
-                <div className="flex items-center justify-between text-xs sm:text-sm text-gray-600 flex-wrap gap-2">
-                  <span>Costo: ${event.cost.toLocaleString()}</span>
-                  {event.followUpDate && (
-                    <span>
-                      Seguimiento: {event.followUpDate.toLocaleDateString()}
-                    </span>
-                  )}
-                </div>
-              </motion.div>
-            </div>
-          </motion.div>
-        );
-      })}
-    </div>
-  );
-};
-
-const MedicalHistory: React.FC = () => {
-  // Estados del componente
-  const [selectedAnimal, setSelectedAnimal] = useState<string>("all");
-  const [animals, setAnimals] = useState<AnimalProfile[]>([]);
-  const [medicalEvents, setMedicalEvents] = useState<MedicalEvent[]>([]);
-  const [healthStats, setHealthStats] = useState<HealthStats>({
-    totalEvents: 0,
-    vaccinationsCount: 0,
-    illnessesCount: 0,
-    treatmentsCount: 0,
-    averageRecoveryTime: 0,
-    healthScore: 0,
-    lastEventDate: new Date(),
-  });
-  const [searchTerm, setSearchTerm] = useState("");
-  const [selectedEventType, setSelectedEventType] = useState<string>("all");
-  const [selectedDateRange, setSelectedDateRange] = useState<string>("30");
-  const [selectedVeterinarian, setSelectedVeterinarian] =
-    useState<string>("all");
-  const [showNewEventModal, setShowNewEventModal] = useState(false);
-
-  // Función para generar ID único
-  const generateId = () => {
-    return Date.now().toString() + Math.random().toString(36).substr(2, 9);
-  };
-
-  // Función para manejar nuevo evento
-  const handleNewEvent = (eventData: NewEventForm) => {
-    const selectedAnimalData = animals.find(a => a.id === eventData.animalId);
-    if (!selectedAnimalData) return;
 
     const newEvent: MedicalEvent = {
-      id: generateId(),
-      animalId: eventData.animalId,
-      animalName: selectedAnimalData.name,
-      animalTag: selectedAnimalData.tag,
-      eventType: eventData.eventType as any,
-      title: eventData.title,
-      description: eventData.description,
-      date: new Date(eventData.date),
-      veterinarian: eventData.veterinarian,
-      location: {
-        lat: 17.9869,
-        lng: -92.9303,
-        address: "Ubicación actual",
-        facility: "Clínica Principal",
-      },
-      severity: eventData.severity as any,
-      status: eventData.status as any,
-      medications: eventData.medications ? eventData.medications.split(',').map(m => m.trim()) : [],
-      diagnosis: eventData.diagnosis,
-      treatment: eventData.treatment,
-      followUpDate: eventData.followUpDate ? new Date(eventData.followUpDate) : undefined,
-      cost: eventData.cost,
-      attachments: [],
-      notes: eventData.notes,
-      vitalSigns: eventData.vitalSigns.temperature > 0 ? eventData.vitalSigns : undefined,
+      id: `event-${Date.now()}`,
+      animalName: formData.animalName!,
+      animalTag: formData.animalTag || "N/A",
+      eventType: formData.eventType!,
+      title: formData.title!,
+      description: formData.description!,
+      date: formData.date!,
+      veterinarian: formData.veterinarian!,
+      location: formData.location!,
+      severity: formData.severity,
+      status: formData.status!,
+      medications: formData.medications ? formData.medications.split(',').map(m => m.trim()).filter(m => m) : undefined,
+      diagnosis: formData.diagnosis || undefined,
+      treatment: formData.treatment || undefined,
+      followUpDate: formData.followUpDate || undefined,
+      cost: formData.cost || 0,
+      notes: formData.notes || "",
+      createdAt: new Date().toISOString(),
+      vitalSigns: formData.vitalSigns?.temperature ? formData.vitalSigns : undefined,
     };
 
-    setMedicalEvents(prev => [newEvent, ...prev]);
-    
+    setEvents(prev => [newEvent, ...prev]);
+    setShowForm(false);
+    resetForm();
+
     // Actualizar estadísticas
     setHealthStats(prev => ({
       ...prev,
       totalEvents: prev.totalEvents + 1,
-      vaccinationsCount: eventData.eventType === 'vaccination' ? prev.vaccinationsCount + 1 : prev.vaccinationsCount,
-      illnessesCount: eventData.eventType === 'illness' ? prev.illnessesCount + 1 : prev.illnessesCount,
-      treatmentsCount: eventData.eventType === 'treatment' ? prev.treatmentsCount + 1 : prev.treatmentsCount,
-      lastEventDate: new Date(),
+      vaccinationsCount: newEvent.eventType === 'vaccination' ? prev.vaccinationsCount + 1 : prev.vaccinationsCount,
+      illnessesCount: newEvent.eventType === 'illness' ? prev.illnessesCount + 1 : prev.illnessesCount,
+      treatmentsCount: newEvent.eventType === 'treatment' ? prev.treatmentsCount + 1 : prev.treatmentsCount,
     }));
-
-    console.log("Nuevo evento creado:", newEvent);
   };
 
-  // Simulación de datos
-  useEffect(() => {
-    const loadData = async () => {
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+  // Actualizar evento existente
+  const handleUpdate = () => {
+    if (!editingEvent) return;
 
-      // Datos de ejemplo para animales
-      const mockAnimals: AnimalProfile[] = [
-        {
-          id: "COW001",
-          name: "Bessie",
-          tag: "TAG-001",
-          breed: "Holstein",
-          birthDate: new Date("2022-03-15"),
-          gender: "female",
-          currentWeight: 580,
-          healthStatus: "healthy",
-          lastCheckup: new Date("2025-07-01"),
-          totalEvents: 15,
-          chronicConditions: [],
-          allergies: ["Penicilina"],
-        },
-        {
-          id: "COW002",
-          name: "Luna",
-          tag: "TAG-002",
-          breed: "Jersey",
-          birthDate: new Date("2021-11-08"),
-          gender: "female",
-          currentWeight: 425,
-          healthStatus: "recovering",
-          lastCheckup: new Date("2025-07-10"),
-          totalEvents: 23,
-          chronicConditions: ["Mastitis recurrente"],
-          allergies: [],
-        },
-        {
-          id: "COW003",
-          name: "Estrella",
-          tag: "TAG-003",
-          breed: "Simmental",
-          birthDate: new Date("2020-06-22"),
-          gender: "female",
-          currentWeight: 650,
-          healthStatus: "healthy",
-          lastCheckup: new Date("2025-06-28"),
-          totalEvents: 31,
-          chronicConditions: [],
-          allergies: ["Sulfonamidas"],
-        },
-      ];
+    const errors = validateForm(formData);
+    if (Object.keys(errors).length > 0) {
+      setFormErrors(errors);
+      return;
+    }
 
-      // Datos de ejemplo para eventos médicos
-      const mockEvents: MedicalEvent[] = [
-        {
-          id: "1",
-          animalId: "COW001",
-          animalName: "Bessie",
-          animalTag: "TAG-001",
-          eventType: "checkup",
-          title: "Chequeo Mensual de Rutina",
-          description: "Examen de salud general y evaluación reproductiva",
-          date: new Date("2025-07-01"),
-          veterinarian: "Dr. García",
-          location: {
-            lat: 17.9869,
-            lng: -92.9303,
-            address: "Establo Principal, Sector A",
-            facility: "Clínica Veterinaria Principal",
-          },
-          status: "completed",
-          cost: 150,
-          attachments: [],
-          notes:
-            "Animal en excelente estado de salud. Todos los parámetros normales.",
-          vitalSigns: {
-            temperature: 38.5,
-            heartRate: 72,
-            respiratoryRate: 24,
-            weight: 580,
-          },
-        },
-        {
-          id: "2",
-          animalId: "COW001",
-          animalName: "Bessie",
-          animalTag: "TAG-001",
-          eventType: "vaccination",
-          title: "Vacuna Antiaftosa",
-          description:
-            "Aplicación de vacuna contra fiebre aftosa - dosis anual",
-          date: new Date("2025-06-15"),
-          veterinarian: "Dr. Martínez",
-          location: {
-            lat: 17.9869,
-            lng: -92.9303,
-            address: "Establo Principal, Sector A",
-            facility: "Clínica Veterinaria Principal",
-          },
-          status: "completed",
-          medications: ["Vacuna Antiaftosa"],
-          cost: 85,
-          attachments: [],
-          notes: "Vacunación sin complicaciones. Próxima dosis en 12 meses.",
-          followUpDate: new Date("2026-06-15"),
-        },
-        {
-          id: "3",
-          animalId: "COW002",
-          animalName: "Luna",
-          animalTag: "TAG-002",
-          eventType: "illness",
-          title: "Mastitis Clínica",
-          description: "Inflamación aguda de la glándula mamaria",
-          date: new Date("2025-07-08"),
-          veterinarian: "Dr. López",
-          location: {
-            lat: 17.9719,
-            lng: -92.9456,
-            address: "Sector Norte, Establo B",
-            facility: "Clínica Veterinaria Norte",
-          },
-          severity: "medium",
-          status: "ongoing",
-          diagnosis: "Mastitis clínica en cuarto anterior derecho",
-          treatment: "Antibioterapia sistémica y tratamiento intramamario",
-          medications: ["Ceftriaxona", "Antiinflamatorio"],
-          cost: 320,
-          attachments: [],
-          notes:
-            "Respuesta favorable al tratamiento. Continuar terapia por 5 días más.",
-          vitalSigns: {
-            temperature: 39.2,
-            heartRate: 85,
-            respiratoryRate: 28,
-            weight: 425,
-          },
-          followUpDate: new Date("2025-07-15"),
-        },
-        {
-          id: "4",
-          animalId: "COW003",
-          animalName: "Estrella",
-          animalTag: "TAG-003",
-          eventType: "surgery",
-          title: "Cesárea de Emergencia",
-          description: "Intervención quirúrgica por distocia",
-          date: new Date("2025-06-25"),
-          veterinarian: "Dr. Hernández",
-          location: {
-            lat: 17.9589,
-            lng: -92.9289,
-            address: "Corral Sur, Sector C",
-            facility: "Quirófano Móvil",
-          },
-          severity: "high",
-          status: "completed",
-          diagnosis: "Distocia por presentación anormal del feto",
-          treatment: "Cesárea con anestesia epidural y sedación",
-          medications: ["Lidocaína", "Xilacina", "Antibióticos profilácticos"],
-          cost: 1200,
-          attachments: [],
-          notes:
-            "Cirugía exitosa. Madre y cría en buen estado. Recuperación satisfactoria.",
-          vitalSigns: {
-            temperature: 38.8,
-            heartRate: 78,
-            respiratoryRate: 26,
-            weight: 650,
-          },
-          followUpDate: new Date("2025-07-02"),
-        },
-      ];
-
-      // Estadísticas de ejemplo
-      const mockStats: HealthStats = {
-        totalEvents: 47,
-        vaccinationsCount: 18,
-        illnessesCount: 12,
-        treatmentsCount: 15,
-        averageRecoveryTime: 8.5,
-        healthScore: 92,
-        lastEventDate: new Date("2025-07-10"),
-      };
-
-      setAnimals(mockAnimals);
-      setMedicalEvents(mockEvents);
-      setHealthStats(mockStats);
+    const updatedData: Partial<MedicalEvent> = {
+      animalName: formData.animalName!,
+      animalTag: formData.animalTag || "N/A",
+      eventType: formData.eventType!,
+      title: formData.title!,
+      description: formData.description!,
+      date: formData.date!,
+      veterinarian: formData.veterinarian!,
+      location: formData.location!,
+      severity: formData.severity,
+      status: formData.status!,
+      medications: formData.medications ? formData.medications.split(',').map(m => m.trim()).filter(m => m) : undefined,
+      diagnosis: formData.diagnosis || undefined,
+      treatment: formData.treatment || undefined,
+      followUpDate: formData.followUpDate || undefined,
+      cost: formData.cost || 0,
+      notes: formData.notes || "",
+      vitalSigns: formData.vitalSigns?.temperature ? formData.vitalSigns : undefined,
     };
 
-    loadData();
-  }, []);
+    setEvents(prev => prev.map(event => 
+      event.id === editingEvent.id 
+        ? { ...event, ...updatedData }
+        : event
+    ));
+    
+    setEditingEvent(null);
+    setShowForm(false);
+    resetForm();
+  };
 
-  // Filtrar eventos médicos
-  const filteredEvents = medicalEvents.filter((event) => {
-    const matchesAnimal =
-      selectedAnimal === "all" || event.animalId === selectedAnimal;
+  // Ver detalles
+  const handleView = (event: MedicalEvent) => {
+    setSelectedEvent(event);
+    setShowDetailsModal(true);
+  };
+
+  // Editar evento
+  const handleEdit = (event: MedicalEvent) => {
+    setEditingEvent(event);
+    const formEventData: Partial<NewEventForm> = {
+      animalName: event.animalName,
+      animalTag: event.animalTag,
+      eventType: event.eventType,
+      title: event.title,
+      description: event.description,
+      date: event.date,
+      veterinarian: event.veterinarian,
+      location: event.location,
+      severity: event.severity,
+      status: event.status,
+      medications: event.medications ? event.medications.join(', ') : "",
+      diagnosis: event.diagnosis || "",
+      treatment: event.treatment || "",
+      followUpDate: event.followUpDate || "",
+      cost: event.cost,
+      notes: event.notes,
+      vitalSigns: event.vitalSigns || {
+        temperature: 0,
+        heartRate: 0,
+        respiratoryRate: 0,
+        weight: 0,
+      },
+    };
+    setFormData(formEventData);
+    setShowForm(true);
+  };
+
+  // Eliminar evento
+  const handleDeleteClick = (event: MedicalEvent) => {
+    setEventToDelete(event);
+    setShowDeleteModal(true);
+  };
+
+  // Confirmar eliminación
+  const confirmDelete = () => {
+    if (!eventToDelete) return;
+
+    setEvents(prev => prev.filter(e => e.id !== eventToDelete.id));
+    
+    if (selectedEvent?.id === eventToDelete.id) {
+      setSelectedEvent(null);
+      setShowDetailsModal(false);
+    }
+    if (editingEvent?.id === eventToDelete.id) {
+      setEditingEvent(null);
+      setShowForm(false);
+    }
+    
+    setShowDeleteModal(false);
+    setEventToDelete(null);
+
+    // Actualizar estadísticas
+    setHealthStats(prev => ({
+      ...prev,
+      totalEvents: prev.totalEvents - 1,
+      vaccinationsCount: eventToDelete.eventType === 'vaccination' ? prev.vaccinationsCount - 1 : prev.vaccinationsCount,
+      illnessesCount: eventToDelete.eventType === 'illness' ? prev.illnessesCount - 1 : prev.illnessesCount,
+      treatmentsCount: eventToDelete.eventType === 'treatment' ? prev.treatmentsCount - 1 : prev.treatmentsCount,
+    }));
+  };
+
+  // Nuevo evento
+  const handleNew = () => {
+    setEditingEvent(null);
+    resetForm();
+    setShowForm(true);
+  };
+
+  // Funciones auxiliares
+  const getStatusColor = (status: EventStatus) => {
+    const colors = {
+      active: "bg-red-100 text-red-800",
+      completed: "bg-green-100 text-green-800",
+      ongoing: "bg-blue-100 text-blue-800",
+      cancelled: "bg-gray-100 text-gray-800",
+    };
+    return colors[status];
+  };
+
+  const getStatusText = (status: EventStatus) => {
+    const texts = {
+      active: "Activo",
+      completed: "Completado",
+      ongoing: "En progreso",
+      cancelled: "Cancelado",
+    };
+    return texts[status];
+  };
+
+  const getEventTypeColor = (eventType: EventType) => {
+    const colors = {
+      vaccination: "bg-purple-100 text-purple-800",
+      illness: "bg-red-100 text-red-800",
+      treatment: "bg-blue-100 text-blue-800",
+      checkup: "bg-green-100 text-green-800",
+      surgery: "bg-orange-100 text-orange-800",
+      medication: "bg-indigo-100 text-indigo-800",
+      exam: "bg-cyan-100 text-cyan-800",
+      observation: "bg-gray-100 text-gray-800",
+    };
+    return colors[eventType];
+  };
+
+  const getEventTypeText = (eventType: EventType) => {
+    const texts = {
+      vaccination: "Vacunación",
+      illness: "Enfermedad",
+      treatment: "Tratamiento",
+      checkup: "Chequeo",
+      surgery: "Cirugía",
+      medication: "Medicamento",
+      exam: "Examen",
+      observation: "Observación",
+    };
+    return texts[eventType];
+  };
+
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString + 'T12:00:00');
+    return date.toLocaleDateString('es-MX');
+  };
+
+  const formatFullDate = (dateString: string) => {
+    const date = new Date(dateString + 'T12:00:00');
+    return date.toLocaleDateString('es-MX', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long', 
+      day: 'numeric'
+    });
+  };
+
+  // Filtrar eventos
+  const filteredEvents = events.filter((event) => {
     const matchesSearch =
       event.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
       event.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -1202,409 +508,850 @@ const MedicalHistory: React.FC = () => {
     const matchesEventType =
       selectedEventType === "all" || event.eventType === selectedEventType;
     const matchesVeterinarian =
-      selectedVeterinarian === "all" ||
-      event.veterinarian === selectedVeterinarian;
+      selectedVeterinarian === "all" || event.veterinarian === selectedVeterinarian;
 
-    return (
-      matchesAnimal && matchesSearch && matchesEventType && matchesVeterinarian
-    );
+    return matchesSearch && matchesEventType && matchesVeterinarian;
   });
 
-  // Obtener perfil del animal seleccionado
-  const selectedAnimalProfile =
-    selectedAnimal !== "all"
-      ? animals.find((a) => a.id === selectedAnimal)
-      : null;
+  // Loading
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center p-8">
+        <div className="flex items-center space-x-3">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#519a7c]"></div>
+          <p className="text-gray-600">Cargando eventos médicos...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Error
+  if (error) {
+    return (
+      <div className="p-8 text-center">
+        <p className="text-red-600">❌ {error}</p>
+        <button 
+          onClick={() => window.location.reload()}
+          className="mt-4 px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
+        >
+          Recargar
+        </button>
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-emerald-50 via-teal-50 to-cyan-50">
-      {/* Header */}
-      <motion.div
-        initial={{ opacity: 0, y: -20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="bg-white/80 backdrop-blur-md border-b border-green-200 sticky top-0 z-40"
-      >
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <div className="flex items-center justify-between flex-wrap gap-4">
-            <div className="min-w-0 flex-1">
-              <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">
-                Historial Médico
-              </h1>
-              <p className="text-gray-600 mt-1 text-sm sm:text-base">
-                Registro completo de eventos médicos del ganado
-              </p>
+    <div className="p-6">
+      {/* Header Simple */}
+      <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
+        {/* Header Simple */}
+        <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-3">
+              <div className="w-10 h-10 bg-[#519a7c] rounded-lg flex items-center justify-center">
+                <Stethoscope className="w-6 h-6 text-white" />
+              </div>
+              <div>
+                <h1 className="text-2xl font-bold text-gray-900">
+                  Historial Médico
+                </h1>
+                <p className="text-gray-600">
+                  Registro completo de eventos médicos del ganado
+                </p>
+              </div>
             </div>
-            <div className="flex items-center gap-3">
-              <Button 
-                size="sm" 
-                onClick={() => setShowNewEventModal(true)}
-                className="whitespace-nowrap"
-              >
-                <Plus className="w-4 h-4 mr-2" />
-                Nuevo Evento
-              </Button>
+            <button 
+              onClick={handleNew}
+              className="px-4 py-2 bg-[#519a7c] text-white rounded-lg hover:bg-[#4a8970] flex items-center space-x-2 transition-colors"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Nuevo</span>
+            </button>
+          </div>
+
+          {/* Estadísticas simples */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6">
+            <div className="bg-blue-50 rounded-lg p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-gray-600">Total</p>
+                  <p className="text-2xl font-bold text-gray-900">{healthStats.totalEvents}</p>
+                </div>
+                <History className="w-8 h-8 text-blue-600" />
+              </div>
+            </div>
+            
+            <div className="bg-purple-50 rounded-lg p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-gray-600">Vacunaciones</p>
+                  <p className="text-2xl font-bold text-gray-900">{healthStats.vaccinationsCount}</p>
+                </div>
+                <Syringe className="w-8 h-8 text-purple-600" />
+              </div>
+            </div>
+
+            <div className="bg-red-50 rounded-lg p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-gray-600">Enfermedades</p>
+                  <p className="text-2xl font-bold text-gray-900">{healthStats.illnessesCount}</p>
+                </div>
+                <Thermometer className="w-8 h-8 text-red-600" />
+              </div>
+            </div>
+
+            <div className="bg-green-50 rounded-lg p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-gray-600">Score Salud</p>
+                  <p className="text-2xl font-bold text-gray-900">{healthStats.healthScore}%</p>
+                </div>
+                <TrendingUp className="w-8 h-8 text-green-600" />
+              </div>
             </div>
           </div>
-        </div>
-      </motion.div>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-6">
-          {/* Estadísticas Generales */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="lg:col-span-12"
-          >
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-4 sm:mb-6">
-              <Card className="bg-white/80 backdrop-blur-md border-blue-200">
-                <CardContent className="p-4 sm:p-6">
-                  <div className="flex items-center gap-3 sm:gap-4">
-                    <div className="w-10 h-10 sm:w-12 sm:h-12 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                      <History className="w-5 h-5 sm:w-6 sm:h-6 text-blue-600" />
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-xs sm:text-sm font-medium text-gray-600">
-                        Total de Eventos
-                      </p>
-                      <p className="text-lg sm:text-2xl font-bold text-gray-900">
-                        {healthStats.totalEvents}
-                      </p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card className="bg-white/80 backdrop-blur-md border-purple-200">
-                <CardContent className="p-4 sm:p-6">
-                  <div className="flex items-center gap-3 sm:gap-4">
-                    <div className="w-10 h-10 sm:w-12 sm:h-12 bg-purple-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                      <Syringe className="w-5 h-5 sm:w-6 sm:h-6 text-purple-600" />
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-xs sm:text-sm font-medium text-gray-600">
-                        Vacunaciones
-                      </p>
-                      <p className="text-lg sm:text-2xl font-bold text-gray-900">
-                        {healthStats.vaccinationsCount}
-                      </p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card className="bg-white/80 backdrop-blur-md border-red-200">
-                <CardContent className="p-4 sm:p-6">
-                  <div className="flex items-center gap-3 sm:gap-4">
-                    <div className="w-10 h-10 sm:w-12 sm:h-12 bg-red-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                      <Thermometer className="w-5 h-5 sm:w-6 sm:h-6 text-red-600" />
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-xs sm:text-sm font-medium text-gray-600">
-                        Enfermedades
-                      </p>
-                      <p className="text-lg sm:text-2xl font-bold text-gray-900">
-                        {healthStats.illnessesCount}
-                      </p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card className="bg-white/80 backdrop-blur-md border-green-200">
-                <CardContent className="p-4 sm:p-6">
-                  <div className="flex items-center gap-3 sm:gap-4">
-                    <div className="w-10 h-10 sm:w-12 sm:h-12 bg-green-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                      <TrendingUp className="w-5 h-5 sm:w-6 sm:h-6 text-green-600" />
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-xs sm:text-sm font-medium text-gray-600">
-                        Score de Salud
-                      </p>
-                      <p className="text-lg sm:text-2xl font-bold text-gray-900">
-                        {healthStats.healthScore}%
-                      </p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
+          {/* Filtros */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6">
+            <div className="relative">
+              <Search className="w-4 h-4 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+              <input
+                type="text"
+                placeholder="Buscar eventos..."
+                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
             </div>
-          </motion.div>
 
-          {/* Panel de Filtros */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 }}
-            className="lg:col-span-4 space-y-4 sm:space-y-6"
-          >
-            {/* Filtros */}
-            <Card className="bg-white/80 backdrop-blur-md border-gray-200">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
-                  <Filter className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600" />
-                  Filtros de Búsqueda
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {/* Búsqueda */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Buscar
-                  </label>
-                  <div className="relative">
-                    <Search className="w-4 h-4 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
-                    <input
-                      type="text"
-                      placeholder="Evento, animal, descripción..."
-                      className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
-                      value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
-                    />
+            <select
+              className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
+              value={selectedEventType}
+              onChange={(e) => setSelectedEventType(e.target.value)}
+            >
+              <option value="all">Todos los tipos</option>
+              <option value="vaccination">Vacunaciones</option>
+              <option value="illness">Enfermedades</option>
+              <option value="treatment">Tratamientos</option>
+              <option value="checkup">Chequeos</option>
+              <option value="surgery">Cirugías</option>
+            </select>
+
+            <select
+              className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
+              value={selectedVeterinarian}
+              onChange={(e) => setSelectedVeterinarian(e.target.value)}
+            >
+              <option value="all">Todos los veterinarios</option>
+              <option value="Dr. García">Dr. García</option>
+              <option value="Dr. Martínez">Dr. Martínez</option>
+              <option value="Dr. López">Dr. López</option>
+            </select>
+          </div>
+        </div>
+
+        {/* Lista de eventos */}
+        {filteredEvents.length === 0 ? (
+          <div className="bg-white rounded-lg shadow-lg p-12 text-center">
+            <Stethoscope className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+            <h3 className="text-xl font-semibold text-gray-900 mb-2">
+              No hay eventos médicos
+            </h3>
+            <p className="text-gray-600 mb-6">
+              No se encontraron eventos que coincidan con los filtros seleccionados
+            </p>
+            <button 
+              onClick={handleNew}
+              className="px-6 py-3 bg-[#519a7c] text-white rounded-lg hover:bg-[#4a8970] flex items-center space-x-2 mx-auto transition-colors"
+            >
+              <Plus className="w-5 h-5" />
+              <span>Crear Primer Evento</span>
+            </button>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {filteredEvents.map((event) => (
+              <motion.div
+                key={event.id}
+                className="bg-white rounded-lg shadow-lg overflow-hidden hover:shadow-xl transition-shadow"
+                whileHover={{ y: -2 }}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.3 }}
+              >
+                {/* Header de la tarjeta */}
+                <div className="bg-gradient-to-r from-[#519a7c] to-[#4e9c75] p-4 text-white">
+                  <h3 className="font-bold text-lg">
+                    {event.title}
+                  </h3>
+                  <p className="text-white/80 text-sm">
+                    {event.animalName} ({event.animalTag})
+                  </p>
+                  <div className="flex justify-between items-center mt-2">
+                    <span className={`inline-block px-2 py-1 rounded-full text-xs font-medium ${getEventTypeColor(event.eventType)}`}>
+                      {getEventTypeText(event.eventType)}
+                    </span>
+                    <span className={`inline-block px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(event.status)}`}>
+                      {getStatusText(event.status)}
+                    </span>
                   </div>
                 </div>
 
-                {/* Animal */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Animal
-                  </label>
-                  <select
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
-                    value={selectedAnimal}
-                    onChange={(e) => setSelectedAnimal(e.target.value)}
-                  >
-                    <option value="all">Todos los animales</option>
-                    {animals.map((animal) => (
-                      <option key={animal.id} value={animal.id}>
-                        {animal.name} ({animal.tag})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Tipo de evento */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Tipo de Evento
-                  </label>
-                  <select
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
-                    value={selectedEventType}
-                    onChange={(e) => setSelectedEventType(e.target.value)}
-                  >
-                    <option value="all">Todos los tipos</option>
-                    <option value="vaccination">Vacunaciones</option>
-                    <option value="illness">Enfermedades</option>
-                    <option value="treatment">Tratamientos</option>
-                    <option value="checkup">Chequeos</option>
-                    <option value="surgery">Cirugías</option>
-                    <option value="medication">Medicamentos</option>
-                    <option value="exam">Exámenes</option>
-                    <option value="observation">Observaciones</option>
-                  </select>
-                </div>
-
-                {/* Veterinario */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Veterinario
-                  </label>
-                  <select
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
-                    value={selectedVeterinarian}
-                    onChange={(e) => setSelectedVeterinarian(e.target.value)}
-                  >
-                    <option value="all">Todos los veterinarios</option>
-                    <option value="Dr. García">Dr. García</option>
-                    <option value="Dr. Martínez">Dr. Martínez</option>
-                    <option value="Dr. López">Dr. López</option>
-                    <option value="Dr. Hernández">Dr. Hernández</option>
-                  </select>
-                </div>
-
-                {/* Período */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Período
-                  </label>
-                  <select
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
-                    value={selectedDateRange}
-                    onChange={(e) => setSelectedDateRange(e.target.value)}
-                  >
-                    <option value="7">Últimos 7 días</option>
-                    <option value="30">Últimos 30 días</option>
-                    <option value="90">Últimos 3 meses</option>
-                    <option value="365">Último año</option>
-                    <option value="all">Todo el historial</option>
-                  </select>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Perfil del Animal Seleccionado */}
-            {selectedAnimalProfile && (
-              <Card className="bg-white/80 backdrop-blur-md border-gray-200">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
-                    <Tag className="w-4 h-4 sm:w-5 sm:h-5 text-green-600" />
-                    Perfil del Animal
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  <div className="text-center mb-4">
-                    <h3 className="text-lg sm:text-xl font-bold text-gray-900">
-                      {selectedAnimalProfile.name}
-                    </h3>
-                    <p className="text-gray-600 text-sm">{selectedAnimalProfile.tag}</p>
-                    <Badge
-                      variant={selectedAnimalProfile.healthStatus}
-                      className="mt-2"
-                    >
-                      {selectedAnimalProfile.healthStatus === "healthy"
-                        ? "Saludable"
-                        : selectedAnimalProfile.healthStatus === "sick"
-                        ? "Enfermo"
-                        : selectedAnimalProfile.healthStatus === "recovering"
-                        ? "Recuperándose"
-                        : "Crítico"}
-                    </Badge>
-                  </div>
-
-                  <div className="space-y-2 text-xs sm:text-sm">
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Raza:</span>
-                      <span className="font-medium">
-                        {selectedAnimalProfile.breed}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Edad:</span>
-                      <span className="font-medium">
-                        {Math.floor(
-                          (new Date().getTime() -
-                            selectedAnimalProfile.birthDate.getTime()) /
-                            (1000 * 60 * 60 * 24 * 365)
-                        )}{" "}
-                        años
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Peso actual:</span>
-                      <span className="font-medium">
-                        {selectedAnimalProfile.currentWeight} kg
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Último chequeo:</span>
-                      <span className="font-medium">
-                        {selectedAnimalProfile.lastCheckup.toLocaleDateString()}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Total eventos:</span>
-                      <span className="font-medium">
-                        {selectedAnimalProfile.totalEvents}
-                      </span>
-                    </div>
-                  </div>
-
-                  {selectedAnimalProfile.chronicConditions.length > 0 && (
+                {/* Contenido */}
+                <div className="p-4 space-y-3">
+                  <div className="grid grid-cols-2 gap-3 text-sm">
                     <div>
-                      <h5 className="font-medium text-gray-900 mb-2 text-sm">
-                        Condiciones Crónicas
-                      </h5>
-                      <div className="space-y-1">
-                        {selectedAnimalProfile.chronicConditions.map(
-                          (condition, idx) => (
-                            <span
-                              key={idx}
-                              className="inline-block px-2 py-1 bg-orange-100 text-orange-800 rounded-full text-xs mr-1 mb-1"
-                            >
-                              {condition}
-                            </span>
-                          )
-                        )}
+                      <p className="text-gray-600">Fecha:</p>
+                      <p className="font-medium">
+                        {formatDate(event.date)}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-gray-600">Veterinario:</p>
+                      <p className="font-medium">{event.veterinarian}</p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center space-x-2 text-sm text-gray-600">
+                    <MapPin className="w-4 h-4" />
+                    <span>{event.location}</span>
+                  </div>
+
+                  <p className="text-sm text-gray-700 line-clamp-2">{event.description}</p>
+
+                  {event.vitalSigns && (
+                    <div className="bg-gray-50 rounded p-2">
+                      <p className="text-xs font-medium text-gray-900 mb-1">Signos Vitales</p>
+                      <div className="grid grid-cols-2 gap-1 text-xs text-gray-600">
+                        <span>Temp: {event.vitalSigns.temperature}°C</span>
+                        <span>Peso: {event.vitalSigns.weight}kg</span>
                       </div>
                     </div>
                   )}
 
-                  {selectedAnimalProfile.allergies.length > 0 && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-lg font-bold text-[#519a7c]">
+                      ${event.cost.toLocaleString()}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Acciones */}
+                <div className="bg-gray-50 px-4 py-3 flex justify-between">
+                  <div className="flex space-x-2">
+                    <button 
+                      onClick={() => handleView(event)}
+                      className="p-2 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                      title="Ver detalles"
+                    >
+                      <Eye className="w-4 h-4" />
+                    </button>
+                    <button 
+                      onClick={() => handleEdit(event)}
+                      className="p-2 text-gray-600 hover:text-green-600 hover:bg-green-50 rounded transition-colors"
+                      title="Editar"
+                    >
+                      <Edit className="w-4 h-4" />
+                    </button>
+                    <button 
+                      onClick={() => handleDeleteClick(event)}
+                      className="p-2 text-gray-600 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                      title="Eliminar"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                  <span className="text-xs text-gray-500">
+                    {formatDate(event.createdAt.split('T')[0])}
+                  </span>
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        )}
+
+        {/* Modal de formulario */}
+        <AnimatePresence>
+          {showForm && (
+            <motion.div 
+              className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+            >
+              <motion.div 
+                className="bg-white rounded-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto"
+                initial={{ scale: 0.9, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.9, opacity: 0 }}
+              >
+                {/* Header del modal */}
+                <div className="flex justify-between items-center p-6 border-b">
+                  <h2 className="text-xl font-bold text-gray-900">
+                    {editingEvent ? "Editar Evento Médico" : "Nuevo Evento Médico"}
+                  </h2>
+                  <button 
+                    onClick={() => setShowForm(false)}
+                    className="p-2 hover:bg-gray-100 rounded"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                {/* Contenido del formulario */}
+                <div className="p-6 space-y-4">
+                  {/* Información del Animal */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <h5 className="font-medium text-gray-900 mb-2 text-sm">
-                        Alergias
-                      </h5>
-                      <div className="space-y-1">
-                        {selectedAnimalProfile.allergies.map((allergy, idx) => (
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Nombre del Animal *
+                      </label>
+                      <input
+                        type="text"
+                        value={formData.animalName || ""}
+                        onChange={(e) => setFormData(prev => ({ ...prev, animalName: e.target.value }))}
+                        className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent ${
+                          formErrors.animalName ? "border-red-300" : "border-gray-300"
+                        }`}
+                        placeholder="Ej: Esperanza"
+                      />
+                      {formErrors.animalName && (
+                        <p className="text-red-500 text-xs mt-1">{formErrors.animalName}</p>
+                      )}
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Tag del Animal
+                      </label>
+                      <input
+                        type="text"
+                        value={formData.animalTag || ""}
+                        onChange={(e) => setFormData(prev => ({ ...prev, animalTag: e.target.value }))}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
+                        placeholder="Ej: TAG-001"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Tipo de evento y título */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Tipo de Evento *
+                      </label>
+                      <select
+                        value={formData.eventType || "vaccination"}
+                        onChange={(e) => setFormData(prev => ({ ...prev, eventType: e.target.value as EventType }))}
+                        className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent ${
+                          formErrors.eventType ? "border-red-300" : "border-gray-300"
+                        }`}
+                      >
+                        <option value="vaccination">Vacunación</option>
+                        <option value="illness">Enfermedad</option>
+                        <option value="treatment">Tratamiento</option>
+                        <option value="checkup">Chequeo</option>
+                        <option value="surgery">Cirugía</option>
+                        <option value="medication">Medicamento</option>
+                        <option value="exam">Examen</option>
+                        <option value="observation">Observación</option>
+                      </select>
+                      {formErrors.eventType && (
+                        <p className="text-red-500 text-xs mt-1">{formErrors.eventType}</p>
+                      )}
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Título *
+                      </label>
+                      <input
+                        type="text"
+                        value={formData.title || ""}
+                        onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
+                        className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent ${
+                          formErrors.title ? "border-red-300" : "border-gray-300"
+                        }`}
+                        placeholder="Ej: Vacuna antiaftosa"
+                      />
+                      {formErrors.title && (
+                        <p className="text-red-500 text-xs mt-1">{formErrors.title}</p>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Descripción */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Descripción *
+                    </label>
+                    <textarea
+                      value={formData.description || ""}
+                      onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
+                      rows={3}
+                      className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent ${
+                        formErrors.description ? "border-red-300" : "border-gray-300"
+                      }`}
+                      placeholder="Descripción del evento..."
+                    />
+                    {formErrors.description && (
+                      <p className="text-red-500 text-xs mt-1">{formErrors.description}</p>
+                    )}
+                  </div>
+
+                  {/* Fecha, Veterinario y Ubicación */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Fecha *
+                      </label>
+                      <input
+                        type="date"
+                        value={formData.date || new Date().toISOString().substr(0, 10)}
+                        onChange={(e) => setFormData(prev => ({ ...prev, date: e.target.value }))}
+                        className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent ${
+                          formErrors.date ? "border-red-300" : "border-gray-300"
+                        }`}
+                      />
+                      {formErrors.date && (
+                        <p className="text-red-500 text-xs mt-1">{formErrors.date}</p>
+                      )}
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Veterinario *
+                      </label>
+                      <input
+                        type="text"
+                        value={formData.veterinarian || ""}
+                        onChange={(e) => setFormData(prev => ({ ...prev, veterinarian: e.target.value }))}
+                        className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent ${
+                          formErrors.veterinarian ? "border-red-300" : "border-gray-300"
+                        }`}
+                        placeholder="Dr. García"
+                      />
+                      {formErrors.veterinarian && (
+                        <p className="text-red-500 text-xs mt-1">{formErrors.veterinarian}</p>
+                      )}
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Ubicación *
+                      </label>
+                      <input
+                        type="text"
+                        value={formData.location || ""}
+                        onChange={(e) => setFormData(prev => ({ ...prev, location: e.target.value }))}
+                        className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent ${
+                          formErrors.location ? "border-red-300" : "border-gray-300"
+                        }`}
+                        placeholder="Establo Principal"
+                      />
+                      {formErrors.location && (
+                        <p className="text-red-500 text-xs mt-1">{formErrors.location}</p>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Signos vitales */}
+                  <div>
+                    <h3 className="text-sm font-medium text-gray-900 mb-2">
+                      Signos Vitales (opcional)
+                    </h3>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 mb-1">
+                          Temp. (°C)
+                        </label>
+                        <input
+                          type="number"
+                          step="0.1"
+                          value={formData.vitalSigns?.temperature || ""}
+                          onChange={(e) =>
+                            setFormData(prev => ({
+                              ...prev,
+                              vitalSigns: {
+                                ...prev.vitalSigns,
+                                temperature: parseFloat(e.target.value) || 0,
+                                heartRate: prev.vitalSigns?.heartRate || 0,
+                                respiratoryRate: prev.vitalSigns?.respiratoryRate || 0,
+                                weight: prev.vitalSigns?.weight || 0,
+                              },
+                            }))
+                          }
+                          className="w-full px-2 py-1.5 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#519a7c] focus:border-transparent text-sm"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 mb-1">
+                          Pulso (bpm)
+                        </label>
+                        <input
+                          type="number"
+                          value={formData.vitalSigns?.heartRate || ""}
+                          onChange={(e) =>
+                            setFormData(prev => ({
+                              ...prev,
+                              vitalSigns: {
+                                ...prev.vitalSigns,
+                                temperature: prev.vitalSigns?.temperature || 0,
+                                heartRate: parseInt(e.target.value) || 0,
+                                respiratoryRate: prev.vitalSigns?.respiratoryRate || 0,
+                                weight: prev.vitalSigns?.weight || 0,
+                              },
+                            }))
+                          }
+                          className="w-full px-2 py-1.5 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#519a7c] focus:border-transparent text-sm"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 mb-1">
+                          Resp. (rpm)
+                        </label>
+                        <input
+                          type="number"
+                          value={formData.vitalSigns?.respiratoryRate || ""}
+                          onChange={(e) =>
+                            setFormData(prev => ({
+                              ...prev,
+                              vitalSigns: {
+                                ...prev.vitalSigns,
+                                temperature: prev.vitalSigns?.temperature || 0,
+                                heartRate: prev.vitalSigns?.heartRate || 0,
+                                respiratoryRate: parseInt(e.target.value) || 0,
+                                weight: prev.vitalSigns?.weight || 0,
+                              },
+                            }))
+                          }
+                          className="w-full px-2 py-1.5 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#519a7c] focus:border-transparent text-sm"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 mb-1">
+                          Peso (kg)
+                        </label>
+                        <input
+                          type="number"
+                          step="0.1"
+                          value={formData.vitalSigns?.weight || ""}
+                          onChange={(e) =>
+                            setFormData(prev => ({
+                              ...prev,
+                              vitalSigns: {
+                                ...prev.vitalSigns,
+                                temperature: prev.vitalSigns?.temperature || 0,
+                                heartRate: prev.vitalSigns?.heartRate || 0,
+                                respiratoryRate: prev.vitalSigns?.respiratoryRate || 0,
+                                weight: parseFloat(e.target.value) || 0,
+                              },
+                            }))
+                          }
+                          className="w-full px-2 py-1.5 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#519a7c] focus:border-transparent text-sm"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Notas y costo */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Notas
+                      </label>
+                      <textarea
+                        value={formData.notes || ""}
+                        onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
+                        rows={3}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
+                        placeholder="Observaciones adicionales..."
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Costo
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={formData.cost || ""}
+                        onChange={(e) => setFormData(prev => ({ ...prev, cost: parseFloat(e.target.value) || 0 }))}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
+                        placeholder="0.00"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Footer del modal */}
+                <div className="flex justify-end space-x-3 p-6 border-t bg-gray-50">
+                  <button
+                    onClick={() => setShowForm(false)}
+                    className="px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={editingEvent ? handleUpdate : handleCreate}
+                    className="px-4 py-2 bg-[#519a7c] text-white rounded-lg hover:bg-[#4a8970] flex items-center space-x-2 transition-colors"
+                  >
+                    <Save className="w-4 h-4" />
+                    <span>{editingEvent ? "Actualizar" : "Guardar"}</span>
+                  </button>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Modal de detalles */}
+        <AnimatePresence>
+          {showDetailsModal && selectedEvent && (
+            <motion.div 
+              className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+            >
+              <motion.div 
+                className="bg-white rounded-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto"
+                initial={{ scale: 0.9, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.9, opacity: 0 }}
+              >
+                {/* Header del modal */}
+                <div className="flex justify-between items-center p-6 border-b bg-gradient-to-r from-[#519a7c] to-[#4e9c75] text-white">
+                  <h2 className="text-xl font-bold">
+                    Detalles del Evento Médico
+                  </h2>
+                  <button 
+                    onClick={() => setShowDetailsModal(false)}
+                    className="p-2 hover:bg-white/20 rounded"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                {/* Contenido del modal */}
+                <div className="p-6 space-y-6">
+                  {/* Información principal */}
+                  <div className="text-center">
+                    <h3 className="text-2xl font-bold text-gray-900 mb-2">
+                      {selectedEvent.title}
+                    </h3>
+                    <p className="text-gray-600">
+                      {selectedEvent.animalName} ({selectedEvent.animalTag})
+                    </p>
+                    <div className="flex justify-center space-x-4 mt-4">
+                      <span className={`px-3 py-1 rounded-full text-sm font-medium ${getEventTypeColor(selectedEvent.eventType)}`}>
+                        {getEventTypeText(selectedEvent.eventType)}
+                      </span>
+                      <span className={`px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(selectedEvent.status)}`}>
+                        {getStatusText(selectedEvent.status)}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Descripción */}
+                  <div className="bg-gray-50 rounded-lg p-4">
+                    <p className="text-gray-700">{selectedEvent.description}</p>
+                  </div>
+
+                  {/* Detalles */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="space-y-4">
+                      <h4 className="font-semibold text-gray-900 flex items-center">
+                        <Calendar className="w-5 h-5 mr-2 text-[#519a7c]" />
+                        Información Temporal
+                      </h4>
+                      <div className="bg-gray-50 rounded-lg p-4 space-y-2">
+                        <div>
+                          <span className="text-gray-600">Fecha:</span>
+                          <span className="ml-2 font-medium">
+                            {formatFullDate(selectedEvent.date)}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-gray-600">Veterinario:</span>
+                          <span className="ml-2 font-medium">{selectedEvent.veterinarian}</span>
+                        </div>
+                        <div>
+                          <span className="text-gray-600">Creado:</span>
+                          <span className="ml-2 font-medium">
+                            {formatDate(selectedEvent.createdAt.split('T')[0])}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="space-y-4">
+                      <h4 className="font-semibold text-gray-900 flex items-center">
+                        <MapPin className="w-5 h-5 mr-2 text-[#519a7c]" />
+                        Ubicación y Costo
+                      </h4>
+                      <div className="bg-gray-50 rounded-lg p-4 space-y-2">
+                        <div>
+                          <span className="text-gray-600">Ubicación:</span>
+                          <span className="ml-2 font-medium">{selectedEvent.location}</span>
+                        </div>
+                        <div>
+                          <span className="text-gray-600">Costo:</span>
+                          <span className="ml-2 font-bold text-[#519a7c] text-lg">
+                            ${selectedEvent.cost.toLocaleString()}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Signos vitales */}
+                  {selectedEvent.vitalSigns && (
+                    <div>
+                      <h4 className="font-semibold text-gray-900 mb-2">Signos Vitales</h4>
+                      <div className="bg-blue-50 rounded-lg p-4">
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                          <div className="text-center">
+                            <p className="text-sm text-gray-600">Temperatura</p>
+                            <p className="text-lg font-bold text-blue-600">{selectedEvent.vitalSigns.temperature}°C</p>
+                          </div>
+                          <div className="text-center">
+                            <p className="text-sm text-gray-600">Pulso</p>
+                            <p className="text-lg font-bold text-blue-600">{selectedEvent.vitalSigns.heartRate} bpm</p>
+                          </div>
+                          <div className="text-center">
+                            <p className="text-sm text-gray-600">Respiración</p>
+                            <p className="text-lg font-bold text-blue-600">{selectedEvent.vitalSigns.respiratoryRate} rpm</p>
+                          </div>
+                          <div className="text-center">
+                            <p className="text-sm text-gray-600">Peso</p>
+                            <p className="text-lg font-bold text-blue-600">{selectedEvent.vitalSigns.weight} kg</p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Medicamentos */}
+                  {selectedEvent.medications && selectedEvent.medications.length > 0 && (
+                    <div>
+                      <h4 className="font-semibold text-gray-900 mb-2">Medicamentos</h4>
+                      <div className="flex flex-wrap gap-2">
+                        {selectedEvent.medications.map((med, idx) => (
                           <span
                             key={idx}
-                            className="inline-block px-2 py-1 bg-red-100 text-red-800 rounded-full text-xs mr-1 mb-1"
+                            className="px-3 py-1 bg-green-100 text-green-800 rounded-full text-sm"
                           >
-                            {allergy}
+                            {med}
                           </span>
                         ))}
                       </div>
                     </div>
                   )}
-                </CardContent>
-              </Card>
-            )}
-          </motion.div>
 
-          {/* Timeline de Eventos */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2 }}
-            className="lg:col-span-8"
-          >
-            <Card className="bg-white/80 backdrop-blur-md border-gray-200">
-              <CardHeader>
-                <CardTitle className="text-base sm:text-lg">
-                  Historial de Eventos ({filteredEvents.length})
-                  {selectedAnimalProfile && (
-                    <span className="text-sm sm:text-base font-normal text-gray-600 ml-2">
-                      - {selectedAnimalProfile.name}
-                    </span>
+                  {/* Notas */}
+                  {selectedEvent.notes && (
+                    <div>
+                      <h4 className="font-semibold text-gray-900 mb-2">Notas</h4>
+                      <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4">
+                        <p className="text-gray-700">{selectedEvent.notes}</p>
+                      </div>
+                    </div>
                   )}
-                </CardTitle>
-                <CardDescription className="text-sm">
-                  Cronología detallada de todos los eventos médicos registrados
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                {filteredEvents.length > 0 ? (
-                  <EventTimeline events={filteredEvents} />
-                ) : (
-                  <div className="text-center py-8 sm:py-12">
-                    <Stethoscope className="w-10 h-10 sm:w-12 sm:h-12 text-gray-400 mx-auto mb-4" />
-                    <h3 className="text-base sm:text-lg font-medium text-gray-900 mb-2">
-                      No hay eventos médicos
-                    </h3>
-                    <p className="text-gray-600 mb-4 text-sm sm:text-base">
-                      No se encontraron eventos que coincidan con los filtros
-                      seleccionados.
-                    </p>
-                    <Button onClick={() => setShowNewEventModal(true)}>
-                      <Plus className="w-4 h-4 mr-2" />
-                      Registrar Primer Evento
-                    </Button>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </motion.div>
-        </div>
-      </div>
+                </div>
 
-      {/* Modal para nuevo evento */}
-      <NewEventModal
-        isOpen={showNewEventModal}
-        onClose={() => setShowNewEventModal(false)}
-        onSave={handleNewEvent}
-        animals={animals}
-      />
+                {/* Footer del modal */}
+                <div className="flex justify-end space-x-3 p-6 border-t bg-gray-50">
+                  <button
+                    onClick={() => setShowDetailsModal(false)}
+                    className="px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                  >
+                    Cerrar
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowDetailsModal(false);
+                      handleEdit(selectedEvent);
+                    }}
+                    className="px-4 py-2 bg-[#519a7c] text-white rounded-lg hover:bg-[#4a8970] flex items-center space-x-2 transition-colors"
+                  >
+                    <Edit className="w-4 h-4" />
+                    <span>Editar</span>
+                  </button>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Modal de confirmación de eliminación */}
+        <AnimatePresence>
+          {showDeleteModal && eventToDelete && (
+            <motion.div 
+              className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+            >
+              <motion.div 
+                className="bg-white rounded-lg w-full max-w-md"
+                initial={{ scale: 0.9, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.9, opacity: 0 }}
+              >
+                {/* Header del modal */}
+                <div className="flex items-center gap-4 p-6 border-b">
+                  <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center">
+                    <AlertTriangle className="w-6 h-6 text-red-600" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-900">
+                      Eliminar Evento Médico
+                    </h3>
+                    <p className="text-sm text-gray-600">
+                      Esta acción no se puede deshacer
+                    </p>
+                  </div>
+                </div>
+
+                {/* Contenido del modal */}
+                <div className="p-6">
+                  <p className="text-gray-700 mb-6">
+                    ¿Estás seguro de que deseas eliminar el evento médico "{eventToDelete.title}" 
+                    de {eventToDelete.animalName}?
+                    <br />
+                    <br />
+                    Toda la información del evento se perderá permanentemente.
+                  </p>
+                </div>
+
+                {/* Footer del modal */}
+                <div className="flex justify-end space-x-3 p-6 border-t bg-gray-50">
+                  <button
+                    onClick={() => {
+                      setShowDeleteModal(false);
+                      setEventToDelete(null);
+                    }}
+                    className="px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={confirmDelete}
+                    className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 flex items-center space-x-2 transition-colors"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    <span>Eliminar</span>
+                  </button>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
     </div>
   );
 };

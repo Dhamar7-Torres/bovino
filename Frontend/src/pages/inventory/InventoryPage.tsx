@@ -31,11 +31,8 @@ import {
 import { getMainBackgroundClasses, CSS_CLASSES } from "../../components/layout";
 
 // Importar los componentes del módulo de inventario
-import InventoryDashboard from "./InventoryDashboard";
 import MedicineInventory from "./MedicineInventory";
 import StockLevels from "./StockLevels";
-import LowStockAlerts from "./LowStockAlerts";
-import InventoryReports from "./InventoryReports";
 
 // Interfaces para el módulo
 interface InventoryModuleStats {
@@ -744,7 +741,6 @@ const InventoryPage: React.FC = () => {
                     exit={{ opacity: 0, x: -20 }}
                     transition={{ duration: 0.3 }}
                   >
-                    <InventoryDashboard />
                   </motion.div>
                 }
               />
@@ -786,7 +782,6 @@ const InventoryPage: React.FC = () => {
                     exit={{ opacity: 0, x: -20 }}
                     transition={{ duration: 0.3 }}
                   >
-                    <LowStockAlerts />
                   </motion.div>
                 }
               />
@@ -800,7 +795,6 @@ const InventoryPage: React.FC = () => {
                     exit={{ opacity: 0, x: -20 }}
                     transition={{ duration: 0.3 }}
                   >
-                    <InventoryReports />
                   </motion.div>
                 }
               />

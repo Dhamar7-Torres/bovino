@@ -2,11 +2,8 @@ import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Heart,
-  Baby,
-  Activity,
   Calendar,
   MapPin,
-  User,
   Search,
   Plus,
   Edit3,
@@ -15,61 +12,57 @@ import {
   X,
   Bell,
   FileText,
-  TrendingUp,
-  Target,
-  DollarSign,
   AlertTriangle,
-  BarChart3,
-  LineChart,
-  Shield,
-  Clock,
   AlertCircle,
   Info,
-  Users,
   Stethoscope,
   Save,
   ArrowLeft,
   CheckCircle,
   XCircle,
+  Thermometer,
+  Pill,
+  Bandage,
+  Shield,
+  Clock,
+  UserCheck,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
-// Importar funciones de integración con Timeline
-// import { addEventToTimeline } from './EventTimeline';
-
 // ==================== INTERFACES ====================
-interface ReproductionEvent {
+interface HealthEvent {
   id: string;
   bovineId: string;
   bovineName: string;
   bovineTag: string;
-  eventType: ReproductionEventType;
-  status: "scheduled" | "completed" | "in_progress" | "cancelled" | "failed";
-  priority: "low" | "medium" | "high" | "critical";
+  eventType: HealthEventType;
+  status: "scheduled" | "completed" | "in_progress" | "cancelled" | "emergency";
+  priority: "low" | "medium" | "high" | "critical" | "emergency";
   scheduledDate: string;
   completedDate?: string;
   location: Location;
-  reproductionData: {
-    method: "natural" | "artificial_insemination";
-    bullId?: string;
-    bullName?: string;
-    bullBreed?: string;
-    semenBatch?: string;
-    semenProvider?: string;
-    technician?: string;
-    attempts?: number;
-    success?: boolean;
-    expectedDueDate?: string;
-    heatDetectionDate?: string;
-    inseminationTime?: string;
-    semenQuality?: "excellent" | "good" | "fair" | "poor";
-    cervixCondition?: "excellent" | "good" | "fair" | "poor";
+  healthData: {
+    checkType: HealthCheckType;
+    symptoms?: string[];
+    diagnosis?: string;
+    treatment?: string;
+    medication?: MedicationInfo[];
+    vitalSigns?: VitalSigns;
+    bodyConditionScore?: number; // 1-9 escala
+    weight?: number;
+    temperature?: number;
+    heartRate?: number;
+    respiratoryRate?: number;
+    findings?: string[];
+    recommendations?: string[];
     followUpDate?: string;
-    gestationConfirmed?: boolean;
-    gestationMethod?: "palpation" | "ultrasound" | "blood_test";
-    fetusCount?: number;
+    followUpRequired: boolean;
+    severity?: "mild" | "moderate" | "severe" | "critical";
+    contagious?: boolean;
+    quarantine?: boolean;
+    prognosis: "excellent" | "good" | "fair" | "poor" | "grave";
+    recoveryDate?: string;
     complications?: string[];
-    nextCheckDate?: string;
     notes?: string;
   };
   veterinarian?: VeterinarianInfo;
@@ -89,15 +82,46 @@ interface ReproductionEvent {
   relatedEvents?: string[];
 }
 
-interface ReproductionEventType {
+interface HealthEventType {
   id: string;
   name: string;
   icon: React.ComponentType<any>;
   color: string;
   description: string;
-  category: "heat_detection" | "insemination" | "pregnancy_check" | "breeding_management";
+  category: "checkup" | "emergency" | "treatment" | "vaccination" | "prevention";
   requiresVeterinarian: boolean;
   urgencyLevel: number; // 1-5
+}
+
+interface HealthCheckType {
+  id: string;
+  name: string;
+  description: string;
+  standardProcedures: string[];
+  estimatedDuration: number; // minutos
+  cost: number;
+}
+
+interface MedicationInfo {
+  id: string;
+  name: string;
+  dosage: string;
+  frequency: string;
+  duration: string;
+  route: "oral" | "injectable" | "topical" | "intravenous";
+  startDate: string;
+  endDate: string;
+  sideEffects?: string[];
+  completed: boolean;
+}
+
+interface VitalSigns {
+  temperature: number; // Celsius
+  heartRate: number; // bpm
+  respiratoryRate: number; // rpm
+  bloodPressure?: string;
+  oxygenSaturation?: number;
+  capillaryRefillTime?: number; // segundos
 }
 
 interface VeterinarianInfo {
@@ -109,6 +133,8 @@ interface VeterinarianInfo {
   email: string;
   clinic?: string;
   emergencyContact: boolean;
+  rating?: number;
+  experience?: number;
 }
 
 interface Location {
@@ -132,7 +158,7 @@ interface Attachment {
 
 interface EventReminder {
   id: string;
-  type: "medication" | "follow_up" | "lab_result" | "pregnancy_check";
+  type: "medication" | "follow_up" | "lab_result" | "vaccination";
   message: string;
   dueDate: string;
   completed: boolean;
@@ -146,128 +172,102 @@ interface WeatherInfo {
   precipitation: number;
 }
 
-interface ReproductionStatistics {
-  totalEvents: number;
-  successfulInseminations: number;
-  pregnancyRate: number;
-  currentPregnant: number;
-  expectedCalvings: number;
-  averageGestation: number;
-  heatDetectionAccuracy: number;
-  activeBulls: number;
-  totalCost: number;
-  upcomingFollowUps: number;
-  activePregnancies: number;
-}
-
-interface Bovine {
-  id: string;
-  name: string;
-  tag: string;
-  breed: string;
-  age: number;
-  gender: "male" | "female";
-  status: "active" | "pregnant" | "lactating" | "dry" | "sick";
-  lastHeatDate?: string;
-  breedingHistory: any[];
-}
-
 // ==================== CONFIGURACIONES ====================
-const reproductionEventTypes: ReproductionEventType[] = [
+const healthEventTypes: HealthEventType[] = [
   {
-    id: "heat_detection",
-    name: "Detección de Celo",
-    icon: Target,
-    color: "text-pink-600",
-    description: "Detección y confirmación del celo en hembras",
-    category: "heat_detection",
-    requiresVeterinarian: false,
+    id: "routine_checkup",
+    name: "Revisión Rutinaria",
+    icon: Stethoscope,
+    color: "text-green-600",
+    description: "Examen de salud preventivo rutinario",
+    category: "checkup",
+    requiresVeterinarian: true,
+    urgencyLevel: 2,
+  },
+  {
+    id: "emergency_call",
+    name: "Emergencia Médica",
+    icon: AlertTriangle,
+    color: "text-red-600",
+    description: "Situación médica urgente",
+    category: "emergency",
+    requiresVeterinarian: true,
+    urgencyLevel: 5,
+  },
+  {
+    id: "disease_treatment",
+    name: "Tratamiento de Enfermedad",
+    icon: Pill,
+    color: "text-blue-600",
+    description: "Tratamiento médico específico",
+    category: "treatment",
+    requiresVeterinarian: true,
     urgencyLevel: 3,
   },
   {
-    id: "artificial_insemination",
-    name: "Inseminación Artificial",
-    icon: Activity,
-    color: "text-blue-600",
-    description: "Procedimiento de inseminación artificial",
-    category: "insemination",
+    id: "injury_treatment",
+    name: "Tratamiento de Lesión",
+    icon: Bandage,
+    color: "text-orange-600",
+    description: "Atención médica por lesiones",
+    category: "treatment",
     requiresVeterinarian: true,
     urgencyLevel: 4,
   },
   {
-    id: "natural_breeding",
-    name: "Monta Natural",
-    icon: Users,
-    color: "text-green-600",
-    description: "Servicio por monta natural",
-    category: "insemination",
-    requiresVeterinarian: false,
-    urgencyLevel: 3,
-  },
-  {
-    id: "pregnancy_check",
-    name: "Diagnóstico de Gestación",
-    icon: Stethoscope,
+    id: "vaccination",
+    name: "Vacunación",
+    icon: Shield,
     color: "text-purple-600",
-    description: "Confirmación de gestación",
-    category: "pregnancy_check",
+    description: "Aplicación de vacunas preventivas",
+    category: "vaccination",
     requiresVeterinarian: true,
-    urgencyLevel: 3,
+    urgencyLevel: 2,
   },
   {
-    id: "breeding_management",
-    name: "Manejo Reproductivo",
-    icon: FileText,
-    color: "text-orange-600",
-    description: "Actividades generales de manejo reproductivo",
-    category: "breeding_management",
+    id: "preventive_care",
+    name: "Cuidado Preventivo",
+    icon: Heart,
+    color: "text-pink-600",
+    description: "Medidas preventivas de salud",
+    category: "prevention",
     requiresVeterinarian: false,
-    urgencyLevel: 2,
+    urgencyLevel: 1,
   },
 ];
 
-// Datos mock
-const mockBovines: Bovine[] = [
+const healthCheckTypes: HealthCheckType[] = [
   {
-    id: "bov_001",
-    name: "Luna",
-    tag: "L-001",
-    breed: "Holstein",
-    age: 3,
-    gender: "female",
-    status: "active",
-    lastHeatDate: "2024-12-15",
-    breedingHistory: [],
+    id: "general_exam",
+    name: "Examen General",
+    description: "Revisión completa del estado de salud",
+    standardProcedures: ["Examen físico", "Signos vitales", "Peso corporal"],
+    estimatedDuration: 30,
+    cost: 150,
   },
   {
-    id: "bov_002",
-    name: "Esperanza",
-    tag: "E-002",
-    breed: "Jersey",
-    age: 4,
-    gender: "female",
-    status: "pregnant",
-    breedingHistory: [],
+    id: "emergency_exam",
+    name: "Examen de Emergencia",
+    description: "Evaluación urgente por enfermedad o lesión",
+    standardProcedures: ["Evaluación rápida", "Estabilización", "Diagnóstico"],
+    estimatedDuration: 45,
+    cost: 300,
   },
   {
-    id: "bov_003",
-    name: "Bella",
-    tag: "B-003",
-    breed: "Angus",
-    age: 2,
-    gender: "female",
-    status: "active",
-    lastHeatDate: "2024-12-10",
-    breedingHistory: [],
+    id: "follow_up",
+    name: "Seguimiento",
+    description: "Revisión posterior a tratamiento",
+    standardProcedures: ["Evaluación de progreso", "Ajuste de tratamiento"],
+    estimatedDuration: 20,
+    cost: 100,
   },
 ];
 
 // ==================== COMPONENTE PRINCIPAL ====================
 const EventHealth: React.FC = () => {
   // Estados principales
-  const [reproductionEvents, setReproductionEvents] = useState<ReproductionEvent[]>([]);
-  const [filteredEvents, setFilteredEvents] = useState<ReproductionEvent[]>([]);
-  const [bovines] = useState<Bovine[]>(mockBovines);
+  const [healthEvents, setHealthEvents] = useState<HealthEvent[]>([]);
+  const [filteredEvents, setFilteredEvents] = useState<HealthEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedEventType, setSelectedEventType] = useState<string>("all");
@@ -279,13 +279,14 @@ const EventHealth: React.FC = () => {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
-  const [selectedEvent, setSelectedEvent] = useState<ReproductionEvent | null>(null);
-  const [showAnalytics, setShowAnalytics] = useState(false);
+  const [selectedEvent, setSelectedEvent] = useState<HealthEvent | null>(null);
   
   // Estados para el formulario
-  const [formData, setFormData] = useState<Partial<ReproductionEvent>>({
+  const [formData, setFormData] = useState<Partial<HealthEvent>>({
     bovineId: "",
-    eventType: reproductionEventTypes[0],
+    bovineName: "",
+    bovineTag: "",
+    eventType: healthEventTypes[0],
     scheduledDate: "",
     priority: "medium",
     status: "scheduled",
@@ -297,28 +298,31 @@ const EventHealth: React.FC = () => {
       section: "",
       facility: "",
     },
-    reproductionData: {
-      method: "artificial_insemination",
-      attempts: 1,
-      success: false,
+    healthData: {
+      checkType: healthCheckTypes[0],
+      followUpRequired: false,
+      prognosis: "good",
+      symptoms: [],
+      findings: [],
+      recommendations: [],
     },
     reminders: [],
     attachments: [],
   });
 
   // Estados para estadísticas
-  const [statistics, setStatistics] = useState<ReproductionStatistics>({
+  const [statistics, setStatistics] = useState<HealthStatistics>({
     totalEvents: 0,
-    successfulInseminations: 0,
-    pregnancyRate: 0,
-    currentPregnant: 0,
-    expectedCalvings: 0,
-    averageGestation: 283,
-    heatDetectionAccuracy: 0,
-    activeBulls: 3,
+    emergencyEvents: 0,
+    completedTreatments: 0,
+    activePatients: 0,
+    upcomingCheckups: 0,
+    averageRecoveryTime: 7,
+    healthyAnimals: 0,
+    sickAnimals: 0,
     totalCost: 0,
     upcomingFollowUps: 0,
-    activePregnancies: 0,
+    medicationCompliance: 85,
   });
 
   // Hooks de React Router
@@ -326,85 +330,75 @@ const EventHealth: React.FC = () => {
 
   // ==================== EFFECTS ====================
   useEffect(() => {
-    const loadReproductionEvents = async () => {
+    const loadHealthEvents = async () => {
       setLoading(true);
       try {
         // Simular carga de datos desde la API
         await new Promise((resolve) => setTimeout(resolve, 1000));
 
         // Datos simulados para desarrollo
-        const mockEvents: ReproductionEvent[] = [
+        const mockEvents: HealthEvent[] = [
           {
-            id: "rep_001",
+            id: "health_001",
             bovineId: "bov_001",
             bovineName: "Luna",
             bovineTag: "L-001",
-            eventType: reproductionEventTypes[1], // IA
+            eventType: healthEventTypes[0], // Rutinaria
             status: "completed",
-            priority: "high",
+            priority: "medium",
             scheduledDate: "2024-12-20T09:00:00Z",
-            completedDate: "2024-12-20T09:30:00Z",
+            completedDate: "2024-12-20T09:45:00Z",
             location: {
               latitude: 17.9869,
               longitude: -92.9303,
-              address: "Corral de Inseminación, Rancho El Progreso",
+              address: "Corral Principal, Rancho El Progreso",
               farm: "El Progreso",
-              section: "Corral A",
+              section: "Corral Principal",
               facility: "Manga de Trabajo",
             },
-            reproductionData: {
-              method: "artificial_insemination",
-              semenBatch: "HOL-2024-001",
-              semenProvider: "Genética Premium SA",
-              technician: "Dr. Carlos Herrera",
-              attempts: 1,
-              success: true,
-              expectedDueDate: "2025-09-20",
-              heatDetectionDate: "2024-12-19",
-              inseminationTime: "09:15",
-              semenQuality: "excellent",
-              cervixCondition: "excellent",
-              followUpDate: "2025-01-20",
-              gestationConfirmed: false,
-              nextCheckDate: "2025-01-15",
-              complications: [],
+            healthData: {
+              checkType: healthCheckTypes[0],
+              vitalSigns: {
+                temperature: 38.5,
+                heartRate: 72,
+                respiratoryRate: 20,
+              },
+              bodyConditionScore: 7,
+              weight: 450,
+              findings: ["Estado general bueno", "Condición corporal óptima"],
+              recommendations: ["Continuar con alimentación actual", "Próxima revisión en 3 meses"],
+              followUpRequired: false,
+              prognosis: "excellent",
             },
-            cost: 250,
+            cost: 150,
             veterinarian: {
               id: "vet_001",
               name: "Dr. Carlos Herrera",
               license: "VET-2024-001",
-              specialization: "Reproducción Bovina",
+              specialization: "Medicina Bovina General",
               phone: "+52 993 123 4567",
               email: "carlos.herrera@vet.com",
-              clinic: "Centro de Reproducción Animal",
+              clinic: "Clínica Veterinaria El Campo",
               emergencyContact: true,
+              rating: 4.8,
+              experience: 15,
             },
-            notes: "Inseminación exitosa, vaca en celo óptimo",
+            notes: "Revisión rutinaria completada sin novedades",
             attachments: [],
-            reminders: [
-              {
-                id: "rem_001",
-                type: "pregnancy_check",
-                message: "Diagnóstico de gestación programado",
-                dueDate: "2025-01-15T10:00:00Z",
-                completed: false,
-              },
-            ],
+            reminders: [],
             createdAt: "2024-12-20T08:00:00Z",
-            updatedAt: "2024-12-20T09:30:00Z",
+            updatedAt: "2024-12-20T09:45:00Z",
             createdBy: "user_001",
           },
           {
-            id: "rep_002",
+            id: "health_002",
             bovineId: "bov_002",
             bovineName: "Esperanza",
             bovineTag: "E-002",
-            eventType: reproductionEventTypes[3], // Pregnancy check
-            status: "completed",
+            eventType: healthEventTypes[2], // Tratamiento enfermedad
+            status: "in_progress",
             priority: "high",
             scheduledDate: "2024-12-18T10:00:00Z",
-            completedDate: "2024-12-18T10:30:00Z",
             location: {
               latitude: 17.9869,
               longitude: -92.9303,
@@ -413,82 +407,94 @@ const EventHealth: React.FC = () => {
               section: "Área Veterinaria",
               facility: "Consulta",
             },
-            reproductionData: {
-              method: "artificial_insemination",
-              gestationConfirmed: true,
-              gestationMethod: "palpation",
-              fetusCount: 1,
-              expectedDueDate: "2025-08-15",
-              nextCheckDate: "2025-02-15",
+            healthData: {
+              checkType: healthCheckTypes[1],
+              symptoms: ["Fiebre", "Falta de apetito", "Tos persistente"],
+              diagnosis: "Neumonía bacteriana leve",
+              treatment: "Antibioterapia con penicilina",
+              medication: [{
+                id: "med_001",
+                name: "Penicilina G",
+                dosage: "20,000 UI/kg",
+                frequency: "Cada 12 horas",
+                duration: "7 días",
+                route: "injectable",
+                startDate: "2024-12-18",
+                endDate: "2024-12-25",
+                completed: false,
+              }],
+              vitalSigns: {
+                temperature: 39.8,
+                heartRate: 85,
+                respiratoryRate: 28,
+              },
+              severity: "moderate",
+              followUpRequired: true,
+              followUpDate: "2024-12-25T10:00:00Z",
+              prognosis: "good",
             },
-            cost: 180,
+            cost: 280,
             veterinarian: {
               id: "vet_001",
               name: "Dr. Carlos Herrera",
               license: "VET-2024-001",
-              specialization: "Reproducción Bovina",
+              specialization: "Medicina Bovina General",
               phone: "+52 993 123 4567",
               email: "carlos.herrera@vet.com",
-              clinic: "Centro de Reproducción Animal",
+              clinic: "Clínica Veterinaria El Campo",
               emergencyContact: true,
+              rating: 4.8,
+              experience: 15,
             },
-            notes: "Gestación confirmada, feto en desarrollo normal",
+            notes: "Respondiendo bien al tratamiento, mejoría notable",
             attachments: [],
-            reminders: [],
+            reminders: [
+              {
+                id: "rem_001",
+                type: "medication",
+                message: "Aplicar dosis de penicilina",
+                dueDate: "2024-12-22T08:00:00Z",
+                completed: false,
+              },
+              {
+                id: "rem_002",
+                type: "follow_up",
+                message: "Revisión post-tratamiento",
+                dueDate: "2024-12-25T10:00:00Z",
+                completed: false,
+              },
+            ],
             createdAt: "2024-12-18T09:00:00Z",
-            updatedAt: "2024-12-18T10:30:00Z",
+            updatedAt: "2024-12-21T16:30:00Z",
             createdBy: "user_001",
           },
         ];
 
-        setReproductionEvents(mockEvents);
-        calculateStatistics(mockEvents);
+        setHealthEvents(mockEvents);
       } catch (error) {
-        console.error("Error cargando eventos de reproducción:", error);
+        console.error("Error cargando eventos de salud:", error);
       } finally {
         setLoading(false);
       }
     };
 
-    loadReproductionEvents();
+    loadHealthEvents();
   }, []);
 
   useEffect(() => {
     filterEvents();
-  }, [reproductionEvents, searchTerm, selectedEventType, selectedStatus, selectedPriority, dateFilter]);
+  }, [healthEvents, searchTerm, selectedEventType, selectedStatus, selectedPriority, dateFilter]);
 
   // ==================== FUNCIONES ====================
-  const calculateStatistics = (events: ReproductionEvent[]) => {
-    const successful = events.filter(e => e.reproductionData.success).length;
-    const totalCost = events.reduce((sum, e) => sum + (e.cost || 0), 0);
-    const pregnant = bovines.filter(b => b.status === "pregnant").length;
-    const upcomingFollowUps = events.filter(e => 
-      e.reminders.some(r => !r.completed && new Date(r.dueDate) > new Date())
-    ).length;
-
-    setStatistics({
-      totalEvents: events.length,
-      successfulInseminations: successful,
-      pregnancyRate: events.length > 0 ? (successful / events.length) * 100 : 0,
-      currentPregnant: pregnant,
-      expectedCalvings: pregnant,
-      averageGestation: 283,
-      heatDetectionAccuracy: 85,
-      activeBulls: 3,
-      totalCost,
-      upcomingFollowUps,
-      activePregnancies: pregnant,
-    });
-  };
-
   const filterEvents = () => {
-    let filtered = reproductionEvents;
+    let filtered = healthEvents;
 
     if (searchTerm) {
       filtered = filtered.filter(event =>
         event.bovineName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         event.bovineTag.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        event.eventType.name.toLowerCase().includes(searchTerm.toLowerCase())
+        event.eventType.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        event.healthData.diagnosis?.toLowerCase().includes(searchTerm.toLowerCase())
       );
     }
 
@@ -539,25 +545,33 @@ const EventHealth: React.FC = () => {
     setFilteredEvents(filtered);
   };
 
-  const handleCreateEvent = () => {
+  const handleCreateEvent = async () => {
+    // Obtener ubicación actual
+    const currentLocation = await getCurrentLocation();
+    
     setFormData({
       bovineId: "",
-      eventType: reproductionEventTypes[0],
+      bovineName: "",
+      bovineTag: "",
+      eventType: healthEventTypes[0],
       scheduledDate: "",
       priority: "medium",
       status: "scheduled",
       location: {
-        latitude: 17.9869,
-        longitude: -92.9303,
-        address: "",
+        latitude: currentLocation.latitude,
+        longitude: currentLocation.longitude,
+        address: `${currentLocation.latitude.toFixed(6)}, ${currentLocation.longitude.toFixed(6)}`,
         farm: "El Progreso",
         section: "",
         facility: "",
       },
-      reproductionData: {
-        method: "artificial_insemination",
-        attempts: 1,
-        success: false,
+      healthData: {
+        checkType: healthCheckTypes[0],
+        followUpRequired: false,
+        prognosis: "good",
+        symptoms: [],
+        findings: [],
+        recommendations: [],
       },
       reminders: [],
       attachments: [],
@@ -565,46 +579,47 @@ const EventHealth: React.FC = () => {
     setShowCreateModal(true);
   };
 
-  const handleEditEvent = (event: ReproductionEvent) => {
-    setFormData(event);
+  const handleEditEvent = (event: HealthEvent) => {
+    setFormData({
+      ...event,
+      // Asegurar que todos los campos estén disponibles para edición
+      bovineName: event.bovineName,
+      bovineTag: event.bovineTag,
+    });
     setSelectedEvent(event);
     setShowEditModal(true);
   };
 
   const handleDeleteEvent = async (eventId: string) => {
-    if (window.confirm("¿Estás seguro de eliminar este evento de reproducción?")) {
-      const updatedEvents = reproductionEvents.filter(event => event.id !== eventId);
-      setReproductionEvents(updatedEvents);
-      calculateStatistics(updatedEvents);
+    if (window.confirm("¿Estás seguro de eliminar este evento de salud?")) {
+      const updatedEvents = healthEvents.filter(event => event.id !== eventId);
+      setHealthEvents(updatedEvents);
     }
   };
 
-  const handleViewEvent = (event: ReproductionEvent) => {
+  const handleViewEvent = (event: HealthEvent) => {
     setSelectedEvent(event);
     setShowDetailsModal(true);
   };
 
   const handleSaveEvent = () => {
-    if (!formData.bovineId || !formData.scheduledDate) {
-      alert("Por favor completa los campos obligatorios");
+    if (!formData.bovineName || !formData.scheduledDate) {
+      alert("Por favor completa los campos obligatorios (Nombre de la vaca y Fecha)");
       return;
     }
 
-    const selectedBovine = bovines.find(b => b.id === formData.bovineId);
-    if (!selectedBovine) return;
-
-    const eventData: ReproductionEvent = {
-      id: selectedEvent?.id || `rep_${Date.now()}`,
-      bovineId: formData.bovineId,
-      bovineName: selectedBovine.name,
-      bovineTag: selectedBovine.tag,
+    const eventData: HealthEvent = {
+      id: selectedEvent?.id || `health_${Date.now()}`,
+      bovineId: formData.bovineId || `bovine_${Date.now()}`,
+      bovineName: formData.bovineName!,
+      bovineTag: formData.bovineTag || formData.bovineName!.toUpperCase().substring(0, 3) + "-" + Math.floor(Math.random() * 1000).toString().padStart(3, '0'),
       eventType: formData.eventType!,
       status: formData.status!,
       priority: formData.priority!,
       scheduledDate: formData.scheduledDate!,
       completedDate: formData.completedDate,
       location: formData.location!,
-      reproductionData: formData.reproductionData!,
+      healthData: formData.healthData!,
       veterinarian: formData.veterinarian,
       cost: formData.cost,
       insurance: formData.insurance,
@@ -618,48 +633,20 @@ const EventHealth: React.FC = () => {
       relatedEvents: formData.relatedEvents,
     };
 
-    let updatedEvents: ReproductionEvent[];
+    let updatedEvents: HealthEvent[];
     if (selectedEvent) {
       // Editar evento existente
-      updatedEvents = reproductionEvents.map(event => 
+      updatedEvents = healthEvents.map(event => 
         event.id === selectedEvent.id ? eventData : event
       );
       setShowEditModal(false);
     } else {
       // Crear nuevo evento
-      updatedEvents = [eventData, ...reproductionEvents];
+      updatedEvents = [eventData, ...healthEvents];
       setShowCreateModal(false);
-
-      // Integrar con Timeline - Descomenta estas líneas cuando implementes la integración
-      /*
-      addEventToTimeline({
-        type: 'breeding',
-        title: `${eventData.eventType.name} - ${eventData.bovineName}`,
-        description: `${eventData.reproductionData.method === 'artificial_insemination' ? 'Inseminación artificial' : 'Monta natural'} para ${eventData.bovineName}`,
-        date: new Date(eventData.scheduledDate).toISOString().split('T')[0],
-        time: new Date(eventData.scheduledDate).toTimeString().slice(0, 5),
-        location: eventData.location.facility || eventData.location.section || eventData.location.address,
-        bovineId: eventData.bovineId,
-        bovineName: eventData.bovineName,
-        details: {
-          method: eventData.reproductionData.method === 'artificial_insemination' ? 'Inseminación Artificial' : 'Monta Natural',
-          technician: eventData.reproductionData.technician,
-          semenBatch: eventData.reproductionData.semenBatch,
-          bullName: eventData.reproductionData.bullName,
-          expectedDueDate: eventData.reproductionData.expectedDueDate,
-          success: eventData.reproductionData.success,
-        },
-        status: eventData.status,
-        priority: eventData.priority,
-        createdBy: eventData.createdBy,
-        cost: eventData.cost,
-        notes: eventData.notes,
-      });
-      */
     }
 
-    setReproductionEvents(updatedEvents);
-    calculateStatistics(updatedEvents);
+    setHealthEvents(updatedEvents);
     setSelectedEvent(null);
   };
 
@@ -669,7 +656,7 @@ const EventHealth: React.FC = () => {
       completed: "text-green-600 bg-green-100",
       in_progress: "text-yellow-600 bg-yellow-100",
       cancelled: "text-red-600 bg-red-100",
-      failed: "text-red-600 bg-red-100",
+      emergency: "text-red-600 bg-red-200",
     };
     return colors[status as keyof typeof colors] || "text-gray-600 bg-gray-100";
   };
@@ -680,6 +667,7 @@ const EventHealth: React.FC = () => {
       medium: "text-yellow-600 bg-yellow-100",
       high: "text-orange-600 bg-orange-100",
       critical: "text-red-600 bg-red-100",
+      emergency: "text-red-700 bg-red-200",
     };
     return colors[priority as keyof typeof colors] || "text-gray-600 bg-gray-100";
   };
@@ -720,7 +708,7 @@ const EventHealth: React.FC = () => {
       >
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-2xl font-bold text-gray-900">
-            {isEdit ? "Editar" : "Crear"} Evento de Reproducción
+            {isEdit ? "Editar" : "Crear"} Evento de Salud
           </h2>
           <button
             onClick={() => isEdit ? setShowEditModal(false) : setShowCreateModal(false)}
@@ -737,29 +725,23 @@ const EventHealth: React.FC = () => {
             
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Vaca *
+                Nombre de la Vaca *
               </label>
-              <select
-                value={formData.bovineId}
+              <input
+                type="text"
+                value={formData.bovineName || ""}
                 onChange={(e) => {
-                  const selectedBovine = bovines.find(b => b.id === e.target.value);
                   setFormData(prev => ({
                     ...prev,
-                    bovineId: e.target.value,
-                    bovineName: selectedBovine?.name || "",
-                    bovineTag: selectedBovine?.tag || "",
+                    bovineId: `bovine_${Date.now()}`, // Generar ID único
+                    bovineName: e.target.value,
+                    bovineTag: e.target.value.toUpperCase().substring(0, 3) + "-" + Math.floor(Math.random() * 1000).toString().padStart(3, '0'),
                   }));
                 }}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-pink-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-[#519a7c]"
+                placeholder="Ingresa el nombre de la vaca"
                 required
-              >
-                <option value="">Seleccionar vaca</option>
-                {bovines.filter(b => b.gender === "female").map(bovine => (
-                  <option key={bovine.id} value={bovine.id}>
-                    {bovine.name} ({bovine.tag}) - {bovine.breed}
-                  </option>
-                ))}
-              </select>
+              />
             </div>
 
             <div>
@@ -769,13 +751,13 @@ const EventHealth: React.FC = () => {
               <select
                 value={formData.eventType?.id}
                 onChange={(e) => {
-                  const eventType = reproductionEventTypes.find(t => t.id === e.target.value);
+                  const eventType = healthEventTypes.find(t => t.id === e.target.value);
                   setFormData(prev => ({ ...prev, eventType }));
                 }}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-pink-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-[#519a7c]"
                 required
               >
-                {reproductionEventTypes.map(type => (
+                {healthEventTypes.map(type => (
                   <option key={type.id} value={type.id}>
                     {type.name}
                   </option>
@@ -794,7 +776,7 @@ const EventHealth: React.FC = () => {
                   ...prev, 
                   scheduledDate: new Date(e.target.value).toISOString() 
                 }))}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-pink-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-[#519a7c]"
                 required
               />
             </div>
@@ -807,13 +789,13 @@ const EventHealth: React.FC = () => {
                 <select
                   value={formData.status}
                   onChange={(e) => setFormData(prev => ({ ...prev, status: e.target.value as any }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-pink-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-[#519a7c]"
                 >
                   <option value="scheduled">Programado</option>
                   <option value="in_progress">En Progreso</option>
                   <option value="completed">Completado</option>
-                  <option value="failed">Fallido</option>
                   <option value="cancelled">Cancelado</option>
+                  <option value="emergency">Emergencia</option>
                 </select>
               </div>
 
@@ -824,124 +806,130 @@ const EventHealth: React.FC = () => {
                 <select
                   value={formData.priority}
                   onChange={(e) => setFormData(prev => ({ ...prev, priority: e.target.value as any }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-pink-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-[#519a7c]"
                 >
                   <option value="low">Baja</option>
                   <option value="medium">Media</option>
                   <option value="high">Alta</option>
                   <option value="critical">Crítica</option>
+                  <option value="emergency">Emergencia</option>
                 </select>
               </div>
             </div>
           </div>
 
-          {/* Datos de Reproducción */}
+          {/* Datos de Salud */}
           <div className="space-y-4">
-            <h3 className="text-lg font-medium text-gray-900">Datos de Reproducción</h3>
+            <h3 className="text-lg font-medium text-gray-900">Datos de Salud</h3>
             
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Método
+                Tipo de Revisión
               </label>
               <select
-                value={formData.reproductionData?.method}
-                onChange={(e) => setFormData(prev => ({
-                  ...prev,
-                  reproductionData: { ...prev.reproductionData!, method: e.target.value as any }
-                }))}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-pink-500"
+                value={formData.healthData?.checkType?.id}
+                onChange={(e) => {
+                  const checkType = healthCheckTypes.find(t => t.id === e.target.value);
+                  setFormData(prev => ({
+                    ...prev,
+                    healthData: { ...prev.healthData!, checkType: checkType! }
+                  }));
+                }}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-[#519a7c]"
               >
-                <option value="artificial_insemination">Inseminación Artificial</option>
-                <option value="natural">Monta Natural</option>
+                {healthCheckTypes.map(type => (
+                  <option key={type.id} value={type.id}>
+                    {type.name}
+                  </option>
+                ))}
               </select>
             </div>
 
-            {formData.reproductionData?.method === "artificial_insemination" && (
-              <>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Lote de Semen
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.reproductionData?.semenBatch || ""}
-                    onChange={(e) => setFormData(prev => ({
-                      ...prev,
-                      reproductionData: { ...prev.reproductionData!, semenBatch: e.target.value }
-                    }))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-pink-500"
-                    placeholder="Ej: HOL-2024-001"
-                  />
-                </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Temperatura (°C)
+                </label>
+                <input
+                  type="number"
+                  step="0.1"
+                  value={formData.healthData?.temperature || ""}
+                  onChange={(e) => setFormData(prev => ({
+                    ...prev,
+                    healthData: { ...prev.healthData!, temperature: parseFloat(e.target.value) || undefined }
+                  }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-[#519a7c]"
+                  placeholder="38.5"
+                />
+              </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Proveedor de Semen
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.reproductionData?.semenProvider || ""}
-                    onChange={(e) => setFormData(prev => ({
-                      ...prev,
-                      reproductionData: { ...prev.reproductionData!, semenProvider: e.target.value }
-                    }))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-pink-500"
-                    placeholder="Ej: Genética Premium SA"
-                  />
-                </div>
-              </>
-            )}
-
-            {formData.reproductionData?.method === "natural" && (
-              <>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Toro
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.reproductionData?.bullName || ""}
-                    onChange={(e) => setFormData(prev => ({
-                      ...prev,
-                      reproductionData: { ...prev.reproductionData!, bullName: e.target.value }
-                    }))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-pink-500"
-                    placeholder="Nombre del toro"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Raza del Toro
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.reproductionData?.bullBreed || ""}
-                    onChange={(e) => setFormData(prev => ({
-                      ...prev,
-                      reproductionData: { ...prev.reproductionData!, bullBreed: e.target.value }
-                    }))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-pink-500"
-                    placeholder="Ej: Holstein, Angus"
-                  />
-                </div>
-              </>
-            )}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Peso (kg)
+                </label>
+                <input
+                  type="number"
+                  value={formData.healthData?.weight || ""}
+                  onChange={(e) => setFormData(prev => ({
+                    ...prev,
+                    healthData: { ...prev.healthData!, weight: parseFloat(e.target.value) || undefined }
+                  }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-[#519a7c]"
+                  placeholder="450"
+                />
+              </div>
+            </div>
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Técnico/Veterinario
+                Diagnóstico
               </label>
               <input
                 type="text"
-                value={formData.reproductionData?.technician || ""}
+                value={formData.healthData?.diagnosis || ""}
                 onChange={(e) => setFormData(prev => ({
                   ...prev,
-                  reproductionData: { ...prev.reproductionData!, technician: e.target.value }
+                  healthData: { ...prev.healthData!, diagnosis: e.target.value }
                 }))}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-pink-500"
-                placeholder="Nombre del técnico"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-[#519a7c]"
+                placeholder="Descripción del diagnóstico"
               />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Tratamiento
+              </label>
+              <input
+                type="text"
+                value={formData.healthData?.treatment || ""}
+                onChange={(e) => setFormData(prev => ({
+                  ...prev,
+                  healthData: { ...prev.healthData!, treatment: e.target.value }
+                }))}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-[#519a7c]"
+                placeholder="Descripción del tratamiento"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Pronóstico
+              </label>
+              <select
+                value={formData.healthData?.prognosis}
+                onChange={(e) => setFormData(prev => ({
+                  ...prev,
+                  healthData: { ...prev.healthData!, prognosis: e.target.value as any }
+                }))}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-[#519a7c]"
+              >
+                <option value="excellent">Excelente</option>
+                <option value="good">Bueno</option>
+                <option value="fair">Regular</option>
+                <option value="poor">Pobre</option>
+                <option value="grave">Grave</option>
+              </select>
             </div>
 
             <div>
@@ -952,7 +940,7 @@ const EventHealth: React.FC = () => {
                 type="number"
                 value={formData.cost || ""}
                 onChange={(e) => setFormData(prev => ({ ...prev, cost: parseFloat(e.target.value) || 0 }))}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-pink-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-[#519a7c]"
                 placeholder="0.00"
                 min="0"
                 step="0.01"
@@ -963,53 +951,74 @@ const EventHealth: React.FC = () => {
 
         {/* Ubicación */}
         <div className="mt-6">
-          <h3 className="text-lg font-medium text-gray-900 mb-4">Ubicación</h3>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-medium text-gray-900">Ubicación GPS</h3>
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={async () => {
+                try {
+                  const location = await getCurrentLocation();
+                  setFormData(prev => ({
+                    ...prev,
+                    location: {
+                      ...prev.location!,
+                      latitude: location.latitude,
+                      longitude: location.longitude,
+                      address: `${location.latitude.toFixed(6)}, ${location.longitude.toFixed(6)}`,
+                    }
+                  }));
+                } catch (error) {
+                  console.error('Error obteniendo ubicación:', error);
+                  alert('No se pudo obtener la ubicación actual');
+                }
+              }}
+              className="flex items-center space-x-2 px-3 py-1 bg-[#519a7c] text-white text-sm rounded-lg hover:bg-[#4e9c75] transition-colors"
+            >
+              <MapPin className="h-4 w-4" />
+              <span>Obtener Ubicación</span>
+            </motion.button>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Sección
+                Latitud
               </label>
               <input
-                type="text"
-                value={formData.location?.section || ""}
+                type="number"
+                step="0.000001"
+                value={formData.location?.latitude || ""}
                 onChange={(e) => setFormData(prev => ({
                   ...prev,
-                  location: { ...prev.location!, section: e.target.value }
+                  location: { 
+                    ...prev.location!, 
+                    latitude: parseFloat(e.target.value) || 0,
+                    address: `${parseFloat(e.target.value) || 0}, ${prev.location?.longitude || 0}`
+                  }
                 }))}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-pink-500"
-                placeholder="Ej: Potrero A"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-[#519a7c]"
+                placeholder="17.986900"
               />
             </div>
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Instalación
+                Longitud
               </label>
               <input
-                type="text"
-                value={formData.location?.facility || ""}
+                type="number"
+                step="0.000001"
+                value={formData.location?.longitude || ""}
                 onChange={(e) => setFormData(prev => ({
                   ...prev,
-                  location: { ...prev.location!, facility: e.target.value }
+                  location: { 
+                    ...prev.location!, 
+                    longitude: parseFloat(e.target.value) || 0,
+                    address: `${prev.location?.latitude || 0}, ${parseFloat(e.target.value) || 0}`
+                  }
                 }))}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-pink-500"
-                placeholder="Ej: Manga de trabajo"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Dirección
-              </label>
-              <input
-                type="text"
-                value={formData.location?.address || ""}
-                onChange={(e) => setFormData(prev => ({
-                  ...prev,
-                  location: { ...prev.location!, address: e.target.value }
-                }))}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-pink-500"
-                placeholder="Dirección completa"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-[#519a7c]"
+                placeholder="-92.930300"
               />
             </div>
           </div>
@@ -1024,7 +1033,7 @@ const EventHealth: React.FC = () => {
             value={formData.notes || ""}
             onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
             rows={3}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-pink-500"
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-[#519a7c]"
             placeholder="Observaciones adicionales..."
           />
         </div>
@@ -1039,7 +1048,7 @@ const EventHealth: React.FC = () => {
           </button>
           <button
             onClick={handleSaveEvent}
-            className="flex items-center space-x-2 px-6 py-2 bg-pink-600 text-white rounded-lg hover:bg-pink-700 transition-colors"
+            className="flex items-center space-x-2 px-6 py-2 bg-gradient-to-r from-[#519a7c] to-[#4e9c75] text-white rounded-lg hover:from-[#4e9c75] hover:to-[#3d7a5c] transition-colors"
           >
             <Save className="h-4 w-4" />
             <span>{isEdit ? "Actualizar" : "Crear"} Evento</span>
@@ -1070,21 +1079,49 @@ const EventHealth: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-pink-50 via-blue-50 to-purple-50 flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-br from-[#519a7c] via-[#f2e9d8] to-[#f4ac3a] flex items-center justify-center">
         <motion.div
           initial={{ opacity: 0, scale: 0.8 }}
           animate={{ opacity: 1, scale: 1 }}
           className="text-center"
         >
-          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-pink-600 mx-auto mb-4"></div>
-          <p className="text-gray-600 text-lg">Cargando eventos de reproducción...</p>
+          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-[#519a7c] mx-auto mb-4"></div>
+          <p className="text-gray-800 text-lg font-medium">Cargando eventos de salud...</p>
         </motion.div>
       </div>
     );
   }
 
+  // Función para obtener ubicación actual
+  const getCurrentLocation = (): Promise<{ latitude: number; longitude: number }> => {
+    return new Promise((resolve, reject) => {
+      if (!navigator.geolocation) {
+        reject(new Error('Geolocalización no soportada'));
+        return;
+      }
+
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          resolve({
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude,
+          });
+        },
+        (error) => {
+          console.error('Error obteniendo ubicación:', error);
+          // Fallback a ubicación por defecto (Cunduacán, Tabasco)
+          resolve({
+            latitude: 17.9869,
+            longitude: -92.9303,
+          });
+        },
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 300000 }
+      );
+    });
+  };
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-pink-50 via-blue-50 to-purple-50">
+    <div className="min-h-screen bg-gradient-to-br from-[#519a7c] via-[#f2e9d8] to-[#f4ac3a]">
       {/* Header */}
       <motion.div
         initial={{ opacity: 0, y: -20 }}
@@ -1103,16 +1140,16 @@ const EventHealth: React.FC = () => {
               <motion.div
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
-                className="p-3 bg-gradient-to-r from-pink-500 to-purple-600 rounded-xl text-white"
+                className="p-3 bg-gradient-to-r from-[#519a7c] to-[#4e9c75] rounded-xl text-white"
               >
-                <Heart className="h-8 w-8" />
+                <Stethoscope className="h-8 w-8" />
               </motion.div>
               <div>
                 <h1 className="text-3xl font-bold text-gray-900">
-                  Eventos de Reproducción
+                  Eventos de Salud
                 </h1>
                 <p className="text-gray-600 mt-1">
-                  Gestiona la reproducción y genética de tu ganado
+                  Gestiona la salud y cuidado médico de tu ganado
                 </p>
               </div>
             </div>
@@ -1121,18 +1158,8 @@ const EventHealth: React.FC = () => {
               <motion.button
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
-                onClick={() => setShowAnalytics(!showAnalytics)}
-                className="flex items-center space-x-2 bg-blue-600 text-white px-4 py-3 rounded-xl font-medium hover:bg-blue-700 transition-all"
-              >
-                <BarChart3 className="h-5 w-5" />
-                <span>Analíticas</span>
-              </motion.button>
-
-              <motion.button
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
                 onClick={handleCreateEvent}
-                className="flex items-center space-x-2 bg-gradient-to-r from-pink-600 to-purple-600 text-white px-6 py-3 rounded-xl font-medium hover:from-pink-700 hover:to-purple-700 transition-all shadow-lg"
+                className="flex items-center space-x-2 bg-gradient-to-r from-[#519a7c] to-[#f4ac3a] text-white px-6 py-3 rounded-xl font-medium hover:from-[#4e9c75] hover:to-[#e8a234] transition-all shadow-lg"
               >
                 <Plus className="h-5 w-5" />
                 <span>Nuevo Evento</span>
@@ -1142,208 +1169,11 @@ const EventHealth: React.FC = () => {
         </div>
       </motion.div>
 
-      {/* Estadísticas */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.1 }}
-        className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6"
-      >
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          <motion.div
-            variants={itemVariants}
-            className="bg-white/70 backdrop-blur-sm rounded-2xl p-6 border border-gray-200 hover:shadow-lg transition-all"
-          >
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">Tasa de Preñez</p>
-                <p className="text-3xl font-bold text-green-600">
-                  {statistics.pregnancyRate.toFixed(1)}%
-                </p>
-                <p className="text-sm text-gray-500 mt-1">
-                  {statistics.successfulInseminations} exitosas
-                </p>
-              </div>
-              <div className="p-3 bg-green-100 rounded-xl">
-                <TrendingUp className="h-8 w-8 text-green-600" />
-              </div>
-            </div>
-          </motion.div>
-
-          <motion.div
-            variants={itemVariants}
-            className="bg-white/70 backdrop-blur-sm rounded-2xl p-6 border border-gray-200 hover:shadow-lg transition-all"
-          >
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">Vacas Preñadas</p>
-                <p className="text-3xl font-bold text-blue-600">
-                  {statistics.currentPregnant}
-                </p>
-                <p className="text-sm text-gray-500 mt-1">
-                  {statistics.expectedCalvings} partos esperados
-                </p>
-              </div>
-              <div className="p-3 bg-blue-100 rounded-xl">
-                <Baby className="h-8 w-8 text-blue-600" />
-              </div>
-            </div>
-          </motion.div>
-
-          <motion.div
-            variants={itemVariants}
-            className="bg-white/70 backdrop-blur-sm rounded-2xl p-6 border border-gray-200 hover:shadow-lg transition-all"
-          >
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">Eventos Totales</p>
-                <p className="text-3xl font-bold text-purple-600">
-                  {statistics.totalEvents}
-                </p>
-                <p className="text-sm text-gray-500 mt-1">Este período</p>
-              </div>
-              <div className="p-3 bg-purple-100 rounded-xl">
-                <Activity className="h-8 w-8 text-purple-600" />
-              </div>
-            </div>
-          </motion.div>
-
-          <motion.div
-            variants={itemVariants}
-            className="bg-white/70 backdrop-blur-sm rounded-2xl p-6 border border-gray-200 hover:shadow-lg transition-all"
-          >
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">Costo Total</p>
-                <p className="text-3xl font-bold text-orange-600">
-                  ${statistics.totalCost.toLocaleString()}
-                </p>
-                <p className="text-sm text-gray-500 mt-1">Inversión reproductiva</p>
-              </div>
-              <div className="p-3 bg-orange-100 rounded-xl">
-                <DollarSign className="h-8 w-8 text-orange-600" />
-              </div>
-            </div>
-          </motion.div>
-        </div>
-      </motion.div>
-
-      {/* Panel de Analíticas (Expandible) */}
-      <AnimatePresence>
-        {showAnalytics && (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: "auto" }}
-            exit={{ opacity: 0, height: 0 }}
-            className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-6"
-          >
-            <div className="bg-white/70 backdrop-blur-sm rounded-2xl p-6 border border-gray-200">
-              <div className="flex items-center justify-between mb-6">
-                <h2 className="text-xl font-bold text-gray-900">
-                  Panel de Reproducción y Analíticas
-                </h2>
-                <motion.button
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                  onClick={() => setShowAnalytics(false)}
-                  className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-                >
-                  <X className="h-5 w-5" />
-                </motion.button>
-              </div>
-
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                {/* Distribución de Eventos */}
-                <div className="lg:col-span-2 bg-gray-50 rounded-xl p-6">
-                  <h3 className="text-lg font-medium text-gray-900 mb-4 flex items-center">
-                    <LineChart className="h-5 w-5 mr-2" />
-                    Distribución de Eventos Reproductivos
-                  </h3>
-                  <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                    <div className="text-center">
-                      <div className="w-16 h-16 bg-pink-100 rounded-full flex items-center justify-center mx-auto mb-2">
-                        <Target className="h-8 w-8 text-pink-600" />
-                      </div>
-                      <p className="text-sm text-gray-600">Detección Celo</p>
-                      <p className="text-xl font-bold text-pink-600">
-                        {reproductionEvents.filter(e => e.eventType.id === 'heat_detection').length}
-                      </p>
-                    </div>
-
-                    <div className="text-center">
-                      <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-2">
-                        <Activity className="h-8 w-8 text-blue-600" />
-                      </div>
-                      <p className="text-sm text-gray-600">Inseminaciones</p>
-                      <p className="text-xl font-bold text-blue-600">
-                        {reproductionEvents.filter(e => 
-                          e.eventType.id === 'artificial_insemination' || e.eventType.id === 'natural_breeding'
-                        ).length}
-                      </p>
-                    </div>
-
-                    <div className="text-center">
-                      <div className="w-16 h-16 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-2">
-                        <Stethoscope className="h-8 w-8 text-purple-600" />
-                      </div>
-                      <p className="text-sm text-gray-600">Diagnósticos</p>
-                      <p className="text-xl font-bold text-purple-600">
-                        {reproductionEvents.filter(e => e.eventType.id === 'pregnancy_check').length}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Métricas de Eficiencia */}
-                <div className="bg-gray-50 rounded-xl p-6">
-                  <h3 className="text-lg font-medium text-gray-900 mb-4 flex items-center">
-                    <Target className="h-5 w-5 mr-2" />
-                    Eficiencia Reproductiva
-                  </h3>
-                  <div className="space-y-4">
-                    <div>
-                      <div className="flex justify-between text-sm mb-1">
-                        <span className="text-gray-600">Tasa de Preñez</span>
-                        <span className="font-medium">{statistics.pregnancyRate.toFixed(1)}%</span>
-                      </div>
-                      <div className="w-full bg-gray-200 rounded-full h-2">
-                        <div 
-                          className="bg-green-500 h-2 rounded-full" 
-                          style={{ width: `${statistics.pregnancyRate}%` }}
-                        ></div>
-                      </div>
-                    </div>
-
-                    <div>
-                      <div className="flex justify-between text-sm mb-1">
-                        <span className="text-gray-600">Detección de Celo</span>
-                        <span className="font-medium">{statistics.heatDetectionAccuracy}%</span>
-                      </div>
-                      <div className="w-full bg-gray-200 rounded-full h-2">
-                        <div 
-                          className="bg-pink-500 h-2 rounded-full" 
-                          style={{ width: `${statistics.heatDetectionAccuracy}%` }}
-                        ></div>
-                      </div>
-                    </div>
-
-                    <div className="pt-4 border-t border-gray-200">
-                      <p className="text-sm text-gray-600 mb-1">Próximos Seguimientos</p>
-                      <p className="text-2xl font-bold text-blue-600">{statistics.upcomingFollowUps}</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
       {/* Filtros y Búsqueda */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.2 }}
+        transition={{ delay: 0.1 }}
         className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-6"
       >
         <div className="bg-white/70 backdrop-blur-sm rounded-2xl p-6 border border-gray-200">
@@ -1353,10 +1183,10 @@ const EventHealth: React.FC = () => {
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
               <input
                 type="text"
-                placeholder="Buscar por vaca, evento..."
+                placeholder="Buscar por animal, evento, diagnóstico..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-pink-500 focus:border-transparent bg-white/80"
+                className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#519a7c] focus:border-transparent bg-white/80"
               />
             </div>
 
@@ -1364,10 +1194,10 @@ const EventHealth: React.FC = () => {
             <select
               value={selectedEventType}
               onChange={(e) => setSelectedEventType(e.target.value)}
-              className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-pink-500 focus:border-transparent bg-white/80"
+              className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#519a7c] focus:border-transparent bg-white/80"
             >
               <option value="all">Todos los tipos</option>
-              {reproductionEventTypes.map((type) => (
+              {healthEventTypes.map((type) => (
                 <option key={type.id} value={type.id}>
                   {type.name}
                 </option>
@@ -1378,34 +1208,35 @@ const EventHealth: React.FC = () => {
             <select
               value={selectedStatus}
               onChange={(e) => setSelectedStatus(e.target.value)}
-              className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-pink-500 focus:border-transparent bg-white/80"
+              className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#519a7c] focus:border-transparent bg-white/80"
             >
               <option value="all">Todos los estados</option>
               <option value="scheduled">Programado</option>
               <option value="in_progress">En Progreso</option>
               <option value="completed">Completado</option>
-              <option value="failed">Fallido</option>
               <option value="cancelled">Cancelado</option>
+              <option value="emergency">Emergencia</option>
             </select>
 
             {/* Filtro por prioridad */}
             <select
               value={selectedPriority}
               onChange={(e) => setSelectedPriority(e.target.value)}
-              className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-pink-500 focus:border-transparent bg-white/80"
+              className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#519a7c] focus:border-transparent bg-white/80"
             >
               <option value="all">Todas las prioridades</option>
               <option value="low">Baja</option>
               <option value="medium">Media</option>
               <option value="high">Alta</option>
               <option value="critical">Crítica</option>
+              <option value="emergency">Emergencia</option>
             </select>
 
             {/* Filtro por fecha */}
             <select
               value={dateFilter}
               onChange={(e) => setDateFilter(e.target.value)}
-              className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-pink-500 focus:border-transparent bg-white/80"
+              className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#519a7c] focus:border-transparent bg-white/80"
             >
               <option value="all">Todas las fechas</option>
               <option value="today">Hoy</option>
@@ -1429,9 +1260,9 @@ const EventHealth: React.FC = () => {
             variants={itemVariants}
             className="bg-white/70 backdrop-blur-sm rounded-2xl p-12 text-center border border-gray-200"
           >
-            <Heart className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+            <Stethoscope className="h-16 w-16 text-gray-400 mx-auto mb-4" />
             <h3 className="text-xl font-semibold text-gray-900 mb-2">
-              No hay eventos de reproducción
+              No hay eventos de salud
             </h3>
             <p className="text-gray-600 mb-6">
               {searchTerm ||
@@ -1440,13 +1271,13 @@ const EventHealth: React.FC = () => {
               selectedPriority !== "all" ||
               dateFilter !== "all"
                 ? "No se encontraron eventos que coincidan con los filtros aplicados."
-                : "Comienza creando tu primer evento de reproducción."}
+                : "Comienza creando tu primer evento de salud."}
             </p>
             <motion.button
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
               onClick={handleCreateEvent}
-              className="bg-gradient-to-r from-pink-600 to-purple-600 text-white px-6 py-3 rounded-xl font-medium hover:from-pink-700 hover:to-purple-700 transition-all"
+              className="bg-gradient-to-r from-[#519a7c] to-[#f4ac3a] text-white px-6 py-3 rounded-xl font-medium hover:from-[#4e9c75] hover:to-[#e8a234] transition-all"
             >
               Crear Primer Evento
             </motion.button>
@@ -1464,7 +1295,7 @@ const EventHealth: React.FC = () => {
                 {/* Header del evento */}
                 <div className="flex items-start justify-between mb-4">
                   <div className="flex items-center space-x-3">
-                    <div className={`p-2 rounded-xl bg-gradient-to-r from-pink-500 to-purple-600 text-white`}>
+                    <div className={`p-2 rounded-xl bg-gradient-to-r from-[#519a7c] to-[#4e9c75] text-white`}>
                       <event.eventType.icon className="h-5 w-5" />
                     </div>
                     <div>
@@ -1483,12 +1314,13 @@ const EventHealth: React.FC = () => {
                       {event.status === "scheduled" ? "Programado" :
                        event.status === "completed" ? "Completado" :
                        event.status === "in_progress" ? "En Progreso" :
-                       event.status === "failed" ? "Fallido" : "Cancelado"}
+                       event.status === "cancelled" ? "Cancelado" : "Emergencia"}
                     </span>
                     <span className={`px-2 py-1 rounded-full text-xs font-medium ${getPriorityColor(event.priority)}`}>
                       {event.priority === "low" ? "Baja" :
                        event.priority === "medium" ? "Media" :
-                       event.priority === "high" ? "Alta" : "Crítica"}
+                       event.priority === "high" ? "Alta" : 
+                       event.priority === "critical" ? "Crítica" : "Emergencia"}
                     </span>
                   </div>
                 </div>
@@ -1502,56 +1334,57 @@ const EventHealth: React.FC = () => {
 
                   <div className="flex items-center space-x-2 text-sm text-gray-600">
                     <MapPin className="h-4 w-4" />
-                    <span>{event.location.facility || event.location.section || "No especificado"}</span>
+                    <span>
+                      {event.location.latitude && event.location.longitude 
+                        ? `${event.location.latitude.toFixed(4)}, ${event.location.longitude.toFixed(4)}`
+                        : "Ubicación no disponible"
+                      }
+                    </span>
                   </div>
 
-                  {event.reproductionData.technician && (
+                  {event.veterinarian && (
                     <div className="flex items-center space-x-2 text-sm text-gray-600">
-                      <User className="h-4 w-4" />
-                      <span>{event.reproductionData.technician}</span>
+                      <UserCheck className="h-4 w-4" />
+                      <span>{event.veterinarian.name}</span>
                     </div>
                   )}
 
-                  {event.cost && (
+                  {event.healthData.temperature && (
                     <div className="flex items-center space-x-2 text-sm text-gray-600">
-                      <DollarSign className="h-4 w-4" />
-                      <span>${event.cost.toLocaleString()}</span>
+                      <Thermometer className="h-4 w-4" />
+                      <span>{event.healthData.temperature}°C</span>
                     </div>
                   )}
                 </div>
 
-                {/* Datos específicos de reproducción */}
-                <div className="mt-4 p-3 bg-pink-50 rounded-lg">
+                {/* Datos específicos de salud */}
+                <div className="mt-4 p-3 bg-blue-50 rounded-lg">
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm font-medium text-pink-900">
-                      {event.reproductionData.method === "artificial_insemination" ? "Inseminación Artificial" : "Monta Natural"}
+                    <span className="text-sm font-medium text-blue-900">
+                      {event.healthData.checkType.name}
                     </span>
-                    {event.reproductionData.success !== undefined && (
-                      <span className={`text-xs px-2 py-1 rounded-full ${
-                        event.reproductionData.success 
-                          ? "bg-green-100 text-green-800" 
-                          : "bg-red-100 text-red-800"
-                      }`}>
-                        {event.reproductionData.success ? "Exitoso" : "Fallido"}
-                      </span>
-                    )}
+                    <span className={`text-xs px-2 py-1 rounded-full ${
+                      event.healthData.prognosis === "excellent" ? "bg-green-100 text-green-800" :
+                      event.healthData.prognosis === "good" ? "bg-blue-100 text-blue-800" :
+                      event.healthData.prognosis === "fair" ? "bg-yellow-100 text-yellow-800" :
+                      "bg-red-100 text-red-800"
+                    }`}>
+                      {event.healthData.prognosis === "excellent" ? "Excelente" :
+                       event.healthData.prognosis === "good" ? "Bueno" :
+                       event.healthData.prognosis === "fair" ? "Regular" :
+                       event.healthData.prognosis === "poor" ? "Pobre" : "Grave"}
+                    </span>
                   </div>
                   
-                  {event.reproductionData.method === "artificial_insemination" && event.reproductionData.semenBatch && (
-                    <p className="text-xs text-pink-700">
-                      Lote: {event.reproductionData.semenBatch}
+                  {event.healthData.diagnosis && (
+                    <p className="text-xs text-blue-700 mb-1">
+                      <strong>Diagnóstico:</strong> {event.healthData.diagnosis}
                     </p>
                   )}
                   
-                  {event.reproductionData.method === "natural" && event.reproductionData.bullName && (
-                    <p className="text-xs text-pink-700">
-                      Toro: {event.reproductionData.bullName}
-                    </p>
-                  )}
-                  
-                  {event.reproductionData.expectedDueDate && (
-                    <p className="text-xs text-pink-700 mt-1">
-                      Fecha esperada de parto: {formatDate(event.reproductionData.expectedDueDate)}
+                  {event.healthData.treatment && (
+                    <p className="text-xs text-blue-700">
+                      <strong>Tratamiento:</strong> {event.healthData.treatment}
                     </p>
                   )}
                 </div>
@@ -1581,6 +1414,7 @@ const EventHealth: React.FC = () => {
                         handleViewEvent(event);
                       }}
                       className="p-2 hover:bg-blue-100 rounded-lg transition-colors text-blue-600"
+                      title="Ver detalles"
                     >
                       <Eye className="h-4 w-4" />
                     </button>
@@ -1591,6 +1425,7 @@ const EventHealth: React.FC = () => {
                         handleEditEvent(event);
                       }}
                       className="p-2 hover:bg-yellow-100 rounded-lg transition-colors text-yellow-600"
+                      title="Editar evento"
                     >
                       <Edit3 className="h-4 w-4" />
                     </button>
@@ -1601,6 +1436,7 @@ const EventHealth: React.FC = () => {
                         handleDeleteEvent(event.id);
                       }}
                       className="p-2 hover:bg-red-100 rounded-lg transition-colors text-red-600"
+                      title="Eliminar evento"
                     >
                       <Trash2 className="h-4 w-4" />
                     </button>
@@ -1634,7 +1470,7 @@ const EventHealth: React.FC = () => {
             >
               <div className="flex items-center justify-between mb-6">
                 <div className="flex items-center space-x-3">
-                  <div className="p-3 rounded-xl bg-pink-100 text-pink-600">
+                  <div className="p-3 rounded-xl bg-blue-100 text-blue-600">
                     <selectedEvent.eventType.icon className="h-6 w-6" />
                   </div>
                   <div>
@@ -1667,7 +1503,7 @@ const EventHealth: React.FC = () => {
                         {selectedEvent.status === "scheduled" ? "Programado" :
                          selectedEvent.status === "completed" ? "Completado" :
                          selectedEvent.status === "in_progress" ? "En Progreso" :
-                         selectedEvent.status === "failed" ? "Fallido" : "Cancelado"}
+                         selectedEvent.status === "cancelled" ? "Cancelado" : "Emergencia"}
                       </span>
                     </div>
 
@@ -1676,7 +1512,8 @@ const EventHealth: React.FC = () => {
                       <span className={`px-2 py-1 rounded-full text-xs font-medium ${getPriorityColor(selectedEvent.priority)}`}>
                         {selectedEvent.priority === "low" ? "Baja" :
                          selectedEvent.priority === "medium" ? "Media" :
-                         selectedEvent.priority === "high" ? "Alta" : "Crítica"}
+                         selectedEvent.priority === "high" ? "Alta" : 
+                         selectedEvent.priority === "critical" ? "Crítica" : "Emergencia"}
                       </span>
                     </div>
 
@@ -1685,10 +1522,10 @@ const EventHealth: React.FC = () => {
                       <span className="font-medium">{formatDate(selectedEvent.scheduledDate)}</span>
                     </div>
 
-                    {selectedEvent.reproductionData.technician && (
+                    {selectedEvent.veterinarian && (
                       <div className="flex justify-between">
-                        <span className="text-gray-600">Técnico:</span>
-                        <span className="font-medium">{selectedEvent.reproductionData.technician}</span>
+                        <span className="text-gray-600">Veterinario:</span>
+                        <span className="font-medium">{selectedEvent.veterinarian.name}</span>
                       </div>
                     )}
 
@@ -1701,92 +1538,91 @@ const EventHealth: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Datos de Reproducción */}
+                {/* Datos de Salud */}
                 <div className="space-y-4">
-                  <h3 className="text-lg font-medium text-gray-900">Datos de Reproducción</h3>
+                  <h3 className="text-lg font-medium text-gray-900">Datos de Salud</h3>
                   
-                  <div className="bg-pink-50 rounded-lg p-4">
+                  <div className="bg-blue-50 rounded-lg p-4">
                     <div className="space-y-2">
                       <div className="flex justify-between">
-                        <span className="text-pink-700">Método:</span>
-                        <span className="font-medium text-pink-900">
-                          {selectedEvent.reproductionData.method === "artificial_insemination" 
-                            ? "Inseminación Artificial" 
-                            : "Monta Natural"}
+                        <span className="text-blue-700">Tipo de Revisión:</span>
+                        <span className="font-medium text-blue-900">
+                          {selectedEvent.healthData.checkType.name}
                         </span>
                       </div>
 
-                      {selectedEvent.reproductionData.method === "artificial_insemination" && (
-                        <>
-                          {selectedEvent.reproductionData.semenBatch && (
-                            <div className="flex justify-between">
-                              <span className="text-pink-700">Lote de Semen:</span>
-                              <span className="font-medium text-pink-900">
-                                {selectedEvent.reproductionData.semenBatch}
-                              </span>
-                            </div>
-                          )}
-                          {selectedEvent.reproductionData.semenProvider && (
-                            <div className="flex justify-between">
-                              <span className="text-pink-700">Proveedor:</span>
-                              <span className="font-medium text-pink-900">
-                                {selectedEvent.reproductionData.semenProvider}
-                              </span>
-                            </div>
-                          )}
-                        </>
-                      )}
-
-                      {selectedEvent.reproductionData.method === "natural" && (
-                        <>
-                          {selectedEvent.reproductionData.bullName && (
-                            <div className="flex justify-between">
-                              <span className="text-pink-700">Toro:</span>
-                              <span className="font-medium text-pink-900">
-                                {selectedEvent.reproductionData.bullName}
-                              </span>
-                            </div>
-                          )}
-                          {selectedEvent.reproductionData.bullBreed && (
-                            <div className="flex justify-between">
-                              <span className="text-pink-700">Raza del Toro:</span>
-                              <span className="font-medium text-pink-900">
-                                {selectedEvent.reproductionData.bullBreed}
-                              </span>
-                            </div>
-                          )}
-                        </>
-                      )}
-
-                      {selectedEvent.reproductionData.expectedDueDate && (
+                      {selectedEvent.healthData.diagnosis && (
                         <div className="flex justify-between">
-                          <span className="text-pink-700">Fecha Esperada de Parto:</span>
-                          <span className="font-medium text-pink-900">
-                            {formatDate(selectedEvent.reproductionData.expectedDueDate)}
+                          <span className="text-blue-700">Diagnóstico:</span>
+                          <span className="font-medium text-blue-900">
+                            {selectedEvent.healthData.diagnosis}
                           </span>
                         </div>
                       )}
 
-                      {selectedEvent.reproductionData.success !== undefined && (
+                      {selectedEvent.healthData.treatment && (
                         <div className="flex justify-between">
-                          <span className="text-pink-700">Resultado:</span>
-                          <span className={`font-medium flex items-center space-x-1 ${
-                            selectedEvent.reproductionData.success ? "text-green-700" : "text-red-700"
-                          }`}>
-                            {selectedEvent.reproductionData.success ? (
-                              <>
-                                <CheckCircle className="h-4 w-4" />
-                                <span>Exitoso</span>
-                              </>
-                            ) : (
-                              <>
-                                <XCircle className="h-4 w-4" />
-                                <span>Fallido</span>
-                              </>
-                            )}
+                          <span className="text-blue-700">Tratamiento:</span>
+                          <span className="font-medium text-blue-900">
+                            {selectedEvent.healthData.treatment}
                           </span>
                         </div>
                       )}
+
+                      {selectedEvent.healthData.temperature && (
+                        <div className="flex justify-between">
+                          <span className="text-blue-700">Temperatura:</span>
+                          <span className="font-medium text-blue-900">
+                            {selectedEvent.healthData.temperature}°C
+                          </span>
+                        </div>
+                      )}
+
+                      {selectedEvent.healthData.weight && (
+                        <div className="flex justify-between">
+                          <span className="text-blue-700">Peso:</span>
+                          <span className="font-medium text-blue-900">
+                            {selectedEvent.healthData.weight}kg
+                          </span>
+                        </div>
+                      )}
+
+                      <div className="flex justify-between">
+                        <span className="text-blue-700">Pronóstico:</span>
+                        <span className={`font-medium flex items-center space-x-1 ${
+                          selectedEvent.healthData.prognosis === "excellent" ? "text-green-700" :
+                          selectedEvent.healthData.prognosis === "good" ? "text-blue-700" :
+                          selectedEvent.healthData.prognosis === "fair" ? "text-yellow-700" :
+                          "text-red-700"
+                        }`}>
+                          {selectedEvent.healthData.prognosis === "excellent" ? (
+                            <>
+                              <CheckCircle className="h-4 w-4" />
+                              <span>Excelente</span>
+                            </>
+                          ) : selectedEvent.healthData.prognosis === "good" ? (
+                            <>
+                              <CheckCircle className="h-4 w-4" />
+                              <span>Bueno</span>
+                            </>
+                          ) : selectedEvent.healthData.prognosis === "fair" ? (
+                            <>
+                              <Clock className="h-4 w-4" />
+                              <span>Regular</span>
+                            </>
+                          ) : selectedEvent.healthData.prognosis === "poor" ? (
+                            <>
+                              <XCircle className="h-4 w-4" />
+                              <span>Pobre</span>
+                            </>
+                          ) : (
+                            <>
+                              <XCircle className="h-4 w-4" />
+                              <span>Grave</span>
+                            </>
+                          )}
+                        </span>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -1804,27 +1640,21 @@ const EventHealth: React.FC = () => {
 
               {/* Ubicación */}
               <div className="mt-6">
-                <h3 className="text-lg font-medium text-gray-900 mb-3">Ubicación</h3>
-                <div className="bg-blue-50 rounded-lg p-4">
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-                    {selectedEvent.location.section && (
-                      <div>
-                        <span className="font-medium text-blue-700">Sección:</span>
-                        <p className="text-blue-900">{selectedEvent.location.section}</p>
-                      </div>
-                    )}
-                    {selectedEvent.location.facility && (
-                      <div>
-                        <span className="font-medium text-blue-700">Instalación:</span>
-                        <p className="text-blue-900">{selectedEvent.location.facility}</p>
-                      </div>
-                    )}
-                    {selectedEvent.location.address && (
-                      <div>
-                        <span className="font-medium text-blue-700">Dirección:</span>
-                        <p className="text-blue-900">{selectedEvent.location.address}</p>
-                      </div>
-                    )}
+                <h3 className="text-lg font-medium text-gray-900 mb-3">Ubicación GPS</h3>
+                <div className="bg-green-50 rounded-lg p-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                    <div>
+                      <span className="font-medium text-green-700">Latitud:</span>
+                      <p className="text-green-900">
+                        {selectedEvent.location.latitude ? selectedEvent.location.latitude.toFixed(6) : "No disponible"}
+                      </p>
+                    </div>
+                    <div>
+                      <span className="font-medium text-green-700">Longitud:</span>
+                      <p className="text-green-900">
+                        {selectedEvent.location.longitude ? selectedEvent.location.longitude.toFixed(6) : "No disponible"}
+                      </p>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -1836,7 +1666,7 @@ const EventHealth: React.FC = () => {
                     setShowDetailsModal(false);
                     handleEditEvent(selectedEvent);
                   }}
-                  className="flex items-center space-x-2 px-4 py-2 bg-pink-600 text-white rounded-lg hover:bg-pink-700 transition-colors"
+                  className="flex items-center space-x-2 px-4 py-2 bg-[#519a7c] text-white rounded-lg hover:bg-[#4e9c75] transition-colors"
                 >
                   <Edit3 className="h-4 w-4" />
                   <span>Editar</span>

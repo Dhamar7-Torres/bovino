@@ -21,7 +21,6 @@ import {
   UserCheck,
   Activity,
   Baby,
-  MapPinIcon,
   Syringe,
   Bell,
   Flower2,
@@ -30,6 +29,10 @@ import {
   Stethoscope,
   Weight,
   Star,
+  X,
+  Save,
+  AlertCircle,
+  CircleDollarSign,
 } from "lucide-react";
 
 // Interfaces para gestión de vacas
@@ -253,7 +256,1088 @@ const itemVariants: Variants = {
   },
 };
 
-// Componente principal
+// Componente Modal reutilizable
+const Modal: React.FC<{
+  isOpen: boolean;
+  onClose: () => void;
+  title: string;
+  children: React.ReactNode;
+  size?: 'sm' | 'md' | 'lg' | 'xl' | 'full';
+}> = ({ isOpen, onClose, title, children, size = 'lg' }) => {
+  const sizeClasses = {
+    sm: 'max-w-md',
+    md: 'max-w-lg',
+    lg: 'max-w-2xl',
+    xl: 'max-w-4xl',
+    full: 'max-w-7xl',
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <AnimatePresence>
+      <motion.div
+        className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        onClick={onClose}
+      >
+        <motion.div
+          className={`bg-white rounded-xl shadow-2xl w-full ${sizeClasses[size]} max-h-[90vh] overflow-hidden`}
+          initial={{ scale: 0.9, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          exit={{ scale: 0.9, opacity: 0 }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {/* Header del modal */}
+          <div className="flex items-center justify-between p-6 border-b border-gray-200 bg-gradient-to-r from-[#519a7c] to-[#4e9c75]">
+            <h2 className="text-xl font-semibold text-white">{title}</h2>
+            <button
+              onClick={onClose}
+              className="p-2 hover:bg-white/20 rounded-lg transition-colors"
+            >
+              <X className="w-5 h-5 text-white" />
+            </button>
+          </div>
+          
+          {/* Contenido del modal */}
+          <div className="p-6 max-h-[calc(90vh-140px)] overflow-y-auto">
+            {children}
+          </div>
+        </motion.div>
+      </motion.div>
+    </AnimatePresence>
+  );
+};
+
+// Componente para ver detalles de vaca
+const CowDetailsModal: React.FC<{
+  cow: Cow;
+  isOpen: boolean;
+  onClose: () => void;
+}> = ({ cow, isOpen, onClose }) => {
+  const age = new Date().getFullYear() - new Date(cow.birthDate).getFullYear();
+
+  return (
+    <Modal isOpen={isOpen} onClose={onClose} title={`Detalles de ${cow.name}`} size="xl">
+      <div className="space-y-6">
+        {/* Información básica */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="bg-gray-50 rounded-lg p-4">
+            <h3 className="text-lg font-semibold text-gray-900 mb-3 flex items-center">
+              <Flower2 className="w-5 h-5 mr-2 text-pink-600" />
+              Información General
+            </h3>
+            <div className="space-y-2 text-sm">
+              <div className="flex justify-between">
+                <span className="text-gray-600">Nombre:</span>
+                <span className="font-medium">{cow.name}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-600">Arete:</span>
+                <span className="font-medium">{cow.earTag}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-600">Registro:</span>
+                <span className="font-medium">{cow.registrationNumber || 'N/A'}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-600">Raza:</span>
+                <span className="font-medium">{cow.breed}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-600">Edad:</span>
+                <span className="font-medium">{age} años</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-600">Peso:</span>
+                <span className="font-medium">{cow.weight} kg</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-600">Altura:</span>
+                <span className="font-medium">{cow.height || 'N/A'} cm</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-gray-50 rounded-lg p-4">
+            <h3 className="text-lg font-semibold text-gray-900 mb-3 flex items-center">
+              <MapPin className="w-5 h-5 mr-2 text-blue-600" />
+              Ubicación Actual
+            </h3>
+            <div className="space-y-2 text-sm">
+              <div className="flex justify-between">
+                <span className="text-gray-600">Potrero:</span>
+                <span className="font-medium">{cow.currentLocation.paddock}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-600">Instalación:</span>
+                <span className="font-medium">{cow.currentLocation.facility}</span>
+              </div>
+              <div>
+                <span className="text-gray-600">Dirección:</span>
+                <p className="font-medium mt-1">{cow.currentLocation.address}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Estado de salud y reproductivo */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="bg-gray-50 rounded-lg p-4">
+            <h3 className="text-lg font-semibold text-gray-900 mb-3 flex items-center">
+              <Shield className="w-5 h-5 mr-2 text-green-600" />
+              Estado de Salud
+            </h3>
+            <div className="space-y-2 text-sm">
+              <div className="flex justify-between">
+                <span className="text-gray-600">Estado general:</span>
+                <span className={`font-medium px-2 py-1 rounded text-xs ${
+                  cow.healthStatus === 'excellent' ? 'bg-green-100 text-green-800' :
+                  cow.healthStatus === 'good' ? 'bg-blue-100 text-blue-800' :
+                  cow.healthStatus === 'fair' ? 'bg-yellow-100 text-yellow-800' :
+                  cow.healthStatus === 'poor' ? 'bg-orange-100 text-orange-800' :
+                  'bg-red-100 text-red-800'
+                }`}>
+                  {cow.healthStatus === 'excellent' ? 'Excelente' :
+                   cow.healthStatus === 'good' ? 'Buena' :
+                   cow.healthStatus === 'fair' ? 'Regular' :
+                   cow.healthStatus === 'poor' ? 'Mala' : 'Enferma'}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-600">Última revisión:</span>
+                <span className="font-medium">{new Date(cow.health.lastCheckupDate).toLocaleDateString('es-MX')}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-600">Veterinario:</span>
+                <span className="font-medium">{cow.health.veterinarian}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-600">Condición corporal:</span>
+                <span className="font-medium">{cow.health.bodyConditionScore}/5</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-gray-50 rounded-lg p-4">
+            <h3 className="text-lg font-semibold text-gray-900 mb-3 flex items-center">
+              <Heart className="w-5 h-5 mr-2 text-red-600" />
+              Estado Reproductivo
+            </h3>
+            <div className="space-y-2 text-sm">
+              <div className="flex justify-between">
+                <span className="text-gray-600">Estado:</span>
+                <span className={`font-medium px-2 py-1 rounded text-xs ${
+                  cow.reproductiveStatus === 'maiden' ? 'bg-purple-100 text-purple-800' :
+                  cow.reproductiveStatus === 'pregnant' ? 'bg-pink-100 text-pink-800' :
+                  cow.reproductiveStatus === 'lactating' ? 'bg-blue-100 text-blue-800' :
+                  cow.reproductiveStatus === 'dry' ? 'bg-yellow-100 text-yellow-800' :
+                  cow.reproductiveStatus === 'open' ? 'bg-green-100 text-green-800' :
+                  'bg-gray-100 text-gray-800'
+                }`}>
+                  {cow.reproductiveStatus === 'maiden' ? 'Vaquilla' :
+                   cow.reproductiveStatus === 'pregnant' ? 'Gestante' :
+                   cow.reproductiveStatus === 'lactating' ? 'Lactando' :
+                   cow.reproductiveStatus === 'dry' ? 'Seca' :
+                   cow.reproductiveStatus === 'open' ? 'Vacía' : 'Retirada'}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-600">Total partos:</span>
+                <span className="font-medium">{cow.reproductiveHistory.totalPregnancies}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-600">Crías vivas:</span>
+                <span className="font-medium">{cow.reproductiveHistory.liveCalves}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-600">Tasa concepción:</span>
+                <span className="font-medium">{cow.reproductiveHistory.conception.conceptionRate}%</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Información específica según estado */}
+        {cow.reproductiveStatus === 'lactating' && cow.lactation.isLactating && (
+          <div className="bg-blue-50 rounded-lg p-4">
+            <h3 className="text-lg font-semibold text-gray-900 mb-3 flex items-center">
+              <Milk className="w-5 h-5 mr-2 text-blue-600" />
+              Información de Lactancia
+            </h3>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+              <div>
+                <span className="text-gray-600">Lactancia #:</span>
+                <p className="font-medium">{cow.lactation.lactationNumber}</p>
+              </div>
+              <div>
+                <span className="text-gray-600">Producción actual:</span>
+                <p className="font-medium">{cow.lactation.currentMilk}L/día</p>
+              </div>
+              <div>
+                <span className="text-gray-600">Pico de lactancia:</span>
+                <p className="font-medium">{cow.lactation.peakMilk}L/día</p>
+              </div>
+              <div>
+                <span className="text-gray-600">Total acumulado:</span>
+                <p className="font-medium">{cow.lactation.totalMilk}L</p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {cow.reproductiveStatus === 'pregnant' && cow.currentPregnancy && (
+          <div className="bg-pink-50 rounded-lg p-4">
+            <h3 className="text-lg font-semibold text-gray-900 mb-3 flex items-center">
+              <Baby className="w-5 h-5 mr-2 text-pink-600" />
+              Información de Gestación
+            </h3>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+              <div>
+                <span className="text-gray-600">Toro:</span>
+                <p className="font-medium">{cow.currentPregnancy.bullName}</p>
+              </div>
+              <div>
+                <span className="text-gray-600">Día de gestación:</span>
+                <p className="font-medium">{cow.currentPregnancy.gestationDay}</p>
+              </div>
+              <div>
+                <span className="text-gray-600">Fecha de monta:</span>
+                <p className="font-medium">{new Date(cow.currentPregnancy.breedingDate).toLocaleDateString('es-MX')}</p>
+              </div>
+              <div>
+                <span className="text-gray-600">Parto esperado:</span>
+                <p className="font-medium">{new Date(cow.currentPregnancy.expectedCalvingDate).toLocaleDateString('es-MX')}</p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Notas */}
+        {cow.notes && (
+          <div className="bg-gray-50 rounded-lg p-4">
+            <h3 className="text-lg font-semibold text-gray-900 mb-3">Notas</h3>
+            <p className="text-gray-700">{cow.notes}</p>
+          </div>
+        )}
+      </div>
+    </Modal>
+  );
+};
+
+// Componente para formulario de vaca
+const CowFormModal: React.FC<{
+  cow?: Cow;
+  isOpen: boolean;
+  onClose: () => void;
+  onSave: (cowData: Partial<Cow>) => void;
+}> = ({ cow, isOpen, onClose, onSave }) => {
+  const isEditing = !!cow;
+  
+  const [formData, setFormData] = useState<Partial<Cow>>({
+    name: cow?.name || '',
+    earTag: cow?.earTag || '',
+    registrationNumber: cow?.registrationNumber || '',
+    breed: cow?.breed || '',
+    birthDate: cow?.birthDate || '',
+    weight: cow?.weight || 0,
+    height: cow?.height || 0,
+    healthStatus: cow?.healthStatus || 'good',
+    reproductiveStatus: cow?.reproductiveStatus || 'maiden',
+    notes: cow?.notes || '',
+    active: cow?.active ?? true,
+  });
+
+  const [errors, setErrors] = useState<Record<string, string>>({});
+
+  const handleInputChange = (field: string, value: any) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
+    if (errors[field]) {
+      setErrors(prev => ({ ...prev, [field]: '' }));
+    }
+  };
+
+  const validateForm = () => {
+    const newErrors: Record<string, string> = {};
+
+    if (!formData.name?.trim()) {
+      newErrors.name = 'El nombre es requerido';
+    }
+    if (!formData.earTag?.trim()) {
+      newErrors.earTag = 'El número de arete es requerido';
+    }
+    if (!formData.breed?.trim()) {
+      newErrors.breed = 'La raza es requerida';
+    }
+    if (!formData.birthDate) {
+      newErrors.birthDate = 'La fecha de nacimiento es requerida';
+    }
+    if (!formData.weight || formData.weight <= 0) {
+      newErrors.weight = 'El peso debe ser mayor a 0';
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (validateForm()) {
+      onSave(formData);
+      onClose();
+    }
+  };
+
+  const resetForm = () => {
+    setFormData({
+      name: '',
+      earTag: '',
+      registrationNumber: '',
+      breed: '',
+      birthDate: '',
+      weight: 0,
+      height: 0,
+      healthStatus: 'good',
+      reproductiveStatus: 'maiden',
+      notes: '',
+      active: true,
+    });
+    setErrors({});
+  };
+
+  const handleClose = () => {
+    onClose();
+    if (!isEditing) resetForm();
+  };
+
+  return (
+    <Modal 
+      isOpen={isOpen} 
+      onClose={handleClose} 
+      title={isEditing ? `Editar ${cow?.name}` : 'Nueva Vaca'} 
+      size="xl"
+    >
+      <form onSubmit={handleSubmit} className="space-y-6">
+        {/* Información básica */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Nombre *
+            </label>
+            <input
+              type="text"
+              value={formData.name || ''}
+              onChange={(e) => handleInputChange('name', e.target.value)}
+              className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent ${
+                errors.name ? 'border-red-500' : 'border-gray-300'
+              }`}
+              placeholder="Nombre de la vaca"
+            />
+            {errors.name && <p className="text-red-500 text-xs mt-1">{errors.name}</p>}
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Número de Arete *
+            </label>
+            <input
+              type="text"
+              value={formData.earTag || ''}
+              onChange={(e) => handleInputChange('earTag', e.target.value)}
+              className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent ${
+                errors.earTag ? 'border-red-500' : 'border-gray-300'
+              }`}
+              placeholder="Ej: VL001"
+            />
+            {errors.earTag && <p className="text-red-500 text-xs mt-1">{errors.earTag}</p>}
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Número de Registro
+            </label>
+            <input
+              type="text"
+              value={formData.registrationNumber || ''}
+              onChange={(e) => handleInputChange('registrationNumber', e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
+              placeholder="Ej: REG-V-2024-001"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Raza *
+            </label>
+            <select
+              value={formData.breed || ''}
+              onChange={(e) => handleInputChange('breed', e.target.value)}
+              className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent ${
+                errors.breed ? 'border-red-500' : 'border-gray-300'
+              }`}
+            >
+              <option value="">Seleccionar raza</option>
+              <option value="Holstein">Holstein</option>
+              <option value="Jersey">Jersey</option>
+              <option value="Brown Swiss">Brown Swiss</option>
+              <option value="Angus">Angus</option>
+              <option value="Brahman">Brahman</option>
+              <option value="Charolais">Charolais</option>
+              <option value="Simmental">Simmental</option>
+              <option value="Criollo">Criollo</option>
+            </select>
+            {errors.breed && <p className="text-red-500 text-xs mt-1">{errors.breed}</p>}
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Fecha de Nacimiento *
+            </label>
+            <input
+              type="date"
+              value={formData.birthDate || ''}
+              onChange={(e) => handleInputChange('birthDate', e.target.value)}
+              className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent ${
+                errors.birthDate ? 'border-red-500' : 'border-gray-300'
+              }`}
+            />
+            {errors.birthDate && <p className="text-red-500 text-xs mt-1">{errors.birthDate}</p>}
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Peso (kg) *
+            </label>
+            <input
+              type="number"
+              value={formData.weight || ''}
+              onChange={(e) => handleInputChange('weight', parseFloat(e.target.value) || 0)}
+              className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent ${
+                errors.weight ? 'border-red-500' : 'border-gray-300'
+              }`}
+              placeholder="Peso en kilogramos"
+              min="0"
+              step="0.1"
+            />
+            {errors.weight && <p className="text-red-500 text-xs mt-1">{errors.weight}</p>}
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Altura (cm)
+            </label>
+            <input
+              type="number"
+              value={formData.height || ''}
+              onChange={(e) => handleInputChange('height', parseFloat(e.target.value) || 0)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
+              placeholder="Altura en centímetros"
+              min="0"
+              step="0.1"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Estado de Salud
+            </label>
+            <select
+              value={formData.healthStatus || 'good'}
+              onChange={(e) => handleInputChange('healthStatus', e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
+            >
+              <option value="excellent">Excelente</option>
+              <option value="good">Buena</option>
+              <option value="fair">Regular</option>
+              <option value="poor">Mala</option>
+              <option value="sick">Enferma</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Estado Reproductivo
+            </label>
+            <select
+              value={formData.reproductiveStatus || 'maiden'}
+              onChange={(e) => handleInputChange('reproductiveStatus', e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
+            >
+              <option value="maiden">Vaquilla</option>
+              <option value="pregnant">Gestante</option>
+              <option value="lactating">Lactando</option>
+              <option value="dry">Seca</option>
+              <option value="open">Vacía</option>
+              <option value="retired">Retirada</option>
+            </select>
+          </div>
+        </div>
+
+        {/* Notas */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Notas
+          </label>
+          <textarea
+            value={formData.notes || ''}
+            onChange={(e) => handleInputChange('notes', e.target.value)}
+            rows={3}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
+            placeholder="Observaciones, comentarios especiales..."
+          />
+        </div>
+
+        {/* Estado activo */}
+        <div className="flex items-center">
+          <input
+            type="checkbox"
+            id="active"
+            checked={formData.active ?? true}
+            onChange={(e) => handleInputChange('active', e.target.checked)}
+            className="h-4 w-4 text-[#519a7c] focus:ring-[#519a7c] border-gray-300 rounded"
+          />
+          <label htmlFor="active" className="ml-2 block text-sm text-gray-900">
+            Vaca activa
+          </label>
+        </div>
+
+        {/* Botones */}
+        <div className="flex justify-end space-x-3 pt-4 border-t border-gray-200">
+          <button
+            type="button"
+            onClick={handleClose}
+            className="px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+          >
+            Cancelar
+          </button>
+          <button
+            type="submit"
+            className="px-4 py-2 bg-[#519a7c] text-white hover:bg-[#4a8970] rounded-lg transition-colors flex items-center space-x-2"
+          >
+            <Save className="w-4 h-4" />
+            <span>{isEditing ? 'Actualizar' : 'Guardar'}</span>
+          </button>
+        </div>
+      </form>
+    </Modal>
+  );
+};
+
+// Componente para ver detalles de enmadre
+const MotherhoodDetailsModal: React.FC<{
+  record: MotherhoodRecord;
+  isOpen: boolean;
+  onClose: () => void;
+}> = ({ record, isOpen, onClose }) => {
+  return (
+    <Modal isOpen={isOpen} onClose={onClose} title={`Parto de ${record.cowName}`} size="xl">
+      <div className="space-y-6">
+        {/* Información del parto */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="bg-gray-50 rounded-lg p-4">
+            <h3 className="text-lg font-semibold text-gray-900 mb-3 flex items-center">
+              <Flower2 className="w-5 h-5 mr-2 text-pink-600" />
+              Información de la Vaca
+            </h3>
+            <div className="space-y-2 text-sm">
+              <div className="flex justify-between">
+                <span className="text-gray-600">Nombre:</span>
+                <span className="font-medium">{record.cowName}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-600">Arete:</span>
+                <span className="font-medium">{record.cowEarTag}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-600">Toro:</span>
+                <span className="font-medium">{record.bullName || 'N/A'}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-600">Tipo reproducción:</span>
+                <span className="font-medium">
+                  {record.breedingType === 'natural' ? 'Natural' :
+                   record.breedingType === 'artificial' ? 'Artificial' : 'Transferencia embrionaria'}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-gray-50 rounded-lg p-4">
+            <h3 className="text-lg font-semibold text-gray-900 mb-3 flex items-center">
+              <Baby className="w-5 h-5 mr-2 text-blue-600" />
+              Información de la Cría
+            </h3>
+            <div className="space-y-2 text-sm">
+              <div className="flex justify-between">
+                <span className="text-gray-600">Nombre:</span>
+                <span className="font-medium">{record.calf.name}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-600">Arete:</span>
+                <span className="font-medium">{record.calf.earTag}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-600">Género:</span>
+                <span className={`font-medium px-2 py-1 rounded text-xs ${
+                  record.calf.gender === 'male' ? 'bg-blue-100 text-blue-800' : 'bg-pink-100 text-pink-800'
+                }`}>
+                  {record.calf.gender === 'male' ? '♂ Macho' : '♀ Hembra'}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-600">Peso nacimiento:</span>
+                <span className="font-medium">{record.calf.birthWeight} kg</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-600">Estado salud:</span>
+                <span className={`font-medium px-2 py-1 rounded text-xs ${
+                  record.calf.healthStatus === 'excellent' ? 'bg-green-100 text-green-800' :
+                  record.calf.healthStatus === 'good' ? 'bg-blue-100 text-blue-800' :
+                  record.calf.healthStatus === 'fair' ? 'bg-yellow-100 text-yellow-800' :
+                  record.calf.healthStatus === 'poor' ? 'bg-orange-100 text-orange-800' :
+                  'bg-red-100 text-red-800'
+                }`}>
+                  {record.calf.healthStatus === 'excellent' ? 'Excelente' :
+                   record.calf.healthStatus === 'good' ? 'Buena' :
+                   record.calf.healthStatus === 'fair' ? 'Regular' :
+                   record.calf.healthStatus === 'poor' ? 'Mala' : 'Crítica'}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-600">Estado:</span>
+                <span className={`font-medium px-2 py-1 rounded text-xs ${
+                  record.calf.alive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                }`}>
+                  {record.calf.alive ? 'Vivo' : 'Muerto'}
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Detalles del parto */}
+        <div className="bg-gray-50 rounded-lg p-4">
+          <h3 className="text-lg font-semibold text-gray-900 mb-3 flex items-center">
+            <Calendar className="w-5 h-5 mr-2 text-green-600" />
+            Detalles del Parto
+          </h3>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+            <div>
+              <span className="text-gray-600">Fecha:</span>
+              <p className="font-medium">{new Date(record.calvingDate).toLocaleDateString('es-MX')}</p>
+            </div>
+            <div>
+              <span className="text-gray-600">Hora:</span>
+              <p className="font-medium">{record.calvingTime}</p>
+            </div>
+            <div>
+              <span className="text-gray-600">Tipo parto:</span>
+              <p className="font-medium">
+                {record.calvingType === 'natural' ? 'Natural' :
+                 record.calvingType === 'assisted' ? 'Asistido' :
+                 record.calvingType === 'cesarean' ? 'Cesárea' : 'Emergencia'}
+              </p>
+            </div>
+            <div>
+              <span className="text-gray-600">Gestación:</span>
+              <p className="font-medium">{record.gestationPeriod} días</p>
+            </div>
+            <div>
+              <span className="text-gray-600">Asistido por:</span>
+              <p className="font-medium">{record.assistedBy.name}</p>
+            </div>
+            <div>
+              <span className="text-gray-600">Ubicación:</span>
+              <p className="font-medium">{record.location.paddock}</p>
+            </div>
+            <div>
+              <span className="text-gray-600">Placenta expulsada:</span>
+              <p className="font-medium">{record.placentaExpelled ? 'Sí' : 'No'}</p>
+            </div>
+            {record.placentaExpelledTime && (
+              <div>
+                <span className="text-gray-600">Hora expulsión:</span>
+                <p className="font-medium">{record.placentaExpelledTime}</p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Información de calostro */}
+        <div className="bg-blue-50 rounded-lg p-4">
+          <h3 className="text-lg font-semibold text-gray-900 mb-3 flex items-center">
+            <Milk className="w-5 h-5 mr-2 text-blue-600" />
+            Información de Calostro
+          </h3>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
+            <div>
+              <span className="text-gray-600">Recibido:</span>
+              <p className="font-medium">{record.colostrum.received ? 'Sí' : 'No'}</p>
+            </div>
+            <div>
+              <span className="text-gray-600">Calidad:</span>
+              <p className="font-medium">
+                {record.colostrum.quality === 'excellent' ? 'Excelente' :
+                 record.colostrum.quality === 'good' ? 'Buena' :
+                 record.colostrum.quality === 'fair' ? 'Regular' : 'Mala'}
+              </p>
+            </div>
+            {record.colostrum.timeReceived && (
+              <div>
+                <span className="text-gray-600">Hora recepción:</span>
+                <p className="font-medium">{record.colostrum.timeReceived}</p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Cuidados post-parto */}
+        <div className="bg-green-50 rounded-lg p-4">
+          <h3 className="text-lg font-semibold text-gray-900 mb-3 flex items-center">
+            <Stethoscope className="w-5 h-5 mr-2 text-green-600" />
+            Cuidados Post-Parto
+          </h3>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
+            <div>
+              <span className="text-gray-600">Vitaminas:</span>
+              <p className="font-medium">{record.postCalvingCare.vitamins ? 'Sí' : 'No'}</p>
+            </div>
+            <div>
+              <span className="text-gray-600">Antibióticos:</span>
+              <p className="font-medium">{record.postCalvingCare.antibiotics ? 'Sí' : 'No'}</p>
+            </div>
+            <div>
+              <span className="text-gray-600">Monitoreo:</span>
+              <p className="font-medium">{record.postCalvingCare.monitoring.join(', ')}</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Impacto económico */}
+        <div className="bg-yellow-50 rounded-lg p-4">
+          <h3 className="text-lg font-semibold text-gray-900 mb-3 flex items-center">
+            <CircleDollarSign className="w-5 h-5 mr-2 text-yellow-600" />
+            Impacto Económico
+          </h3>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
+            <div>
+              <span className="text-gray-600">Costo parto:</span>
+              <p className="font-medium">${record.economicImpact.calvingCost.toLocaleString()}</p>
+            </div>
+            <div>
+              <span className="text-gray-600">Costo veterinario:</span>
+              <p className="font-medium">${record.economicImpact.veterinaryCost.toLocaleString()}</p>
+            </div>
+            <div>
+              <span className="text-gray-600">Valor esperado:</span>
+              <p className="font-medium">${record.economicImpact.expectedValue.toLocaleString()}</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Complicaciones */}
+        {record.complications.length > 0 && (
+          <div className="bg-red-50 rounded-lg p-4">
+            <h3 className="text-lg font-semibold text-gray-900 mb-3 flex items-center">
+              <AlertCircle className="w-5 h-5 mr-2 text-red-600" />
+              Complicaciones
+            </h3>
+            <ul className="list-disc list-inside text-sm text-gray-700">
+              {record.complications.map((complication, index) => (
+                <li key={index}>{complication}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {/* Notas */}
+        {record.notes && (
+          <div className="bg-gray-50 rounded-lg p-4">
+            <h3 className="text-lg font-semibold text-gray-900 mb-3">Notas</h3>
+            <p className="text-gray-700">{record.notes}</p>
+          </div>
+        )}
+      </div>
+    </Modal>
+  );
+};
+
+// Componente Modal de Confirmación
+const ConfirmModal: React.FC<{
+  isOpen: boolean;
+  onClose: () => void;
+  onConfirm: () => void;
+  title: string;
+  message: string;
+  confirmText?: string;
+  cancelText?: string;
+}> = ({ 
+  isOpen, 
+  onClose, 
+  onConfirm, 
+  title, 
+  message, 
+  confirmText = "Eliminar", 
+  cancelText = "Cancelar" 
+}) => {
+  if (!isOpen) return null;
+
+  return (
+    <AnimatePresence>
+      <motion.div
+        className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        onClick={onClose}
+      >
+        <motion.div
+          className="bg-white rounded-xl shadow-2xl w-full max-w-md"
+          initial={{ scale: 0.9, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          exit={{ scale: 0.9, opacity: 0 }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {/* Header */}
+          <div className="flex items-center justify-between p-6 border-b border-gray-200">
+            <div className="flex items-center space-x-3">
+              <div className="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center">
+                <AlertCircle className="w-5 h-5 text-red-600" />
+              </div>
+              <h2 className="text-lg font-semibold text-gray-900">{title}</h2>
+            </div>
+          </div>
+          
+          {/* Contenido */}
+          <div className="p-6">
+            <p className="text-gray-600">{message}</p>
+          </div>
+
+          {/* Botones */}
+          <div className="flex justify-end space-x-3 p-6 border-t border-gray-200 bg-gray-50 rounded-b-xl">
+            <button
+              onClick={onClose}
+              className="px-4 py-2 text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 rounded-lg transition-colors"
+            >
+              {cancelText}
+            </button>
+            <button
+              onClick={() => {
+                onConfirm();
+                onClose();
+              }}
+              className="px-4 py-2 bg-red-600 text-white hover:bg-red-700 rounded-lg transition-colors flex items-center space-x-2"
+            >
+              <Trash2 className="w-4 h-4" />
+              <span>{confirmText}</span>
+            </button>
+          </div>
+        </motion.div>
+      </motion.div>
+    </AnimatePresence>
+  );
+};
+const MotherhoodFormModal: React.FC<{
+  record?: MotherhoodRecord;
+  isOpen: boolean;
+  onClose: () => void;
+  onSave: (data: Partial<MotherhoodRecord>) => void;
+}> = ({ record, isOpen, onClose, onSave }) => {
+  const isEditing = !!record;
+  
+  const [formData, setFormData] = useState({
+    cowName: record?.cowName || '',
+    cowEarTag: record?.cowEarTag || '',
+    calvingDate: record?.calvingDate || '',
+    calvingTime: record?.calvingTime || '',
+    calvingType: record?.calvingType || 'natural',
+    calfName: record?.calf?.name || '',
+    calfEarTag: record?.calf?.earTag || '',
+    calfGender: record?.calf?.gender || 'male',
+    calfBirthWeight: record?.calf?.birthWeight || 0,
+    notes: record?.notes || '',
+  });
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    onSave(formData);
+    onClose();
+  };
+
+  return (
+    <Modal 
+      isOpen={isOpen} 
+      onClose={onClose} 
+      title={isEditing ? `Editar Parto de ${record?.cowName}` : 'Nuevo Registro de Parto'} 
+      size="lg"
+    >
+      <div onSubmit={handleSubmit} className="space-y-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Nombre de la Vaca *
+            </label>
+            <input
+              type="text"
+              value={formData.cowName}
+              onChange={(e) => setFormData(prev => ({ ...prev, cowName: e.target.value }))}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
+              placeholder="Nombre de la vaca"
+              required
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Arete de la Vaca *
+            </label>
+            <input
+              type="text"
+              value={formData.cowEarTag}
+              onChange={(e) => setFormData(prev => ({ ...prev, cowEarTag: e.target.value }))}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
+              placeholder="Ej: VL001"
+              required
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Fecha de Parto *
+            </label>
+            <input
+              type="date"
+              value={formData.calvingDate}
+              onChange={(e) => setFormData(prev => ({ ...prev, calvingDate: e.target.value }))}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
+              required
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Hora de Parto *
+            </label>
+            <input
+              type="time"
+              value={formData.calvingTime}
+              onChange={(e) => setFormData(prev => ({ ...prev, calvingTime: e.target.value }))}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
+              required
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Tipo de Parto
+            </label>
+            <select
+              value={formData.calvingType}
+              onChange={(e) => setFormData(prev => ({ ...prev, calvingType: e.target.value as any }))}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
+            >
+              <option value="natural">Natural</option>
+              <option value="assisted">Asistido</option>
+              <option value="cesarean">Cesárea</option>
+              <option value="emergency">Emergencia</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Nombre de la Cría *
+            </label>
+            <input
+              type="text"
+              value={formData.calfName}
+              onChange={(e) => setFormData(prev => ({ ...prev, calfName: e.target.value }))}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
+              placeholder="Nombre de la cría"
+              required
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Arete de la Cría *
+            </label>
+            <input
+              type="text"
+              value={formData.calfEarTag}
+              onChange={(e) => setFormData(prev => ({ ...prev, calfEarTag: e.target.value }))}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
+              placeholder="Ej: BE001"
+              required
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Género de la Cría
+            </label>
+            <select
+              value={formData.calfGender}
+              onChange={(e) => setFormData(prev => ({ ...prev, calfGender: e.target.value as any }))}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
+            >
+              <option value="male">Macho</option>
+              <option value="female">Hembra</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Peso al Nacer (kg) *
+            </label>
+            <input
+              type="number"
+              value={formData.calfBirthWeight}
+              onChange={(e) => setFormData(prev => ({ ...prev, calfBirthWeight: parseFloat(e.target.value) || 0 }))}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
+              placeholder="Peso en kilogramos"
+              min="0"
+              step="0.1"
+              required
+            />
+          </div>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Notas
+          </label>
+          <textarea
+            value={formData.notes}
+            onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
+            rows={3}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
+            placeholder="Observaciones sobre el parto..."
+          />
+        </div>
+
+        <div className="flex justify-end space-x-3 pt-4 border-t border-gray-200">
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+          >
+            Cancelar
+          </button>
+          <button
+            type="button"
+            onClick={() => handleSubmit({} as any)}
+            className="px-4 py-2 bg-[#519a7c] text-white hover:bg-[#4a8970] rounded-lg transition-colors flex items-center space-x-2"
+          >
+            <Save className="w-4 h-4" />
+            <span>{isEditing ? 'Actualizar' : 'Guardar'}</span>
+          </button>
+        </div>
+      </div>
+    </Modal>
+  );
+};
 const CowManagement: React.FC = () => {
   // Estados principales
   const [activeTab, setActiveTab] = useState<"cows" | "motherhood">("cows");
@@ -264,13 +1348,19 @@ const CowManagement: React.FC = () => {
   const [filteredMotherhoodRecords, setFilteredMotherhoodRecords] = useState<MotherhoodRecord[]>([]);
   
   // Estados de UI
-  const [, setShowCowForm] = useState(false);
-  const [, setShowMotherhoodForm] = useState(false);
+  const [showCowForm, setShowCowForm] = useState(false);
+  const [showMotherhoodForm, setShowMotherhoodForm] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
-  const [, setSelectedCow] = useState<Cow | null>(null);
-  const [, setSelectedMotherhood] = useState<MotherhoodRecord | null>(null);
-  const [, setEditingCow] = useState<Cow | null>(null);
-  const [, setEditingMotherhood] = useState<MotherhoodRecord | null>(null);
+  const [selectedCow, setSelectedCow] = useState<Cow | null>(null);
+  const [selectedMotherhood, setSelectedMotherhood] = useState<MotherhoodRecord | null>(null);
+  const [editingCow, setEditingCow] = useState<Cow | null>(null);
+  const [editingMotherhood, setEditingMotherhood] = useState<MotherhoodRecord | null>(null);
+  
+  // Estados para modal de confirmación
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [confirmAction, setConfirmAction] = useState<() => void>(() => {});
+  const [confirmTitle, setConfirmTitle] = useState('');
+  const [confirmMessage, setConfirmMessage] = useState('');
   
   // Estados de filtros
   const [cowFilters, setCowFilters] = useState<CowFilters>({
@@ -793,6 +1883,179 @@ const CowManagement: React.FC = () => {
     setFilteredMotherhoodRecords(filtered);
   };
 
+  // Funciones para CRUD de vacas
+  const handleSaveCow = (cowData: Partial<Cow>) => {
+    if (editingCow) {
+      // Actualizar vaca existente
+      setCows(prev => prev.map(cow => 
+        cow.id === editingCow.id 
+          ? { ...cow, ...cowData, updatedAt: new Date().toISOString() }
+          : cow
+      ));
+      setEditingCow(null);
+    } else {
+      // Crear nueva vaca
+      const newCow: Cow = {
+        id: Date.now().toString(),
+        name: cowData.name || '',
+        earTag: cowData.earTag || '',
+        registrationNumber: cowData.registrationNumber,
+        breed: cowData.breed || '',
+        birthDate: cowData.birthDate || '',
+        weight: cowData.weight || 0,
+        height: cowData.height,
+        currentLocation: {
+          lat: 17.9869,
+          lng: -92.9303,
+          address: "Villahermosa, Tabasco",
+          paddock: "Potrero A1",
+          facility: "Área General"
+        },
+        healthStatus: cowData.healthStatus || 'good',
+        reproductiveStatus: cowData.reproductiveStatus || 'maiden',
+        genetics: {
+          genealogy: []
+        },
+        reproductiveHistory: {
+          totalPregnancies: 0,
+          liveCalves: 0,
+          estrus: {
+            lastCycle: '',
+            cycleLength: 21,
+            irregular: false
+          },
+          conception: {
+            attempts: 0,
+            averageAttempts: 0,
+            conceptionRate: 0
+          }
+        },
+        lactation: {
+          isLactating: false,
+          lactationNumber: 0
+        },
+        health: {
+          lastCheckupDate: new Date().toISOString().split('T')[0],
+          veterinarian: '',
+          bodyConditionScore: 3,
+          vaccinations: [],
+          treatments: []
+        },
+        nutrition: {
+          diet: '',
+          dailyFeed: 0,
+          supplements: [],
+          lastWeightDate: new Date().toISOString().split('T')[0]
+        },
+        acquisition: {
+          date: new Date().toISOString().split('T')[0],
+          source: '',
+          cost: 0,
+          purpose: 'breeding'
+        },
+        notes: cowData.notes || '',
+        photos: [],
+        active: cowData.active ?? true,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+      setCows(prev => [...prev, newCow]);
+    }
+    setShowCowForm(false);
+  };
+
+  const handleDeleteCow = (cow: Cow) => {
+    setConfirmTitle('Eliminar Vaca');
+    setConfirmMessage(`¿Estás seguro de que quieres eliminar a "${cow.name}" (${cow.earTag})? Esta acción no se puede deshacer.`);
+    setConfirmAction(() => () => {
+      setCows(prev => prev.filter(c => c.id !== cow.id));
+    });
+    setShowConfirmModal(true);
+  };
+
+  // Funciones para CRUD de enmadre
+  const handleSaveMotherhood = (data: Partial<MotherhoodRecord>) => {
+    if (editingMotherhood) {
+      // Actualizar registro existente
+      setMotherhoodRecords(prev => prev.map(record => 
+        record.id === editingMotherhood.id 
+          ? { ...record, ...data, updatedAt: new Date().toISOString() }
+          : record
+      ));
+      setEditingMotherhood(null);
+    } else {
+      // Crear nuevo registro
+      const newRecord: MotherhoodRecord = {
+        id: Date.now().toString(),
+        cowId: data.cowId || Date.now().toString(),
+        cowName: data.cowName || '',
+        cowEarTag: data.cowEarTag || '',
+        breedingDate: data.breedingDate || '',
+        breedingType: data.breedingType || 'natural',
+        pregnancyConfirmDate: data.pregnancyConfirmDate || '',
+        gestationPeriod: data.gestationPeriod || 280,
+        calvingDate: data.calvingDate || '',
+        calvingTime: data.calvingTime || '',
+        location: {
+          lat: 17.9869,
+          lng: -92.9303,
+          address: "Villahermosa, Tabasco",
+          paddock: "Potrero A1"
+        },
+        assistedBy: {
+          id: "VET001",
+          name: "Veterinario",
+          role: "Veterinario"
+        },
+        calvingType: (data as any).calvingType || 'natural',
+        complications: [],
+        calf: {
+          id: Date.now().toString(),
+          name: (data as any).calfName || '',
+          earTag: (data as any).calfEarTag || '',
+          gender: (data as any).calfGender || 'male',
+          birthWeight: (data as any).calfBirthWeight || 0,
+          healthStatus: 'good',
+          alive: true
+        },
+        placentaExpelled: true,
+        colostrum: {
+          received: true,
+          quality: 'good'
+        },
+        postCalvingCare: {
+          vitamins: false,
+          antibiotics: false,
+          monitoring: []
+        },
+        lactationStart: {
+          date: data.calvingDate || '',
+          initialMilk: 0
+        },
+        economicImpact: {
+          calvingCost: 0,
+          veterinaryCost: 0,
+          expectedValue: 0
+        },
+        notes: data.notes || '',
+        success: true,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+      setMotherhoodRecords(prev => [...prev, newRecord]);
+    }
+    setShowMotherhoodForm(false);
+  };
+
+  const handleDeleteMotherhood = (record: MotherhoodRecord) => {
+    setConfirmTitle('Eliminar Registro de Parto');
+    setConfirmMessage(`¿Estás seguro de que quieres eliminar el registro del parto de "${record.cowName}" del ${new Date(record.calvingDate).toLocaleDateString('es-MX')}? Esta acción no se puede deshacer.`);
+    setConfirmAction(() => () => {
+      setMotherhoodRecords(prev => prev.filter(r => r.id !== record.id));
+    });
+    setShowConfirmModal(true);
+  };
+
   // Funciones para obtener estilos de estados
   const getHealthStatusColor = (status: string) => {
     const colors = {
@@ -1072,7 +2335,7 @@ const CowManagement: React.FC = () => {
               <Edit className="w-4 h-4" />
             </button>
             <button
-              onClick={() => {/* Función para eliminar */}}
+              onClick={() => handleDeleteCow(cow)}
               className="p-2 text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
               title="Eliminar"
             >
@@ -1160,7 +2423,7 @@ const CowManagement: React.FC = () => {
       </td>
       <td className="px-6 py-4">
         <div className="flex items-center space-x-1">
-          <MapPinIcon className="w-4 h-4 text-gray-400" />
+          <MapPin className="w-4 h-4 text-gray-400" />
           <span className="text-sm text-gray-600">{record.location.paddock}</span>
         </div>
       </td>
@@ -1181,7 +2444,7 @@ const CowManagement: React.FC = () => {
             <Edit className="w-4 h-4" />
           </button>
           <button
-            onClick={() => {/* Función para eliminar */}}
+            onClick={() => handleDeleteMotherhood(record)}
             className="p-1 text-gray-600 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
             title="Eliminar"
           >
@@ -1561,8 +2824,55 @@ const CowManagement: React.FC = () => {
           )}
         </AnimatePresence>
 
-        {/* Modales y formularios serían implementados aquí */}
-        {/* FormModal components would go here for create/edit operations */}
+        {/* Modales */}
+        {selectedCow && (
+          <CowDetailsModal
+            cow={selectedCow}
+            isOpen={!!selectedCow}
+            onClose={() => setSelectedCow(null)}
+          />
+        )}
+
+        {selectedMotherhood && (
+          <MotherhoodDetailsModal
+            record={selectedMotherhood}
+            isOpen={!!selectedMotherhood}
+            onClose={() => setSelectedMotherhood(null)}
+          />
+        )}
+
+        {(showCowForm || editingCow) && (
+          <CowFormModal
+            cow={editingCow || undefined}
+            isOpen={showCowForm || !!editingCow}
+            onClose={() => {
+              setShowCowForm(false);
+              setEditingCow(null);
+            }}
+            onSave={handleSaveCow}
+          />
+        )}
+
+        {(showMotherhoodForm || editingMotherhood) && (
+          <MotherhoodFormModal
+            record={editingMotherhood || undefined}
+            isOpen={showMotherhoodForm || !!editingMotherhood}
+            onClose={() => {
+              setShowMotherhoodForm(false);
+              setEditingMotherhood(null);
+            }}
+            onSave={handleSaveMotherhood}
+          />
+        )}
+
+        {/* Modal de confirmación */}
+        <ConfirmModal
+          isOpen={showConfirmModal}
+          onClose={() => setShowConfirmModal(false)}
+          onConfirm={confirmAction}
+          title={confirmTitle}
+          message={confirmMessage}
+        />
         
       </motion.div>
     </div>

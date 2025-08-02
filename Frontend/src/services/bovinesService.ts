@@ -45,6 +45,7 @@ interface BovineSearchParams {
 }
 
 interface PaginatedResponse<T> {
+  items: Bovine[];
   data: T[];
   pagination: {
     page: number;

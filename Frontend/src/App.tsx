@@ -15,7 +15,6 @@ import { Plus, Beef, Syringe, Calendar, Bell } from "lucide-react";
 import { Layout } from "./components/layout";
 import AuthPage from "./pages/auth/AuthPage";
 import BovinesPage from "./pages/bovines/BovinesPage";
-import { CalendarPage } from "./pages/calendar";
 import EventPage from "./pages/events/EventsPage";
 import FeedingPage from "./pages/feeding/FeedingPage";
 import { FinancesPage } from "./pages/finances";
@@ -335,7 +334,6 @@ const App: React.FC = () => {
           <Route path="/*" element={<Layout />}>
             <Route path="dashboard/*" element={<DashboardPage />} />
             <Route path="bovines/*" element={<BovinesPage />} />
-            <Route path="calendar/*" element={<CalendarPage />} />
             <Route path="feeding/*" element={<FeedingPage />} /> 
             <Route path="health/*" element={<HealthPage />} /> 
             <Route path="reproduction/*" element={<ReproductionPage />} /> 

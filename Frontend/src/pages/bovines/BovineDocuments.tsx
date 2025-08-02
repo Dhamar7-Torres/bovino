@@ -1,10 +1,7 @@
 import React, { useState, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  Download,
-  Eye,
   Trash2,
-  Share2,
   Search,
   Filter,
   FileText,
@@ -24,8 +21,6 @@ import {
   File,
   Plus,
   MoreVertical,
-  Edit3,
-  Copy,
 } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 
@@ -45,7 +40,6 @@ interface DocumentFile {
   url: string;
   thumbnailUrl?: string;
   isPublic: boolean;
-  downloadCount: number;
   version: number;
   parentId?: string;
 }
@@ -139,12 +133,9 @@ const FileTypeIcon: React.FC<{ fileType: string; className?: string }> = ({
 // Componente para la tarjeta de documento
 const DocumentCard: React.FC<{
   document: DocumentFile;
-  onView: (doc: DocumentFile) => void;
-  onDownload: (doc: DocumentFile) => void;
   onDelete: (doc: DocumentFile) => void;
-  onShare: (doc: DocumentFile) => void;
   index: number;
-}> = ({ document, onView, onDownload, onDelete, onShare, index }) => {
+}> = ({ document, onDelete, index }) => {
   const [showMenu, setShowMenu] = useState(false);
   const category = documentCategories[document.category];
 
@@ -176,31 +167,6 @@ const DocumentCard: React.FC<{
             <FileTypeIcon fileType={document.type} className="w-12 h-12" />
           </div>
         )}
-
-        {/* Overlay con acciones */}
-        <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center gap-2">
-          <button
-            onClick={() => onView(document)}
-            className="p-2 bg-white/20 backdrop-blur-sm rounded-full text-white hover:bg-white/30 transition-colors"
-            title="Ver documento"
-          >
-            <Eye className="w-4 h-4" />
-          </button>
-          <button
-            onClick={() => onDownload(document)}
-            className="p-2 bg-white/20 backdrop-blur-sm rounded-full text-white hover:bg-white/30 transition-colors"
-            title="Descargar"
-          >
-            <Download className="w-4 h-4" />
-          </button>
-          <button
-            onClick={() => onShare(document)}
-            className="p-2 bg-white/20 backdrop-blur-sm rounded-full text-white hover:bg-white/30 transition-colors"
-            title="Compartir"
-          >
-            <Share2 className="w-4 h-4" />
-          </button>
-        </div>
       </div>
 
       {/* Información del documento */}
@@ -225,36 +191,6 @@ const DocumentCard: React.FC<{
                   exit={{ opacity: 0, scale: 0.95, y: -10 }}
                   className="absolute right-0 top-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-10 min-w-[120px]"
                 >
-                  <button
-                    onClick={() => {
-                      onView(document);
-                      setShowMenu(false);
-                    }}
-                    className="flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 w-full text-left"
-                  >
-                    <Eye className="w-4 h-4" />
-                    Ver
-                  </button>
-                  <button
-                    onClick={() => {
-                      // Editar documento
-                      setShowMenu(false);
-                    }}
-                    className="flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 w-full text-left"
-                  >
-                    <Edit3 className="w-4 h-4" />
-                    Editar
-                  </button>
-                  <button
-                    onClick={() => {
-                      // Duplicar documento
-                      setShowMenu(false);
-                    }}
-                    className="flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 w-full text-left"
-                  >
-                    <Copy className="w-4 h-4" />
-                    Duplicar
-                  </button>
                   <button
                     onClick={() => {
                       onDelete(document);
@@ -305,7 +241,7 @@ const DocumentCard: React.FC<{
         <div className="text-xs text-gray-500 space-y-1">
           <div className="flex items-center justify-between">
             <span>{formatFileSize(document.size)}</span>
-            <span>{document.downloadCount} descargas</span>
+            <span>v{document.version}</span>
           </div>
           <div className="flex items-center gap-1">
             <Calendar className="w-3 h-3" />
@@ -430,7 +366,6 @@ const BovineDocuments: React.FC = () => {
   const [showFilters, setShowFilters] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<UploadProgress[]>([]);
   const [isUploading, setIsUploading] = useState(false);
-  const [, setSelectedDocument] = useState<DocumentFile | null>(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [documentToDelete, setDocumentToDelete] = useState<DocumentFile | null>(
     null
@@ -463,7 +398,6 @@ const BovineDocuments: React.FC = () => {
         bovineId: id || "1",
         url: "/documents/cert-vacuna-ibr.pdf",
         isPublic: false,
-        downloadCount: 5,
         version: 1,
       },
       {
@@ -482,7 +416,6 @@ const BovineDocuments: React.FC = () => {
         thumbnailUrl:
           "https://images.unsplash.com/photo-1516467508483-a7212febe31a?w=200",
         isPublic: true,
-        downloadCount: 12,
         version: 1,
       },
       {
@@ -500,7 +433,6 @@ const BovineDocuments: React.FC = () => {
         bovineId: id || "1",
         url: "/documents/reporte-mastitis.pdf",
         isPublic: false,
-        downloadCount: 8,
         version: 2,
       },
       {
@@ -517,7 +449,6 @@ const BovineDocuments: React.FC = () => {
         bovineId: id || "1",
         url: "/documents/registro-genealogico.pdf",
         isPublic: false,
-        downloadCount: 3,
         version: 1,
       },
     ];
@@ -597,7 +528,6 @@ const BovineDocuments: React.FC = () => {
           bovineId: id || "1",
           url: URL.createObjectURL(file),
           isPublic: false,
-          downloadCount: 0,
           version: 1,
         };
 
@@ -634,36 +564,7 @@ const BovineDocuments: React.FC = () => {
     }, 2000);
   };
 
-  // Manejar acciones de documentos
-  const handleViewDocument = (document: DocumentFile) => {
-    setSelectedDocument(document);
-    // Abrir modal de vista previa o nueva ventana
-    window.open(document.url, "_blank");
-  };
-
-  const handleDownloadDocument = (documentFile: DocumentFile) => {
-    // Incrementar contador de descargas
-    setDocuments((prev) =>
-      prev.map((doc) =>
-        doc.id === documentFile.id
-          ? { ...doc, downloadCount: doc.downloadCount + 1 }
-          : doc
-      )
-    );
-
-    // Simular descarga
-    const link = document.createElement("a");
-    link.href = documentFile.url;
-    link.download = documentFile.name;
-    link.click();
-  };
-
-  const handleShareDocument = (document: DocumentFile) => {
-    // Copiar enlace al portapapeles
-    navigator.clipboard.writeText(document.url);
-    alert("Enlace copiado al portapapeles");
-  };
-
+  // Manejar eliminación de documentos
   const handleDeleteDocument = (document: DocumentFile) => {
     setDocumentToDelete(document);
     setShowDeleteModal(true);
@@ -708,7 +609,6 @@ const BovineDocuments: React.FC = () => {
       bovineId: id || "1",
       url: URL.createObjectURL(newDocumentForm.file),
       isPublic: newDocumentForm.isPublic,
-      downloadCount: 0,
       version: 1,
     };
 
@@ -896,7 +796,6 @@ const BovineDocuments: React.FC = () => {
                     <option value="date">Fecha</option>
                     <option value="name">Nombre</option>
                     <option value="size">Tamaño</option>
-                    <option value="downloads">Descargas</option>
                   </select>
                 </motion.div>
               )}
@@ -995,10 +894,7 @@ const BovineDocuments: React.FC = () => {
                 <DocumentCard
                   key={document.id}
                   document={document}
-                  onView={handleViewDocument}
-                  onDownload={handleDownloadDocument}
                   onDelete={handleDeleteDocument}
-                  onShare={handleShareDocument}
                   index={index}
                 />
               ))}

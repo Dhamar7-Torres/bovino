@@ -32,7 +32,6 @@ import {
   Info,
   Menu,
   Eye,
-  NotebookPen,
   Plus,
   Edit,
   Microscope,
@@ -40,7 +39,6 @@ import {
   HeartHandshake,
   Bug,
   Boxes,
-  AlertCircle,
   ClipboardList,
   FolderOpen,
   BarChart4,
@@ -123,31 +121,10 @@ const Sidebar: React.FC<SidebarProps> = ({
           badge: 1247,
           children: [
             {
-              id: "bovines-list",
-              title: "Lista de Ganado",
-              href: "/bovines", 
-              icon: ClipboardList,
-              color: "text-[#4e9c75]",
-            },
-            {
               id: "add-bovine",
               title: "Agregar Bovino",
               href: "/bovines/add", 
               icon: Plus,
-              color: "text-[#4e9c75]",
-            },
-            {
-              id: "bovine-detail",
-              title: "Perfil Individual",
-              href: "/bovines/detail/1", 
-              icon: Eye,
-              color: "text-[#4e9c75]",
-            },
-            {
-              id: "edit-bovine",
-              title: "Editar Bovino",
-              href: "/bovines/edit/1", 
-              icon: Edit,
               color: "text-[#4e9c75]",
             },
             {
@@ -162,13 +139,6 @@ const Sidebar: React.FC<SidebarProps> = ({
               title: "Ubicación y Movimientos",
               href: "/bovines/location/1", 
               icon: MapPin,
-              color: "text-[#4e9c75]",
-            },
-            {
-              id: "bovine-notes",
-              title: "Notas y Observaciones",
-              href: "/bovines/notes/1", 
-              icon: NotebookPen,
               color: "text-[#4e9c75]",
             },
           ],
@@ -224,13 +194,6 @@ const Sidebar: React.FC<SidebarProps> = ({
               color: "text-[#4e9c75]",
             },
             {
-              id: "health-reports",
-              title: "Reportes de Salud",
-              href: "/health/reports",
-              icon: FileText,
-              color: "text-[#4e9c75]",
-            },
-            {
               id: "postmortem-reports",
               title: "Reportes Post-Mortem",
               href: "/health/postmortem",
@@ -260,13 +223,6 @@ const Sidebar: React.FC<SidebarProps> = ({
           icon: Baby,
           color: "text-[#4e9c75]",
           children: [
-            {
-              id: "reproduction-dashboard",
-              title: "Dashboard de Reproducción",
-              href: "/reproduction/dashboard",
-              icon: BarChart3,
-              color: "text-[#4e9c75]",
-            },
             {
               id: "mating-records",
               title: "Registros de Apareamiento",
@@ -349,14 +305,6 @@ const Sidebar: React.FC<SidebarProps> = ({
           color: "text-[#4e9c75]",
           children: [
             {
-              id: "production-dashboard",
-              title: "Dashboard de Producción",
-              href: "/production?section=dashboard",
-              icon: BarChart3,
-              color: "text-[#4e9c75]",
-              navigationHandler: () => navigateToProduction('dashboard'),
-            },
-            {
               id: "milk-production",
               title: "Producción de Leche",
               href: "/production?section=milk",
@@ -391,13 +339,6 @@ const Sidebar: React.FC<SidebarProps> = ({
           badge: 2,
           children: [
             {
-              id: "inventory-dashboard",
-              title: "Dashboard de Inventario",
-              href: "/inventory/dashboard",
-              icon: BarChart3,
-              color: "text-[#4e9c75]",
-            },
-            {
               id: "medicine-inventory",
               title: "Inventario de Medicinas",
               href: "/inventory/medicine",
@@ -411,20 +352,6 @@ const Sidebar: React.FC<SidebarProps> = ({
               icon: Boxes,
               color: "text-[#4e9c75]",
             },
-            {
-              id: "low-stock-alerts",
-              title: "Alertas de Stock Bajo",
-              href: "/inventory/low-stock-alerts",
-              icon: AlertCircle,
-              color: "text-[#4e9c75]",
-            },
-            {
-              id: "inventory-reports",
-              title: "Reportes de Inventario",
-              href: "/inventory/reports",
-              icon: FileText,
-              color: "text-[#4e9c75]",
-            },
           ],
         },
         {
@@ -434,13 +361,6 @@ const Sidebar: React.FC<SidebarProps> = ({
           icon: MapPin,
           color: "text-[#4e9c75]",
           children: [
-            {
-              id: "maps-overview",
-              title: "Vista General",
-              href: "/maps",
-              icon: BarChart3,
-              color: "text-[#4e9c75]",
-            },
             {
               id: "ranch-map",
               title: "Mapa del Rancho",
@@ -470,58 +390,6 @@ const Sidebar: React.FC<SidebarProps> = ({
       id: "planning",
       title: "Planificación",
       items: [
-        {
-          id: "calendar",
-          title: "Calendario",
-          href: "/calendar",
-          icon: Calendar,
-          color: "text-[#4e9c75]",
-          badge: 5,
-          children: [
-            {
-              id: "month-view",
-              title: "Vista Mensual",
-              href: "/calendar/month",
-              icon: Calendar,
-              color: "text-[#4e9c75]",
-            },
-            {
-              id: "event-detail",
-              title: "Detalle de Evento",
-              href: "/calendar/events",
-              icon: Eye,
-              color: "text-[#4e9c75]",
-            },
-            {
-              id: "create-event",
-              title: "Crear Evento",
-              href: "/calendar/create",
-              icon: Plus,
-              color: "text-[#4e9c75]",
-            },
-            {
-              id: "edit-event",
-              title: "Editar Evento",
-              href: "/calendar/edit",
-              icon: Edit,
-              color: "text-[#4e9c75]",
-            },
-            {
-              id: "event-reminders",
-              title: "Recordatorios",
-              href: "/calendar/reminders",
-              icon: Bell,
-              color: "text-[#4e9c75]",
-            },
-            {
-              id: "vaccination-schedule",
-              title: "Programa de Vacunación",
-              href: "/calendar/vaccination",
-              icon: Syringe,
-              color: "text-[#4e9c75]",
-            },
-          ],
-        },
         {
           id: "events",
           title: "Eventos",

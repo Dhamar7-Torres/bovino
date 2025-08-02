@@ -18,7 +18,6 @@ import {
 } from 'lucide-react';
 
 // Importar los componentes del módulo production
-import ProductionDashboard from './ProductionDashboard';
 import MilkProduction from './MilkProduction';
 import MeatProduction from './MeatProduction';
 import BreedingProduction from './BreedingProduction';
@@ -519,8 +518,6 @@ const ProductionPage: React.FC = () => {
   // Función para renderizar el contenido según la sección
   const renderSectionContent = () => {
     switch (currentSection) {
-      case 'dashboard':
-        return <ProductionDashboard />;
       case 'milk':
         return <MilkProduction />;
       case 'meat':

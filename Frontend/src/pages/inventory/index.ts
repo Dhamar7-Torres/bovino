@@ -10,11 +10,8 @@
 export { default as InventoryPage } from "./InventoryPage";
 
 // Componentes principales del módulo
-export { default as InventoryDashboard } from "./InventoryDashboard";
 export { default as MedicineInventory } from "./MedicineInventory";
 export { default as StockLevels } from "./StockLevels";
-export { default as LowStockAlerts } from "./LowStockAlerts";
-export { default as InventoryReports } from "./InventoryReports";
 
 // =================================================================
 // TIPOS Y INTERFACES PRINCIPALES

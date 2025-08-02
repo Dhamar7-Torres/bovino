@@ -31,7 +31,6 @@ import MedicalHistory from "./MedicalHistory";
 import TreatmentPlans from "./TreatmentPlans";
 import DiseaseTracking from "./DiseaseTracking";
 import MedicationInventory from "./MedicationInventory";
-import HealthReports from "./HealthReports";
 import PostMortemReports from "./PostMortemReports";
 import ReproductiveHealth from "./ReproductiveHealth";
 import ParasiteParatrol from "./ParasiteParatrol";
@@ -300,7 +299,6 @@ const HealthPage: React.FC = () => {
                     path="medication-inventory"
                     element={<MedicationInventory />}
                   />
-                  <Route path="reports" element={<HealthReports />} />
                   <Route path="postmortem" element={<PostMortemReports />} />
                   <Route path="reproductive" element={<ReproductiveHealth />} />
                   <Route path="parasite-control" element={<ParasiteParatrol />} />

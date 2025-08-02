@@ -1,599 +1,620 @@
-// PregnancyTracking.tsx
-// CRUD completo para seguimiento de gestaciones bovinas
-// Sistema de gestión ganadera - Universidad Juárez Autónoma de Tabasco (UJAT)
-
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useMemo, useCallback } from "react";
 import { motion, AnimatePresence, Variants } from "framer-motion";
 import {
-  Baby,
-  Plus,
   Search,
-  Filter,
-  Eye,
-  Edit,
+  Plus,
+  Edit3,
   Trash2,
-  Download,
+  Eye,
+  Filter,
+  Calendar,
+  MapPin,
+  Heart,
+  Baby,
+  Stethoscope,
+  AlertTriangle,
+  CheckCircle,
   Clock,
   Activity,
-  FileText,
   X,
-  Calendar,
   Save,
-  ArrowLeft,
-  MapPin,
-  Info,
-  Heart,
-  Stethoscope,
-  Timer,
-  AlertTriangle,
-  User,
-  Crown,
+  FileText,
+
 } from "lucide-react";
 
-// Simulación de react-bits para animación de texto
-const AnimatedText: React.FC<{ children: string; className?: string }> = ({ 
-  children, 
-  className = "" 
-}) => {
-  return (
-    <motion.span
-      className={className}
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.6, ease: "easeOut" }}
-    >
-      {children.split("").map((char, index) => (
-        <motion.span
-          key={index}
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ 
-            delay: index * 0.03,
-            duration: 0.3 
-          }}
-        >
-          {char}
-        </motion.span>
-      ))}
-    </motion.span>
-  );
-};
+// ========================================
+// INTERFACES Y TIPOS
+// ========================================
 
-// Interfaces para seguimiento de gestación
-interface PregnancyRecord {
+interface Veterinarian {
   id: string;
-  animalId: string;
-  animalName: string;
-  animalEarTag: string;
-  bullId?: string;
-  bullName?: string;
-  bullEarTag?: string;
-  breedingDate: string;
-  breedingType: "natural" | "artificial_insemination" | "embryo_transfer";
-  confirmationDate: string;
-  confirmationMethod: "palpation" | "ultrasound" | "blood_test" | "visual";
-  gestationDay: number;
-  expectedCalvingDate: string;
-  currentStage: "early" | "middle" | "late";
-  pregnancyNumber: number; // Número de gestación de la vaca
-  veterinarian: {
-    id: string;
-    name: string;
-    license: string;
-    phone?: string;
-    email?: string;
-  };
-  location: {
-    lat: number;
-    lng: number;
-    address: string;
-    paddock?: string;
-    facility?: string;
-  };
-  examinations: PregnancyExamination[];
-  nutritionPlan: {
-    currentStage: "maintenance" | "increased" | "pre_calving";
-    supplements: string[];
-    specialDiet: boolean;
-    waterAccess: "excellent" | "good" | "fair" | "poor";
-    notes?: string;
-  };
-  healthStatus: {
-    overall: "excellent" | "good" | "fair" | "poor" | "critical";
-    bodyCondition: number; // 1-5 escala
-    weight: number; // kg
-    temperature: number; // °C
-    heartRate: number; // bpm
-    respiratoryRate: number; // por minuto
-    bloodPressure?: string;
-  };
-  complications: {
-    hasComplications: boolean;
-    type?: "metabolic" | "reproductive" | "physical" | "nutritional" | "infectious";
-    description?: string;
-    severity: "mild" | "moderate" | "severe";
-    treatmentRequired: boolean;
-    veterinaryAction?: string;
-  };
-  monitoringSchedule: {
-    nextExamDate: string;
-    frequency: "weekly" | "biweekly" | "monthly";
-    specialRequirements?: string[];
-  };
-  notes: string;
-  cost: number;
-  status: "active" | "completed" | "lost" | "transferred" | "aborted";
-  outcome?: {
-    type: "successful_birth" | "miscarriage" | "stillbirth" | "early_termination";
-    date?: string;
-    details?: string;
-  };
-  alerts: PregnancyAlert[];
-  photos: string[];
-  createdAt: string;
-  updatedAt: string;
+  name: string;
+  license: string;
+  phone: string;
+  email: string;
 }
 
-interface PregnancyExamination {
+interface Location {
+  lat: number;
+  lng: number;
+  address: string;
+  paddock: string;
+  facility: string;
+}
+
+interface Examination {
   id: string;
   date: string;
   time: string;
-  type: "routine" | "emergency" | "follow_up" | "pre_calving";
+  type: "routine" | "emergency" | "pre_calving";
   veterinarian: string;
   gestationDay: number;
   findings: {
-    fetalMovement: "strong" | "moderate" | "weak" | "none";
-    fetalSize: "normal" | "small" | "large";
+    fetalMovement: "none" | "weak" | "moderate" | "strong";
+    fetalSize: "small" | "normal" | "large";
     placentalHealth: "normal" | "concerning" | "abnormal";
-    amnioticFluid: "normal" | "low" | "high";
-    cervicalCondition: "normal" | "soft" | "dilated";
+    amnioticFluid: "normal" | "low" | "excessive";
+    cervicalCondition: "closed" | "soft" | "dilated";
   };
   measurements: {
-    fetalLength?: number; // cm
-    fetalWeight?: number; // kg estimado
-    heartRate?: number; // bpm
+    fetalLength?: number;
+    fetalWeight?: number;
+    heartRate?: number;
   };
-  ultrasoundImages?: string[];
   recommendations: string[];
   nextExamDate?: string;
   cost: number;
   notes: string;
 }
 
-interface PregnancyAlert {
+interface NutritionPlan {
+  currentStage: "normal" | "increased" | "pre_calving";
+  supplements: string[];
+  specialDiet: boolean;
+  waterAccess: "poor" | "fair" | "good" | "excellent";
+  notes: string;
+}
+
+interface HealthStatus {
+  overall: "poor" | "fair" | "good" | "excellent";
+  bodyCondition: number; // 1-5 scale
+  weight: number;
+  temperature: number;
+  heartRate: number;
+  respiratoryRate: number;
+  bloodPressure?: string;
+}
+
+interface Complications {
+  hasComplications: boolean;
+  type?: "nutritional" | "infectious" | "metabolic" | "physical" | "other";
+  description?: string;
+  severity?: "mild" | "moderate" | "severe";
+  treatmentRequired: boolean;
+  veterinaryAction?: string;
+}
+
+interface MonitoringSchedule {
+  nextExamDate: string;
+  frequency: "weekly" | "biweekly" | "monthly";
+  specialRequirements: string[];
+}
+
+interface Alert {
   id: string;
-  type: "health" | "schedule" | "nutrition" | "behavior" | "emergency";
+  type: "health" | "nutrition" | "emergency" | "routine";
   severity: "low" | "medium" | "high" | "critical";
   title: string;
   message: string;
   date: string;
   resolved: boolean;
-  resolvedDate?: string;
-  resolvedBy?: string;
-  actionTaken?: string;
 }
 
-interface PregnancyFilters {
+type BreedingType = "natural_mating" | "artificial_insemination" | "embryo_transfer";
+type ConfirmationMethod = "ultrasound" | "palpation" | "blood_test" | "hormone_test";
+type PregnancyStage = "early" | "middle" | "late";
+type PregnancyStatus = "active" | "completed" | "terminated" | "lost";
+
+interface PregnancyRecord {
+  id: string;
+  animalId: string;
+  animalName: string;
+  animalEarTag: string;
+  bullId: string;
+  bullName: string;
+  bullEarTag: string;
+  breedingDate: string;
+  breedingType: BreedingType;
+  confirmationDate: string;
+  confirmationMethod: ConfirmationMethod;
+  gestationDay: number;
+  expectedCalvingDate: string;
+  currentStage: PregnancyStage;
+  pregnancyNumber: number;
+  veterinarian: Veterinarian;
+  location: Location;
+  examinations: Examination[];
+  nutritionPlan: NutritionPlan;
+  healthStatus: HealthStatus;
+  complications: Complications;
+  monitoringSchedule: MonitoringSchedule;
+  notes: string;
+  cost: number;
+  status: PregnancyStatus;
+  alerts: Alert[];
+  photos: string[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface FilterOptions {
+  searchTerm: string;
+  breedingType: BreedingType | "";
+  currentStage: PregnancyStage | "";
+  status: PregnancyStatus | "";
+  veterinarian: string;
+  hasComplications: string;
   dateRange: {
     start: string;
     end: string;
   };
-  stage: string[];
-  status: string[];
-  veterinarian: string[];
-  complications: string[];
-  pregnancyNumber: string[];
-  searchTerm: string;
-  dueRange: {
-    start: string;
-    end: string;
-  };
 }
 
-// Componente principal de Seguimiento de Gestación
-const PregnancyTracking: React.FC = () => {
-  // Estados principales
-  const [records, setRecords] = useState<PregnancyRecord[]>([]);
-  const [filteredRecords, setFilteredRecords] = useState<PregnancyRecord[]>([]);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
-  const [showForm, setShowForm] = useState<boolean>(false);
-  const [selectedRecord, setSelectedRecord] = useState<PregnancyRecord | null>(null);
-  const [viewMode, setViewMode] = useState<"grid" | "list" | "calendar">("grid");
-  const [showFilters, setShowFilters] = useState<boolean>(false);
-  const [editingRecord, setEditingRecord] = useState<PregnancyRecord | null>(null);
-  
-  // Estados para filtros
-  const [filters, setFilters] = useState<PregnancyFilters>({
-    dateRange: {
-      start: "",
-      end: "",
-    },
-    stage: [],
-    status: [],
-    veterinarian: [],
-    complications: [],
-    pregnancyNumber: [],
-    searchTerm: "",
-    dueRange: {
-      start: "",
-      end: "",
-    },
-  });
+interface FormDataType {
+  animalName?: string;
+  animalEarTag?: string;
+  bullName?: string;
+  bullEarTag?: string;
+  breedingDate?: string;
+  breedingType?: BreedingType;
+  confirmationDate?: string;
+  confirmationMethod?: ConfirmationMethod;
+  gestationDay?: number;
+  expectedCalvingDate?: string;
+  currentStage?: PregnancyStage;
+  pregnancyNumber?: number;
+  status?: PregnancyStatus;
+  notes?: string;
+}
 
-  // Estados para formulario
-  const [formData, setFormData] = useState<Partial<PregnancyRecord>>({
-    breedingType: "natural",
+// ========================================
+// COMPONENTES UI REUTILIZABLES
+// ========================================
+
+interface ButtonProps {
+  children: React.ReactNode;
+  variant?: "primary" | "secondary" | "success" | "warning" | "error" | "ghost";
+  size?: "sm" | "md" | "lg";
+  onClick?: () => void;
+  disabled?: boolean;
+  className?: string;
+  type?: "button" | "submit";
+}
+
+const Button: React.FC<ButtonProps> = ({
+  children,
+  variant = "primary",
+  size = "md",
+  onClick,
+  disabled = false,
+  className = "",
+  type = "button",
+}) => {
+  const baseClasses = "inline-flex items-center justify-center rounded-md font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50";
+  
+  const variants = {
+    primary: "bg-[#519a7c] text-white hover:bg-[#4a8b6e] focus-visible:ring-[#519a7c]",
+    secondary: "bg-gray-200 text-gray-900 hover:bg-gray-300 focus-visible:ring-gray-500",
+    success: "bg-green-600 text-white hover:bg-green-700 focus-visible:ring-green-600",
+    warning: "bg-yellow-600 text-white hover:bg-yellow-700 focus-visible:ring-yellow-600",
+    error: "bg-red-600 text-white hover:bg-red-700 focus-visible:ring-red-600",
+    ghost: "hover:bg-gray-100 focus-visible:ring-gray-500",
+  };
+  
+  const sizes = {
+    sm: "h-8 px-3 text-sm",
+    md: "h-10 px-4 py-2",
+    lg: "h-12 px-6 text-lg",
+  };
+
+  return (
+    <button
+      type={type}
+      onClick={onClick}
+      disabled={disabled}
+      className={`${baseClasses} ${variants[variant]} ${sizes[size]} ${className}`}
+    >
+      {children}
+    </button>
+  );
+};
+
+interface InputProps {
+  type?: string;
+  placeholder?: string;
+  value?: string;
+  onChange?: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  className?: string;
+  disabled?: boolean;
+}
+
+const Input: React.FC<InputProps> = ({
+  type = "text",
+  placeholder,
+  value,
+  onChange,
+  className = "",
+  disabled = false,
+}) => (
+  <input
+    type={type}
+    placeholder={placeholder}
+    value={value}
+    onChange={onChange}
+    disabled={disabled}
+    className={`flex h-10 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-gray-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#519a7c] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 ${className}`}
+  />
+);
+
+interface SelectProps {
+  children: React.ReactNode;
+  value?: string;
+  onChange?: (value: string) => void;
+  className?: string;
+  disabled?: boolean;
+}
+
+const Select: React.FC<SelectProps> = ({
+  children,
+  value,
+  onChange,
+  className = "",
+  disabled = false,
+}) => (
+  <select
+    value={value}
+    onChange={(e) => onChange?.(e.target.value)}
+    disabled={disabled}
+    className={`flex h-10 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#519a7c] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 ${className}`}
+  >
+    {children}
+  </select>
+);
+
+interface TextareaProps {
+  placeholder?: string;
+  value?: string;
+  onChange?: (e: React.ChangeEvent<HTMLTextAreaElement>) => void;
+  className?: string;
+  rows?: number;
+  disabled?: boolean;
+}
+
+const Textarea: React.FC<TextareaProps> = ({
+  placeholder,
+  value,
+  onChange,
+  className = "",
+  rows = 3,
+  disabled = false,
+}) => (
+  <textarea
+    placeholder={placeholder}
+    value={value}
+    onChange={onChange}
+    rows={rows}
+    disabled={disabled}
+    className={`flex w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm ring-offset-background placeholder:text-gray-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#519a7c] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 ${className}`}
+  />
+);
+
+interface CardProps {
+  children: React.ReactNode;
+  className?: string;
+}
+
+const Card: React.FC<CardProps> = ({ children, className = "" }) => (
+  <div className={`rounded-lg border border-gray-200 bg-white shadow-sm ${className}`}>
+    {children}
+  </div>
+);
+
+const CardHeader: React.FC<CardProps> = ({ children, className = "" }) => (
+  <div className={`flex flex-col space-y-1.5 p-6 ${className}`}>
+    {children}
+  </div>
+);
+
+const CardTitle: React.FC<CardProps> = ({ children, className = "" }) => (
+  <h3 className={`text-lg font-medium leading-none tracking-tight ${className}`}>
+    {children}
+  </h3>
+);
+
+const CardContent: React.FC<CardProps> = ({ children, className = "" }) => (
+  <div className={`p-6 pt-0 ${className}`}>
+    {children}
+  </div>
+);
+
+interface BadgeProps {
+  children: React.ReactNode;
+  variant?: "default" | "success" | "warning" | "error" | "info";
+  className?: string;
+}
+
+const Badge: React.FC<BadgeProps> = ({ children, variant = "default", className = "" }) => {
+  const variants = {
+    default: "bg-gray-100 text-gray-800",
+    success: "bg-green-100 text-green-800",
+    warning: "bg-yellow-100 text-yellow-800",
+    error: "bg-red-100 text-red-800",
+    info: "bg-blue-100 text-blue-800",
+  };
+
+  return (
+    <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${variants[variant]} ${className}`}>
+      {children}
+    </span>
+  );
+};
+
+// ========================================
+// DATOS MOCK
+// ========================================
+
+const mockPregnancies: PregnancyRecord[] = [
+  {
+    id: "pregnancy-001",
+    animalId: "cow-123",
+    animalName: "Bella",
+    animalEarTag: "MX-001",
+    bullId: "bull-001",
+    bullName: "Campeón",
+    bullEarTag: "T-001",
+    breedingDate: "2025-04-15",
+    breedingType: "artificial_insemination",
+    confirmationDate: "2025-05-15",
     confirmationMethod: "ultrasound",
-    currentStage: "early",
-    pregnancyNumber: 1,
-    gestationDay: 0,
-    cost: 0,
-    status: "active",
+    gestationDay: 92,
+    expectedCalvingDate: "2025-12-31",
+    currentStage: "middle",
+    pregnancyNumber: 3,
     veterinarian: {
-      id: "",
-      name: "",
-      license: "",
+      id: "vet-001",
+      name: "Dr. García",
+      license: "MVZ-123456",
+      phone: "+52 993 123 4567",
+      email: "dr.garcia@veterinaria.com",
     },
     location: {
       lat: 17.989,
       lng: -92.247,
-      address: "Villahermosa, Tabasco",
+      address: "Potrero Norte, Rancho San Miguel",
+      paddock: "Potrero 3",
+      facility: "Área de Maternidad",
     },
-    examinations: [],
+    examinations: [
+      {
+        id: "exam-001",
+        date: "2025-07-15",
+        time: "09:00",
+        type: "routine",
+        veterinarian: "Dr. García",
+        gestationDay: 92,
+        findings: {
+          fetalMovement: "strong",
+          fetalSize: "normal",
+          placentalHealth: "normal",
+          amnioticFluid: "normal",
+          cervicalCondition: "closed",
+        },
+        measurements: {
+          fetalLength: 18.5,
+          fetalWeight: 8.2,
+          heartRate: 165,
+        },
+        recommendations: ["Continuar monitoreo mensual", "Suplementos vitamínicos"],
+        nextExamDate: "2025-08-15",
+        cost: 800,
+        notes: "Desarrollo fetal normal. Sin complicaciones observadas.",
+      },
+    ],
     nutritionPlan: {
-      currentStage: "maintenance",
-      supplements: [],
+      currentStage: "increased",
+      supplements: ["Vitaminas prenatales", "Calcio", "Fósforo"],
+      specialDiet: true,
+      waterAccess: "excellent",
+      notes: "Dieta rica en proteínas y minerales",
+    },
+    healthStatus: {
+      overall: "excellent",
+      bodyCondition: 4,
+      weight: 580,
+      temperature: 38.3,
+      heartRate: 65,
+      respiratoryRate: 18,
+      bloodPressure: "120/80",
+    },
+    complications: {
+      hasComplications: false,
+      treatmentRequired: false,
+    },
+    monitoringSchedule: {
+      nextExamDate: "2025-08-15",
+      frequency: "monthly",
+      specialRequirements: ["Ultrasonido mensual", "Análisis de sangre"],
+    },
+    notes: "Gestación transcurriendo normalmente. Vaca en excelentes condiciones.",
+    cost: 15000,
+    status: "active",
+    alerts: [],
+    photos: ["ultrasound_001.jpg", "exam_002.jpg"],
+    createdAt: "2025-05-15T09:00:00Z",
+    updatedAt: "2025-07-15T10:30:00Z",
+  },
+  {
+    id: "pregnancy-002",
+    animalId: "cow-124",
+    animalName: "Luna",
+    animalEarTag: "MX-002",
+    bullId: "bull-002",
+    bullName: "Emperador",
+    bullEarTag: "T-002",
+    breedingDate: "2025-03-20",
+    breedingType: "natural_mating",
+    confirmationDate: "2025-04-20",
+    confirmationMethod: "palpation",
+    gestationDay: 118,
+    expectedCalvingDate: "2025-12-26",
+    currentStage: "middle",
+    pregnancyNumber: 1,
+    veterinarian: {
+      id: "vet-002",
+      name: "Dra. Martínez",
+      license: "MVZ-789012",
+      phone: "+52 993 987 6543",
+      email: "dra.martinez@reprovet.com",
+    },
+    location: {
+      lat: 17.995,
+      lng: -92.255,
+      address: "Potrero Sur, Rancho San Miguel",
+      paddock: "Potrero 7",
+      facility: "Área de Gestación",
+    },
+    examinations: [
+      {
+        id: "exam-003",
+        date: "2025-07-10",
+        time: "14:00",
+        type: "routine",
+        veterinarian: "Dra. Martínez",
+        gestationDay: 112,
+        findings: {
+          fetalMovement: "moderate",
+          fetalSize: "normal",
+          placentalHealth: "normal",
+          amnioticFluid: "normal",
+          cervicalCondition: "closed",
+        },
+        measurements: {
+          fetalLength: 22.0,
+          heartRate: 170,
+        },
+        recommendations: ["Monitoreo cada 3 semanas", "Suplementación mineral"],
+        nextExamDate: "2025-08-01",
+        cost: 750,
+        notes: "Primera gestación. Desarrollo normal.",
+      },
+    ],
+    nutritionPlan: {
+      currentStage: "increased",
+      supplements: ["Complejo vitamínico", "Minerales"],
       specialDiet: false,
       waterAccess: "good",
+      notes: "Dieta estándar con suplementos",
     },
     healthStatus: {
       overall: "good",
       bodyCondition: 3,
-      weight: 500,
-      temperature: 38.5,
-      heartRate: 60,
-      respiratoryRate: 20,
+      weight: 520,
+      temperature: 38.4,
+      heartRate: 68,
+      respiratoryRate: 22,
     },
     complications: {
-      hasComplications: false,
+      hasComplications: true,
+      type: "nutritional",
+      description: "Ligera pérdida de condición corporal",
       severity: "mild",
-      treatmentRequired: false,
+      treatmentRequired: true,
+      veterinaryAction: "Ajuste nutricional y suplementación",
     },
     monitoringSchedule: {
-      nextExamDate: "",
-      frequency: "monthly",
+      nextExamDate: "2025-08-01",
+      frequency: "biweekly",
+      specialRequirements: ["Control de peso semanal"],
     },
-    alerts: [],
-    photos: [],
-  });
+    notes: "Primera gestación. Requiere monitoreo cercano de condición corporal.",
+    cost: 12000,
+    status: "active",
+    alerts: [
+      {
+        id: "alert-001",
+        type: "nutrition",
+        severity: "medium",
+        title: "Pérdida de Condición Corporal",
+        message: "Se observa ligera pérdida de peso. Revisar plan nutricional.",
+        date: "2025-07-10T00:00:00Z",
+        resolved: false,
+      },
+    ],
+    photos: ["luna_exam_001.jpg"],
+    createdAt: "2025-04-20T14:00:00Z",
+    updatedAt: "2025-07-10T16:00:00Z",
+  },
+];
 
-  // Datos de ejemplo para desarrollo
-  const mockRecords: PregnancyRecord[] = [
-    {
-      id: "pregnancy-001",
-      animalId: "cow-123",
-      animalName: "Bella",
-      animalEarTag: "MX-001",
-      bullId: "bull-001",
-      bullName: "Campeón",
-      bullEarTag: "T-001",
-      breedingDate: "2025-04-15",
-      breedingType: "natural",
-      confirmationDate: "2025-05-15",
-      confirmationMethod: "ultrasound",
-      gestationDay: 92,
-      expectedCalvingDate: "2026-01-22",
-      currentStage: "early",
-      pregnancyNumber: 3,
-      veterinarian: {
-        id: "vet-001",
-        name: "Dr. García",
-        license: "MVZ-123456",
-        phone: "+52 993 123 4567",
-        email: "dr.garcia@veterinaria.com",
-      },
-      location: {
-        lat: 17.989,
-        lng: -92.247,
-        address: "Potrero Norte, Rancho San Miguel",
-        paddock: "Potrero 3",
-        facility: "Área de Maternidad",
-      },
-      examinations: [
-        {
-          id: "exam-001",
-          date: "2025-05-15",
-          time: "09:00",
-          type: "routine",
-          veterinarian: "Dr. García",
-          gestationDay: 30,
-          findings: {
-            fetalMovement: "strong",
-            fetalSize: "normal",
-            placentalHealth: "normal",
-            amnioticFluid: "normal",
-            cervicalCondition: "normal",
-          },
-          measurements: {
-            fetalLength: 8.5,
-            heartRate: 180,
-          },
-          recommendations: ["Continuar monitoreo mensual", "Suplementos vitamínicos"],
-          nextExamDate: "2025-06-15",
-          cost: 800,
-          notes: "Desarrollo fetal normal. Sin complicaciones observadas.",
-        },
-        {
-          id: "exam-002",
-          date: "2025-06-15",
-          time: "10:30",
-          type: "routine",
-          veterinarian: "Dr. García",
-          gestationDay: 61,
-          findings: {
-            fetalMovement: "strong",
-            fetalSize: "normal",
-            placentalHealth: "normal",
-            amnioticFluid: "normal",
-            cervicalCondition: "normal",
-          },
-          measurements: {
-            fetalLength: 15.2,
-            fetalWeight: 2.5,
-            heartRate: 175,
-          },
-          recommendations: ["Aumentar proteína en dieta", "Monitoreo quincenal"],
-          nextExamDate: "2025-07-01",
-          cost: 850,
-          notes: "Crecimiento fetal excelente. Incrementar nutrición.",
-        },
-      ],
-      nutritionPlan: {
-        currentStage: "increased",
-        supplements: ["Vitaminas prenatales", "Calcio", "Fósforo"],
-        specialDiet: true,
-        waterAccess: "excellent",
-        notes: "Dieta rica en proteínas y minerales",
-      },
-      healthStatus: {
-        overall: "excellent",
-        bodyCondition: 4,
-        weight: 580,
-        temperature: 38.3,
-        heartRate: 65,
-        respiratoryRate: 18,
-        bloodPressure: "120/80",
-      },
-      complications: {
-        hasComplications: false,
-        severity: "mild",
-        treatmentRequired: false,
-      },
-      monitoringSchedule: {
-        nextExamDate: "2025-07-01",
-        frequency: "biweekly",
-        specialRequirements: ["Ultrasonido mensual", "Análisis de sangre"],
-      },
-      notes: "Gestación transcurriendo normalmente. Vaca en excelentes condiciones. Propietario muy colaborativo con el programa de seguimiento.",
-      cost: 15000,
-      status: "active",
-      alerts: [],
-      photos: ["ultrasound_001.jpg", "exam_002.jpg"],
-      createdAt: "2025-05-15T09:00:00Z",
-      updatedAt: "2025-06-15T10:30:00Z",
+const mockVeterinarians: Veterinarian[] = [
+  {
+    id: "vet-001",
+    name: "Dr. García",
+    license: "MVZ-123456",
+    phone: "+52 993 123 4567",
+    email: "dr.garcia@veterinaria.com",
+  },
+  {
+    id: "vet-002",
+    name: "Dra. Martínez",
+    license: "MVZ-789012",
+    phone: "+52 993 987 6543",
+    email: "dra.martinez@reprovet.com",
+  },
+];
+
+// ========================================
+// COMPONENTE PRINCIPAL
+// ========================================
+
+const PregnancyTracking: React.FC = () => {
+  // Estados principales
+  const [pregnancies, setPregnancies] = useState<PregnancyRecord[]>(mockPregnancies);
+  const [veterinarians] = useState<Veterinarian[]>(mockVeterinarians);
+  const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Estados para modales y formularios
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState<boolean>(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState<boolean>(false);
+  const [isViewModalOpen, setIsViewModalOpen] = useState<boolean>(false);
+  const [selectedPregnancy, setSelectedPregnancy] = useState<PregnancyRecord | null>(null);
+  const [formData, setFormData] = useState<FormDataType>({});
+
+  // NUEVOS ESTADOS PARA MODAL DE ELIMINACIÓN
+  const [showDeleteModal, setShowDeleteModal] = useState<boolean>(false);
+  const [pregnancyToDelete, setPregnancyToDelete] = useState<PregnancyRecord | null>(null);
+
+  // Estados para filtros y búsqueda
+  const [filters, setFilters] = useState<FilterOptions>({
+    searchTerm: "",
+    breedingType: "",
+    currentStage: "",
+    status: "",
+    veterinarian: "",
+    hasComplications: "",
+    dateRange: {
+      start: "",
+      end: "",
     },
-    {
-      id: "pregnancy-002",
-      animalId: "cow-124",
-      animalName: "Luna",
-      animalEarTag: "MX-002",
-      bullId: "bull-002",
-      bullName: "Emperador",
-      bullEarTag: "T-002",
-      breedingDate: "2025-03-20",
-      breedingType: "artificial_insemination",
-      confirmationDate: "2025-04-20",
-      confirmationMethod: "palpation",
-      gestationDay: 118,
-      expectedCalvingDate: "2025-12-26",
-      currentStage: "middle",
-      pregnancyNumber: 1,
-      veterinarian: {
-        id: "vet-002",
-        name: "Dra. Martínez",
-        license: "MVZ-789012",
-        phone: "+52 993 987 6543",
-        email: "dra.martinez@reprovet.com",
-      },
-      location: {
-        lat: 17.995,
-        lng: -92.255,
-        address: "Potrero Sur, Rancho San Miguel",
-        paddock: "Potrero 7",
-        facility: "Área de Gestación",
-      },
-      examinations: [
-        {
-          id: "exam-003",
-          date: "2025-04-20",
-          time: "14:00",
-          type: "routine",
-          veterinarian: "Dra. Martínez",
-          gestationDay: 31,
-          findings: {
-            fetalMovement: "moderate",
-            fetalSize: "normal",
-            placentalHealth: "normal",
-            amnioticFluid: "normal",
-            cervicalCondition: "normal",
-          },
-          measurements: {
-            fetalLength: 9.0,
-            heartRate: 170,
-          },
-          recommendations: ["Monitoreo cada 3 semanas", "Suplementación mineral"],
-          nextExamDate: "2025-05-11",
-          cost: 750,
-          notes: "Primera gestación. Desarrollo normal.",
-        },
-      ],
-      nutritionPlan: {
-        currentStage: "increased",
-        supplements: ["Complejo vitamínico", "Minerales"],
-        specialDiet: false,
-        waterAccess: "good",
-        notes: "Dieta estándar con suplementos",
-      },
-      healthStatus: {
-        overall: "good",
-        bodyCondition: 3,
-        weight: 520,
-        temperature: 38.4,
-        heartRate: 68,
-        respiratoryRate: 22,
-      },
-      complications: {
-        hasComplications: true,
-        type: "nutritional",
-        description: "Ligera pérdida de condición corporal",
-        severity: "mild",
-        treatmentRequired: true,
-        veterinaryAction: "Ajuste nutricional y suplementación",
-      },
-      monitoringSchedule: {
-        nextExamDate: "2025-07-20",
-        frequency: "monthly",
-        specialRequirements: ["Control de peso semanal"],
-      },
-      notes: "Primera gestación. Requiere monitoreo cercano de condición corporal. Vaquilla joven adaptándose bien.",
-      cost: 12000,
-      status: "active",
-      alerts: [
-        {
-          id: "alert-001",
-          type: "nutrition",
-          severity: "medium",
-          title: "Pérdida de Condición Corporal",
-          message: "Se observa ligera pérdida de peso. Revisar plan nutricional.",
-          date: "2025-06-15T00:00:00Z",
-          resolved: false,
-        },
-      ],
-      photos: ["luna_exam_001.jpg"],
-      createdAt: "2025-04-20T14:00:00Z",
-      updatedAt: "2025-06-15T16:00:00Z",
-    },
-    {
-      id: "pregnancy-003",
-      animalId: "cow-125",
-      animalName: "Esperanza",
-      animalEarTag: "MX-003",
-      bullId: "bull-003",
-      bullName: "Titán",
-      bullEarTag: "T-003",
-      breedingDate: "2025-01-10",
-      breedingType: "embryo_transfer",
-      confirmationDate: "2025-02-10",
-      confirmationMethod: "ultrasound",
-      gestationDay: 188,
-      expectedCalvingDate: "2025-10-18",
-      currentStage: "late",
-      pregnancyNumber: 5,
-      veterinarian: {
-        id: "vet-001",
-        name: "Dr. García",
-        license: "MVZ-123456",
-        phone: "+52 993 123 4567",
-        email: "dr.garcia@veterinaria.com",
-      },
-      location: {
-        lat: 17.992,
-        lng: -92.250,
-        address: "Área de Maternidad, Rancho San Miguel",
-        paddock: "Corral de Maternidad",
-        facility: "Instalación de Partos",
-      },
-      examinations: [
-        {
-          id: "exam-004",
-          date: "2025-07-10",
-          time: "08:00",
-          type: "pre_calving",
-          veterinarian: "Dr. García",
-          gestationDay: 180,
-          findings: {
-            fetalMovement: "strong",
-            fetalSize: "large",
-            placentalHealth: "normal",
-            amnioticFluid: "normal",
-            cervicalCondition: "soft",
-          },
-          measurements: {
-            fetalLength: 45.0,
-            fetalWeight: 35.0,
-            heartRate: 160,
-          },
-          recommendations: ["Monitoreo diario", "Preparar área de parto", "Asistencia veterinaria en parto"],
-          nextExamDate: "2025-07-17",
-          cost: 1200,
-          notes: "Preparándose para parto. Becerro grande, posible parto asistido.",
-        },
-      ],
-      nutritionPlan: {
-        currentStage: "pre_calving",
-        supplements: ["Calcio", "Magnesio", "Vitamina D"],
-        specialDiet: true,
-        waterAccess: "excellent",
-        notes: "Dieta pre-parto con restricción energética controlada",
-      },
-      healthStatus: {
-        overall: "good",
-        bodyCondition: 4,
-        weight: 650,
-        temperature: 38.6,
-        heartRate: 72,
-        respiratoryRate: 24,
-        bloodPressure: "125/85",
-      },
-      complications: {
-        hasComplications: true,
-        type: "physical",
-        description: "Becerro de gran tamaño, posible distocia",
-        severity: "moderate",
-        treatmentRequired: true,
-        veterinaryAction: "Preparación para parto asistido",
-      },
-      monitoringSchedule: {
-        nextExamDate: "2025-07-17",
-        frequency: "weekly",
-        specialRequirements: ["Monitoreo diario", "Vigilancia 24/7 cerca del parto"],
-      },
-      notes: "Vaca multípara experimentada. Gestación avanzada con becerro grande. Preparación para posible parto asistido. Ubicada en área de maternidad para monitoreo intensivo.",
-      cost: 25000,
-      status: "active",
-      alerts: [
-        {
-          id: "alert-002",
-          type: "emergency",
-          severity: "high",
-          title: "Parto Próximo - Becerro Grande",
-          message: "Monitoreo intensivo requerido. Preparar para posible asistencia en parto.",
-          date: "2025-07-10T00:00:00Z",
-          resolved: false,
-        },
-      ],
-      photos: ["esperanza_ultrasound_latest.jpg", "maternity_area.jpg"],
-      createdAt: "2025-02-10T10:00:00Z",
-      updatedAt: "2025-07-10T08:00:00Z",
-    },
-  ];
+  });
+  const [showFilters, setShowFilters] = useState<boolean>(false);
 
   // Variantes de animación
   const containerVariants: Variants = {
-    hidden: { opacity: 0, y: 20 },
+    hidden: { opacity: 0 },
     visible: {
       opacity: 1,
-      y: 0,
       transition: {
         duration: 0.6,
         staggerChildren: 0.1,
@@ -610,1424 +631,1337 @@ const PregnancyTracking: React.FC = () => {
     },
   };
 
-  // Cargar datos iniciales
-  useEffect(() => {
-    const loadData = async () => {
-      setIsLoading(true);
-      try {
-        // Simular carga de datos
-        await new Promise(resolve => setTimeout(resolve, 1200));
-        setRecords(mockRecords);
-        setFilteredRecords(mockRecords);
-      } catch (error) {
-        console.error("Error cargando datos:", error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
+  // Filtrado de datos
+  const filteredPregnancies = useMemo(() => {
+    return pregnancies.filter((pregnancy) => {
+      const matchesSearch = 
+        pregnancy.animalName.toLowerCase().includes(filters.searchTerm.toLowerCase()) ||
+        pregnancy.animalEarTag.toLowerCase().includes(filters.searchTerm.toLowerCase()) ||
+        pregnancy.bullName.toLowerCase().includes(filters.searchTerm.toLowerCase());
+      
+      const matchesBreedingType = !filters.breedingType || pregnancy.breedingType === filters.breedingType;
+      const matchesStage = !filters.currentStage || pregnancy.currentStage === filters.currentStage;
+      const matchesStatus = !filters.status || pregnancy.status === filters.status;
+      const matchesVeterinarian = !filters.veterinarian || pregnancy.veterinarian.id === filters.veterinarian;
+      const matchesComplications = !filters.hasComplications || 
+        (filters.hasComplications === "true" && pregnancy.complications.hasComplications) ||
+        (filters.hasComplications === "false" && !pregnancy.complications.hasComplications);
 
-    loadData();
-  }, []);
+      return matchesSearch && matchesBreedingType && matchesStage && 
+             matchesStatus && matchesVeterinarian && matchesComplications;
+    });
+  }, [pregnancies, filters]);
 
-  // Aplicar filtros a los registros
-  useEffect(() => {
-    let filtered = records;
-
-    // Filtro de búsqueda por texto
-    if (filters.searchTerm) {
-      filtered = filtered.filter(record =>
-        record.animalName.toLowerCase().includes(filters.searchTerm.toLowerCase()) ||
-        record.animalEarTag.toLowerCase().includes(filters.searchTerm.toLowerCase()) ||
-        record.bullName?.toLowerCase().includes(filters.searchTerm.toLowerCase()) ||
-        record.veterinarian.name.toLowerCase().includes(filters.searchTerm.toLowerCase())
-      );
-    }
-
-    // Filtro por etapa
-    if (filters.stage.length > 0) {
-      filtered = filtered.filter(record => filters.stage.includes(record.currentStage));
-    }
-
-    // Filtro por estado
-    if (filters.status.length > 0) {
-      filtered = filtered.filter(record => filters.status.includes(record.status));
-    }
-
-    // Filtro por veterinario
-    if (filters.veterinarian.length > 0) {
-      filtered = filtered.filter(record => filters.veterinarian.includes(record.veterinarian.id));
-    }
-
-    // Filtro por complicaciones
-    if (filters.complications.length > 0) {
-      filtered = filtered.filter(record => {
-        if (filters.complications.includes("none") && !record.complications.hasComplications) return true;
-        if (filters.complications.includes("has_complications") && record.complications.hasComplications) return true;
-        return record.complications.type && filters.complications.includes(record.complications.type);
-      });
-    }
-
-    // Filtro por rango de fechas de confirmación
-    if (filters.dateRange.start && filters.dateRange.end) {
-      filtered = filtered.filter(record => {
-        const recordDate = new Date(record.confirmationDate);
-        const startDate = new Date(filters.dateRange.start);
-        const endDate = new Date(filters.dateRange.end);
-        return recordDate >= startDate && recordDate <= endDate;
-      });
-    }
-
-    // Filtro por rango de fechas de parto esperado
-    if (filters.dueRange.start && filters.dueRange.end) {
-      filtered = filtered.filter(record => {
-        const dueDate = new Date(record.expectedCalvingDate);
-        const startDate = new Date(filters.dueRange.start);
-        const endDate = new Date(filters.dueRange.end);
-        return dueDate >= startDate && dueDate <= endDate;
-      });
-    }
-
-    setFilteredRecords(filtered);
-  }, [records, filters]);
-
-  // Estadísticas calculadas
+  // Estadísticas
   const stats = useMemo(() => {
-    const total = records.length;
-    const active = records.filter(r => r.status === "active").length;
-    const early = records.filter(r => r.currentStage === "early").length;
-    const middle = records.filter(r => r.currentStage === "middle").length;
-    const late = records.filter(r => r.currentStage === "late").length;
-    const withComplications = records.filter(r => r.complications.hasComplications).length;
-    const dueThisWeek = records.filter(r => {
-      const dueDate = new Date(r.expectedCalvingDate);
-      const today = new Date();
-      const nextWeek = new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000);
-      return dueDate >= today && dueDate <= nextWeek;
-    }).length;
+    const total = pregnancies.length;
+    const active = pregnancies.filter(p => p.status === "active").length;
+    const withComplications = pregnancies.filter(p => p.complications.hasComplications).length;
+    const nearCalving = pregnancies.filter(p => p.gestationDay > 250).length;
 
-    return {
-      total,
-      active,
-      early,
-      middle,
-      late,
-      withComplications,
-      dueThisWeek,
-      averageGestationDay: records.length > 0 ? Math.round(records.reduce((sum, r) => sum + r.gestationDay, 0) / records.length) : 0,
-    };
-  }, [records]);
+    return { total, active, withComplications, nearCalving };
+  }, [pregnancies]);
 
   // Funciones CRUD
-
-  // Crear nuevo registro
-  const handleCreate = (data: Partial<PregnancyRecord>) => {
-    const today = new Date();
-    const breedingDate = new Date(data.breedingDate || today);
-    const gestationDays = Math.floor((today.getTime() - breedingDate.getTime()) / (1000 * 60 * 60 * 24));
-    const expectedCalving = new Date(breedingDate.getTime() + (283 * 24 * 60 * 60 * 1000)); // 283 días promedio
-
-    const newRecord: PregnancyRecord = {
-      id: `pregnancy-${Date.now()}`,
-      animalId: data.animalId || "",
-      animalName: data.animalName || "",
-      animalEarTag: data.animalEarTag || "",
-      bullId: data.bullId,
-      bullName: data.bullName,
-      bullEarTag: data.bullEarTag,
-      breedingDate: data.breedingDate || today.toISOString().split('T')[0],
-      breedingType: data.breedingType || "natural",
-      confirmationDate: data.confirmationDate || today.toISOString().split('T')[0],
-      confirmationMethod: data.confirmationMethod || "ultrasound",
-      gestationDay: data.gestationDay || gestationDays,
-      expectedCalvingDate: data.expectedCalvingDate || expectedCalving.toISOString().split('T')[0],
-      currentStage: data.currentStage || "early",
-      pregnancyNumber: data.pregnancyNumber || 1,
-      veterinarian: data.veterinarian || {
-        id: "",
-        name: "",
-        license: "",
-      },
-      location: data.location || {
-        lat: 17.989,
-        lng: -92.247,
-        address: "Villahermosa, Tabasco",
-      },
-      examinations: data.examinations || [],
-      nutritionPlan: data.nutritionPlan || {
-        currentStage: "maintenance",
-        supplements: [],
-        specialDiet: false,
-        waterAccess: "good",
-      },
-      healthStatus: data.healthStatus || {
-        overall: "good",
-        bodyCondition: 3,
-        weight: 500,
-        temperature: 38.5,
-        heartRate: 60,
-        respiratoryRate: 20,
-      },
-      complications: data.complications || {
-        hasComplications: false,
-        severity: "mild",
-        treatmentRequired: false,
-      },
-      monitoringSchedule: data.monitoringSchedule || {
-        nextExamDate: "",
-        frequency: "monthly",
-      },
-      notes: data.notes || "",
-      cost: data.cost || 0,
-      status: data.status || "active",
-      outcome: data.outcome,
-      alerts: data.alerts || [],
-      photos: data.photos || [],
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
-
-    setRecords(prev => [newRecord, ...prev]);
-    setShowForm(false);
-    resetForm();
+  const handleCreate = () => {
+    setFormData({
+      animalName: "",
+      animalEarTag: "",
+      bullName: "",
+      bullEarTag: "",
+      breedingDate: "",
+      breedingType: "artificial_insemination",
+      confirmationDate: "",
+      confirmationMethod: "ultrasound",
+      gestationDay: 0,
+      expectedCalvingDate: "",
+      currentStage: "early",
+      pregnancyNumber: 1,
+      status: "active",
+      notes: "",
+    });
+    setIsCreateModalOpen(true);
   };
 
-  // Actualizar registro existente
-  const handleUpdate = (id: string, data: Partial<PregnancyRecord>) => {
-    setRecords(prev => prev.map(record => 
-      record.id === id 
-        ? { ...record, ...data, updatedAt: new Date().toISOString() }
-        : record
-    ));
-    setEditingRecord(null);
-    setShowForm(false);
-    resetForm();
+  const handleEdit = (pregnancy: PregnancyRecord) => {
+    setSelectedPregnancy(pregnancy);
+    setFormData(pregnancy);
+    setIsEditModalOpen(true);
   };
 
-  // Eliminar registro
-  const handleDelete = (id: string) => {
-    if (window.confirm("¿Está seguro de que desea eliminar este registro de gestación?")) {
-      setRecords(prev => prev.filter(record => record.id !== id));
+  const handleView = (pregnancy: PregnancyRecord) => {
+    setSelectedPregnancy(pregnancy);
+    setIsViewModalOpen(true);
+  };
+
+  // FUNCIONES DE ELIMINACIÓN CORREGIDAS
+  const handleDeleteClick = useCallback((pregnancy: PregnancyRecord) => {
+    console.log("🔴 CLICK en botón eliminar para:", pregnancy.id, pregnancy.animalName);
+    setPregnancyToDelete(pregnancy);
+    setShowDeleteModal(true);
+  }, []);
+
+  // Confirmar eliminación - NUEVA FUNCIÓN
+  const confirmDelete = useCallback(async () => {
+    if (!pregnancyToDelete) return;
+
+    try {
+      console.log("🗑️ Eliminando embarazo:", pregnancyToDelete.id);
+      
+      // Simular API call
+      await new Promise(resolve => setTimeout(resolve, 800));
+      
+      setPregnancies(prev => {
+        const newPregnancies = prev.filter(p => p.id !== pregnancyToDelete.id);
+        console.log("📝 Embarazos actualizados:", newPregnancies.length, "embarazos restantes");
+        return newPregnancies;
+      });
+      
+      // Cerrar modales si están abiertos
+      if (selectedPregnancy?.id === pregnancyToDelete.id) {
+        setSelectedPregnancy(null);
+        setIsViewModalOpen(false);
+        setIsEditModalOpen(false);
+      }
+      
+      // Cerrar modal de confirmación
+      setShowDeleteModal(false);
+      setPregnancyToDelete(null);
+      
+      console.log("✅ Embarazo eliminado correctamente");
+      alert(`✅ Registro de embarazo eliminado: ${pregnancyToDelete.animalName}`);
+      
+    } catch (err) {
+      console.error("❌ Error al eliminar:", err);
+      setError("Error al eliminar el registro de embarazo");
+    }
+  }, [pregnancyToDelete, selectedPregnancy]);
+
+  const handleSave = async () => {
+    try {
+      setIsLoading(true);
+      // Simular API call
+      await new Promise(resolve => setTimeout(resolve, 1000));
+
+      if (selectedPregnancy) {
+        // Actualizar
+        const updatedData: Partial<PregnancyRecord> = {};
+        
+        if (formData.animalName !== undefined) updatedData.animalName = formData.animalName;
+        if (formData.animalEarTag !== undefined) updatedData.animalEarTag = formData.animalEarTag;
+        if (formData.bullName !== undefined) updatedData.bullName = formData.bullName;
+        if (formData.bullEarTag !== undefined) updatedData.bullEarTag = formData.bullEarTag;
+        if (formData.breedingDate !== undefined) updatedData.breedingDate = formData.breedingDate;
+        if (formData.breedingType !== undefined) updatedData.breedingType = formData.breedingType;
+        if (formData.confirmationDate !== undefined) updatedData.confirmationDate = formData.confirmationDate;
+        if (formData.confirmationMethod !== undefined) updatedData.confirmationMethod = formData.confirmationMethod;
+        if (formData.gestationDay !== undefined) updatedData.gestationDay = formData.gestationDay;
+        if (formData.expectedCalvingDate !== undefined) updatedData.expectedCalvingDate = formData.expectedCalvingDate;
+        if (formData.currentStage !== undefined) updatedData.currentStage = formData.currentStage;
+        if (formData.pregnancyNumber !== undefined) updatedData.pregnancyNumber = formData.pregnancyNumber;
+        if (formData.status !== undefined) updatedData.status = formData.status;
+        if (formData.notes !== undefined) updatedData.notes = formData.notes;
+        
+        updatedData.updatedAt = new Date().toISOString();
+        
+        setPregnancies(prev => prev.map(p => 
+          p.id === selectedPregnancy.id 
+            ? { ...p, ...updatedData }
+            : p
+        ));
+        setIsEditModalOpen(false);
+      } else {
+                        // Crear nuevo
+                        const newPregnancy: PregnancyRecord = {
+                          id: `pregnancy-${Date.now()}`,
+                          animalId: `cow-${Date.now()}`,
+                          animalName: formData.animalName || "",
+                          animalEarTag: formData.animalEarTag || "",
+                          bullId: `bull-${Date.now()}`,
+                          bullName: formData.bullName || "",
+                          bullEarTag: formData.bullEarTag || "",
+                          breedingDate: formData.breedingDate || "",
+                          breedingType: formData.breedingType || "artificial_insemination",
+                          confirmationDate: formData.confirmationDate || "",
+                          confirmationMethod: formData.confirmationMethod || "ultrasound",
+                          gestationDay: formData.gestationDay || 0,
+                          expectedCalvingDate: formData.expectedCalvingDate || "",
+                          currentStage: formData.currentStage || "early",
+                          pregnancyNumber: formData.pregnancyNumber || 1,
+                          status: formData.status || "active",
+                          notes: formData.notes || "",
+                          veterinarian: veterinarians[0],
+                          location: {
+                            lat: 17.989,
+                            lng: -92.247,
+                            address: "Potrero Norte, Rancho San Miguel",
+                            paddock: "Potrero 1",
+                            facility: "Área de Maternidad",
+                          },
+                          examinations: [],
+                          nutritionPlan: {
+                            currentStage: "normal",
+                            supplements: [],
+                            specialDiet: false,
+                            waterAccess: "good",
+                            notes: "",
+                          },
+                          healthStatus: {
+                            overall: "good",
+                            bodyCondition: 3,
+                            weight: 500,
+                            temperature: 38.5,
+                            heartRate: 70,
+                            respiratoryRate: 20,
+                          },
+                          complications: {
+                            hasComplications: false,
+                            treatmentRequired: false,
+                          },
+                          monitoringSchedule: {
+                            nextExamDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+                            frequency: "monthly",
+                            specialRequirements: [],
+                          },
+                          cost: 0,
+                          alerts: [],
+                          photos: [],
+                          createdAt: new Date().toISOString(),
+                          updatedAt: new Date().toISOString(),
+                        };
+        setPregnancies(prev => [...prev, newPregnancy]);
+        setIsCreateModalOpen(false);
+      }
+
+      setFormData({});
+      setSelectedPregnancy(null);
+    } catch (err) {
+      setError("Error al guardar el registro");
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  // Resetear formulario
-  const resetForm = () => {
-    setFormData({
-      breedingType: "natural",
-      confirmationMethod: "ultrasound",
-      currentStage: "early",
-      pregnancyNumber: 1,
-      gestationDay: 0,
-      cost: 0,
-      status: "active",
-      veterinarian: {
-        id: "",
-        name: "",
-        license: "",
-      },
-      location: {
-        lat: 17.989,
-        lng: -92.247,
-        address: "Villahermosa, Tabasco",
-      },
-      examinations: [],
-      nutritionPlan: {
-        currentStage: "maintenance",
-        supplements: [],
-        specialDiet: false,
-        waterAccess: "good",
-      },
-      healthStatus: {
-        overall: "good",
-        bodyCondition: 3,
-        weight: 500,
-        temperature: 38.5,
-        heartRate: 60,
-        respiratoryRate: 20,
-      },
-      complications: {
-        hasComplications: false,
-        severity: "mild",
-        treatmentRequired: false,
-      },
-      monitoringSchedule: {
-        nextExamDate: "",
-        frequency: "monthly",
-      },
-      alerts: [],
-      photos: [],
+  const resetFilters = () => {
+    setFilters({
+      searchTerm: "",
+      breedingType: "",
+      currentStage: "",
+      status: "",
+      veterinarian: "",
+      hasComplications: "",
+      dateRange: { start: "", end: "" },
     });
   };
 
-  // Función para obtener color del estado
-  const getStatusColor = (status: string) => {
-    const colors = {
-      active: "bg-green-100 text-green-800 border-green-200",
-      completed: "bg-blue-100 text-blue-800 border-blue-200",
-      lost: "bg-red-100 text-red-800 border-red-200",
-      transferred: "bg-yellow-100 text-yellow-800 border-yellow-200",
-      aborted: "bg-gray-100 text-gray-800 border-gray-200",
+  // Funciones auxiliares
+  const getStatusBadge = (status: PregnancyStatus) => {
+    const statusConfig = {
+      active: { variant: "success" as const, label: "Activo" },
+      completed: { variant: "info" as const, label: "Completado" },
+      terminated: { variant: "error" as const, label: "Terminado" },
+      lost: { variant: "error" as const, label: "Perdido" },
     };
-    return colors[status as keyof typeof colors] || colors.active;
+    
+    const config = statusConfig[status];
+    return <Badge variant={config.variant}>{config.label}</Badge>;
   };
 
-  // Función para obtener color de la etapa
-  const getStageColor = (stage: string) => {
-    const colors = {
-      early: "bg-blue-100 text-blue-800 border-blue-200",
-      middle: "bg-yellow-100 text-yellow-800 border-yellow-200",
-      late: "bg-orange-100 text-orange-800 border-orange-200",
+  const getStageBadge = (stage: PregnancyStage) => {
+    const stageConfig = {
+      early: { variant: "info" as const, label: "Temprano" },
+      middle: { variant: "warning" as const, label: "Medio" },
+      late: { variant: "error" as const, label: "Tardío" },
     };
-    return colors[stage as keyof typeof colors] || colors.early;
+    
+    const config = stageConfig[stage];
+    return <Badge variant={config.variant}>{config.label}</Badge>;
   };
 
-  // Función para obtener color de salud
-  const getHealthColor = (health: string) => {
-    const colors = {
-      excellent: "bg-green-100 text-green-800 border-green-200",
-      good: "bg-blue-100 text-blue-800 border-blue-200",
-      fair: "bg-yellow-100 text-yellow-800 border-yellow-200",
-      poor: "bg-orange-100 text-orange-800 border-orange-200",
-      critical: "bg-red-100 text-red-800 border-red-200",
+  const getBreedingTypeBadge = (type: BreedingType) => {
+    const typeLabels = {
+      natural_mating: "Monta Natural",
+      artificial_insemination: "IA",
+      embryo_transfer: "TE",
     };
-    return colors[health as keyof typeof colors] || colors.good;
+    
+    return <Badge variant="default">{typeLabels[type]}</Badge>;
   };
-
-  // Función para calcular días restantes
-  const getDaysRemaining = (dueDate: string): number => {
-    const today = new Date();
-    const due = new Date(dueDate);
-    const diffTime = due.getTime() - today.getTime();
-    return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-  };
-
-  // Función para obtener icono de alerta
-  const getAlertIcon = (severity: string) => {
-    const icons = {
-      critical: <AlertTriangle className="w-4 h-4 text-red-600" />,
-      high: <AlertTriangle className="w-4 h-4 text-orange-600" />,
-      medium: <Info className="w-4 h-4 text-yellow-600" />,
-      low: <Info className="w-4 h-4 text-blue-600" />,
-    };
-    return icons[severity as keyof typeof icons] || icons.low;
-  };
-
-  // Si está cargando
-  if (isLoading) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-[#519a7c] via-[#f2e9d8] to-[#f4ac3a] flex items-center justify-center">
-        <motion.div
-          className="bg-white/90 backdrop-blur-sm rounded-2xl p-8 shadow-xl"
-          initial={{ opacity: 0, scale: 0.9 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ duration: 0.5 }}
-        >
-          <div className="flex flex-col items-center space-y-4">
-            <motion.div
-              className="w-12 h-12 border-4 border-[#519a7c] border-t-transparent rounded-full"
-              animate={{ rotate: 360 }}
-              transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-            />
-            <p className="text-gray-600 font-medium">Cargando seguimiento de gestaciones...</p>
-          </div>
-        </motion.div>
-      </div>
-    );
-  }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#519a7c] via-[#f2e9d8] to-[#f4ac3a] p-6">
-      <motion.div
-        className="max-w-7xl mx-auto"
-        variants={containerVariants}
-        initial="hidden"
-        animate="visible"
-      >
+    <motion.div
+      variants={containerVariants}
+      initial="hidden"
+      animate="visible"
+      className="min-h-screen bg-gradient-to-br from-green-50 via-white to-green-50 p-4 md:p-6"
+    >
+      <div className="mx-auto max-w-7xl space-y-6">
         {/* Header */}
-        <motion.div
-          className="bg-white/95 backdrop-blur-sm rounded-2xl shadow-xl p-6 mb-6 border border-white/20"
-          variants={itemVariants}
-        >
-          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-            <div className="flex items-center space-x-4">
-              <div className="w-12 h-12 bg-gradient-to-r from-[#519a7c] to-[#4e9c75] rounded-xl flex items-center justify-center">
-                <Baby className="w-6 h-6 text-white" />
-              </div>
-              <div>
-                <h1 className="text-3xl font-bold text-gray-900">
-                  <AnimatedText>Seguimiento de Gestaciones</AnimatedText>
-                </h1>
-                <p className="text-gray-600 mt-1">
-                  Monitoreo integral de embarazos y salud maternal bovina
-                </p>
-              </div>
-            </div>
+        <motion.div variants={itemVariants} className="text-center">
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">
+            Seguimiento de Embarazos
+          </h1>
+          <p className="text-gray-600">
+            Gestión completa del programa de reproducción bovina
+          </p>
+        </motion.div>
 
-            <div className="flex items-center space-x-3">
-              <motion.button
-                onClick={() => setShowFilters(!showFilters)}
-                className={`px-4 py-2 rounded-xl border-2 transition-all duration-200 flex items-center space-x-2 ${
-                  showFilters 
-                    ? "bg-[#519a7c] text-white border-[#519a7c]" 
-                    : "bg-white text-gray-700 border-gray-300 hover:border-[#519a7c]"
-                }`}
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-              >
-                <Filter className="w-4 h-4" />
-                <span>Filtros</span>
-              </motion.button>
-
-              <motion.button
-                onClick={() => {
-                  setEditingRecord(null);
-                  resetForm();
-                  setShowForm(true);
-                }}
-                className="px-6 py-2 bg-gradient-to-r from-[#519a7c] to-[#4e9c75] text-white rounded-xl hover:from-[#4e9c75] hover:to-[#519a7c] transition-all duration-200 flex items-center space-x-2 shadow-lg"
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-              >
-                <Plus className="w-4 h-4" />
-                <span>Nueva Gestación</span>
-              </motion.button>
-            </div>
-          </div>
-
-          {/* Estadísticas rápidas */}
-          <div className="grid grid-cols-2 md:grid-cols-6 gap-4 mt-6">
-            {[
-              { label: "Total", value: stats.total, icon: Activity, color: "text-blue-600" },
-              { label: "Activas", value: stats.active, icon: Heart, color: "text-green-600" },
-              { label: "Temprana", value: stats.early, icon: Timer, color: "text-blue-600" },
-              { label: "Media", value: stats.middle, icon: Clock, color: "text-yellow-600" },
-              { label: "Tardía", value: stats.late, icon: Baby, color: "text-orange-600" },
-              { label: "Partos Semana", value: stats.dueThisWeek, icon: Calendar, color: "text-red-600" },
-            ].map((stat, index) => (
-              <motion.div
-                key={index}
-                className="bg-white/80 backdrop-blur-sm rounded-xl p-4 border border-white/30"
-                variants={itemVariants}
-                whileHover={{ scale: 1.02 }}
-              >
+        {/* Estadísticas */}
+        <motion.div variants={itemVariants}>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <Card className="bg-gradient-to-r from-blue-500 to-blue-600 text-white">
+              <CardContent className="p-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm text-gray-600 font-medium">{stat.label}</p>
-                    <p className="text-2xl font-bold text-gray-900">{stat.value}</p>
+                    <p className="text-blue-100 text-sm font-medium">Total</p>
+                    <p className="text-2xl font-bold">{stats.total}</p>
                   </div>
-                  <stat.icon className={`w-8 h-8 ${stat.color}`} />
+                  <Baby className="h-8 w-8 text-blue-200" />
                 </div>
-              </motion.div>
-            ))}
+              </CardContent>
+            </Card>
+
+            <Card className="bg-gradient-to-r from-green-500 to-green-600 text-white">
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-green-100 text-sm font-medium">Activos</p>
+                    <p className="text-2xl font-bold">{stats.active}</p>
+                  </div>
+                  <CheckCircle className="h-8 w-8 text-green-200" />
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-gradient-to-r from-yellow-500 to-yellow-600 text-white">
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-yellow-100 text-sm font-medium">Con Complicaciones</p>
+                    <p className="text-2xl font-bold">{stats.withComplications}</p>
+                  </div>
+                  <AlertTriangle className="h-8 w-8 text-yellow-200" />
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-gradient-to-r from-red-500 to-red-600 text-white">
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-red-100 text-sm font-medium">Próximas al Parto</p>
+                    <p className="text-2xl font-bold">{stats.nearCalving}</p>
+                  </div>
+                  <Clock className="h-8 w-8 text-red-200" />
+                </div>
+              </CardContent>
+            </Card>
           </div>
         </motion.div>
 
-        {/* Panel de filtros */}
-        <AnimatePresence>
-          {showFilters && (
-            <motion.div
-              className="bg-white/95 backdrop-blur-sm rounded-2xl shadow-xl p-6 mb-6 border border-white/20"
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: "auto" }}
-              exit={{ opacity: 0, height: 0 }}
-              transition={{ duration: 0.3 }}
-            >
-              <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4">
-                {/* Búsqueda por texto */}
-                <div className="lg:col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Buscar
-                  </label>
-                  <div className="relative">
-                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
-                    <input
-                      type="text"
+        {/* Controles y filtros */}
+        <motion.div variants={itemVariants}>
+          <Card className="bg-white/95 backdrop-blur-sm border border-white/20">
+            <CardContent className="p-6">
+              <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+                <div className="flex flex-col sm:flex-row gap-4 flex-1">
+                  <div className="relative flex-1 max-w-md">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                    <Input
+                      placeholder="Buscar por vaca, etiqueta o toro..."
                       value={filters.searchTerm}
                       onChange={(e) => setFilters(prev => ({ ...prev, searchTerm: e.target.value }))}
-                      placeholder="Animal, veterinario, arete..."
-                      className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
+                      className="pl-10"
+                    />
+                  </div>
+                  <Button
+                    variant="secondary"
+                    onClick={() => setShowFilters(!showFilters)}
+                    className="flex items-center gap-2"
+                  >
+                    <Filter className="h-4 w-4" />
+                    Filtros
+                  </Button>
+                </div>
+
+                <div className="flex gap-2">
+                  <Button
+                    onClick={handleCreate}
+                    className="flex items-center gap-2"
+                  >
+                    <Plus className="h-4 w-4" />
+                    Nuevo Embarazo
+                  </Button>
+                </div>
+              </div>
+
+              {/* Panel de filtros expandible */}
+              <AnimatePresence>
+                {showFilters && (
+                  <motion.div
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: "auto", opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    transition={{ duration: 0.3 }}
+                    className="mt-4 pt-4 border-t border-gray-200"
+                  >
+                    <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4">
+                      <Select
+                        value={filters.breedingType}
+                        onChange={(value) => setFilters(prev => ({ ...prev, breedingType: value as BreedingType | "" }))}
+                      >
+                        <option value="">Tipo de Reproducción</option>
+                        <option value="natural_mating">Monta Natural</option>
+                        <option value="artificial_insemination">Inseminación Artificial</option>
+                        <option value="embryo_transfer">Transferencia de Embriones</option>
+                      </Select>
+
+                      <Select
+                        value={filters.currentStage}
+                        onChange={(value) => setFilters(prev => ({ ...prev, currentStage: value as PregnancyStage | "" }))}
+                      >
+                        <option value="">Etapa de Gestación</option>
+                        <option value="early">Temprano (0-84 días)</option>
+                        <option value="middle">Medio (85-210 días)</option>
+                        <option value="late">Tardío (211-280 días)</option>
+                      </Select>
+
+                      <Select
+                        value={filters.status}
+                        onChange={(value) => setFilters(prev => ({ ...prev, status: value as PregnancyStatus | "" }))}
+                      >
+                        <option value="">Estado</option>
+                        <option value="active">Activo</option>
+                        <option value="completed">Completado</option>
+                        <option value="terminated">Terminado</option>
+                        <option value="lost">Perdido</option>
+                      </Select>
+
+                      <Select
+                        value={filters.veterinarian}
+                        onChange={(value) => setFilters(prev => ({ ...prev, veterinarian: value }))}
+                      >
+                        <option value="">Veterinario</option>
+                        {veterinarians.map(vet => (
+                          <option key={vet.id} value={vet.id}>{vet.name}</option>
+                        ))}
+                      </Select>
+
+                      <Select
+                        value={filters.hasComplications}
+                        onChange={(value) => setFilters(prev => ({ ...prev, hasComplications: value }))}
+                      >
+                        <option value="">Complicaciones</option>
+                        <option value="true">Con Complicaciones</option>
+                        <option value="false">Sin Complicaciones</option>
+                      </Select>
+
+                      <Button
+                        variant="secondary"
+                        onClick={resetFilters}
+                        className="h-10"
+                      >
+                        Limpiar
+                      </Button>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </CardContent>
+          </Card>
+        </motion.div>
+
+        {/* Error Alert */}
+        {error && (
+          <motion.div variants={itemVariants}>
+            <Card className="border-red-200 bg-red-50">
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-red-800">
+                    <AlertTriangle className="h-4 w-4" />
+                    <span>{error}</span>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setError(null)}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </motion.div>
+        )}
+
+        {/* Tabla de embarazos */}
+        <motion.div variants={itemVariants}>
+          <Card className="bg-white/95 backdrop-blur-sm border border-white/20">
+            <CardHeader>
+              <CardTitle className="flex items-center justify-between">
+                <span className="flex items-center gap-2">
+                  <Baby className="h-5 w-5 text-[#519a7c]" />
+                  Registros de Embarazos ({filteredPregnancies.length})
+                </span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-0">
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="bg-gray-50 border-b">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Vaca
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Toro
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Tipo
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Días de Gestación
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Etapa
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Fecha de Parto
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Estado
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Complicaciones
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Acciones
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {isLoading ? (
+                      <tr>
+                        <td colSpan={9} className="px-6 py-12 text-center">
+                          <div className="flex items-center justify-center">
+                            <Activity className="h-6 w-6 animate-spin text-[#519a7c] mr-2" />
+                            Cargando...
+                          </div>
+                        </td>
+                      </tr>
+                    ) : filteredPregnancies.length === 0 ? (
+                      <tr>
+                        <td colSpan={9} className="px-6 py-12 text-center text-gray-500">
+                          No se encontraron registros de embarazos
+                        </td>
+                      </tr>
+                    ) : (
+                      filteredPregnancies.map((pregnancy) => (
+                        <tr key={pregnancy.id} className="hover:bg-gray-50 transition-colors">
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="flex items-center">
+                              <div>
+                                <div className="text-sm font-medium text-gray-900">
+                                  {pregnancy.animalName}
+                                </div>
+                                <div className="text-sm text-gray-500">
+                                  {pregnancy.animalEarTag}
+                                </div>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="text-sm text-gray-900">{pregnancy.bullName}</div>
+                            <div className="text-sm text-gray-500">{pregnancy.bullEarTag}</div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            {getBreedingTypeBadge(pregnancy.breedingType)}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="text-sm text-gray-900">{pregnancy.gestationDay} días</div>
+                            <div className="text-sm text-gray-500">
+                              Embarazo #{pregnancy.pregnancyNumber}
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            {getStageBadge(pregnancy.currentStage)}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="flex items-center text-sm text-gray-900">
+                              <Calendar className="h-4 w-4 mr-1 text-gray-400" />
+                              {new Date(pregnancy.expectedCalvingDate).toLocaleDateString('es-ES')}
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            {getStatusBadge(pregnancy.status)}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            {pregnancy.complications.hasComplications ? (
+                              <Badge variant="warning">
+                                <AlertTriangle className="h-3 w-3 mr-1" />
+                                Sí
+                              </Badge>
+                            ) : (
+                              <Badge variant="success">
+                                <CheckCircle className="h-3 w-3 mr-1" />
+                                No
+                              </Badge>
+                            )}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                            <div className="flex items-center justify-end gap-2">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleView(pregnancy)}
+                                className="text-blue-600 hover:text-blue-900"
+                              >
+                                <Eye className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleEdit(pregnancy)}
+                                className="text-yellow-600 hover:text-yellow-900"
+                              >
+                                <Edit3 className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleDeleteClick(pregnancy)}
+                                className="text-red-600 hover:text-red-900"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </CardContent>
+          </Card>
+        </motion.div>
+
+        {/* Modal de creación */}
+        <AnimatePresence>
+          {isCreateModalOpen && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4"
+              onClick={() => setIsCreateModalOpen(false)}
+            >
+              <motion.div
+                initial={{ scale: 0.95, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.95, opacity: 0 }}
+                onClick={(e) => e.stopPropagation()}
+                className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto"
+              >
+                <div className="flex items-center justify-between p-6 border-b">
+                  <h2 className="text-xl font-semibold text-gray-900">
+                    Nuevo Registro de Embarazo
+                  </h2>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setIsCreateModalOpen(false)}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+
+                <div className="p-6 space-y-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Nombre de la Vaca *
+                      </label>
+                      <Input
+                        placeholder="Ej: Bella"
+                        value={formData.animalName || ""}
+                        onChange={(e) => setFormData(prev => ({ ...prev, animalName: e.target.value }))}
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Etiqueta de la Vaca *
+                      </label>
+                      <Input
+                        placeholder="Ej: MX-001"
+                        value={formData.animalEarTag || ""}
+                        onChange={(e) => setFormData(prev => ({ ...prev, animalEarTag: e.target.value }))}
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Nombre del Toro *
+                      </label>
+                      <Input
+                        placeholder="Ej: Campeón"
+                        value={formData.bullName || ""}
+                        onChange={(e) => setFormData(prev => ({ ...prev, bullName: e.target.value }))}
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Etiqueta del Toro *
+                      </label>
+                      <Input
+                        placeholder="Ej: T-001"
+                        value={formData.bullEarTag || ""}
+                        onChange={(e) => setFormData(prev => ({ ...prev, bullEarTag: e.target.value }))}
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Fecha de Reproducción *
+                      </label>
+                      <Input
+                        type="date"
+                        value={formData.breedingDate || ""}
+                        onChange={(e) => setFormData(prev => ({ ...prev, breedingDate: e.target.value }))}
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Tipo de Reproducción *
+                      </label>
+                      <Select
+                        value={formData.breedingType || ""}
+                        onChange={(value) => setFormData(prev => ({ ...prev, breedingType: value as BreedingType }))}
+                      >
+                        <option value="">Seleccionar...</option>
+                        <option value="natural_mating">Monta Natural</option>
+                        <option value="artificial_insemination">Inseminación Artificial</option>
+                        <option value="embryo_transfer">Transferencia de Embriones</option>
+                      </Select>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Fecha de Confirmación *
+                      </label>
+                      <Input
+                        type="date"
+                        value={formData.confirmationDate || ""}
+                        onChange={(e) => setFormData(prev => ({ ...prev, confirmationDate: e.target.value }))}
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Método de Confirmación *
+                      </label>
+                      <Select
+                        value={formData.confirmationMethod || ""}
+                        onChange={(value) => setFormData(prev => ({ ...prev, confirmationMethod: value as ConfirmationMethod }))}
+                      >
+                        <option value="">Seleccionar...</option>
+                        <option value="ultrasound">Ultrasonido</option>
+                        <option value="palpation">Palpación</option>
+                        <option value="blood_test">Examen de Sangre</option>
+                        <option value="hormone_test">Prueba Hormonal</option>
+                      </Select>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Días de Gestación
+                      </label>
+                      <Input
+                        type="number"
+                        placeholder="0"
+                        value={formData.gestationDay?.toString() || ""}
+                        onChange={(e) => setFormData(prev => ({ ...prev, gestationDay: parseInt(e.target.value) || 0 }))}
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Fecha Esperada de Parto
+                      </label>
+                      <Input
+                        type="date"
+                        value={formData.expectedCalvingDate || ""}
+                        onChange={(e) => setFormData(prev => ({ ...prev, expectedCalvingDate: e.target.value }))}
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Número de Embarazo
+                      </label>
+                      <Input
+                        type="number"
+                        placeholder="1"
+                        value={formData.pregnancyNumber?.toString() || ""}
+                        onChange={(e) => setFormData(prev => ({ ...prev, pregnancyNumber: parseInt(e.target.value) || 1 }))}
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Estado
+                      </label>
+                      <Select
+                        value={formData.status || ""}
+                        onChange={(value) => setFormData(prev => ({ ...prev, status: value as PregnancyStatus }))}
+                      >
+                        <option value="active">Activo</option>
+                        <option value="completed">Completado</option>
+                        <option value="terminated">Terminado</option>
+                        <option value="lost">Perdido</option>
+                      </Select>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Notas
+                    </label>
+                    <Textarea
+                      placeholder="Observaciones sobre el embarazo..."
+                      value={formData.notes || ""}
+                      onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
+                      rows={4}
                     />
                   </div>
                 </div>
 
-                {/* Filtro de etapa */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Etapa
-                  </label>
-                  <select
-                    multiple
-                    value={filters.stage}
-                    onChange={(e) => {
-                      const values = Array.from(e.target.selectedOptions, option => option.value);
-                      setFilters(prev => ({ ...prev, stage: values }));
-                    }}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
+                <div className="flex items-center justify-end gap-3 p-6 border-t bg-gray-50">
+                  <Button
+                    variant="secondary"
+                    onClick={() => setIsCreateModalOpen(false)}
                   >
-                    <option value="early">Temprana (0-90d)</option>
-                    <option value="middle">Media (91-210d)</option>
-                    <option value="late">Tardía (210+d)</option>
-                  </select>
-                </div>
-
-                {/* Filtro de estado */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Estado
-                  </label>
-                  <select
-                    multiple
-                    value={filters.status}
-                    onChange={(e) => {
-                      const values = Array.from(e.target.selectedOptions, option => option.value);
-                      setFilters(prev => ({ ...prev, status: values }));
-                    }}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
+                    Cancelar
+                  </Button>
+                  <Button
+                    onClick={handleSave}
+                    disabled={isLoading}
+                    className="flex items-center gap-2"
                   >
-                    <option value="active">Activa</option>
-                    <option value="completed">Completada</option>
-                    <option value="lost">Perdida</option>
-                    <option value="transferred">Transferida</option>
-                    <option value="aborted">Abortada</option>
-                  </select>
+                    {isLoading ? (
+                      <Activity className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Save className="h-4 w-4" />
+                    )}
+                    Guardar
+                  </Button>
                 </div>
-
-                {/* Filtro de complicaciones */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Complicaciones
-                  </label>
-                  <select
-                    multiple
-                    value={filters.complications}
-                    onChange={(e) => {
-                      const values = Array.from(e.target.selectedOptions, option => option.value);
-                      setFilters(prev => ({ ...prev, complications: values }));
-                    }}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
-                  >
-                    <option value="none">Sin Complicaciones</option>
-                    <option value="has_complications">Con Complicaciones</option>
-                    <option value="metabolic">Metabólicas</option>
-                    <option value="reproductive">Reproductivas</option>
-                    <option value="physical">Físicas</option>
-                    <option value="nutritional">Nutricionales</option>
-                  </select>
-                </div>
-
-                {/* Filtro de parto próximo */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Parto Inicio
-                  </label>
-                  <input
-                    type="date"
-                    value={filters.dueRange.start}
-                    onChange={(e) => setFilters(prev => ({ 
-                      ...prev, 
-                      dueRange: { ...prev.dueRange, start: e.target.value }
-                    }))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
-                  />
-                </div>
-              </div>
-
-              {/* Botones de control de filtros */}
-              <div className="flex justify-end space-x-3 mt-4 pt-4 border-t border-gray-200">
-                <button
-                  onClick={() => setFilters({
-                    dateRange: { start: "", end: "" },
-                    stage: [],
-                    status: [],
-                    veterinarian: [],
-                    complications: [],
-                    pregnancyNumber: [],
-                    searchTerm: "",
-                    dueRange: { start: "", end: "" },
-                  })}
-                  className="px-4 py-2 text-gray-600 hover:text-gray-800 transition-colors"
-                >
-                  Limpiar Filtros
-                </button>
-                <button
-                  onClick={() => setShowFilters(false)}
-                  className="px-6 py-2 bg-gradient-to-r from-[#519a7c] to-[#4e9c75] text-white rounded-lg hover:from-[#4e9c75] hover:to-[#519a7c] transition-all duration-200"
-                >
-                  Aplicar
-                </button>
-              </div>
+              </motion.div>
             </motion.div>
           )}
         </AnimatePresence>
 
-        {/* Controles de vista */}
-        <motion.div
-          className="bg-white/95 backdrop-blur-sm rounded-2xl shadow-xl p-4 mb-6 border border-white/20"
-          variants={itemVariants}
-        >
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4">
-              <span className="text-sm text-gray-600 font-medium">
-                Mostrando {filteredRecords.length} de {records.length} gestaciones
-              </span>
-            </div>
-
-            <div className="flex items-center space-x-3">
-              {/* Botones de vista */}
-              <div className="flex items-center bg-gray-100 rounded-lg p-1">
-                <button
-                  onClick={() => setViewMode("grid")}
-                  className={`px-3 py-1 rounded-md text-sm font-medium transition-all duration-200 ${
-                    viewMode === "grid"
-                      ? "bg-white text-gray-900 shadow-sm"
-                      : "text-gray-600 hover:text-gray-900"
-                  }`}
-                >
-                  Tarjetas
-                </button>
-                <button
-                  onClick={() => setViewMode("list")}
-                  className={`px-3 py-1 rounded-md text-sm font-medium transition-all duration-200 ${
-                    viewMode === "list"
-                      ? "bg-white text-gray-900 shadow-sm"
-                      : "text-gray-600 hover:text-gray-900"
-                  }`}
-                >
-                  Lista
-                </button>
-                <button
-                  onClick={() => setViewMode("calendar")}
-                  className={`px-3 py-1 rounded-md text-sm font-medium transition-all duration-200 ${
-                    viewMode === "calendar"
-                      ? "bg-white text-gray-900 shadow-sm"
-                      : "text-gray-600 hover:text-gray-900"
-                  }`}
-                >
-                  Calendario
-                </button>
-              </div>
-
-              {/* Botón de exportar */}
-              <motion.button
-                className="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:border-[#519a7c] hover:text-[#519a7c] transition-all duration-200 flex items-center space-x-2"
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-              >
-                <Download className="w-4 h-4" />
-                <span>Exportar</span>
-              </motion.button>
-            </div>
-          </div>
-        </motion.div>
-
-        {/* Lista de registros */}
-        {viewMode === "grid" ? (
-          <motion.div
-            className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6"
-            variants={containerVariants}
-          >
-            {filteredRecords.map((record) => (
-              <motion.div
-                key={record.id}
-                className="bg-white/95 backdrop-blur-sm rounded-2xl shadow-xl border border-white/20 overflow-hidden hover:shadow-2xl transition-all duration-300"
-                variants={itemVariants}
-                whileHover={{ y: -5 }}
-              >
-                {/* Header de la tarjeta */}
-                <div className="bg-gradient-to-r from-[#519a7c] to-[#4e9c75] p-4 text-white">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-3">
-                      <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center">
-                        <Baby className="w-5 h-5" />
-                      </div>
-                      <div>
-                        <h3 className="font-bold text-lg">{record.animalName}</h3>
-                        <p className="text-white/80 text-sm">Arete: {record.animalEarTag}</p>
-                      </div>
-                    </div>
-                    <div className="flex flex-col items-end space-y-1">
-                      <span className={`px-2 py-1 rounded-full text-xs font-medium border ${getStageColor(record.currentStage)}`}>
-                        {record.currentStage === "early" && "Temprana"}
-                        {record.currentStage === "middle" && "Media"}
-                        {record.currentStage === "late" && "Tardía"}
-                      </span>
-                      <span className={`px-2 py-1 rounded-full text-xs font-medium border ${getStatusColor(record.status)}`}>
-                        {record.status === "active" && "Activa"}
-                        {record.status === "completed" && "Completada"}
-                        {record.status === "lost" && "Perdida"}
-                        {record.status === "transferred" && "Transferida"}
-                        {record.status === "aborted" && "Abortada"}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Contenido de la tarjeta */}
-                <div className="p-4 space-y-4">
-                  {/* Información principal */}
-                  <div className="grid grid-cols-2 gap-4 text-sm">
-                    <div>
-                      <p className="text-gray-600 font-medium">Día Gestación:</p>
-                      <p className="text-2xl font-bold text-[#519a7c]">{record.gestationDay}</p>
-                    </div>
-                    <div>
-                      <p className="text-gray-600 font-medium">Días Restantes:</p>
-                      <p className="text-2xl font-bold text-orange-600">{getDaysRemaining(record.expectedCalvingDate)}</p>
-                    </div>
-                    <div>
-                      <p className="text-gray-600 font-medium">Parto Esperado:</p>
-                      <p className="text-gray-900">{new Date(record.expectedCalvingDate).toLocaleDateString()}</p>
-                    </div>
-                    <div>
-                      <p className="text-gray-600 font-medium">Gestación #:</p>
-                      <p className="text-gray-900">{record.pregnancyNumber}</p>
-                    </div>
-                  </div>
-
-                  {/* Información del toro */}
-                  {record.bullName && (
-                    <div className="bg-blue-50 rounded-lg p-3">
-                      <h4 className="font-medium text-gray-900 mb-2 flex items-center">
-                        <Crown className="w-4 h-4 mr-2 text-blue-600" />
-                        Información del Toro
-                      </h4>
-                      <div className="space-y-1 text-sm">
-                        <p><span className="text-gray-600">Nombre:</span> {record.bullName}</p>
-                        <p><span className="text-gray-600">Arete:</span> {record.bullEarTag}</p>
-                        <p><span className="text-gray-600">Tipo apareamiento:</span> 
-                          <span className="ml-1">
-                            {record.breedingType === "natural" && "Natural"}
-                            {record.breedingType === "artificial_insemination" && "IA"}
-                            {record.breedingType === "embryo_transfer" && "Transferencia"}
-                          </span>
-                        </p>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Estado de salud */}
-                  <div className="bg-green-50 rounded-lg p-3">
-                    <h4 className="font-medium text-gray-900 mb-2 flex items-center">
-                      <Stethoscope className="w-4 h-4 mr-2 text-green-600" />
-                      Estado de Salud
-                    </h4>
-                    <div className="grid grid-cols-2 gap-2 text-sm">
-                      <div>
-                        <p className="text-gray-600">General:</p>
-                        <span className={`inline-flex px-2 py-1 rounded-full text-xs font-medium ${getHealthColor(record.healthStatus.overall)}`}>
-                          {record.healthStatus.overall === "excellent" && "Excelente"}
-                          {record.healthStatus.overall === "good" && "Bueno"}
-                          {record.healthStatus.overall === "fair" && "Regular"}
-                          {record.healthStatus.overall === "poor" && "Malo"}
-                          {record.healthStatus.overall === "critical" && "Crítico"}
-                        </span>
-                      </div>
-                      <div>
-                        <p className="text-gray-600">Condición Corporal:</p>
-                        <p className="font-medium text-[#519a7c]">{record.healthStatus.bodyCondition}/5</p>
-                      </div>
-                      <div>
-                        <p className="text-gray-600">Peso:</p>
-                        <p className="font-medium">{record.healthStatus.weight} kg</p>
-                      </div>
-                      <div>
-                        <p className="text-gray-600">Temperatura:</p>
-                        <p className="font-medium">{record.healthStatus.temperature}°C</p>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Complicaciones */}
-                  {record.complications.hasComplications && (
-                    <div className="bg-red-50 rounded-lg p-3">
-                      <h4 className="font-medium text-gray-900 mb-2 flex items-center">
-                        <AlertTriangle className="w-4 h-4 mr-2 text-red-600" />
-                        Complicaciones
-                      </h4>
-                      <div className="space-y-1 text-sm">
-                        <p><span className="text-gray-600">Tipo:</span> {record.complications.type}</p>
-                        <p><span className="text-gray-600">Severidad:</span> 
-                          <span className={`ml-1 font-medium ${
-                            record.complications.severity === "severe" ? "text-red-600" :
-                            record.complications.severity === "moderate" ? "text-yellow-600" :
-                            "text-green-600"
-                          }`}>
-                            {record.complications.severity === "severe" && "Severa"}
-                            {record.complications.severity === "moderate" && "Moderada"}
-                            {record.complications.severity === "mild" && "Leve"}
-                          </span>
-                        </p>
-                        {record.complications.description && (
-                          <p className="text-gray-700 mt-1">{record.complications.description}</p>
-                        )}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Veterinario */}
-                  <div className="bg-purple-50 rounded-lg p-3">
-                    <h4 className="font-medium text-gray-900 mb-2 flex items-center">
-                      <User className="w-4 h-4 mr-2 text-purple-600" />
-                      Veterinario Responsable
-                    </h4>
-                    <div className="space-y-1 text-sm">
-                      <p><span className="text-gray-600">Nombre:</span> {record.veterinarian.name}</p>
-                      <p><span className="text-gray-600">Licencia:</span> {record.veterinarian.license}</p>
-                      {record.veterinarian.phone && (
-                        <p><span className="text-gray-600">Teléfono:</span> {record.veterinarian.phone}</p>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Próximo examen */}
-                  <div className="bg-yellow-50 rounded-lg p-3">
-                    <h4 className="font-medium text-gray-900 mb-2 flex items-center">
-                      <Calendar className="w-4 h-4 mr-2 text-yellow-600" />
-                      Próximo Examen
-                    </h4>
-                    <div className="space-y-1 text-sm">
-                      <p><span className="text-gray-600">Fecha:</span> {new Date(record.monitoringSchedule.nextExamDate).toLocaleDateString()}</p>
-                      <p><span className="text-gray-600">Frecuencia:</span> 
-                        <span className="ml-1">
-                          {record.monitoringSchedule.frequency === "weekly" && "Semanal"}
-                          {record.monitoringSchedule.frequency === "biweekly" && "Quincenal"}
-                          {record.monitoringSchedule.frequency === "monthly" && "Mensual"}
-                        </span>
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Alertas activas */}
-                  {record.alerts.filter(alert => !alert.resolved).length > 0 && (
-                    <div className="bg-orange-50 rounded-lg p-3">
-                      <h4 className="font-medium text-gray-900 mb-2 flex items-center">
-                        <AlertTriangle className="w-4 h-4 mr-2 text-orange-600" />
-                        Alertas Activas ({record.alerts.filter(alert => !alert.resolved).length})
-                      </h4>
-                      <div className="space-y-2">
-                        {record.alerts.filter(alert => !alert.resolved).slice(0, 2).map((alert) => (
-                          <div key={alert.id} className="flex items-start space-x-2 text-sm">
-                            {getAlertIcon(alert.severity)}
-                            <div>
-                              <p className="font-medium text-gray-900">{alert.title}</p>
-                              <p className="text-gray-600">{alert.message}</p>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Ubicación */}
-                  <div className="flex items-center space-x-2 text-sm text-gray-600">
-                    <MapPin className="w-4 h-4" />
-                    <span>{record.location.address}</span>
-                  </div>
-
-                  {/* Costo total */}
-                  <div className="flex items-center justify-between">
-                    <span className="text-lg font-bold text-[#519a7c]">
-                      ${record.cost.toLocaleString()}
-                    </span>
-                    <span className="text-sm text-gray-600">
-                      {record.examinations.length} exámenes
-                    </span>
-                  </div>
-
-                  {/* Notas */}
-                  {record.notes && (
-                    <div className="bg-gray-50 rounded-lg p-3">
-                      <h4 className="font-medium text-gray-900 mb-1 flex items-center">
-                        <FileText className="w-4 h-4 mr-2 text-gray-600" />
-                        Notas
-                      </h4>
-                      <p className="text-sm text-gray-700">{record.notes}</p>
-                    </div>
-                  )}
-                </div>
-
-                {/* Acciones */}
-                <div className="bg-gray-50 px-4 py-3 flex items-center justify-between">
-                  <div className="flex items-center space-x-2">
-                    <motion.button
-                      onClick={() => setSelectedRecord(record)}
-                      className="p-2 text-gray-600 hover:text-[#519a7c] hover:bg-white rounded-lg transition-all duration-200"
-                      whileHover={{ scale: 1.1 }}
-                      whileTap={{ scale: 0.9 }}
-                    >
-                      <Eye className="w-4 h-4" />
-                    </motion.button>
-                    <motion.button
-                      onClick={() => {
-                        setEditingRecord(record);
-                        setFormData(record);
-                        setShowForm(true);
-                      }}
-                      className="p-2 text-gray-600 hover:text-blue-600 hover:bg-white rounded-lg transition-all duration-200"
-                      whileHover={{ scale: 1.1 }}
-                      whileTap={{ scale: 0.9 }}
-                    >
-                      <Edit className="w-4 h-4" />
-                    </motion.button>
-                    <motion.button
-                      onClick={() => handleDelete(record.id)}
-                      className="p-2 text-gray-600 hover:text-red-600 hover:bg-white rounded-lg transition-all duration-200"
-                      whileHover={{ scale: 1.1 }}
-                      whileTap={{ scale: 0.9 }}
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </motion.button>
-                  </div>
-                  <div className="text-xs text-gray-500">
-                    {new Date(record.createdAt).toLocaleDateString()}
-                  </div>
-                </div>
-              </motion.div>
-            ))}
-          </motion.div>
-        ) : viewMode === "list" ? (
-          // Vista de lista
-          <motion.div
-            className="bg-white/95 backdrop-blur-sm rounded-2xl shadow-xl border border-white/20 overflow-hidden"
-            variants={itemVariants}
-          >
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="bg-gradient-to-r from-[#519a7c] to-[#4e9c75] text-white">
-                  <tr>
-                    <th className="px-6 py-4 text-left text-sm font-medium">Animal</th>
-                    <th className="px-6 py-4 text-left text-sm font-medium">Gestación</th>
-                    <th className="px-6 py-4 text-left text-sm font-medium">Etapa</th>
-                    <th className="px-6 py-4 text-left text-sm font-medium">Parto Esperado</th>
-                    <th className="px-6 py-4 text-left text-sm font-medium">Salud</th>
-                    <th className="px-6 py-4 text-left text-sm font-medium">Veterinario</th>
-                    <th className="px-6 py-4 text-left text-sm font-medium">Estado</th>
-                    <th className="px-6 py-4 text-center text-sm font-medium">Acciones</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-200">
-                  {filteredRecords.map((record) => (
-                    <motion.tr
-                      key={record.id}
-                      className="hover:bg-gray-50 transition-colors"
-                      whileHover={{ backgroundColor: "rgba(81, 154, 124, 0.05)" }}
-                    >
-                      <td className="px-6 py-4">
-                        <div>
-                          <p className="font-medium text-gray-900">{record.animalName}</p>
-                          <p className="text-sm text-gray-600">{record.animalEarTag}</p>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div>
-                          <p className="font-bold text-[#519a7c]">Día {record.gestationDay}</p>
-                          <p className="text-sm text-gray-600">Gestación #{record.pregnancyNumber}</p>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <span className={`inline-flex px-2 py-1 rounded-full text-xs font-medium ${getStageColor(record.currentStage)}`}>
-                          {record.currentStage === "early" && "Temprana"}
-                          {record.currentStage === "middle" && "Media"}
-                          {record.currentStage === "late" && "Tardía"}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div>
-                          <p className="text-gray-900">{new Date(record.expectedCalvingDate).toLocaleDateString()}</p>
-                          <p className="text-sm text-orange-600 font-medium">{getDaysRemaining(record.expectedCalvingDate)} días</p>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <span className={`inline-flex px-2 py-1 rounded-full text-xs font-medium ${getHealthColor(record.healthStatus.overall)}`}>
-                          {record.healthStatus.overall === "excellent" && "Excelente"}
-                          {record.healthStatus.overall === "good" && "Bueno"}
-                          {record.healthStatus.overall === "fair" && "Regular"}
-                          {record.healthStatus.overall === "poor" && "Malo"}
-                          {record.healthStatus.overall === "critical" && "Crítico"}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 text-gray-900">{record.veterinarian.name}</td>
-                      <td className="px-6 py-4">
-                        <span className={`inline-flex px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(record.status)}`}>
-                          {record.status === "active" && "Activa"}
-                          {record.status === "completed" && "Completada"}
-                          {record.status === "lost" && "Perdida"}
-                          {record.status === "transferred" && "Transferida"}
-                          {record.status === "aborted" && "Abortada"}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="flex items-center justify-center space-x-2">
-                          <motion.button
-                            onClick={() => setSelectedRecord(record)}
-                            className="p-1 text-gray-600 hover:text-[#519a7c] transition-colors"
-                            whileHover={{ scale: 1.1 }}
-                            whileTap={{ scale: 0.9 }}
-                          >
-                            <Eye className="w-4 h-4" />
-                          </motion.button>
-                          <motion.button
-                            onClick={() => {
-                              setEditingRecord(record);
-                              setFormData(record);
-                              setShowForm(true);
-                            }}
-                            className="p-1 text-gray-600 hover:text-blue-600 transition-colors"
-                            whileHover={{ scale: 1.1 }}
-                            whileTap={{ scale: 0.9 }}
-                          >
-                            <Edit className="w-4 h-4" />
-                          </motion.button>
-                          <motion.button
-                            onClick={() => handleDelete(record.id)}
-                            className="p-1 text-gray-600 hover:text-red-600 transition-colors"
-                            whileHover={{ scale: 1.1 }}
-                            whileTap={{ scale: 0.9 }}
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </motion.button>
-                        </div>
-                      </td>
-                    </motion.tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </motion.div>
-        ) : (
-          // Vista de calendario (próximos partos)
-          <motion.div
-            className="bg-white/95 backdrop-blur-sm rounded-2xl shadow-xl p-6 border border-white/20"
-            variants={itemVariants}
-          >
-            <h2 className="text-xl font-bold text-gray-900 mb-6 flex items-center">
-              <Calendar className="w-5 h-5 mr-2 text-[#519a7c]" />
-              Calendario de Partos
-            </h2>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {filteredRecords
-                .sort((a, b) => new Date(a.expectedCalvingDate).getTime() - new Date(b.expectedCalvingDate).getTime())
-                .slice(0, 12)
-                .map((record) => (
-                  <motion.div
-                    key={record.id}
-                    className="bg-gradient-to-r from-blue-50 to-green-50 rounded-xl p-4 border-l-4 border-[#519a7c]"
-                    whileHover={{ scale: 1.02 }}
-                  >
-                    <div className="flex items-center justify-between mb-2">
-                      <h3 className="font-bold text-gray-900">{record.animalName}</h3>
-                      <span className="text-sm text-gray-600">{record.animalEarTag}</span>
-                    </div>
-                    <div className="space-y-1 text-sm">
-                      <p><span className="font-medium text-gray-600">Parto esperado:</span> {new Date(record.expectedCalvingDate).toLocaleDateString()}</p>
-                      <p><span className="font-medium text-gray-600">Días restantes:</span> 
-                        <span className={`ml-1 font-bold ${
-                          getDaysRemaining(record.expectedCalvingDate) <= 7 ? "text-red-600" :
-                          getDaysRemaining(record.expectedCalvingDate) <= 30 ? "text-orange-600" :
-                          "text-green-600"
-                        }`}>
-                          {getDaysRemaining(record.expectedCalvingDate)}
-                        </span>
-                      </p>
-                      <p><span className="font-medium text-gray-600">Gestación:</span> Día {record.gestationDay}</p>
-                      <p><span className="font-medium text-gray-600">Veterinario:</span> {record.veterinarian.name}</p>
-                    </div>
-                    
-                    {getDaysRemaining(record.expectedCalvingDate) <= 7 && (
-                      <div className="mt-3 bg-red-100 border border-red-200 rounded-lg p-2">
-                        <p className="text-red-800 text-xs font-medium">
-                          ⚠️ Parto inminente - Requiere monitoreo intensivo
-                        </p>
-                      </div>
-                    )}
-                  </motion.div>
-                ))}
-            </div>
-          </motion.div>
-        )}
-
-        {/* Modal de formulario */}
+        {/* Modal de edición */}
         <AnimatePresence>
-          {showForm && (
+          {isEditModalOpen && selectedPregnancy && (
             <motion.div
-              className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
+              className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4"
+              onClick={() => setIsEditModalOpen(false)}
             >
               <motion.div
-                className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[90vh] overflow-y-auto"
-                initial={{ opacity: 0, scale: 0.9, y: 20 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.9, y: 20 }}
-                transition={{ duration: 0.3 }}
+                initial={{ scale: 0.95, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.95, opacity: 0 }}
+                onClick={(e) => e.stopPropagation()}
+                className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto"
               >
-                {/* Header del formulario */}
-                <div className="bg-gradient-to-r from-[#519a7c] to-[#4e9c75] p-6 text-white">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-3">
-                      <Baby className="w-6 h-6" />
-                      <h2 className="text-xl font-bold">
-                        {editingRecord ? "Editar Gestación" : "Nueva Gestación"}
-                      </h2>
-                    </div>
-                    <button
-                      onClick={() => {
-                        setShowForm(false);
-                        setEditingRecord(null);
-                        resetForm();
-                      }}
-                      className="p-2 hover:bg-white/20 rounded-lg transition-colors"
-                    >
-                      <X className="w-5 h-5" />
-                    </button>
-                  </div>
+                <div className="flex items-center justify-between p-6 border-b">
+                  <h2 className="text-xl font-semibold text-gray-900">
+                    Editar Registro de Embarazo
+                  </h2>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setIsEditModalOpen(false)}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
                 </div>
 
-                {/* Contenido del formulario - Simplificado para ejemplo */}
                 <div className="p-6 space-y-6">
-                  {/* Información básica del animal */}
-                  <div className="bg-blue-50 rounded-xl p-4">
-                    <h3 className="font-semibold text-gray-900 mb-4 flex items-center">
-                      <Heart className="w-5 h-5 mr-2 text-blue-600" />
-                      Información del Animal
-                    </h3>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          ID del Animal *
-                        </label>
-                        <input
-                          type="text"
-                          value={formData.animalId || ""}
-                          onChange={(e) => setFormData(prev => ({ ...prev, animalId: e.target.value }))}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
-                          placeholder="cow-123"
-                          required
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Nombre del Animal *
-                        </label>
-                        <input
-                          type="text"
-                          value={formData.animalName || ""}
-                          onChange={(e) => setFormData(prev => ({ ...prev, animalName: e.target.value }))}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
-                          placeholder="Bella"
-                          required
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Arete *
-                        </label>
-                        <input
-                          type="text"
-                          value={formData.animalEarTag || ""}
-                          onChange={(e) => setFormData(prev => ({ ...prev, animalEarTag: e.target.value }))}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
-                          placeholder="MX-001"
-                          required
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Información de gestación */}
-                  <div className="bg-green-50 rounded-xl p-4">
-                    <h3 className="font-semibold text-gray-900 mb-4 flex items-center">
-                      <Baby className="w-5 h-5 mr-2 text-green-600" />
-                      Detalles de Gestación
-                    </h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Fecha de Apareamiento *
-                        </label>
-                        <input
-                          type="date"
-                          value={formData.breedingDate || ""}
-                          onChange={(e) => setFormData(prev => ({ ...prev, breedingDate: e.target.value }))}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
-                          required
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Fecha de Confirmación *
-                        </label>
-                        <input
-                          type="date"
-                          value={formData.confirmationDate || ""}
-                          onChange={(e) => setFormData(prev => ({ ...prev, confirmationDate: e.target.value }))}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
-                          required
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Método de Confirmación *
-                        </label>
-                        <select
-                          value={formData.confirmationMethod || "ultrasound"}
-                          onChange={(e) => setFormData(prev => ({ ...prev, confirmationMethod: e.target.value as any }))}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
-                          required
-                        >
-                          <option value="ultrasound">Ultrasonido</option>
-                          <option value="palpation">Palpación</option>
-                          <option value="blood_test">Análisis de Sangre</option>
-                          <option value="visual">Visual</option>
-                        </select>
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Número de Gestación
-                        </label>
-                        <input
-                          type="number"
-                          min="1"
-                          value={formData.pregnancyNumber || 1}
-                          onChange={(e) => setFormData(prev => ({ ...prev, pregnancyNumber: parseInt(e.target.value) || 1 }))}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Información adicional simplificada */}
-                  <div className="bg-yellow-50 rounded-xl p-4">
-                    <h3 className="font-semibold text-gray-900 mb-4 flex items-center">
-                      <Info className="w-5 h-5 mr-2 text-yellow-600" />
-                      Información Adicional
-                    </h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Estado
-                        </label>
-                        <select
-                          value={formData.status || "active"}
-                          onChange={(e) => setFormData(prev => ({ ...prev, status: e.target.value as any }))}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
-                        >
-                          <option value="active">Activa</option>
-                          <option value="completed">Completada</option>
-                          <option value="lost">Perdida</option>
-                          <option value="transferred">Transferida</option>
-                          <option value="aborted">Abortada</option>
-                        </select>
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Costo Total ($)
-                        </label>
-                        <input
-                          type="number"
-                          min="0"
-                          value={formData.cost || 0}
-                          onChange={(e) => setFormData(prev => ({ ...prev, cost: parseInt(e.target.value) || 0 }))}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
-                        />
-                      </div>
-                    </div>
-                    
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Notas Generales
+                        Nombre de la Vaca *
                       </label>
-                      <textarea
-                        value={formData.notes || ""}
-                        onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
-                        rows={3}
-                        placeholder="Observaciones sobre la gestación..."
+                      <Input
+                        placeholder="Ej: Bella"
+                        value={formData.animalName || ""}
+                        onChange={(e) => setFormData(prev => ({ ...prev, animalName: e.target.value }))}
                       />
                     </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Etiqueta de la Vaca *
+                      </label>
+                      <Input
+                        placeholder="Ej: MX-001"
+                        value={formData.animalEarTag || ""}
+                        onChange={(e) => setFormData(prev => ({ ...prev, animalEarTag: e.target.value }))}
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Días de Gestación
+                      </label>
+                      <Input
+                        type="number"
+                        value={formData.gestationDay?.toString() || ""}
+                        onChange={(e) => setFormData(prev => ({ ...prev, gestationDay: parseInt(e.target.value) || 0 }))}
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Fecha Esperada de Parto
+                      </label>
+                      <Input
+                        type="date"
+                        value={formData.expectedCalvingDate || ""}
+                        onChange={(e) => setFormData(prev => ({ ...prev, expectedCalvingDate: e.target.value }))}
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Estado
+                      </label>
+                      <Select
+                        value={formData.status || "active"}
+                        onChange={(value) => setFormData(prev => ({ ...prev, status: value as PregnancyStatus }))}
+                      >
+                        <option value="active">Activo</option>
+                        <option value="completed">Completado</option>
+                        <option value="terminated">Terminado</option>
+                        <option value="lost">Perdido</option>
+                      </Select>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Etapa Actual
+                      </label>
+                      <Select
+                        value={formData.currentStage || "early"}
+                        onChange={(value) => setFormData(prev => ({ ...prev, currentStage: value as PregnancyStage }))}
+                      >
+                        <option value="early">Temprano (0-84 días)</option>
+                        <option value="middle">Medio (85-210 días)</option>
+                        <option value="late">Tardío (211-280 días)</option>
+                      </Select>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Notas
+                    </label>
+                    <Textarea
+                      placeholder="Observaciones sobre el embarazo..."
+                      value={formData.notes || ""}
+                      onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
+                      rows={4}
+                    />
                   </div>
                 </div>
 
-                {/* Botones de acción */}
-                <div className="bg-gray-50 px-6 py-4 flex items-center justify-end space-x-3 rounded-b-2xl">
-                  <button
-                    onClick={() => {
-                      setShowForm(false);
-                      setEditingRecord(null);
-                      resetForm();
-                    }}
-                    className="px-6 py-2 text-gray-600 hover:text-gray-800 transition-colors flex items-center space-x-2"
+                <div className="flex items-center justify-end gap-3 p-6 border-t bg-gray-50">
+                  <Button
+                    variant="secondary"
+                    onClick={() => setIsEditModalOpen(false)}
                   >
-                    <ArrowLeft className="w-4 h-4" />
-                    <span>Cancelar</span>
-                  </button>
-                  <motion.button
-                    onClick={() => {
-                      if (editingRecord) {
-                        handleUpdate(editingRecord.id, formData);
-                      } else {
-                        handleCreate(formData);
-                      }
-                    }}
-                    className="px-6 py-2 bg-gradient-to-r from-[#519a7c] to-[#4e9c75] text-white rounded-lg hover:from-[#4e9c75] hover:to-[#519a7c] transition-all duration-200 flex items-center space-x-2 shadow-lg"
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
+                    Cancelar
+                  </Button>
+                  <Button
+                    onClick={handleSave}
+                    disabled={isLoading}
+                    className="flex items-center gap-2"
                   >
-                    <Save className="w-4 h-4" />
-                    <span>{editingRecord ? "Actualizar" : "Guardar"}</span>
-                  </motion.button>
+                    {isLoading ? (
+                      <Activity className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Save className="h-4 w-4" />
+                    )}
+                    Actualizar
+                  </Button>
                 </div>
               </motion.div>
             </motion.div>
           )}
         </AnimatePresence>
 
-        {/* Modal de detalles completo */}
+        {/* Modal de visualización */}
         <AnimatePresence>
-          {selectedRecord && (
+          {isViewModalOpen && selectedPregnancy && (
             <motion.div
-              className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              onClick={() => setSelectedRecord(null)}
+              className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4"
+              onClick={() => setIsViewModalOpen(false)}
             >
               <motion.div
-                className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[90vh] overflow-y-auto"
-                initial={{ opacity: 0, scale: 0.9, y: 20 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.9, y: 20 }}
-                transition={{ duration: 0.3 }}
+                initial={{ scale: 0.95, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.95, opacity: 0 }}
                 onClick={(e) => e.stopPropagation()}
+                className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto"
               >
-                {/* Header del modal */}
-                <div className="bg-gradient-to-r from-[#519a7c] to-[#4e9c75] p-6 text-white">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h2 className="text-2xl font-bold">{selectedRecord.animalName}</h2>
-                      <p className="text-white/80">Arete: {selectedRecord.animalEarTag} • Gestación #{selectedRecord.pregnancyNumber}</p>
-                    </div>
-                    <button
-                      onClick={() => setSelectedRecord(null)}
-                      className="p-2 hover:bg-white/20 rounded-lg transition-colors"
-                    >
-                      <X className="w-5 h-5" />
-                    </button>
-                  </div>
+                <div className="flex items-center justify-between p-6 border-b">
+                  <h2 className="text-xl font-semibold text-gray-900">
+                    Detalles del Embarazo - {selectedPregnancy.animalName}
+                  </h2>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setIsViewModalOpen(false)}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
                 </div>
 
-                {/* Contenido del modal con toda la información */}
                 <div className="p-6 space-y-6">
-                  {/* Información general resumida */}
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <div className="bg-blue-50 rounded-xl p-4">
-                      <h3 className="font-semibold text-gray-900 mb-3">Estado de Gestación</h3>
-                      <div className="space-y-2 text-sm">
-                        <p><span className="font-medium text-gray-600">Día:</span> {selectedRecord.gestationDay}</p>
-                        <p><span className="font-medium text-gray-600">Etapa:</span> {selectedRecord.currentStage}</p>
-                        <p><span className="font-medium text-gray-600">Días restantes:</span> {getDaysRemaining(selectedRecord.expectedCalvingDate)}</p>
-                        <p><span className="font-medium text-gray-600">Parto esperado:</span> {new Date(selectedRecord.expectedCalvingDate).toLocaleDateString()}</p>
-                      </div>
-                    </div>
+                  {/* Información básica */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <Card>
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-sm text-gray-600">Animal</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <p className="font-semibold">{selectedPregnancy.animalName}</p>
+                        <p className="text-sm text-gray-500">{selectedPregnancy.animalEarTag}</p>
+                      </CardContent>
+                    </Card>
 
-                    <div className="bg-green-50 rounded-xl p-4">
-                      <h3 className="font-semibold text-gray-900 mb-3">Estado de Salud</h3>
-                      <div className="space-y-2 text-sm">
-                        <p><span className="font-medium text-gray-600">General:</span> {selectedRecord.healthStatus.overall}</p>
-                        <p><span className="font-medium text-gray-600">Condición corporal:</span> {selectedRecord.healthStatus.bodyCondition}/5</p>
-                        <p><span className="font-medium text-gray-600">Peso:</span> {selectedRecord.healthStatus.weight} kg</p>
-                        <p><span className="font-medium text-gray-600">Temperatura:</span> {selectedRecord.healthStatus.temperature}°C</p>
-                      </div>
-                    </div>
+                    <Card>
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-sm text-gray-600">Toro</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <p className="font-semibold">{selectedPregnancy.bullName}</p>
+                        <p className="text-sm text-gray-500">{selectedPregnancy.bullEarTag}</p>
+                      </CardContent>
+                    </Card>
 
-                    <div className="bg-purple-50 rounded-xl p-4">
-                      <h3 className="font-semibold text-gray-900 mb-3">Veterinario</h3>
-                      <div className="space-y-2 text-sm">
-                        <p><span className="font-medium text-gray-600">Nombre:</span> {selectedRecord.veterinarian.name}</p>
-                        <p><span className="font-medium text-gray-600">Licencia:</span> {selectedRecord.veterinarian.license}</p>
-                        {selectedRecord.veterinarian.phone && (
-                          <p><span className="font-medium text-gray-600">Teléfono:</span> {selectedRecord.veterinarian.phone}</p>
-                        )}
-                        {selectedRecord.veterinarian.email && (
-                          <p><span className="font-medium text-gray-600">Email:</span> {selectedRecord.veterinarian.email}</p>
-                        )}
-                      </div>
-                    </div>
-                  </div>
+                    <Card>
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-sm text-gray-600">Gestación</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <p className="font-semibold">{selectedPregnancy.gestationDay} días</p>
+                        <p className="text-sm text-gray-500">Embarazo #{selectedPregnancy.pregnancyNumber}</p>
+                      </CardContent>
+                    </Card>
 
-                  {/* Historial de exámenes */}
-                  <div className="bg-yellow-50 rounded-xl p-4">
-                    <h3 className="font-semibold text-gray-900 mb-3">Historial de Exámenes ({selectedRecord.examinations.length})</h3>
-                    <div className="space-y-3">
-                      {selectedRecord.examinations.slice(0, 3).map((exam) => (
-                        <div key={exam.id} className="bg-white rounded-lg p-3 border">
-                          <div className="flex justify-between items-start mb-2">
-                            <div>
-                              <p className="font-medium text-gray-900">{new Date(exam.date).toLocaleDateString()} - {exam.time}</p>
-                              <p className="text-sm text-gray-600">Día {exam.gestationDay} • {exam.type}</p>
-                            </div>
-                            <span className="text-sm font-medium text-[#519a7c]">${exam.cost}</span>
-                          </div>
-                          <p className="text-sm text-gray-700">{exam.notes}</p>
-                          <div className="mt-2 flex flex-wrap gap-1">
-                            {exam.recommendations.slice(0, 2).map((rec, index) => (
-                              <span key={index} className="bg-blue-100 text-blue-800 px-2 py-1 rounded-full text-xs">
-                                {rec}
-                              </span>
-                            ))}
-                          </div>
+                    <Card>
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-sm text-gray-600">Fecha de Parto</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <p className="font-semibold">
+                          {new Date(selectedPregnancy.expectedCalvingDate).toLocaleDateString('es-ES')}
+                        </p>
+                        <p className="text-sm text-gray-500">
+                          {getStageBadge(selectedPregnancy.currentStage)}
+                        </p>
+                      </CardContent>
+                    </Card>
+
+                    <Card>
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-sm text-gray-600">Estado</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="space-y-1">
+                          {getStatusBadge(selectedPregnancy.status)}
+                          {getBreedingTypeBadge(selectedPregnancy.breedingType)}
                         </div>
-                      ))}
-                    </div>
+                      </CardContent>
+                    </Card>
+
+                    <Card>
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-sm text-gray-600">Veterinario</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <p className="font-semibold">{selectedPregnancy.veterinarian.name}</p>
+                        <p className="text-sm text-gray-500">{selectedPregnancy.veterinarian.license}</p>
+                      </CardContent>
+                    </Card>
                   </div>
+
+                  {/* Estado de salud */}
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <Heart className="h-5 w-5 text-red-500" />
+                        Estado de Salud
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        <div>
+                          <p className="text-sm text-gray-600">Estado General</p>
+                          <p className="font-semibold capitalize">{selectedPregnancy.healthStatus.overall}</p>
+                        </div>
+                        <div>
+                          <p className="text-sm text-gray-600">Condición Corporal</p>
+                          <p className="font-semibold">{selectedPregnancy.healthStatus.bodyCondition}/5</p>
+                        </div>
+                        <div>
+                          <p className="text-sm text-gray-600">Peso</p>
+                          <p className="font-semibold">{selectedPregnancy.healthStatus.weight} kg</p>
+                        </div>
+                        <div>
+                          <p className="text-sm text-gray-600">Temperatura</p>
+                          <p className="font-semibold">{selectedPregnancy.healthStatus.temperature}°C</p>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  {/* Complicaciones */}
+                  {selectedPregnancy.complications.hasComplications && (
+                    <Card className="border-yellow-200 bg-yellow-50">
+                      <CardHeader>
+                        <CardTitle className="flex items-center gap-2 text-yellow-800">
+                          <AlertTriangle className="h-5 w-5" />
+                          Complicaciones
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="space-y-2">
+                          <div>
+                            <span className="text-sm text-yellow-600">Tipo:</span>
+                            <span className="ml-2 font-semibold text-yellow-800 capitalize">
+                              {selectedPregnancy.complications.type}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-sm text-yellow-600">Severidad:</span>
+                            <Badge 
+                              variant={selectedPregnancy.complications.severity === "severe" ? "error" : "warning"}
+                              className="ml-2"
+                            >
+                              {selectedPregnancy.complications.severity}
+                            </Badge>
+                          </div>
+                          {selectedPregnancy.complications.description && (
+                            <div>
+                              <span className="text-sm text-yellow-600">Descripción:</span>
+                              <p className="ml-2 text-yellow-800">{selectedPregnancy.complications.description}</p>
+                            </div>
+                          )}
+                          {selectedPregnancy.complications.veterinaryAction && (
+                            <div>
+                              <span className="text-sm text-yellow-600">Acción Veterinaria:</span>
+                              <p className="ml-2 text-yellow-800">{selectedPregnancy.complications.veterinaryAction}</p>
+                            </div>
+                          )}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
+
+                  {/* Exámenes recientes */}
+                  {selectedPregnancy.examinations.length > 0 && (
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="flex items-center gap-2">
+                          <Stethoscope className="h-5 w-5 text-blue-500" />
+                          Último Examen
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        {(() => {
+                          const lastExam = selectedPregnancy.examinations[selectedPregnancy.examinations.length - 1];
+                          return (
+                            <div className="space-y-3">
+                              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                <div>
+                                  <p className="text-sm text-gray-600">Fecha</p>
+                                  <p className="font-semibold">
+                                    {new Date(lastExam.date).toLocaleDateString('es-ES')}
+                                  </p>
+                                </div>
+                                <div>
+                                  <p className="text-sm text-gray-600">Tipo</p>
+                                  <p className="font-semibold capitalize">{lastExam.type}</p>
+                                </div>
+                                <div>
+                                  <p className="text-sm text-gray-600">Día de Gestación</p>
+                                  <p className="font-semibold">{lastExam.gestationDay}</p>
+                                </div>
+                                <div>
+                                  <p className="text-sm text-gray-600">Costo</p>
+                                  <p className="font-semibold">${lastExam.cost.toLocaleString()}</p>
+                                </div>
+                              </div>
+                              {lastExam.notes && (
+                                <div>
+                                  <p className="text-sm text-gray-600 mb-1">Notas:</p>
+                                  <p className="text-gray-800">{lastExam.notes}</p>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })()}
+                      </CardContent>
+                    </Card>
+                  )}
+
+                  {/* Información de ubicación */}
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <MapPin className="h-5 w-5 text-green-500" />
+                        Ubicación
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-2">
+                        <p><strong>Dirección:</strong> {selectedPregnancy.location.address}</p>
+                        <p><strong>Potrero:</strong> {selectedPregnancy.location.paddock}</p>
+                        <p><strong>Instalación:</strong> {selectedPregnancy.location.facility}</p>
+                      </div>
+                    </CardContent>
+                  </Card>
 
                   {/* Notas */}
-                  {selectedRecord.notes && (
-                    <div className="bg-gray-50 rounded-xl p-4">
-                      <h3 className="font-semibold text-gray-900 mb-3">Notas Generales</h3>
-                      <p className="text-gray-700">{selectedRecord.notes}</p>
-                    </div>
+                  {selectedPregnancy.notes && (
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="flex items-center gap-2">
+                          <FileText className="h-5 w-5 text-gray-500" />
+                          Notas
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <p className="text-gray-800">{selectedPregnancy.notes}</p>
+                      </CardContent>
+                    </Card>
                   )}
+                </div>
+
+                <div className="flex items-center justify-end gap-3 p-6 border-t bg-gray-50">
+                  <Button
+                    variant="secondary"
+                    onClick={() => setIsViewModalOpen(false)}
+                  >
+                    Cerrar
+                  </Button>
+                  <Button
+                    onClick={() => {
+                      setIsViewModalOpen(false);
+                      handleEdit(selectedPregnancy);
+                    }}
+                    className="flex items-center gap-2"
+                  >
+                    <Edit3 className="h-4 w-4" />
+                    Editar
+                  </Button>
                 </div>
               </motion.div>
             </motion.div>
           )}
         </AnimatePresence>
 
-        {/* Mensaje cuando no hay registros */}
-        {filteredRecords.length === 0 && !isLoading && (
-          <motion.div
-            className="bg-white/95 backdrop-blur-sm rounded-2xl shadow-xl p-12 text-center border border-white/20"
-            variants={itemVariants}
-          >
-            <div className="max-w-md mx-auto">
-              <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <Baby className="w-8 h-8 text-gray-400" />
-              </div>
-              <h3 className="text-xl font-semibold text-gray-900 mb-2">
-                No se encontraron gestaciones
-              </h3>
-              <p className="text-gray-600 mb-6">
-                No hay registros de gestación que coincidan con los filtros aplicados.
-              </p>
-              <button
-                onClick={() => {
-                  setEditingRecord(null);
-                  resetForm();
-                  setShowForm(true);
-                }}
-                className="px-6 py-3 bg-gradient-to-r from-[#519a7c] to-[#4e9c75] text-white rounded-xl hover:from-[#4e9c75] hover:to-[#519a7c] transition-all duration-200 flex items-center space-x-2 mx-auto"
+        {/* MODAL DE CONFIRMACIÓN DE ELIMINACIÓN - NUEVO */}
+        <AnimatePresence>
+          {showDeleteModal && pregnancyToDelete && (
+            <motion.div 
+              className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+            >
+              <motion.div 
+                className="bg-white rounded-lg shadow-xl w-full max-w-md"
+                initial={{ scale: 0.9, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.9, opacity: 0 }}
               >
-                <Plus className="w-5 h-5" />
-                <span>Registrar Primera Gestación</span>
-              </button>
-            </div>
-          </motion.div>
-        )}
-      </motion.div>
-    </div>
+                {/* Header del modal */}
+                <div className="flex items-center gap-4 p-6 border-b">
+                  <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center">
+                    <AlertTriangle className="w-6 h-6 text-red-600" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-900">
+                      Eliminar Registro de Embarazo
+                    </h3>
+                    <p className="text-sm text-gray-600">
+                      Esta acción no se puede deshacer
+                    </p>
+                  </div>
+                </div>
+
+                {/* Contenido del modal */}
+                <div className="p-6">
+                  <p className="text-gray-700 mb-6">
+                    ¿Estás seguro de que deseas eliminar el registro de embarazo de{" "}
+                    <strong>{pregnancyToDelete.animalName}</strong> (Arete: <strong>{pregnancyToDelete.animalEarTag}</strong>)?
+                    <br />
+                    <br />
+                    <span className="text-sm text-gray-600">
+                      Toro: {pregnancyToDelete.bullName} ({pregnancyToDelete.bullEarTag})
+                      <br />
+                      Días de gestación: {pregnancyToDelete.gestationDay}
+                      <br />
+                      Embarazo: #{pregnancyToDelete.pregnancyNumber}
+                      <br />
+                      Veterinario: {pregnancyToDelete.veterinarian.name}
+                    </span>
+                    <br />
+                    <br />
+                    Toda la información del embarazo se perderá permanentemente, incluyendo exámenes, notas y datos de salud.
+                  </p>
+                </div>
+
+                {/* Footer del modal */}
+                <div className="flex justify-end space-x-3 p-6 border-t bg-gray-50">
+                  <Button
+                    variant="secondary"
+                    onClick={() => {
+                      setShowDeleteModal(false);
+                      setPregnancyToDelete(null);
+                    }}
+                  >
+                    Cancelar
+                  </Button>
+                  <Button
+                    variant="error"
+                    onClick={confirmDelete}
+                    className="flex items-center space-x-2"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    <span>Eliminar</span>
+                  </Button>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+    </motion.div>
   );
 };
 
