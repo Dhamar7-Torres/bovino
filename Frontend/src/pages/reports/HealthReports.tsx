@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Plus, 
@@ -22,7 +22,11 @@ import {
   MapPin,
   TrendingUp,
   TrendingDown,
-  Users
+  Users,
+  Navigation,
+  Clock,
+  DollarSign,
+  Target
 } from 'lucide-react';
 
 // Función de utilidad para combinar clases CSS
@@ -103,6 +107,12 @@ interface ReportPeriod {
   type: 'daily' | 'weekly' | 'monthly' | 'quarterly' | 'annual' | 'custom';
 }
 
+interface LocationData {
+  latitude: number;
+  longitude: number;
+  address?: string;
+}
+
 type HealthReportType = 
   | 'general_health' 
   | 'disease_outbreak' 
@@ -127,6 +137,7 @@ interface ModalProps {
   onClose: () => void;
   children: React.ReactNode;
   title: string;
+  size?: 'sm' | 'md' | 'lg' | 'xl' | 'full';
 }
 
 // Props del formulario
@@ -135,6 +146,13 @@ interface ReportFormProps {
   onSave: (report: Omit<HealthReport, 'id' | 'createdAt' | 'updatedAt'>) => void;
   onCancel: () => void;
   isEditing: boolean;
+}
+
+// Props del modal de vista detallada
+interface ViewReportModalProps {
+  report: HealthReport;
+  isOpen: boolean;
+  onClose: () => void;
 }
 
 // Datos de ejemplo
@@ -377,9 +395,148 @@ const REPORT_TYPE_CONFIG = {
   }
 };
 
+// Hook para geolocalización
+const useGeolocation = () => {
+  const [location, setLocation] = useState<LocationData | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const getCurrentLocation = useCallback(async (): Promise<LocationData | null> => {
+    if (!navigator.geolocation) {
+      setError('Geolocalización no soportada por este navegador');
+      return null;
+    }
+
+    setIsLoading(true);
+    setError(null);
+
+    return new Promise((resolve) => {
+      navigator.geolocation.getCurrentPosition(
+        async (position) => {
+          const coords = {
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude
+          };
+
+          try {
+            // Intentar obtener la dirección usando geocodificación inversa
+            const response = await fetch(
+              `https://api.openstreetmap.org/reverse?format=json&lat=${coords.latitude}&lon=${coords.longitude}&addressdetails=1`
+            );
+            
+            if (response.ok) {
+              const data = await response.json();
+              const locationData: LocationData = {
+                ...coords,
+                address: data.display_name || `${coords.latitude}, ${coords.longitude}`
+              };
+              setLocation(locationData);
+              setIsLoading(false);
+              resolve(locationData);
+            } else {
+              throw new Error('Error al obtener la dirección');
+            }
+          } catch (geocodeError) {
+            // Si falla la geocodificación, usar solo las coordenadas
+            const locationData: LocationData = {
+              ...coords,
+              address: `${coords.latitude}, ${coords.longitude}`
+            };
+            setLocation(locationData);
+            setIsLoading(false);
+            resolve(locationData);
+          }
+        },
+        (error) => {
+          let errorMessage = 'Error al obtener la ubicación';
+          switch (error.code) {
+            case error.PERMISSION_DENIED:
+              errorMessage = 'Permiso de ubicación denegado';
+              break;
+            case error.POSITION_UNAVAILABLE:
+              errorMessage = 'Ubicación no disponible';
+              break;
+            case error.TIMEOUT:
+              errorMessage = 'Tiempo de espera agotado';
+              break;
+          }
+          setError(errorMessage);
+          setIsLoading(false);
+          resolve(null);
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 10000,
+          maximumAge: 60000
+        }
+      );
+    });
+  }, []);
+
+  return { location, isLoading, error, getCurrentLocation };
+};
+
+// Funciones de utilidad para descarga
+const downloadAsJSON = (data: any, filename: string) => {
+  const jsonString = JSON.stringify(data, null, 2);
+  const blob = new Blob([jsonString], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `${filename}.json`;
+  link.click();
+  URL.revokeObjectURL(url);
+};
+
+const downloadAsCSV = (report: HealthReport) => {
+  const csvData = [
+    ['Campo', 'Valor'],
+    ['ID', report.id],
+    ['Título', report.title],
+    ['Descripción', report.description],
+    ['Tipo', REPORT_TYPE_CONFIG[report.reportType].label],
+    ['Ubicación', report.location],
+    ['Veterinario', report.veterinarian],
+    ['Período Inicio', report.period.startDate],
+    ['Período Fin', report.period.endDate],
+    ['Total Evaluados', report.healthMetrics.totalAnimalsEvaluated.toString()],
+    ['Animales Sanos', report.healthMetrics.healthyAnimals.toString()],
+    ['Animales Enfermos', report.healthMetrics.sickAnimals.toString()],
+    ['En Tratamiento', report.healthMetrics.underTreatment.toString()],
+    ['Recuperados', report.healthMetrics.recovered.toString()],
+    ['Muertes', report.healthMetrics.deaths.toString()],
+    ['Tasa Éxito Tratamiento (%)', report.healthMetrics.treatmentSuccessRate.toString()],
+    ['Cobertura Vacunación (%)', report.healthMetrics.vaccinationCoverage.toString()],
+    ['Costo Total Tratamiento', report.healthMetrics.totalTreatmentCost.toString()],
+    ['Estado', report.status],
+    ['Creado Por', report.createdBy],
+    ['Fecha Creación', new Date(report.createdAt).toLocaleString()]
+  ];
+
+  const csvString = csvData.map(row => 
+    row.map(cell => `"${cell.replace(/"/g, '""')}"`).join(',')
+  ).join('\n');
+
+  const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `reporte_salud_${report.id}.csv`;
+  link.click();
+  URL.revokeObjectURL(url);
+};
+
 // Componente Modal reutilizable
-const Modal: React.FC<ModalProps> = ({ isOpen, onClose, children, title }) => {
+const Modal: React.FC<ModalProps> = ({ isOpen, onClose, children, title, size = 'lg' }) => {
   if (!isOpen) return null;
+
+  const sizeClasses = {
+    sm: 'max-w-md',
+    md: 'max-w-2xl',
+    lg: 'max-w-4xl',
+    xl: 'max-w-6xl',
+    full: 'max-w-[95vw]'
+  };
 
   return (
     <AnimatePresence>
@@ -395,21 +552,24 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, children, title }) => {
           animate={{ scale: 1, opacity: 1 }}
           exit={{ scale: 0.9, opacity: 0 }}
           onClick={(e) => e.stopPropagation()}
-          className="bg-white rounded-xl shadow-2xl max-w-6xl w-full max-h-[90vh] overflow-hidden"
+          className={cn(
+            "bg-white rounded-xl shadow-2xl w-full max-h-[90vh] overflow-hidden",
+            sizeClasses[size]
+          )}
         >
           {/* Header del modal */}
-          <div className="flex items-center justify-between p-6 border-b border-gray-200 bg-gradient-to-r from-[#2d6f51] to-[#4e9c75]">
-            <h2 className="text-xl font-semibold text-white">{title}</h2>
+          <div className="flex items-center justify-between p-3 lg:p-4 border-b border-gray-200 bg-gradient-to-r from-[#2d6f51] to-[#4e9c75]">
+            <h2 className="text-base lg:text-lg xl:text-xl font-semibold text-white">{title}</h2>
             <button
               onClick={onClose}
-              className="p-2 hover:bg-white/20 rounded-lg transition-colors"
+              className="p-1.5 lg:p-2 hover:bg-white/20 rounded-lg transition-colors"
             >
-              <X className="w-5 h-5 text-white" />
+              <X className="w-4 h-4 lg:w-5 lg:h-5 text-white" />
             </button>
           </div>
           
           {/* Contenido del modal */}
-          <div className="p-6 max-h-[calc(90vh-80px)] overflow-y-auto">
+          <div className="p-3 lg:p-4 xl:p-6 max-h-[calc(90vh-60px)] lg:max-h-[calc(90vh-80px)] overflow-y-auto">
             {children}
           </div>
         </motion.div>
@@ -418,7 +578,330 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, children, title }) => {
   );
 };
 
-// Componente Formulario de Reporte de Salud
+// Componente de Vista Detallada del Reporte
+const ViewReportModal: React.FC<ViewReportModalProps> = ({ report, isOpen, onClose }) => {
+  const getSeverityColor = (severity: DiseaseSeverity) => {
+    switch (severity) {
+      case 'low': return 'text-green-600 bg-green-100';
+      case 'medium': return 'text-yellow-600 bg-yellow-100';
+      case 'high': return 'text-orange-600 bg-orange-100';
+      case 'critical': return 'text-red-600 bg-red-100';
+      default: return 'text-gray-600 bg-gray-100';
+    }
+  };
+
+  const getStatusColor = (status: DiseaseStatus) => {
+    switch (status) {
+      case 'active': return 'text-red-600 bg-red-100';
+      case 'contained': return 'text-yellow-600 bg-yellow-100';
+      case 'resolved': return 'text-green-600 bg-green-100';
+      case 'monitoring': return 'text-blue-600 bg-blue-100';
+      default: return 'text-gray-600 bg-gray-100';
+    }
+  };
+
+  return (
+    <Modal isOpen={isOpen} onClose={onClose} title="Vista Detallada del Reporte" size="full">
+      <div className="space-y-6">
+        {/* Información básica */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="space-y-4">
+            <div>
+              <h3 className="text-lg font-semibold text-gray-800 mb-3">Información General</h3>
+              <div className="bg-gray-50 rounded-lg p-4 space-y-3">
+                <div>
+                  <span className="font-medium text-gray-700">Título:</span>
+                  <p className="text-gray-600 mt-1">{report.title}</p>
+                </div>
+                <div>
+                  <span className="font-medium text-gray-700">Descripción:</span>
+                  <p className="text-gray-600 mt-1">{report.description}</p>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <span className="font-medium text-gray-700">Tipo:</span>
+                    <div className="flex items-center gap-2 mt-1">
+                      <div 
+                        className="p-1 rounded"
+                        style={{ 
+                          backgroundColor: `${REPORT_TYPE_CONFIG[report.reportType].color}20`,
+                          color: REPORT_TYPE_CONFIG[report.reportType].color
+                        }}
+                      >
+                        {REPORT_TYPE_CONFIG[report.reportType].icon}
+                      </div>
+                      <span className="text-gray-600">{REPORT_TYPE_CONFIG[report.reportType].label}</span>
+                    </div>
+                  </div>
+                  <div>
+                    <span className="font-medium text-gray-700">Estado:</span>
+                    <p className="text-gray-600 mt-1 capitalize">{report.status}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            <div>
+              <h3 className="text-lg font-semibold text-gray-800 mb-3">Detalles del Período</h3>
+              <div className="bg-gray-50 rounded-lg p-4 space-y-3">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <span className="font-medium text-gray-700">Inicio:</span>
+                    <p className="text-gray-600 mt-1">{new Date(report.period.startDate).toLocaleDateString()}</p>
+                  </div>
+                  <div>
+                    <span className="font-medium text-gray-700">Fin:</span>
+                    <p className="text-gray-600 mt-1">{new Date(report.period.endDate).toLocaleDateString()}</p>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <span className="font-medium text-gray-700">Tipo:</span>
+                    <p className="text-gray-600 mt-1 capitalize">{report.period.type}</p>
+                  </div>
+                  <div>
+                    <span className="font-medium text-gray-700">Ubicación:</span>
+                    <p className="text-gray-600 mt-1">{report.location}</p>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <span className="font-medium text-gray-700">Veterinario:</span>
+                    <p className="text-gray-600 mt-1">{report.veterinarian}</p>
+                  </div>
+                  <div>
+                    <span className="font-medium text-gray-700">Creado por:</span>
+                    <p className="text-gray-600 mt-1">{report.createdBy}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Métricas de salud */}
+        <div>
+          <h3 className="text-lg font-semibold text-gray-800 mb-4">Métricas de Salud</h3>
+          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-center">
+              <Users className="w-6 h-6 text-blue-600 mx-auto mb-2" />
+              <p className="text-2xl font-bold text-blue-600">{report.healthMetrics.totalAnimalsEvaluated}</p>
+              <p className="text-sm text-blue-700">Total Evaluados</p>
+            </div>
+            <div className="bg-green-50 border border-green-200 rounded-lg p-4 text-center">
+              <Heart className="w-6 h-6 text-green-600 mx-auto mb-2" />
+              <p className="text-2xl font-bold text-green-600">{report.healthMetrics.healthyAnimals}</p>
+              <p className="text-sm text-green-700">Sanos</p>
+            </div>
+            <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-center">
+              <Thermometer className="w-6 h-6 text-red-600 mx-auto mb-2" />
+              <p className="text-2xl font-bold text-red-600">{report.healthMetrics.sickAnimals}</p>
+              <p className="text-sm text-red-700">Enfermos</p>
+            </div>
+            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 text-center">
+              <Pill className="w-6 h-6 text-yellow-600 mx-auto mb-2" />
+              <p className="text-2xl font-bold text-yellow-600">{report.healthMetrics.underTreatment}</p>
+              <p className="text-sm text-yellow-700">En Tratamiento</p>
+            </div>
+            <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4 text-center">
+              <TrendingUp className="w-6 h-6 text-emerald-600 mx-auto mb-2" />
+              <p className="text-2xl font-bold text-emerald-600">{report.healthMetrics.recovered}</p>
+              <p className="text-sm text-emerald-700">Recuperados</p>
+            </div>
+            <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 text-center">
+              <TrendingDown className="w-6 h-6 text-gray-600 mx-auto mb-2" />
+              <p className="text-2xl font-bold text-gray-600">{report.healthMetrics.deaths}</p>
+              <p className="text-sm text-gray-700">Muertes</p>
+            </div>
+          </div>
+
+          {/* Métricas adicionales */}
+          <div className="mt-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="bg-white border rounded-lg p-4">
+              <div className="flex items-center gap-2 mb-2">
+                <Clock className="w-4 h-4 text-gray-500" />
+                <span className="font-medium text-gray-700">Tiempo Promedio de Recuperación</span>
+              </div>
+              <p className="text-xl font-bold text-gray-800">{report.healthMetrics.averageRecoveryTime} días</p>
+            </div>
+            <div className="bg-white border rounded-lg p-4">
+              <div className="flex items-center gap-2 mb-2">
+                <Target className="w-4 h-4 text-gray-500" />
+                <span className="font-medium text-gray-700">Tasa de Éxito</span>
+              </div>
+              <p className="text-xl font-bold text-gray-800">{report.healthMetrics.treatmentSuccessRate.toFixed(1)}%</p>
+            </div>
+            <div className="bg-white border rounded-lg p-4">
+              <div className="flex items-center gap-2 mb-2">
+                <Syringe className="w-4 h-4 text-gray-500" />
+                <span className="font-medium text-gray-700">Cobertura Vacunación</span>
+              </div>
+              <p className="text-xl font-bold text-gray-800">{report.healthMetrics.vaccinationCoverage.toFixed(1)}%</p>
+            </div>
+            <div className="bg-white border rounded-lg p-4">
+              <div className="flex items-center gap-2 mb-2">
+                <DollarSign className="w-4 h-4 text-gray-500" />
+                <span className="font-medium text-gray-700">Costo Total</span>
+              </div>
+              <p className="text-xl font-bold text-gray-800">${report.healthMetrics.totalTreatmentCost.toLocaleString()}</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Enfermedades */}
+        {report.diseases.length > 0 && (
+          <div>
+            <h3 className="text-lg font-semibold text-gray-800 mb-4">Enfermedades Registradas</h3>
+            <div className="space-y-4">
+              {report.diseases.map((disease) => (
+                <div key={disease.diseaseId} className="bg-white border rounded-lg p-4">
+                  <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
+                    <div className="flex-1">
+                      <h4 className="font-semibold text-gray-800 mb-2">{disease.diseaseName}</h4>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                        <div>
+                          <span className="font-medium text-gray-600">Animales Afectados:</span>
+                          <p className="text-gray-800">{disease.affectedAnimals}</p>
+                        </div>
+                        <div>
+                          <span className="font-medium text-gray-600">Primera Detección:</span>
+                          <p className="text-gray-800">{new Date(disease.firstDetected).toLocaleDateString()}</p>
+                        </div>
+                        <div>
+                          <span className="font-medium text-gray-600">Síntomas:</span>
+                          <p className="text-gray-800">{disease.symptoms.join(', ')}</p>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex flex-col gap-2">
+                      <span className={cn(
+                        "inline-flex px-2 py-1 text-xs font-medium rounded-full",
+                        getSeverityColor(disease.severity)
+                      )}>
+                        Severidad: {disease.severity}
+                      </span>
+                      <span className={cn(
+                        "inline-flex px-2 py-1 text-xs font-medium rounded-full",
+                        getStatusColor(disease.status)
+                      )}>
+                        Estado: {disease.status}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Tratamientos */}
+        {report.treatments.length > 0 && (
+          <div>
+            <h3 className="text-lg font-semibold text-gray-800 mb-4">Tratamientos Aplicados</h3>
+            <div className="space-y-4">
+              {report.treatments.map((treatment) => (
+                <div key={treatment.treatmentId} className="bg-white border rounded-lg p-4">
+                  <h4 className="font-semibold text-gray-800 mb-3">{treatment.treatmentName}</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 text-sm">
+                    <div>
+                      <span className="font-medium text-gray-600">Medicamento:</span>
+                      <p className="text-gray-800">{treatment.medication}</p>
+                    </div>
+                    <div>
+                      <span className="font-medium text-gray-600">Dosificación:</span>
+                      <p className="text-gray-800">{treatment.dosage}</p>
+                    </div>
+                    <div>
+                      <span className="font-medium text-gray-600">Duración:</span>
+                      <p className="text-gray-800">{treatment.duration} días</p>
+                    </div>
+                    <div>
+                      <span className="font-medium text-gray-600">Animales Tratados:</span>
+                      <p className="text-gray-800">{treatment.animalsReceived}</p>
+                    </div>
+                    <div>
+                      <span className="font-medium text-gray-600">Tasa de Éxito:</span>
+                      <p className="text-gray-800">{treatment.successRate.toFixed(1)}%</p>
+                    </div>
+                    <div>
+                      <span className="font-medium text-gray-600">Costo:</span>
+                      <p className="text-gray-800">${treatment.cost.toLocaleString()}</p>
+                    </div>
+                    {treatment.sideEffects && treatment.sideEffects.length > 0 && (
+                      <div className="md:col-span-2">
+                        <span className="font-medium text-gray-600">Efectos Secundarios:</span>
+                        <p className="text-gray-800">{treatment.sideEffects.join(', ')}</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Vacunaciones */}
+        {report.vaccinations.length > 0 && (
+          <div>
+            <h3 className="text-lg font-semibold text-gray-800 mb-4">Vacunaciones</h3>
+            <div className="space-y-4">
+              {report.vaccinations.map((vaccination) => (
+                <div key={vaccination.vaccineId} className="bg-white border rounded-lg p-4">
+                  <h4 className="font-semibold text-gray-800 mb-3">{vaccination.vaccineName}</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 text-sm">
+                    <div>
+                      <span className="font-medium text-gray-600">Animales Vacunados:</span>
+                      <p className="text-gray-800">{vaccination.animalsVaccinated}</p>
+                    </div>
+                    <div>
+                      <span className="font-medium text-gray-600">Dosis Administradas:</span>
+                      <p className="text-gray-800">{vaccination.dosesAdministered}</p>
+                    </div>
+                    <div>
+                      <span className="font-medium text-gray-600">Eficacia:</span>
+                      <p className="text-gray-800">{vaccination.effectivenessRate.toFixed(1)}%</p>
+                    </div>
+                    <div>
+                      <span className="font-medium text-gray-600">Próxima Dosis:</span>
+                      <p className="text-gray-800">{new Date(vaccination.nextDueDate).toLocaleDateString()}</p>
+                    </div>
+                    <div>
+                      <span className="font-medium text-gray-600">Costo:</span>
+                      <p className="text-gray-800">${vaccination.cost.toLocaleString()}</p>
+                    </div>
+                    <div>
+                      <span className="font-medium text-gray-600">Lote:</span>
+                      <p className="text-gray-800">{vaccination.batch}</p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Información de auditoría */}
+        <div className="bg-gray-50 rounded-lg p-4">
+          <h3 className="text-lg font-semibold text-gray-800 mb-3">Información de Auditoría</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+            <div>
+              <span className="font-medium text-gray-600">Creado:</span>
+              <p className="text-gray-800">{new Date(report.createdAt).toLocaleString()}</p>
+            </div>
+            <div>
+              <span className="font-medium text-gray-600">Última Actualización:</span>
+              <p className="text-gray-800">{new Date(report.updatedAt).toLocaleString()}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </Modal>
+  );
+};
+
+// Componente Formulario de Reporte de Salud (versión mejorada)
 const HealthReportForm: React.FC<ReportFormProps> = ({ report, onSave, onCancel, isEditing }) => {
   const [formData, setFormData] = useState<Partial<HealthReport>>({
     title: report?.title || '',
@@ -452,6 +935,18 @@ const HealthReportForm: React.FC<ReportFormProps> = ({ report, onSave, onCancel,
   });
 
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const { isLoading: locationLoading, error: locationError, getCurrentLocation } = useGeolocation();
+
+  // Manejar obtención de ubicación actual
+  const handleGetCurrentLocation = async () => {
+    const currentLocation = await getCurrentLocation();
+    if (currentLocation && currentLocation.address) {
+      setFormData(prev => ({
+        ...prev,
+        location: currentLocation.address
+      }));
+    }
+  };
 
   // Validación del formulario
   const validateForm = (): boolean => {
@@ -577,16 +1072,16 @@ const HealthReportForm: React.FC<ReportFormProps> = ({ report, onSave, onCancel,
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-8">
+    <form onSubmit={handleSubmit} className="space-y-4 lg:space-y-6">
       {/* Información básica */}
-      <div className="space-y-6">
-        <h3 className="text-lg font-medium text-gray-800 border-b pb-2">
+      <div className="space-y-3 lg:space-y-4">
+        <h3 className="text-base lg:text-lg font-medium text-gray-800 border-b pb-2">
           Información General
         </h3>
         
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 lg:gap-4">
           <div className="lg:col-span-2">
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-sm font-medium text-gray-700 mb-1">
               Título del Reporte *
             </label>
             <input
@@ -594,24 +1089,24 @@ const HealthReportForm: React.FC<ReportFormProps> = ({ report, onSave, onCancel,
               value={formData.title}
               onChange={(e) => handleInputChange('title', e.target.value)}
               className={cn(
-                "w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-[#2d6f51] focus:border-transparent transition-colors",
+                "w-full px-3 py-2 text-sm border rounded-lg focus:ring-2 focus:ring-[#2d6f51] focus:border-transparent transition-colors",
                 errors.title ? "border-red-500" : "border-gray-300"
               )}
               placeholder="Ej: Evaluación de Salud General - Enero 2025"
             />
             {errors.title && (
-              <p className="text-red-500 text-sm mt-1">{errors.title}</p>
+              <p className="text-red-500 text-xs mt-1">{errors.title}</p>
             )}
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-sm font-medium text-gray-700 mb-1">
               Tipo de Reporte *
             </label>
             <select
               value={formData.reportType}
               onChange={(e) => handleInputChange('reportType', e.target.value as HealthReportType)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2d6f51] focus:border-transparent transition-colors"
+              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2d6f51] focus:border-transparent transition-colors"
             >
               {Object.entries(REPORT_TYPE_CONFIG).map(([key, config]) => (
                 <option key={key} value={key}>
@@ -622,26 +1117,40 @@ const HealthReportForm: React.FC<ReportFormProps> = ({ report, onSave, onCancel,
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-sm font-medium text-gray-700 mb-1">
               Ubicación *
             </label>
-            <input
-              type="text"
-              value={formData.location}
-              onChange={(e) => handleInputChange('location', e.target.value)}
-              className={cn(
-                "w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-[#2d6f51] focus:border-transparent transition-colors",
-                errors.location ? "border-red-500" : "border-gray-300"
-              )}
-              placeholder="Ej: Potrero Norte, Todas las ubicaciones"
-            />
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={formData.location}
+                onChange={(e) => handleInputChange('location', e.target.value)}
+                className={cn(
+                  "flex-1 px-3 py-2 text-sm border rounded-lg focus:ring-2 focus:ring-[#2d6f51] focus:border-transparent transition-colors",
+                  errors.location ? "border-red-500" : "border-gray-300"
+                )}
+                placeholder="Ej: Potrero Norte, Todas las ubicaciones"
+              />
+              <button
+                type="button"
+                onClick={handleGetCurrentLocation}
+                disabled={locationLoading}
+                className="px-3 py-2 bg-[#2d6f51] text-white rounded-lg hover:bg-[#265a44] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                title="Obtener ubicación actual"
+              >
+                <Navigation className={cn("w-4 h-4", locationLoading && "animate-spin")} />
+              </button>
+            </div>
             {errors.location && (
-              <p className="text-red-500 text-sm mt-1">{errors.location}</p>
+              <p className="text-red-500 text-xs mt-1">{errors.location}</p>
+            )}
+            {locationError && (
+              <p className="text-orange-500 text-xs mt-1">{locationError}</p>
             )}
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-sm font-medium text-gray-700 mb-1">
               Veterinario Responsable *
             </label>
             <input
@@ -649,20 +1158,20 @@ const HealthReportForm: React.FC<ReportFormProps> = ({ report, onSave, onCancel,
               value={formData.veterinarian}
               onChange={(e) => handleInputChange('veterinarian', e.target.value)}
               className={cn(
-                "w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-[#2d6f51] focus:border-transparent transition-colors",
+                "w-full px-3 py-2 text-sm border rounded-lg focus:ring-2 focus:ring-[#2d6f51] focus:border-transparent transition-colors",
                 errors.veterinarian ? "border-red-500" : "border-gray-300"
               )}
               placeholder="Ej: Dr. Ana Martínez"
             />
             {errors.veterinarian && (
-              <p className="text-red-500 text-sm mt-1">{errors.veterinarian}</p>
+              <p className="text-red-500 text-xs mt-1">{errors.veterinarian}</p>
             )}
           </div>
         </div>
 
         {/* Descripción */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
+          <label className="block text-sm font-medium text-gray-700 mb-1">
             Descripción *
           </label>
           <textarea
@@ -670,32 +1179,32 @@ const HealthReportForm: React.FC<ReportFormProps> = ({ report, onSave, onCancel,
             onChange={(e) => handleInputChange('description', e.target.value)}
             rows={3}
             className={cn(
-              "w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-[#2d6f51] focus:border-transparent transition-colors resize-none",
+              "w-full px-3 py-2 text-sm border rounded-lg focus:ring-2 focus:ring-[#2d6f51] focus:border-transparent transition-colors resize-none",
               errors.description ? "border-red-500" : "border-gray-300"
             )}
             placeholder="Describe el propósito y alcance del reporte de salud"
           />
           {errors.description && (
-            <p className="text-red-500 text-sm mt-1">{errors.description}</p>
+            <p className="text-red-500 text-xs mt-1">{errors.description}</p>
           )}
         </div>
       </div>
 
       {/* Período del reporte */}
-      <div className="space-y-4">
-        <h3 className="text-lg font-medium text-gray-800 border-b pb-2">
+      <div className="space-y-3">
+        <h3 className="text-base lg:text-lg font-medium text-gray-800 border-b pb-2">
           Período del Reporte
         </h3>
         
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-sm font-medium text-gray-700 mb-1">
               Tipo de Período
             </label>
             <select
               value={formData.period?.type}
               onChange={(e) => handlePeriodChange('type', e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2d6f51] focus:border-transparent transition-colors"
+              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2d6f51] focus:border-transparent transition-colors"
             >
               <option value="daily">Diario</option>
               <option value="weekly">Semanal</option>
@@ -707,7 +1216,7 @@ const HealthReportForm: React.FC<ReportFormProps> = ({ report, onSave, onCancel,
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-sm font-medium text-gray-700 mb-1">
               Fecha de Inicio *
             </label>
             <input
@@ -715,17 +1224,17 @@ const HealthReportForm: React.FC<ReportFormProps> = ({ report, onSave, onCancel,
               value={formData.period?.startDate}
               onChange={(e) => handlePeriodChange('startDate', e.target.value)}
               className={cn(
-                "w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-[#2d6f51] focus:border-transparent transition-colors",
+                "w-full px-3 py-2 text-sm border rounded-lg focus:ring-2 focus:ring-[#2d6f51] focus:border-transparent transition-colors",
                 errors.startDate ? "border-red-500" : "border-gray-300"
               )}
             />
             {errors.startDate && (
-              <p className="text-red-500 text-sm mt-1">{errors.startDate}</p>
+              <p className="text-red-500 text-xs mt-1">{errors.startDate}</p>
             )}
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-sm font-medium text-gray-700 mb-1">
               Fecha de Fin *
             </label>
             <input
@@ -733,43 +1242,43 @@ const HealthReportForm: React.FC<ReportFormProps> = ({ report, onSave, onCancel,
               value={formData.period?.endDate}
               onChange={(e) => handlePeriodChange('endDate', e.target.value)}
               className={cn(
-                "w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-[#2d6f51] focus:border-transparent transition-colors",
+                "w-full px-3 py-2 text-sm border rounded-lg focus:ring-2 focus:ring-[#2d6f51] focus:border-transparent transition-colors",
                 errors.endDate ? "border-red-500" : "border-gray-300"
               )}
             />
             {errors.endDate && (
-              <p className="text-red-500 text-sm mt-1">{errors.endDate}</p>
+              <p className="text-red-500 text-xs mt-1">{errors.endDate}</p>
             )}
           </div>
         </div>
       </div>
 
       {/* Métricas de salud */}
-      <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <h3 className="text-lg font-medium text-gray-800 border-b pb-2 flex-1">
+      <div className="space-y-3 lg:space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+          <h3 className="text-base lg:text-lg font-medium text-gray-800 border-b pb-2 flex-1">
             Métricas de Salud
           </h3>
           <button
             type="button"
             onClick={calculateDerivedMetrics}
-            className="text-sm text-[#2d6f51] hover:text-[#265a44] font-medium"
+            className="text-xs sm:text-sm text-[#2d6f51] hover:text-[#265a44] font-medium whitespace-nowrap"
           >
             Calcular Automáticamente
           </button>
         </div>
         
         {errors.consistency && (
-          <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-            <p className="text-red-600 text-sm">{errors.consistency}</p>
+          <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+            <p className="text-red-600 text-xs">{errors.consistency}</p>
           </div>
         )}
 
         {/* Métricas principales */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              <Users className="w-4 h-4 inline mr-1" />
+            <label className="block text-xs lg:text-sm font-medium text-gray-700 mb-1">
+              <Users className="w-3 h-3 lg:w-4 lg:h-4 inline mr-1" />
               Total Evaluados
             </label>
             <input
@@ -777,13 +1286,13 @@ const HealthReportForm: React.FC<ReportFormProps> = ({ report, onSave, onCancel,
               min="0"
               value={formData.healthMetrics?.totalAnimalsEvaluated || 0}
               onChange={(e) => handleMetricsChange('totalAnimalsEvaluated', parseInt(e.target.value) || 0)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2d6f51] focus:border-transparent transition-colors"
+              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2d6f51] focus:border-transparent transition-colors"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              <Heart className="w-4 h-4 inline mr-1 text-green-600" />
+            <label className="block text-xs lg:text-sm font-medium text-gray-700 mb-1">
+              <Heart className="w-3 h-3 lg:w-4 lg:h-4 inline mr-1 text-green-600" />
               Animales Sanos
             </label>
             <input
@@ -791,13 +1300,13 @@ const HealthReportForm: React.FC<ReportFormProps> = ({ report, onSave, onCancel,
               min="0"
               value={formData.healthMetrics?.healthyAnimals || 0}
               onChange={(e) => handleMetricsChange('healthyAnimals', parseInt(e.target.value) || 0)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2d6f51] focus:border-transparent transition-colors"
+              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2d6f51] focus:border-transparent transition-colors"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              <Thermometer className="w-4 h-4 inline mr-1 text-red-600" />
+            <label className="block text-xs lg:text-sm font-medium text-gray-700 mb-1">
+              <Thermometer className="w-3 h-3 lg:w-4 lg:h-4 inline mr-1 text-red-600" />
               Animales Enfermos
             </label>
             <input
@@ -805,13 +1314,13 @@ const HealthReportForm: React.FC<ReportFormProps> = ({ report, onSave, onCancel,
               min="0"
               value={formData.healthMetrics?.sickAnimals || 0}
               onChange={(e) => handleMetricsChange('sickAnimals', parseInt(e.target.value) || 0)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2d6f51] focus:border-transparent transition-colors"
+              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2d6f51] focus:border-transparent transition-colors"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              <Pill className="w-4 h-4 inline mr-1 text-blue-600" />
+            <label className="block text-xs lg:text-sm font-medium text-gray-700 mb-1">
+              <Pill className="w-3 h-3 lg:w-4 lg:h-4 inline mr-1 text-blue-600" />
               En Tratamiento
             </label>
             <input
@@ -819,13 +1328,13 @@ const HealthReportForm: React.FC<ReportFormProps> = ({ report, onSave, onCancel,
               min="0"
               value={formData.healthMetrics?.underTreatment || 0}
               onChange={(e) => handleMetricsChange('underTreatment', parseInt(e.target.value) || 0)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2d6f51] focus:border-transparent transition-colors"
+              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2d6f51] focus:border-transparent transition-colors"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              <TrendingUp className="w-4 h-4 inline mr-1 text-green-600" />
+            <label className="block text-xs lg:text-sm font-medium text-gray-700 mb-1">
+              <TrendingUp className="w-3 h-3 lg:w-4 lg:h-4 inline mr-1 text-green-600" />
               Recuperados
             </label>
             <input
@@ -833,13 +1342,13 @@ const HealthReportForm: React.FC<ReportFormProps> = ({ report, onSave, onCancel,
               min="0"
               value={formData.healthMetrics?.recovered || 0}
               onChange={(e) => handleMetricsChange('recovered', parseInt(e.target.value) || 0)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2d6f51] focus:border-transparent transition-colors"
+              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2d6f51] focus:border-transparent transition-colors"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              <TrendingDown className="w-4 h-4 inline mr-1 text-red-800" />
+            <label className="block text-xs lg:text-sm font-medium text-gray-700 mb-1">
+              <TrendingDown className="w-3 h-3 lg:w-4 lg:h-4 inline mr-1 text-red-800" />
               Muertes
             </label>
             <input
@@ -847,12 +1356,12 @@ const HealthReportForm: React.FC<ReportFormProps> = ({ report, onSave, onCancel,
               min="0"
               value={formData.healthMetrics?.deaths || 0}
               onChange={(e) => handleMetricsChange('deaths', parseInt(e.target.value) || 0)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2d6f51] focus:border-transparent transition-colors"
+              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2d6f51] focus:border-transparent transition-colors"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-xs lg:text-sm font-medium text-gray-700 mb-1">
               Tiempo Prom. Recuperación (días)
             </label>
             <input
@@ -861,12 +1370,12 @@ const HealthReportForm: React.FC<ReportFormProps> = ({ report, onSave, onCancel,
               step="0.1"
               value={formData.healthMetrics?.averageRecoveryTime || 0}
               onChange={(e) => handleMetricsChange('averageRecoveryTime', parseFloat(e.target.value) || 0)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2d6f51] focus:border-transparent transition-colors"
+              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2d6f51] focus:border-transparent transition-colors"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-xs lg:text-sm font-medium text-gray-700 mb-1">
               Tasa Éxito Tratamiento (%)
             </label>
             <input
@@ -876,16 +1385,16 @@ const HealthReportForm: React.FC<ReportFormProps> = ({ report, onSave, onCancel,
               step="0.1"
               value={formData.healthMetrics?.treatmentSuccessRate || 0}
               onChange={(e) => handleMetricsChange('treatmentSuccessRate', parseFloat(e.target.value) || 0)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2d6f51] focus:border-transparent transition-colors"
+              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2d6f51] focus:border-transparent transition-colors"
             />
           </div>
         </div>
 
         {/* Métricas adicionales */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 pt-4 border-t border-gray-200">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-3 border-t border-gray-200">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              <Syringe className="w-4 h-4 inline mr-1" />
+            <label className="block text-xs lg:text-sm font-medium text-gray-700 mb-1">
+              <Syringe className="w-3 h-3 lg:w-4 lg:h-4 inline mr-1" />
               Cobertura Vacunación (%)
             </label>
             <input
@@ -895,12 +1404,12 @@ const HealthReportForm: React.FC<ReportFormProps> = ({ report, onSave, onCancel,
               step="0.1"
               value={formData.healthMetrics?.vaccinationCoverage || 0}
               onChange={(e) => handleMetricsChange('vaccinationCoverage', parseFloat(e.target.value) || 0)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2d6f51] focus:border-transparent transition-colors"
+              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2d6f51] focus:border-transparent transition-colors"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-xs lg:text-sm font-medium text-gray-700 mb-1">
               Costo Total Tratamiento ($)
             </label>
             <input
@@ -909,12 +1418,12 @@ const HealthReportForm: React.FC<ReportFormProps> = ({ report, onSave, onCancel,
               step="0.01"
               value={formData.healthMetrics?.totalTreatmentCost || 0}
               onChange={(e) => handleMetricsChange('totalTreatmentCost', parseFloat(e.target.value) || 0)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2d6f51] focus:border-transparent transition-colors"
+              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2d6f51] focus:border-transparent transition-colors"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-xs lg:text-sm font-medium text-gray-700 mb-1">
               Costo Prom. por Animal ($)
             </label>
             <input
@@ -923,13 +1432,13 @@ const HealthReportForm: React.FC<ReportFormProps> = ({ report, onSave, onCancel,
               step="0.01"
               value={formData.healthMetrics?.averageCostPerAnimal || 0}
               onChange={(e) => handleMetricsChange('averageCostPerAnimal', parseFloat(e.target.value) || 0)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2d6f51] focus:border-transparent transition-colors"
+              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2d6f51] focus:border-transparent transition-colors"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              <Shield className="w-4 h-4 inline mr-1" />
+            <label className="block text-xs lg:text-sm font-medium text-gray-700 mb-1">
+              <Shield className="w-3 h-3 lg:w-4 lg:h-4 inline mr-1" />
               Medidas Preventivas
             </label>
             <input
@@ -937,26 +1446,26 @@ const HealthReportForm: React.FC<ReportFormProps> = ({ report, onSave, onCancel,
               min="0"
               value={formData.healthMetrics?.preventiveMeasures || 0}
               onChange={(e) => handleMetricsChange('preventiveMeasures', parseInt(e.target.value) || 0)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2d6f51] focus:border-transparent transition-colors"
+              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2d6f51] focus:border-transparent transition-colors"
             />
           </div>
         </div>
       </div>
 
       {/* Estado del reporte */}
-      <div className="space-y-4">
-        <h3 className="text-lg font-medium text-gray-800 border-b pb-2">
+      <div className="space-y-3">
+        <h3 className="text-base lg:text-lg font-medium text-gray-800 border-b pb-2">
           Estado del Reporte
         </h3>
         
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
+          <label className="block text-sm font-medium text-gray-700 mb-1">
             Estado del Reporte
           </label>
           <select
             value={formData.status}
             onChange={(e) => handleInputChange('status', e.target.value as ReportStatus)}
-            className="w-full max-w-xs px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2d6f51] focus:border-transparent transition-colors"
+            className="w-full max-w-xs px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2d6f51] focus:border-transparent transition-colors"
           >
             <option value="draft">Borrador</option>
             <option value="active">Activo</option>
@@ -967,17 +1476,17 @@ const HealthReportForm: React.FC<ReportFormProps> = ({ report, onSave, onCancel,
       </div>
 
       {/* Botones de acción */}
-      <div className="flex items-center justify-end gap-4 pt-6 border-t">
+      <div className="flex flex-col sm:flex-row items-center justify-end gap-2 pt-4 border-t">
         <button
           type="button"
           onClick={onCancel}
-          className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+          className="w-full sm:w-auto px-4 py-2 text-sm border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
         >
           Cancelar
         </button>
         <button
           type="submit"
-          className="flex items-center gap-2 px-6 py-2 bg-gradient-to-r from-[#2d6f51] to-[#4e9c75] text-white rounded-lg hover:from-[#265a44] hover:to-[#3d7a5c] transition-all duration-200"
+          className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2 text-sm bg-gradient-to-r from-[#2d6f51] to-[#4e9c75] text-white rounded-lg hover:from-[#265a44] hover:to-[#3d7a5c] transition-all duration-200"
         >
           <Save className="w-4 h-4" />
           {isEditing ? 'Actualizar Reporte' : 'Crear Reporte'}
@@ -997,6 +1506,8 @@ export const HealthReports: React.FC<HealthReportsProps> = ({ className }) => {
   const [filterType, setFilterType] = useState<string>('all');
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const [viewReportModal, setViewReportModal] = useState<HealthReport | null>(null);
+  const [isMobileFiltersOpen, setIsMobileFiltersOpen] = useState(false);
 
   // Filtrar reportes
   const filteredReports = reports.filter(report => {
@@ -1023,6 +1534,20 @@ export const HealthReports: React.FC<HealthReportsProps> = ({ className }) => {
     setSelectedReport(report);
     setIsEditing(true);
     setIsModalOpen(true);
+  };
+
+  // Ver reporte detallado
+  const handleViewReport = (report: HealthReport) => {
+    setViewReportModal(report);
+  };
+
+  // Descargar reporte
+  const handleDownloadReport = (report: HealthReport, format: 'json' | 'csv' = 'csv') => {
+    if (format === 'json') {
+      downloadAsJSON(report, `reporte_salud_${report.id}`);
+    } else {
+      downloadAsCSV(report);
+    }
   };
 
   // Guardar reporte (crear o editar)
@@ -1091,29 +1616,30 @@ export const HealthReports: React.FC<HealthReportsProps> = ({ className }) => {
         className
       )}
     >
-      <div className="p-6">
+      <div className="p-2 sm:p-4 lg:p-6">
         <div className="max-w-7xl mx-auto">
           {/* Header */}
           <motion.div
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="flex items-center justify-between mb-8"
+            className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-4 lg:mb-6"
           >
             <div>
-              <h1 className="text-3xl font-bold text-white drop-shadow-sm mb-2">
+              <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-white drop-shadow-sm mb-1">
                 Reportes de Salud Ganadera
               </h1>
-              <p className="text-white/90">
+              <p className="text-white/90 text-xs sm:text-sm lg:text-base">
                 Gestiona y analiza los reportes veterinarios y de salud animal
               </p>
             </div>
 
             <button
               onClick={handleCreateReport}
-              className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-[#2d6f51] to-[#4e9c75] text-white rounded-lg hover:from-[#265a44] hover:to-[#3d7a5c] transition-all duration-200 shadow-lg"
+              className="w-full sm:w-auto flex items-center justify-center gap-2 px-3 sm:px-4 lg:px-6 py-2 lg:py-3 bg-gradient-to-r from-[#2d6f51] to-[#4e9c75] text-white rounded-lg hover:from-[#265a44] hover:to-[#3d7a5c] transition-all duration-200 shadow-lg text-xs sm:text-sm lg:text-base"
             >
-              <Plus className="w-5 h-5" />
-              Nuevo Reporte de Salud
+              <Plus className="w-4 h-4" />
+              <span className="hidden sm:inline">Nuevo Reporte de Salud</span>
+              <span className="sm:hidden">Nuevo Reporte</span>
             </button>
           </motion.div>
 
@@ -1122,10 +1648,74 @@ export const HealthReports: React.FC<HealthReportsProps> = ({ className }) => {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.1 }}
-            className="bg-white/95 backdrop-blur-sm rounded-xl p-6 shadow-lg border border-white/20 mb-6"
+            className="bg-white/95 backdrop-blur-sm rounded-xl p-3 sm:p-4 lg:p-6 shadow-lg border border-white/20 mb-3 sm:mb-4 lg:mb-6"
           >
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              {/* Búsqueda */}
+            {/* Versión móvil */}
+            <div className="lg:hidden">
+              <div className="flex items-center gap-2 mb-3">
+                <div className="relative flex-1">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                  <input
+                    type="text"
+                    placeholder="Buscar reportes..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="w-full pl-10 pr-4 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2d6f51] focus:border-transparent transition-colors"
+                  />
+                </div>
+                <button
+                  onClick={() => setIsMobileFiltersOpen(!isMobileFiltersOpen)}
+                  className="px-3 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  <Filter className="w-4 h-4" />
+                </button>
+              </div>
+              
+              <AnimatePresence>
+                {isMobileFiltersOpen && (
+                  <motion.div
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: 'auto', opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    className="overflow-hidden"
+                  >
+                    <div className="space-y-2 pt-2 border-t">
+                      <select
+                        value={filterType}
+                        onChange={(e) => setFilterType(e.target.value)}
+                        className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2d6f51] focus:border-transparent transition-colors"
+                      >
+                        <option value="all">Todos los tipos</option>
+                        {Object.entries(REPORT_TYPE_CONFIG).map(([key, config]) => (
+                          <option key={key} value={key}>
+                            {config.label}
+                          </option>
+                        ))}
+                      </select>
+                      
+                      <select
+                        value={filterStatus}
+                        onChange={(e) => setFilterStatus(e.target.value)}
+                        className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2d6f51] focus:border-transparent transition-colors"
+                      >
+                        <option value="all">Todos los estados</option>
+                        <option value="active">Activo</option>
+                        <option value="draft">Borrador</option>
+                        <option value="archived">Archivado</option>
+                        <option value="processing">Procesando</option>
+                      </select>
+                      
+                      <div className="flex items-center justify-center text-gray-600 text-xs py-1">
+                        <span>{filteredReports.length} de {reports.length} reportes</span>
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+
+            {/* Versión desktop */}
+            <div className="hidden lg:grid lg:grid-cols-4 gap-3">
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
                 <input
@@ -1133,42 +1723,35 @@ export const HealthReports: React.FC<HealthReportsProps> = ({ className }) => {
                   placeholder="Buscar reportes..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2d6f51] focus:border-transparent transition-colors"
+                  className="w-full pl-10 pr-4 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2d6f51] focus:border-transparent transition-colors"
                 />
               </div>
 
-              {/* Filtro por tipo */}
-              <div>
-                <select
-                  value={filterType}
-                  onChange={(e) => setFilterType(e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2d6f51] focus:border-transparent transition-colors"
-                >
-                  <option value="all">Todos los tipos</option>
-                  {Object.entries(REPORT_TYPE_CONFIG).map(([key, config]) => (
-                    <option key={key} value={key}>
-                      {config.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
+              <select
+                value={filterType}
+                onChange={(e) => setFilterType(e.target.value)}
+                className="w-full px-4 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2d6f51] focus:border-transparent transition-colors"
+              >
+                <option value="all">Todos los tipos</option>
+                {Object.entries(REPORT_TYPE_CONFIG).map(([key, config]) => (
+                  <option key={key} value={key}>
+                    {config.label}
+                  </option>
+                ))}
+              </select>
 
-              {/* Filtro por estado */}
-              <div>
-                <select
-                  value={filterStatus}
-                  onChange={(e) => setFilterStatus(e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2d6f51] focus:border-transparent transition-colors"
-                >
-                  <option value="all">Todos los estados</option>
-                  <option value="active">Activo</option>
-                  <option value="draft">Borrador</option>
-                  <option value="archived">Archivado</option>
-                  <option value="processing">Procesando</option>
-                </select>
-              </div>
+              <select
+                value={filterStatus}
+                onChange={(e) => setFilterStatus(e.target.value)}
+                className="w-full px-4 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2d6f51] focus:border-transparent transition-colors"
+              >
+                <option value="all">Todos los estados</option>
+                <option value="active">Activo</option>
+                <option value="draft">Borrador</option>
+                <option value="archived">Archivado</option>
+                <option value="processing">Procesando</option>
+              </select>
 
-              {/* Contador de resultados */}
               <div className="flex items-center text-gray-600">
                 <Filter className="w-4 h-4 mr-2" />
                 <span className="text-sm">
@@ -1186,12 +1769,12 @@ export const HealthReports: React.FC<HealthReportsProps> = ({ className }) => {
             className="bg-white/95 backdrop-blur-sm rounded-xl shadow-lg border border-white/20 overflow-hidden"
           >
             {filteredReports.length === 0 ? (
-              <div className="p-12 text-center">
-                <Activity className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-                <h3 className="text-lg font-medium text-gray-800 mb-2">
+              <div className="p-6 lg:p-12 text-center">
+                <Activity className="w-10 h-10 lg:w-16 lg:h-16 text-gray-400 mx-auto mb-3" />
+                <h3 className="text-base lg:text-lg font-medium text-gray-800 mb-2">
                   No se encontraron reportes de salud
                 </h3>
-                <p className="text-gray-600 mb-6">
+                <p className="text-sm text-gray-600 mb-4 lg:mb-6">
                   {reports.length === 0 
                     ? 'Crea tu primer reporte de salud ganadera'
                     : 'Ajusta los filtros o términos de búsqueda'
@@ -1200,150 +1783,273 @@ export const HealthReports: React.FC<HealthReportsProps> = ({ className }) => {
                 {reports.length === 0 && (
                   <button
                     onClick={handleCreateReport}
-                    className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-[#2d6f51] to-[#4e9c75] text-white rounded-lg hover:from-[#265a44] hover:to-[#3d7a5c] transition-all duration-200"
+                    className="inline-flex items-center gap-2 px-4 lg:px-6 py-2 lg:py-3 bg-gradient-to-r from-[#2d6f51] to-[#4e9c75] text-white rounded-lg hover:from-[#265a44] hover:to-[#3d7a5c] transition-all duration-200 text-sm lg:text-base"
                   >
-                    <Plus className="w-5 h-5" />
+                    <Plus className="w-4 h-4 lg:w-5 lg:h-5" />
                     Crear Primer Reporte
                   </button>
                 )}
               </div>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead className="bg-gradient-to-r from-[#2d6f51] to-[#4e9c75] text-white">
-                    <tr>
-                      <th className="px-6 py-4 text-left text-sm font-medium">Reporte</th>
-                      <th className="px-6 py-4 text-left text-sm font-medium">Tipo</th>
-                      <th className="px-6 py-4 text-left text-sm font-medium">Ubicación</th>
-                      <th className="px-6 py-4 text-left text-sm font-medium">Veterinario</th>
-                      <th className="px-6 py-4 text-left text-sm font-medium">Período</th>
-                      <th className="px-6 py-4 text-left text-sm font-medium">Estado</th>
-                      <th className="px-6 py-4 text-left text-sm font-medium">Métricas Clave</th>
-                      <th className="px-6 py-4 text-left text-sm font-medium">Acciones</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-200">
+              <>
+                {/* Vista móvil - Cards */}
+                <div className="lg:hidden">
+                  <div className="divide-y divide-gray-200">
                     {filteredReports.map((report, index) => (
-                      <motion.tr
+                      <motion.div
                         key={report.id}
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: index * 0.05 }}
-                        className="hover:bg-gray-50/50 transition-colors"
+                        className="p-3 hover:bg-gray-50/50 transition-colors"
                       >
-                        <td className="px-6 py-4">
-                          <div>
-                            <h4 className="font-medium text-gray-800">{report.title}</h4>
-                            <p className="text-sm text-gray-600 mt-1 line-clamp-2">
-                              {report.description}
-                            </p>
-                            <p className="text-xs text-gray-400 mt-1">
-                              Por {report.createdBy} • {new Date(report.createdAt).toLocaleDateString()}
-                            </p>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4">
-                          <div className="flex items-center gap-2">
-                            <div 
-                              className="p-2 rounded-lg"
-                              style={{ 
-                                backgroundColor: `${REPORT_TYPE_CONFIG[report.reportType].color}20`,
-                                color: REPORT_TYPE_CONFIG[report.reportType].color
-                              }}
-                            >
-                              {REPORT_TYPE_CONFIG[report.reportType].icon}
+                        <div className="space-y-2">
+                          {/* Header */}
+                          <div className="flex items-start justify-between">
+                            <div className="flex-1 min-w-0">
+                              <h4 className="font-medium text-gray-800 truncate text-sm">{report.title}</h4>
+                              <p className="text-xs text-gray-600 line-clamp-2 mt-1">
+                                {report.description}
+                              </p>
                             </div>
-                            <span className="text-sm font-medium">
-                              {REPORT_TYPE_CONFIG[report.reportType].label}
+                            <span className={cn(
+                              "inline-flex px-2 py-1 text-xs font-medium rounded-full ml-2 whitespace-nowrap",
+                              getStatusColor(report.status)
+                            )}>
+                              {getStatusLabel(report.status)}
                             </span>
                           </div>
-                        </td>
-                        <td className="px-6 py-4">
-                          <div className="flex items-center gap-2 text-gray-700">
-                            <MapPin className="w-4 h-4 text-gray-400" />
-                            <span className="text-sm">{report.location}</span>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4">
-                          <div className="flex items-center gap-2 text-gray-700">
-                            <Stethoscope className="w-4 h-4 text-gray-400" />
-                            <span className="text-sm">{report.veterinarian}</span>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4">
-                          <div className="text-sm text-gray-700">
-                            <div className="flex items-center gap-1 mb-1">
-                              <Calendar className="w-3 h-3 text-gray-400" />
-                              <span className="capitalize">{report.period.type}</span>
+
+                          {/* Info */}
+                          <div className="grid grid-cols-2 gap-2 text-xs">
+                            <div className="flex items-center gap-1">
+                              <div 
+                                className="p-1 rounded"
+                                style={{ 
+                                  backgroundColor: `${REPORT_TYPE_CONFIG[report.reportType].color}20`,
+                                  color: REPORT_TYPE_CONFIG[report.reportType].color
+                                }}
+                              >
+                                <div className="w-3 h-3">
+                                  {REPORT_TYPE_CONFIG[report.reportType].icon}
+                                </div>
+                              </div>
+                              <span className="text-gray-700 truncate">{REPORT_TYPE_CONFIG[report.reportType].label}</span>
                             </div>
+                            <div className="flex items-center gap-1">
+                              <MapPin className="w-3 h-3 text-gray-400 flex-shrink-0" />
+                              <span className="text-gray-700 truncate">{report.location}</span>
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <Stethoscope className="w-3 h-3 text-gray-400 flex-shrink-0" />
+                              <span className="text-gray-700 truncate">{report.veterinarian}</span>
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <Calendar className="w-3 h-3 text-gray-400 flex-shrink-0" />
+                              <span className="text-gray-700 truncate capitalize">{report.period.type}</span>
+                            </div>
+                          </div>
+
+                          {/* Métricas */}
+                          <div className="bg-gray-50 rounded-lg p-2">
+                            <div className="grid grid-cols-3 gap-2 text-center text-xs">
+                              <div>
+                                <p className="font-medium text-gray-800">{report.healthMetrics.totalAnimalsEvaluated}</p>
+                                <p className="text-xs text-gray-600">Evaluados</p>
+                              </div>
+                              <div>
+                                <p className="font-medium text-green-600">{report.healthMetrics.healthyAnimals}</p>
+                                <p className="text-xs text-gray-600">Sanos</p>
+                              </div>
+                              <div>
+                                <p className="font-medium text-red-600">{report.healthMetrics.sickAnimals}</p>
+                                <p className="text-xs text-gray-600">Enfermos</p>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Acciones */}
+                          <div className="flex items-center justify-between pt-2 border-t border-gray-100">
                             <div className="text-xs text-gray-500">
-                              {new Date(report.period.startDate).toLocaleDateString()} - {new Date(report.period.endDate).toLocaleDateString()}
+                              Por {report.createdBy} • {new Date(report.createdAt).toLocaleDateString()}
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <button
+                                onClick={() => handleEditReport(report)}
+                                className="p-1.5 text-blue-600 hover:bg-blue-100 rounded-lg transition-colors"
+                                title="Editar reporte"
+                              >
+                                <Edit2 className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                onClick={() => handleViewReport(report)}
+                                className="p-1.5 text-green-600 hover:bg-green-100 rounded-lg transition-colors"
+                                title="Ver reporte"
+                              >
+                                <Eye className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                onClick={() => handleDownloadReport(report)}
+                                className="p-1.5 text-[#2d6f51] hover:bg-green-100 rounded-lg transition-colors"
+                                title="Descargar reporte"
+                              >
+                                <Download className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                onClick={() => setDeleteConfirm(report.id)}
+                                className="p-1.5 text-red-600 hover:bg-red-100 rounded-lg transition-colors"
+                                title="Eliminar reporte"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
                             </div>
                           </div>
-                        </td>
-                        <td className="px-6 py-4">
-                          <span className={cn(
-                            "inline-flex px-2 py-1 text-xs font-medium rounded-full",
-                            getStatusColor(report.status)
-                          )}>
-                            {getStatusLabel(report.status)}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4">
-                          <div className="text-sm space-y-1">
-                            <div className="flex justify-between">
-                              <span className="text-gray-600">Evaluados:</span>
-                              <span className="font-medium">{report.healthMetrics.totalAnimalsEvaluated}</span>
-                            </div>
-                            <div className="flex justify-between">
-                              <span className="text-gray-600">Sanos:</span>
-                              <span className="font-medium text-green-600">{report.healthMetrics.healthyAnimals}</span>
-                            </div>
-                            <div className="flex justify-between">
-                              <span className="text-gray-600">Enfermos:</span>
-                              <span className="font-medium text-red-600">{report.healthMetrics.sickAnimals}</span>
-                            </div>
-                            <div className="flex justify-between">
-                              <span className="text-gray-600">Éxito trat.:</span>
-                              <span className="font-medium">{report.healthMetrics.treatmentSuccessRate.toFixed(1)}%</span>
-                            </div>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4">
-                          <div className="flex items-center gap-2">
-                            <button
-                              onClick={() => handleEditReport(report)}
-                              className="p-2 text-blue-600 hover:bg-blue-100 rounded-lg transition-colors"
-                              title="Editar reporte"
-                            >
-                              <Edit2 className="w-4 h-4" />
-                            </button>
-                            <button
-                              className="p-2 text-green-600 hover:bg-green-100 rounded-lg transition-colors"
-                              title="Ver reporte"
-                            >
-                              <Eye className="w-4 h-4" />
-                            </button>
-                            <button
-                              className="p-2 text-[#2d6f51] hover:bg-green-100 rounded-lg transition-colors"
-                              title="Descargar reporte"
-                            >
-                              <Download className="w-4 h-4" />
-                            </button>
-                            <button
-                              onClick={() => setDeleteConfirm(report.id)}
-                              className="p-2 text-red-600 hover:bg-red-100 rounded-lg transition-colors"
-                              title="Eliminar reporte"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </div>
-                        </td>
-                      </motion.tr>
+                        </div>
+                      </motion.div>
                     ))}
-                  </tbody>
-                </table>
-              </div>
+                  </div>
+                </div>
+
+                {/* Vista desktop - Tabla */}
+                <div className="hidden lg:block overflow-x-auto">
+                  <table className="w-full">
+                    <thead className="bg-gradient-to-r from-[#2d6f51] to-[#4e9c75] text-white">
+                      <tr>
+                        <th className="px-4 py-3 text-left text-sm font-medium">Reporte</th>
+                        <th className="px-4 py-3 text-left text-sm font-medium">Tipo</th>
+                        <th className="px-4 py-3 text-left text-sm font-medium">Ubicación</th>
+                        <th className="px-4 py-3 text-left text-sm font-medium">Veterinario</th>
+                        <th className="px-4 py-3 text-left text-sm font-medium">Período</th>
+                        <th className="px-4 py-3 text-left text-sm font-medium">Estado</th>
+                        <th className="px-4 py-3 text-left text-sm font-medium">Métricas Clave</th>
+                        <th className="px-4 py-3 text-left text-sm font-medium">Acciones</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-200">
+                      {filteredReports.map((report, index) => (
+                        <motion.tr
+                          key={report.id}
+                          initial={{ opacity: 0, y: 20 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ delay: index * 0.05 }}
+                          className="hover:bg-gray-50/50 transition-colors"
+                        >
+                          <td className="px-4 py-3">
+                            <div>
+                              <h4 className="font-medium text-gray-800 text-sm">{report.title}</h4>
+                              <p className="text-xs text-gray-600 mt-1 line-clamp-2">
+                                {report.description}
+                              </p>
+                              <p className="text-xs text-gray-400 mt-1">
+                                Por {report.createdBy} • {new Date(report.createdAt).toLocaleDateString()}
+                              </p>
+                            </div>
+                          </td>
+                          <td className="px-4 py-3">
+                            <div className="flex items-center gap-2">
+                              <div 
+                                className="p-1.5 rounded-lg"
+                                style={{ 
+                                  backgroundColor: `${REPORT_TYPE_CONFIG[report.reportType].color}20`,
+                                  color: REPORT_TYPE_CONFIG[report.reportType].color
+                                }}
+                              >
+                                {REPORT_TYPE_CONFIG[report.reportType].icon}
+                              </div>
+                              <span className="text-xs font-medium">
+                                {REPORT_TYPE_CONFIG[report.reportType].label}
+                              </span>
+                            </div>
+                          </td>
+                          <td className="px-4 py-3">
+                            <div className="flex items-center gap-2 text-gray-700">
+                              <MapPin className="w-3 h-3 text-gray-400" />
+                              <span className="text-xs">{report.location}</span>
+                            </div>
+                          </td>
+                          <td className="px-4 py-3">
+                            <div className="flex items-center gap-2 text-gray-700">
+                              <Stethoscope className="w-3 h-3 text-gray-400" />
+                              <span className="text-xs">{report.veterinarian}</span>
+                            </div>
+                          </td>
+                          <td className="px-4 py-3">
+                            <div className="text-xs text-gray-700">
+                              <div className="flex items-center gap-1 mb-1">
+                                <Calendar className="w-3 h-3 text-gray-400" />
+                                <span className="capitalize">{report.period.type}</span>
+                              </div>
+                              <div className="text-xs text-gray-500">
+                                {new Date(report.period.startDate).toLocaleDateString()} - {new Date(report.period.endDate).toLocaleDateString()}
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-4 py-3">
+                            <span className={cn(
+                              "inline-flex px-2 py-1 text-xs font-medium rounded-full",
+                              getStatusColor(report.status)
+                            )}>
+                              {getStatusLabel(report.status)}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3">
+                            <div className="text-xs space-y-1">
+                              <div className="flex justify-between">
+                                <span className="text-gray-600">Evaluados:</span>
+                                <span className="font-medium">{report.healthMetrics.totalAnimalsEvaluated}</span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-gray-600">Sanos:</span>
+                                <span className="font-medium text-green-600">{report.healthMetrics.healthyAnimals}</span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-gray-600">Enfermos:</span>
+                                <span className="font-medium text-red-600">{report.healthMetrics.sickAnimals}</span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-gray-600">Éxito trat.:</span>
+                                <span className="font-medium">{report.healthMetrics.treatmentSuccessRate.toFixed(1)}%</span>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-4 py-3">
+                            <div className="flex items-center gap-1">
+                              <button
+                                onClick={() => handleEditReport(report)}
+                                className="p-1.5 text-blue-600 hover:bg-blue-100 rounded-lg transition-colors"
+                                title="Editar reporte"
+                              >
+                                <Edit2 className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                onClick={() => handleViewReport(report)}
+                                className="p-1.5 text-green-600 hover:bg-green-100 rounded-lg transition-colors"
+                                title="Ver reporte"
+                              >
+                                <Eye className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                onClick={() => handleDownloadReport(report)}
+                                className="p-1.5 text-[#2d6f51] hover:bg-green-100 rounded-lg transition-colors"
+                                title="Descargar reporte"
+                              >
+                                <Download className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                onClick={() => setDeleteConfirm(report.id)}
+                                className="p-1.5 text-red-600 hover:bg-red-100 rounded-lg transition-colors"
+                                title="Eliminar reporte"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </td>
+                        </motion.tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
             )}
           </motion.div>
         </div>
@@ -1354,6 +2060,7 @@ export const HealthReports: React.FC<HealthReportsProps> = ({ className }) => {
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         title={isEditing ? 'Editar Reporte de Salud' : 'Crear Nuevo Reporte de Salud'}
+        size="xl"
       >
         <HealthReportForm
           report={selectedReport || undefined}
@@ -1362,6 +2069,15 @@ export const HealthReports: React.FC<HealthReportsProps> = ({ className }) => {
           isEditing={isEditing}
         />
       </Modal>
+
+      {/* Modal de vista detallada */}
+      {viewReportModal && (
+        <ViewReportModal
+          report={viewReportModal}
+          isOpen={true}
+          onClose={() => setViewReportModal(null)}
+        />
+      )}
 
       {/* Modal de confirmación de eliminación */}
       <AnimatePresence>
@@ -1376,37 +2092,37 @@ export const HealthReports: React.FC<HealthReportsProps> = ({ className }) => {
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
-              className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6"
+              className="bg-white rounded-xl shadow-2xl max-w-md w-full p-4 lg:p-6"
             >
-              <div className="flex items-center gap-4 mb-4">
-                <div className="p-3 bg-red-100 rounded-full">
-                  <AlertCircle className="w-6 h-6 text-red-600" />
+              <div className="flex items-center gap-3 lg:gap-4 mb-3 lg:mb-4">
+                <div className="p-2 lg:p-3 bg-red-100 rounded-full">
+                  <AlertCircle className="w-5 h-5 lg:w-6 lg:h-6 text-red-600" />
                 </div>
                 <div>
-                  <h3 className="text-lg font-semibold text-gray-800">
+                  <h3 className="text-base lg:text-lg font-semibold text-gray-800">
                     Confirmar Eliminación
                   </h3>
-                  <p className="text-gray-600">
+                  <p className="text-sm text-gray-600">
                     Esta acción no se puede deshacer.
                   </p>
                 </div>
               </div>
               
-              <p className="text-gray-700 mb-6">
+              <p className="text-sm text-gray-700 mb-4 lg:mb-6">
                 ¿Estás seguro de que deseas eliminar este reporte de salud? 
                 Se perderán todos los datos médicos asociados.
               </p>
               
-              <div className="flex items-center justify-end gap-3">
+              <div className="flex items-center justify-end gap-2 lg:gap-3">
                 <button
                   onClick={() => setDeleteConfirm(null)}
-                  className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                  className="px-3 lg:px-4 py-2 text-sm border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
                 >
                   Cancelar
                 </button>
                 <button
                   onClick={() => handleDeleteReport(deleteConfirm)}
-                  className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+                  className="px-3 lg:px-4 py-2 text-sm bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
                 >
                   Eliminar
                 </button>
