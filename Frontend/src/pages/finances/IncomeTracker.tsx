@@ -1,32 +1,18 @@
 import React, { useState, useEffect } from "react";
 import { motion, Variants } from "framer-motion";
 import {
-  TrendingUp,
-  DollarSign,
-  BarChart3,
-  ArrowUpRight,
-  Target,
   Plus,
   Edit,
   Trash2,
-  Search,
   Download,
   Eye,
+  X,
+  Save,
+  Calendar,
+  MapPin,
+  Navigation,
 } from "lucide-react";
-import {
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  Legend,
-  ResponsiveContainer,
-  BarChart,
-  Bar,
-  Area,
-  AreaChart,
-} from "recharts";
 
-// Interfaces para tipado de datos
 interface IncomeRecord {
   id: string;
   date: string;
@@ -46,35 +32,225 @@ interface IncomeRecord {
   status: "completed" | "pending" | "cancelled";
 }
 
-interface IncomeCategory {
-  name: string;
-  total: number;
-  count: number;
-  color: string;
-  icon: React.ReactNode;
+interface ModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  title: string;
+  children: React.ReactNode;
 }
 
-interface MonthlyIncomeData {
-  month: string;
-  ganado: number;
-  lacteos: number;
-  servicios: number;
-  otros: number;
-  total: number;
+const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children }) => {
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0, scale: 0.95 }}
+        className="bg-white rounded-xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto"
+      >
+        <div className="flex items-center justify-between p-6 border-b border-gray-200">
+          <h2 className="text-xl font-semibold text-gray-900">{title}</h2>
+          <button
+            onClick={onClose}
+            className="p-2 hover:bg-gray-100 rounded-lg transition-colors duration-200"
+          >
+            <X className="w-5 h-5 text-gray-500" />
+          </button>
+        </div>
+        <div className="p-6">{children}</div>
+      </motion.div>
+    </div>
+  );
+};
+
+// Formulario para agregar/editar ingreso
+interface IncomeFormProps {
+  formData: {
+    description: string;
+    category: IncomeRecord["category"];
+    amount: string;
+    date: string;
+    address: string;
+    animalId: string;
+    status: IncomeRecord["status"];
+  };
+  onFormChange: (field: string, value: string) => void;
+  onSubmit: () => void;
+  onCancel: () => void;
+  onGetLocation: () => void;
+  isGettingLocation: boolean;
+  submitLabel: string;
 }
+
+const IncomeForm: React.FC<IncomeFormProps> = ({ 
+  formData, 
+  onFormChange, 
+  onSubmit, 
+  onCancel, 
+  onGetLocation,
+  isGettingLocation,
+  submitLabel 
+}) => (
+  <div className="space-y-6">
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-2">
+          Descripción *
+        </label>
+        <input
+          type="text"
+          value={formData.description}
+          onChange={(e) => onFormChange("description", e.target.value)}
+          placeholder="Descripción del ingreso"
+          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+        />
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-2">
+          Categoría *
+        </label>
+        <select
+          value={formData.category}
+          onChange={(e) => onFormChange("category", e.target.value)}
+          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+        >
+          <option value="venta_ganado">Venta de Ganado</option>
+          <option value="productos_lacteos">Productos Lácteos</option>
+          <option value="servicios_veterinarios">Servicios Veterinarios</option>
+          <option value="otros">Otros</option>
+        </select>
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-2">
+          Monto *
+        </label>
+        <input
+          type="number"
+          value={formData.amount}
+          onChange={(e) => onFormChange("amount", e.target.value)}
+          placeholder="0.00"
+          step="0.01"
+          min="0"
+          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+        />
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-2">
+          Fecha *
+        </label>
+        <input
+          type="date"
+          value={formData.date}
+          onChange={(e) => onFormChange("date", e.target.value)}
+          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+        />
+      </div>
+
+      <div className="md:col-span-2">
+        <label className="block text-sm font-medium text-gray-700 mb-2">
+          Ubicación
+        </label>
+        <div className="flex gap-2">
+          <input
+            type="text"
+            value={formData.address}
+            onChange={(e) => onFormChange("address", e.target.value)}
+            placeholder="Dirección o ubicación"
+            className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+          />
+          <button
+            type="button"
+            onClick={onGetLocation}
+            disabled={isGettingLocation}
+            className="flex items-center px-3 py-2 bg-blue-500 hover:bg-blue-600 disabled:bg-blue-300 text-white rounded-lg transition-colors duration-200"
+          >
+            {isGettingLocation ? (
+              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+            ) : (
+              <Navigation className="w-4 h-4" />
+            )}
+          </button>
+        </div>
+        <p className="text-xs text-gray-500 mt-1">
+          Haga clic en el botón para obtener su ubicación actual
+        </p>
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-2">
+          ID Animal (opcional)
+        </label>
+        <input
+          type="text"
+          value={formData.animalId}
+          onChange={(e) => onFormChange("animalId", e.target.value)}
+          placeholder="ID del animal relacionado"
+          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+        />
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-2">
+          Estado
+        </label>
+        <select
+          value={formData.status}
+          onChange={(e) => onFormChange("status", e.target.value as IncomeRecord["status"])}
+          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+        >
+          <option value="completed">Completado</option>
+          <option value="pending">Pendiente</option>
+          <option value="cancelled">Cancelado</option>
+        </select>
+      </div>
+    </div>
+
+    <div className="flex justify-end space-x-3 pt-4">
+      <button
+        onClick={onCancel}
+        className="px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors duration-200"
+      >
+        Cancelar
+      </button>
+      <button
+        onClick={onSubmit}
+        className="flex items-center px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors duration-200"
+      >
+        <Save className="w-4 h-4 mr-2" />
+        {submitLabel}
+      </button>
+    </div>
+  </div>
+);
 
 const IncomeTracker: React.FC = () => {
   // Estados del componente
-  const [selectedPeriod, setSelectedPeriod] = useState<
-    "weekly" | "monthly" | "yearly"
-  >("monthly");
-  const [searchTerm, setSearchTerm] = useState<string>("");
-  const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [isLoading, setIsLoading] = useState(true);
-  const [, setShowAddModal] = useState(false);
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [showViewModal, setShowViewModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [selectedRecord, setSelectedRecord] = useState<IncomeRecord | null>(null);
+  const [incomeRecords, setIncomeRecords] = useState<IncomeRecord[]>([]);
+  const [isGettingLocation, setIsGettingLocation] = useState(false);
 
-  // Datos de ejemplo para ingresos
-  const incomeRecords: IncomeRecord[] = [
+  // Formulario para nuevo/editar ingreso
+  const [formData, setFormData] = useState({
+    description: "",
+    category: "venta_ganado" as IncomeRecord["category"],
+    amount: "",
+    date: new Date().toISOString().split('T')[0],
+    address: "",
+    animalId: "",
+    status: "completed" as IncomeRecord["status"],
+  });
+
+  // Datos iniciales de ejemplo para ingresos
+  const initialIncomeRecords: IncomeRecord[] = [
     {
       id: "inc_001",
       date: "2024-06-15",
@@ -113,98 +289,199 @@ const IncomeTracker: React.FC = () => {
     },
   ];
 
-  // Datos para gráfico de ingresos mensuales
-  const monthlyIncomeData: MonthlyIncomeData[] = [
-    {
-      month: "Ene",
-      ganado: 95000,
-      lacteos: 25000,
-      servicios: 12000,
-      otros: 8000,
-      total: 140000,
-    },
-    {
-      month: "Feb",
-      ganado: 110000,
-      lacteos: 28000,
-      servicios: 15000,
-      otros: 7000,
-      total: 160000,
-    },
-    {
-      month: "Mar",
-      ganado: 125000,
-      lacteos: 30000,
-      servicios: 18000,
-      otros: 12000,
-      total: 185000,
-    },
-    {
-      month: "Abr",
-      ganado: 108000,
-      lacteos: 26000,
-      servicios: 14000,
-      otros: 9000,
-      total: 157000,
-    },
-    {
-      month: "May",
-      ganado: 135000,
-      lacteos: 32000,
-      servicios: 20000,
-      otros: 11000,
-      total: 198000,
-    },
-    {
-      month: "Jun",
-      ganado: 142000,
-      lacteos: 35000,
-      servicios: 22000,
-      otros: 13000,
-      total: 212000,
-    },
-  ];
-
-  // Categorías de ingresos con colores verdes
-  const incomeCategories: IncomeCategory[] = [
-    {
-      name: "Venta de Ganado",
-      total: 680000,
-      count: 24,
-      color: "from-green-400 to-green-600",
-      icon: <Target className="w-5 h-5" />,
-    },
-    {
-      name: "Productos Lácteos",
-      total: 176000,
-      count: 156,
-      color: "from-emerald-400 to-emerald-600",
-      icon: <DollarSign className="w-5 h-5" />,
-    },
-    {
-      name: "Servicios Veterinarios",
-      total: 101000,
-      count: 32,
-      color: "from-teal-400 to-teal-600",
-      icon: <BarChart3 className="w-5 h-5" />,
-    },
-    {
-      name: "Otros Ingresos",
-      total: 55000,
-      count: 18,
-      color: "from-lime-400 to-lime-600",
-      icon: <TrendingUp className="w-5 h-5" />,
-    },
-  ];
-
-  // Efecto para simular carga de datos
+  // Efecto para cargar datos iniciales
   useEffect(() => {
     const timer = setTimeout(() => {
+      setIncomeRecords(initialIncomeRecords);
       setIsLoading(false);
     }, 1200);
 
     return () => clearTimeout(timer);
   }, []);
+
+  // Funciones de geolocalización
+  const getCurrentLocation = async (): Promise<{ address: string; lat: number; lng: number } | null> => {
+    if (!navigator.geolocation) {
+      alert("La geolocalización no está soportada en este navegador");
+      return null;
+    }
+
+    return new Promise((resolve) => {
+      setIsGettingLocation(true);
+      navigator.geolocation.getCurrentPosition(
+        async (position) => {
+          const { latitude, longitude } = position.coords;
+          
+          try {
+            // Usar la API de geocodificación inversa (aquí simulamos con una dirección)
+            // En un caso real, usarías Google Maps API o similar
+            const address = `Lat: ${latitude.toFixed(4)}, Lng: ${longitude.toFixed(4)}, Villahermosa, Tabasco`;
+            
+            setIsGettingLocation(false);
+            resolve({
+              address,
+              lat: latitude,
+              lng: longitude
+            });
+          } catch (error) {
+            console.error("Error obteniendo dirección:", error);
+            setIsGettingLocation(false);
+            resolve({
+              address: `Ubicación actual (${latitude.toFixed(4)}, ${longitude.toFixed(4)})`,
+              lat: latitude,
+              lng: longitude
+            });
+          }
+        },
+        (error) => {
+          console.error("Error obteniendo ubicación:", error);
+          setIsGettingLocation(false);
+          alert("No se pudo obtener la ubicación. Verifique los permisos.");
+          resolve(null);
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 10000,
+          maximumAge: 300000
+        }
+      );
+    });
+  };
+
+  const handleGetCurrentLocation = async () => {
+    const location = await getCurrentLocation();
+    if (location) {
+      handleFormChange("address", location.address);
+    }
+  };
+  const resetForm = () => {
+    setFormData({
+      description: "",
+      category: "venta_ganado",
+      amount: "",
+      date: new Date().toISOString().split('T')[0],
+      address: "",
+      animalId: "",
+      status: "completed",
+    });
+  };
+
+  const handleFormChange = (field: string, value: string) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
+  };
+
+  // Funciones de CRUD
+  const handleAddIncome = () => {
+    if (!formData.description || !formData.amount) {
+      alert("Por favor complete todos los campos obligatorios");
+      return;
+    }
+
+    const newRecord: IncomeRecord = {
+      id: `inc_${Date.now()}`,
+      date: formData.date,
+      description: formData.description,
+      category: formData.category,
+      amount: parseFloat(formData.amount),
+      location: {
+        lat: 17.9895,
+        lng: -92.9475,
+        address: formData.address || "Ubicación no especificada",
+      },
+      animalId: formData.animalId || undefined,
+      status: formData.status,
+    };
+
+    setIncomeRecords(prev => [newRecord, ...prev]);
+    setShowAddModal(false);
+    resetForm();
+    alert("Ingreso agregado exitosamente");
+  };
+
+  const handleEditIncome = () => {
+    if (!selectedRecord || !formData.description || !formData.amount) {
+      alert("Por favor complete todos los campos obligatorios");
+      return;
+    }
+
+    const updatedRecord: IncomeRecord = {
+      ...selectedRecord,
+      date: formData.date,
+      description: formData.description,
+      category: formData.category,
+      amount: parseFloat(formData.amount),
+      location: {
+        ...selectedRecord.location,
+        address: formData.address,
+      },
+      animalId: formData.animalId || undefined,
+      status: formData.status,
+    };
+
+    setIncomeRecords(prev => 
+      prev.map(record => 
+        record.id === selectedRecord.id ? updatedRecord : record
+      )
+    );
+    
+    setShowEditModal(false);
+    setSelectedRecord(null);
+    resetForm();
+    alert("Ingreso actualizado exitosamente");
+  };
+
+  const handleDeleteIncome = (recordId: string) => {
+    if (window.confirm("¿Está seguro de que desea eliminar este registro?")) {
+      setIncomeRecords(prev => prev.filter(record => record.id !== recordId));
+      alert("Registro eliminado exitosamente");
+    }
+  };
+
+  const handleViewRecord = (record: IncomeRecord) => {
+    setSelectedRecord(record);
+    setShowViewModal(true);
+  };
+
+  const handleEditRecord = (record: IncomeRecord) => {
+    setSelectedRecord(record);
+    setFormData({
+      description: record.description,
+      category: record.category,
+      amount: record.amount.toString(),
+      date: record.date,
+      address: record.location.address,
+      animalId: record.animalId || "",
+      status: record.status,
+    });
+    setShowEditModal(true);
+  };
+
+  const handleExport = () => {
+    try {
+      const csvContent = [
+        "Fecha,Descripción,Categoría,Monto,Ubicación,Estado",
+        ...incomeRecords.map(record => 
+          `${record.date},"${record.description}","${getCategoryName(record.category)}",${record.amount},"${record.location.address}","${record.status}"`
+        )
+      ].join('\n');
+
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      if (link.download !== undefined) {
+        const url = URL.createObjectURL(blob);
+        link.setAttribute('href', url);
+        link.setAttribute('download', `ingresos_${new Date().toISOString().split('T')[0]}.csv`);
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      }
+      alert("Datos exportados exitosamente");
+    } catch (error) {
+      console.error("Error al exportar:", error);
+      alert("Error al exportar los datos");
+    }
+  };
 
   // Animaciones de Framer Motion
   const containerVariants: Variants = {
@@ -270,17 +547,16 @@ const IncomeTracker: React.FC = () => {
     return statusColors[status] || "bg-gray-500";
   };
 
-  // Filtrar registros de ingresos
-  const filteredRecords = incomeRecords.filter((record) => {
-    const matchesSearch = record.description
-      .toLowerCase()
-      .includes(searchTerm.toLowerCase());
-    const matchesCategory =
-      selectedCategory === "all" || record.category === selectedCategory;
-    return matchesSearch && matchesCategory;
-  });
+  const getStatusText = (status: string): string => {
+    const statusText: Record<string, string> = {
+      completed: "Completado",
+      pending: "Pendiente",
+      cancelled: "Cancelado",
+    };
+    return statusText[status] || status;
+  };
 
-  // Componente de Loading con fondo degradado del layout principal
+  // Componente de Loading
   const LoadingSpinner: React.FC = () => (
     <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-green-400 via-green-500 to-yellow-400">
       <motion.div
@@ -290,6 +566,8 @@ const IncomeTracker: React.FC = () => {
       />
     </div>
   );
+
+
 
   if (isLoading) {
     return <LoadingSpinner />;
@@ -326,205 +604,15 @@ const IncomeTracker: React.FC = () => {
               <Plus className="w-5 h-5 mr-2" />
               Nuevo Ingreso
             </button>
-            <button className="flex items-center px-4 py-2 bg-white/20 hover:bg-white/30 text-white rounded-lg font-medium transition-all duration-300 shadow-lg backdrop-blur-sm">
+            <button 
+              onClick={handleExport}
+              className="flex items-center px-4 py-2 bg-white/20 hover:bg-white/30 text-white rounded-lg font-medium transition-all duration-300 shadow-lg backdrop-blur-sm"
+            >
               <Download className="w-5 h-5 mr-2" />
               Exportar
             </button>
           </div>
         </motion.div>
-
-        {/* Tarjetas de resumen */}
-        <motion.div
-          variants={itemVariants}
-          className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6"
-        >
-          {incomeCategories.map((category) => (
-            <motion.div
-              key={category.name}
-              whileHover={{ scale: 1.02, y: -2 }}
-              whileTap={{ scale: 0.98 }}
-              className="bg-white/95 backdrop-blur-md rounded-xl p-6 border border-white/20 shadow-xl"
-            >
-              <div className="flex items-center justify-between mb-4">
-                <div
-                  className={`p-3 rounded-lg bg-gradient-to-r ${category.color} text-white`}
-                >
-                  {category.icon}
-                </div>
-                <div className="text-right">
-                  <p className="text-gray-600 text-sm">
-                    {category.count} registros
-                  </p>
-                </div>
-              </div>
-
-              <h3 className="text-gray-700 text-sm font-medium mb-1">
-                {category.name}
-              </h3>
-              <p className="text-gray-900 text-2xl font-bold">
-                {formatCurrency(category.total)}
-              </p>
-            </motion.div>
-          ))}
-        </motion.div>
-
-        {/* Filtros y búsqueda */}
-        <motion.div
-          variants={itemVariants}
-          className="bg-white/90 backdrop-blur-md rounded-xl p-6 border border-white/20 shadow-xl"
-        >
-          <div className="flex flex-col md:flex-row gap-4">
-            {/* Búsqueda */}
-            <div className="flex-1">
-              <div className="relative">
-                <Search className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
-                <input
-                  type="text"
-                  placeholder="Buscar por descripción..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 bg-gray-50 border border-gray-300 rounded-lg text-gray-900 placeholder-gray-500 focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors duration-200"
-                />
-              </div>
-            </div>
-
-            {/* Filtro por categoría */}
-            <div className="md:w-64">
-              <select
-                value={selectedCategory}
-                onChange={(e) => setSelectedCategory(e.target.value)}
-                className="w-full px-4 py-2 bg-gray-50 border border-gray-300 rounded-lg text-gray-900 focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors duration-200"
-              >
-                <option value="all">Todas las categorías</option>
-                <option value="venta_ganado">Venta de Ganado</option>
-                <option value="productos_lacteos">Productos Lácteos</option>
-                <option value="servicios_veterinarios">
-                  Servicios Veterinarios
-                </option>
-                <option value="otros">Otros</option>
-              </select>
-            </div>
-
-            {/* Selector de período */}
-            <div className="flex space-x-2">
-              {(["weekly", "monthly", "yearly"] as const).map((period) => (
-                <button
-                  key={period}
-                  onClick={() => setSelectedPeriod(period)}
-                  className={`px-4 py-2 rounded-lg font-medium transition-all duration-300 ${
-                    selectedPeriod === period
-                      ? "bg-green-600 text-white shadow-lg"
-                      : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                  }`}
-                >
-                  {period === "weekly"
-                    ? "Semanal"
-                    : period === "monthly"
-                    ? "Mensual"
-                    : "Anual"}
-                </button>
-              ))}
-            </div>
-          </div>
-        </motion.div>
-
-        {/* Gráficos de ingresos */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Gráfico de área - Evolución de ingresos */}
-          <motion.div
-            variants={itemVariants}
-            className="bg-white/90 backdrop-blur-md rounded-xl p-6 border border-white/20 shadow-xl"
-          >
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-xl font-semibold text-gray-800">
-                Evolución de Ingresos
-              </h3>
-              <TrendingUp className="w-6 h-6 text-green-600" />
-            </div>
-
-            <ResponsiveContainer width="100%" height={300}>
-              <AreaChart data={monthlyIncomeData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
-                <XAxis dataKey="month" stroke="#6B7280" />
-                <YAxis stroke="#6B7280" />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: "#FFFFFF",
-                    border: "1px solid #E5E7EB",
-                    borderRadius: "8px",
-                    color: "#111827",
-                    boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.1)",
-                  }}
-                />
-                <Legend />
-                <Area
-                  type="monotone"
-                  dataKey="total"
-                  stroke="#10B981"
-                  fill="#10B981"
-                  fillOpacity={0.3}
-                  strokeWidth={2}
-                  name="Total Ingresos"
-                />
-              </AreaChart>
-            </ResponsiveContainer>
-          </motion.div>
-
-          {/* Gráfico de barras - Ingresos por categoría */}
-          <motion.div
-            variants={itemVariants}
-            className="bg-white/90 backdrop-blur-md rounded-xl p-6 border border-white/20 shadow-xl"
-          >
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-xl font-semibold text-gray-800">
-                Ingresos por Categoría
-              </h3>
-              <BarChart3 className="w-6 h-6 text-green-600" />
-            </div>
-
-            <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={monthlyIncomeData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
-                <XAxis dataKey="month" stroke="#6B7280" />
-                <YAxis stroke="#6B7280" />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: "#FFFFFF",
-                    border: "1px solid #E5E7EB",
-                    borderRadius: "8px",
-                    color: "#111827",
-                    boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.1)",
-                  }}
-                />
-                <Legend />
-                <Bar
-                  dataKey="ganado"
-                  fill="#10B981"
-                  name="Ganado"
-                  radius={[2, 2, 0, 0]}
-                />
-                <Bar
-                  dataKey="lacteos"
-                  fill="#059669"
-                  name="Lácteos"
-                  radius={[2, 2, 0, 0]}
-                />
-                <Bar
-                  dataKey="servicios"
-                  fill="#0D9488"
-                  name="Servicios"
-                  radius={[2, 2, 0, 0]}
-                />
-                <Bar
-                  dataKey="otros"
-                  fill="#65A30D"
-                  name="Otros"
-                  radius={[2, 2, 0, 0]}
-                />
-              </BarChart>
-            </ResponsiveContainer>
-          </motion.div>
-        </div>
 
         {/* Tabla de registros de ingresos */}
         <motion.div
@@ -536,7 +624,7 @@ const IncomeTracker: React.FC = () => {
               Registros Recientes
             </h3>
             <div className="text-sm text-gray-600">
-              {filteredRecords.length} de {incomeRecords.length} registros
+              {incomeRecords.length} registros
             </div>
           </div>
 
@@ -565,7 +653,7 @@ const IncomeTracker: React.FC = () => {
                 </tr>
               </thead>
               <tbody>
-                {filteredRecords.map((record) => (
+                {incomeRecords.map((record) => (
                   <motion.tr
                     key={record.id}
                     whileHover={{
@@ -590,17 +678,30 @@ const IncomeTracker: React.FC = () => {
                         className={`inline-block w-3 h-3 rounded-full ${getStatusColor(
                           record.status
                         )}`}
+                        title={getStatusText(record.status)}
                       ></span>
                     </td>
                     <td className="py-4 px-4 text-center">
                       <div className="flex justify-center space-x-2">
-                        <button className="p-2 text-blue-500 hover:bg-blue-50 rounded-lg transition-colors duration-200">
+                        <button 
+                          onClick={() => handleViewRecord(record)}
+                          className="p-2 text-blue-500 hover:bg-blue-50 rounded-lg transition-colors duration-200"
+                          title="Ver detalles"
+                        >
                           <Eye className="w-4 h-4" />
                         </button>
-                        <button className="p-2 text-yellow-500 hover:bg-yellow-50 rounded-lg transition-colors duration-200">
+                        <button 
+                          onClick={() => handleEditRecord(record)}
+                          className="p-2 text-yellow-500 hover:bg-yellow-50 rounded-lg transition-colors duration-200"
+                          title="Editar"
+                        >
                           <Edit className="w-4 h-4" />
                         </button>
-                        <button className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors duration-200">
+                        <button 
+                          onClick={() => handleDeleteIncome(record.id)}
+                          className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors duration-200"
+                          title="Eliminar"
+                        >
                           <Trash2 className="w-4 h-4" />
                         </button>
                       </div>
@@ -611,44 +712,143 @@ const IncomeTracker: React.FC = () => {
             </table>
           </div>
         </motion.div>
+      </motion.div>
 
-        {/* Resumen financiero */}
-        <motion.div
-          variants={itemVariants}
-          className="bg-white/90 backdrop-blur-md rounded-xl p-6 border border-white/20 shadow-xl"
-        >
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-center">
-            <div>
-              <h4 className="text-lg font-semibold text-gray-800 mb-2">
-                Ingresos Este Mes
-              </h4>
-              <p className="text-3xl font-bold text-green-600">
-                {formatCurrency(212000)}
-              </p>
-              <div className="flex items-center justify-center mt-2 text-green-600">
-                <ArrowUpRight className="w-4 h-4 mr-1" />
-                <span className="text-sm">+12.5% vs mes anterior</span>
+      {/* Modal para agregar ingreso */}
+      <Modal
+        isOpen={showAddModal}
+        onClose={() => {
+          setShowAddModal(false);
+          resetForm();
+        }}
+        title="Agregar Nuevo Ingreso"
+      >
+        <IncomeForm 
+          formData={formData}
+          onFormChange={handleFormChange}
+          onSubmit={handleAddIncome} 
+          onCancel={() => {
+            setShowAddModal(false);
+            resetForm();
+          }}
+          onGetLocation={handleGetCurrentLocation}
+          isGettingLocation={isGettingLocation}
+          submitLabel="Guardar Ingreso" 
+        />
+      </Modal>
+
+      {/* Modal para editar ingreso */}
+      <Modal
+        isOpen={showEditModal}
+        onClose={() => {
+          setShowEditModal(false);
+          setSelectedRecord(null);
+          resetForm();
+        }}
+        title="Editar Ingreso"
+      >
+        <IncomeForm 
+          formData={formData}
+          onFormChange={handleFormChange}
+          onSubmit={handleEditIncome} 
+          onCancel={() => {
+            setShowEditModal(false);
+            setSelectedRecord(null);
+            resetForm();
+          }}
+          onGetLocation={handleGetCurrentLocation}
+          isGettingLocation={isGettingLocation}
+          submitLabel="Actualizar Ingreso" 
+        />
+      </Modal>
+
+      {/* Modal para ver detalles */}
+      <Modal
+        isOpen={showViewModal}
+        onClose={() => {
+          setShowViewModal(false);
+          setSelectedRecord(null);
+        }}
+        title="Detalles del Ingreso"
+      >
+        {selectedRecord && (
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Fecha
+                </label>
+                <div className="flex items-center text-gray-900">
+                  <Calendar className="w-4 h-4 mr-2 text-gray-500" />
+                  {formatDate(selectedRecord.date)}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Categoría
+                </label>
+                <div className="text-gray-900">
+                  {getCategoryName(selectedRecord.category)}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Monto
+                </label>
+                <div className="text-gray-900 font-semibold text-lg">
+                  {formatCurrency(selectedRecord.amount)}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Estado
+                </label>
+                <div className="flex items-center">
+                  <span
+                    className={`inline-block w-3 h-3 rounded-full mr-2 ${getStatusColor(
+                      selectedRecord.status
+                    )}`}
+                  ></span>
+                  {getStatusText(selectedRecord.status)}
+                </div>
               </div>
             </div>
+
             <div>
-              <h4 className="text-lg font-semibold text-gray-800 mb-2">
-                Promedio Diario
-              </h4>
-              <p className="text-3xl font-bold text-emerald-600">
-                {formatCurrency(7067)}
-              </p>
-              <p className="text-gray-600 text-sm mt-2">ingresos por día</p>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Descripción
+              </label>
+              <div className="text-gray-900 bg-gray-50 p-3 rounded-lg">
+                {selectedRecord.description}
+              </div>
             </div>
+
             <div>
-              <h4 className="text-lg font-semibold text-gray-800 mb-2">
-                Meta Mensual
-              </h4>
-              <p className="text-3xl font-bold text-teal-600">89%</p>
-              <p className="text-gray-600 text-sm mt-2">de la meta alcanzada</p>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Ubicación
+              </label>
+              <div className="flex items-center text-gray-900">
+                <MapPin className="w-4 h-4 mr-2 text-gray-500" />
+                {selectedRecord.location.address}
+              </div>
             </div>
+
+            {selectedRecord.animalId && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Animal Relacionado
+                </label>
+                <div className="text-gray-900">
+                  {selectedRecord.animalId}
+                </div>
+              </div>
+            )}
           </div>
-        </motion.div>
-      </motion.div>
+        )}
+      </Modal>
     </div>
   );
 };

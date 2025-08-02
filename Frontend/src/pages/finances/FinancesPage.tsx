@@ -13,10 +13,8 @@ import {
 } from "lucide-react";
 
 // Importar los componentes hijos del módulo de finanzas
-import FinancesDashboard from "./FinancesDashboard";
 import IncomeTracker from "./IncomeTracker";
 import ExpenseTracker from "./ExpenseTracker";
-import ProfitLoss from "./ProfitLoss";
 
 // Interfaces para tipado
 interface NavigationItem {
@@ -327,17 +325,12 @@ const FinancesPage: React.FC = () => {
         {/* Contenido principal - Sistema de rutas */}
         <div className="flex-1 overflow-auto">
           <Routes>
-            {/* Ruta por defecto - redirige al dashboard SOLO si está en /finances exacto */}
-            <Route index element={<FinancesDashboard />} />
 
             {/* Rutas específicas para cada componente */}
-            <Route path="dashboard" element={<FinancesDashboard />} />
             <Route path="income-tracker" element={<IncomeTracker />} />
             <Route path="expense-tracker" element={<ExpenseTracker />} />
-            <Route path="profit-loss" element={<ProfitLoss />} />
 
             {/* Ruta 404 para rutas no encontradas dentro del módulo */}
-            <Route path="*" element={<FinancesDashboard />} />
           </Routes>
         </div>
 

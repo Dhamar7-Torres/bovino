@@ -5,10 +5,8 @@
 export { default as FinancesPage } from "./FinancesPage";
 
 // Componentes hijos del módulo de finanzas
-export { default as FinancesDashboard } from "./FinancesDashboard";
 export { default as IncomeTracker } from "./IncomeTracker";
 export { default as ExpenseTracker } from "./ExpenseTracker";
-export { default as ProfitLoss } from "./ProfitLoss";
 
 // Tipos e interfaces específicas del módulo (si se requieren en otros módulos)
 export type FinancialPeriod = "weekly" | "monthly" | "quarterly" | "yearly";

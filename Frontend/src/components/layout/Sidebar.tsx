@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  Home,
   Beef,
   Heart,
   Baby,
@@ -22,7 +21,6 @@ import {
   Syringe,
   Truck,
   Clipboard,
-  BarChart3,
   Pill,
   ShoppingCart,
   Map,
@@ -31,9 +29,7 @@ import {
   TestTube,
   Info,
   Menu,
-  Eye,
   Plus,
-  Edit,
   Microscope,
   Skull,
   HeartHandshake,
@@ -41,12 +37,10 @@ import {
   Boxes,
   ClipboardList,
   FolderOpen,
-  BarChart4,
   Users,
   Sprout,
   Wheat,
   TrendingDown,
-  PieChart,
   Leaf,
 } from "lucide-react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
@@ -435,7 +429,7 @@ const Sidebar: React.FC<SidebarProps> = ({
             {
               id: "purchase-events",
               title: "Eventos de Compras",
-              href: "/events/purchases",
+              href: "/events/purchase",
               icon: ShoppingCart,
               color: "text-[#4e9c75]",
             },
@@ -462,13 +456,6 @@ const Sidebar: React.FC<SidebarProps> = ({
           color: "text-[#4e9c75]",
           children: [
             {
-              id: "dashboard",
-              title: "Dashboard Financiero",
-              href: "/finances/dashboard",
-              icon: BarChart3,
-              color: "text-[#4e9c75]",
-            },
-            {
               id: "income-tracker",
               title: "Seguimiento de Ingresos",
               href: "/finances/income-tracker",
@@ -482,13 +469,6 @@ const Sidebar: React.FC<SidebarProps> = ({
               icon: TrendingDown,
               color: "text-[#4e9c75]",
             },
-            {
-              id: "profit-loss",
-              title: "Estado de Ganancias y Pérdidas",
-              href: "/finances/profit-loss",
-              icon: PieChart,
-              color: "text-[#4e9c75]",
-            },
           ],
         },
         {
@@ -498,14 +478,6 @@ const Sidebar: React.FC<SidebarProps> = ({
           icon: Building,
           color: "text-[#4e9c75]",
           children: [
-            {
-              id: "ranch-overview",
-              title: "Vista General del Rancho",
-              href: "/ranch?section=overview",
-              icon: Home,
-              color: "text-[#4e9c75]",
-              navigationHandler: () => navigateToRanch('overview'),
-            },
             {
               id: "property-info",
               title: "Información de la Propiedad",
@@ -531,13 +503,6 @@ const Sidebar: React.FC<SidebarProps> = ({
           icon: FileText,
           color: "text-[#4e9c75]",
           children: [
-            {
-              id: "reports-dashboard",
-              title: "Dashboard de Reportes",
-              href: "/reports/dashboard",
-              icon: BarChart4,
-              color: "text-[#4e9c75]",
-            },
             {
               id: "production-reports",
               title: "Reportes de Producción",

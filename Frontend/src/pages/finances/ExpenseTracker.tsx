@@ -1,49 +1,28 @@
 import React, { useState, useEffect } from "react";
 import { motion, Variants } from "framer-motion";
 import {
-  TrendingDown,
-  PieChart,
-  ArrowUpRight,
-  AlertTriangle,
   Plus,
   Edit,
   Trash2,
-  Search,
   Download,
   Eye,
-  Syringe,
-  Utensils,
-  Home,
-  Truck,
+  X,
+  Save,
+  Calendar,
+  MapPin,
+  User,
+  DollarSign,
+  FileText,
+  CreditCard,
+  Navigation,
 } from "lucide-react";
-import {
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  Legend,
-  ResponsiveContainer,
-  BarChart,
-  Bar,
-  PieChart as RechartsPieChart,
-  Cell,
-  Pie,
-} from "recharts";
 
-// Interfaces para tipado de datos
+// Interfaces
 interface ExpenseRecord {
   id: string;
   date: string;
   description: string;
-  category:
-    | "vacunacion"
-    | "tratamientos"
-    | "alimentacion"
-    | "instalaciones"
-    | "transporte"
-    | "otros";
+  category: "vacunacion" | "tratamientos" | "alimentacion" | "instalaciones" | "transporte" | "otros";
   amount: number;
   location: {
     lat: number;
@@ -56,45 +35,34 @@ interface ExpenseRecord {
   paymentMethod: "efectivo" | "transferencia" | "cheque" | "credito";
 }
 
-interface ExpenseCategory {
-  name: string;
-  total: number;
-  count: number;
-  percentage: number;
-  color: string;
-  icon: React.ReactNode;
-}
-
-interface MonthlyExpenseData {
-  month: string;
-  vacunacion: number;
-  tratamientos: number;
-  alimentacion: number;
-  instalaciones: number;
-  transporte: number;
-  otros: number;
-  total: number;
-}
-
-interface ExpensePieData {
-  name: string;
-  value: number;
-  color: string;
-}
-
 const ExpenseTracker: React.FC = () => {
-  // Estados del componente
-  const [selectedPeriod, setSelectedPeriod] = useState<
-    "weekly" | "monthly" | "yearly"
-  >("monthly");
-  const [searchTerm, setSearchTerm] = useState<string>("");
-  const [selectedCategory, setSelectedCategory] = useState<string>("all");
-  const [selectedStatus, setSelectedStatus] = useState<string>("all");
+  // Estados principales
   const [isLoading, setIsLoading] = useState(true);
-  const [, setShowAddModal] = useState(false);
+  const [expenseRecords, setExpenseRecords] = useState<ExpenseRecord[]>([]);
+  
+  // Estados para modales
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [showViewModal, setShowViewModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [selectedExpense, setSelectedExpense] = useState<ExpenseRecord | null>(null);
 
-  // Datos de ejemplo para gastos
-  const expenseRecords: ExpenseRecord[] = [
+  // Estados para formulario - SEPARADOS
+  const [formDescription, setFormDescription] = useState("");
+  const [formCategory, setFormCategory] = useState("alimentacion");
+  const [formAmount, setFormAmount] = useState("");
+  const [formDate, setFormDate] = useState("");
+  const [formSupplier, setFormSupplier] = useState("");
+  const [formPaymentMethod, setFormPaymentMethod] = useState("efectivo");
+  const [formAddress, setFormAddress] = useState("");
+  const [formAnimalId, setFormAnimalId] = useState("");
+
+  // Estados para geolocalización
+  const [isGettingLocation, setIsGettingLocation] = useState(false);
+  const [currentCoordinates, setCurrentCoordinates] = useState<{lat: number, lng: number} | null>(null);
+
+  // Datos iniciales
+  const initialExpenseRecords: ExpenseRecord[] = [
     {
       id: "exp_001",
       date: "2024-06-15",
@@ -166,142 +134,294 @@ const ExpenseTracker: React.FC = () => {
     },
   ];
 
-  // Datos para gráfico de gastos mensuales
-  const monthlyExpenseData: MonthlyExpenseData[] = [
-    {
-      month: "Ene",
-      vacunacion: 15000,
-      tratamientos: 8000,
-      alimentacion: 45000,
-      instalaciones: 12000,
-      transporte: 6000,
-      otros: 4000,
-      total: 90000,
-    },
-    {
-      month: "Feb",
-      vacunacion: 18000,
-      tratamientos: 12000,
-      alimentacion: 48000,
-      instalaciones: 8000,
-      transporte: 7000,
-      otros: 5000,
-      total: 98000,
-    },
-    {
-      month: "Mar",
-      vacunacion: 22000,
-      tratamientos: 15000,
-      alimentacion: 52000,
-      instalaciones: 25000,
-      transporte: 8000,
-      otros: 6000,
-      total: 128000,
-    },
-    {
-      month: "Abr",
-      vacunacion: 16000,
-      tratamientos: 9000,
-      alimentacion: 49000,
-      instalaciones: 15000,
-      transporte: 7500,
-      otros: 4500,
-      total: 101000,
-    },
-    {
-      month: "May",
-      vacunacion: 20000,
-      tratamientos: 18000,
-      alimentacion: 55000,
-      instalaciones: 30000,
-      transporte: 9000,
-      otros: 8000,
-      total: 140000,
-    },
-    {
-      month: "Jun",
-      vacunacion: 25000,
-      tratamientos: 22000,
-      alimentacion: 58000,
-      instalaciones: 35000,
-      transporte: 10000,
-      otros: 7000,
-      total: 157000,
-    },
-  ];
+  // Funciones helper
+  const getCurrentDate = (): string => {
+    return new Date().toISOString().split('T')[0];
+  };
 
-  // Categorías de gastos con colores verdes
-  const expenseCategories: ExpenseCategory[] = [
-    {
-      name: "Alimentación",
-      total: 307000,
-      count: 48,
-      percentage: 42.1,
-      color: "from-green-400 to-green-600",
-      icon: <Utensils className="w-5 h-5" />,
-    },
-    {
-      name: "Instalaciones",
-      total: 125000,
-      count: 15,
-      percentage: 17.1,
-      color: "from-emerald-400 to-emerald-600",
-      icon: <Home className="w-5 h-5" />,
-    },
-    {
-      name: "Vacunación",
-      total: 116000,
-      count: 32,
-      percentage: 15.9,
-      color: "from-teal-400 to-teal-600",
-      icon: <Syringe className="w-5 h-5" />,
-    },
-    {
-      name: "Tratamientos",
-      total: 84000,
-      count: 24,
-      percentage: 11.5,
-      color: "from-lime-400 to-lime-600",
-      icon: <AlertTriangle className="w-5 h-5" />,
-    },
-    {
-      name: "Transporte",
-      total: 47500,
-      count: 18,
-      percentage: 6.5,
-      color: "from-green-500 to-green-700",
-      icon: <Truck className="w-5 h-5" />,
-    },
-    {
-      name: "Otros",
-      total: 34500,
-      count: 12,
-      percentage: 4.7,
-      color: "from-gray-400 to-gray-600",
-      icon: <Search className="w-5 h-5" />,
-    },
-  ];
+  const formatCurrency = (value: number): string => {
+    return new Intl.NumberFormat("es-MX", {
+      style: "currency",
+      currency: "MXN",
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }).format(value);
+  };
 
-  // Datos para gráfico de torta con colores verdes
-  const pieData: ExpensePieData[] = [
-    { name: "Alimentación", value: 42.1, color: "#10B981" },
-    { name: "Instalaciones", value: 17.1, color: "#059669" },
-    { name: "Vacunación", value: 15.9, color: "#0D9488" },
-    { name: "Tratamientos", value: 11.5, color: "#65A30D" },
-    { name: "Transporte", value: 6.5, color: "#16A34A" },
-    { name: "Otros", value: 4.7, color: "#6B7280" },
-  ];
+  const formatDate = (dateString: string): string => {
+    return new Date(dateString).toLocaleDateString("es-MX", {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+    });
+  };
 
-  // Efecto para simular carga de datos
+  const getCategoryName = (category: string): string => {
+    const categoryMap: Record<string, string> = {
+      vacunacion: "Vacunación",
+      tratamientos: "Tratamientos",
+      alimentacion: "Alimentación",
+      instalaciones: "Instalaciones",
+      transporte: "Transporte",
+      otros: "Otros",
+    };
+    return categoryMap[category] || category;
+  };
+
+  const getStatusColor = (status: string): string => {
+    const statusColors: Record<string, string> = {
+      paid: "bg-green-500",
+      pending: "bg-yellow-500",
+      overdue: "bg-red-500",
+    };
+    return statusColors[status] || "bg-gray-500";
+  };
+
+  const getStatusText = (status: string): string => {
+    const statusTexts: Record<string, string> = {
+      paid: "Pagado",
+      pending: "Pendiente",
+      overdue: "Vencido",
+    };
+    return statusTexts[status] || status;
+  };
+
+  const getPaymentMethodText = (method: string): string => {
+    const methodTexts: Record<string, string> = {
+      efectivo: "Efectivo",
+      transferencia: "Transferencia",
+      cheque: "Cheque",
+      credito: "Crédito",
+    };
+    return methodTexts[method] || method;
+  };
+
+  // Función para limpiar formulario
+  const clearForm = () => {
+    setFormDescription("");
+    setFormCategory("alimentacion");
+    setFormAmount("");
+    setFormDate(getCurrentDate());
+    setFormSupplier("");
+    setFormPaymentMethod("efectivo");
+    setFormAddress("");
+    setFormAnimalId("");
+    setCurrentCoordinates(null);
+  };
+
+  // Función para obtener ubicación actual
+  const getCurrentLocation = () => {
+    if (!navigator.geolocation) {
+      alert("Tu navegador no soporta geolocalización");
+      return;
+    }
+
+    setIsGettingLocation(true);
+
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        const { latitude, longitude } = position.coords;
+        setCurrentCoordinates({ lat: latitude, lng: longitude });
+
+        try {
+          // Usar una API de geocodificación gratuita para obtener la dirección
+          const response = await fetch(
+            `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${latitude}&longitude=${longitude}&localityLanguage=es`
+          );
+          
+          if (response.ok) {
+            const data = await response.json();
+            const address = `${data.locality || ''}, ${data.principalSubdivision || ''}, ${data.countryName || ''}`.replace(/^,\s*|,\s*$/g, '');
+            setFormAddress(address || `Lat: ${latitude.toFixed(6)}, Lng: ${longitude.toFixed(6)}`);
+          } else {
+            // Si falla la API, usar coordenadas
+            setFormAddress(`Lat: ${latitude.toFixed(6)}, Lng: ${longitude.toFixed(6)}`);
+          }
+        } catch (error) {
+          // Si hay error, usar coordenadas
+          setFormAddress(`Lat: ${latitude.toFixed(6)}, Lng: ${longitude.toFixed(6)}`);
+        }
+
+        setIsGettingLocation(false);
+      },
+      (error) => {
+        setIsGettingLocation(false);
+        let errorMessage = "Error obteniendo ubicación";
+        
+        switch (error.code) {
+          case error.PERMISSION_DENIED:
+            errorMessage = "Permiso de ubicación denegado. Por favor permite el acceso a tu ubicación.";
+            break;
+          case error.POSITION_UNAVAILABLE:
+            errorMessage = "Información de ubicación no disponible.";
+            break;
+          case error.TIMEOUT:
+            errorMessage = "Tiempo de espera agotado obteniendo ubicación.";
+            break;
+        }
+        
+        alert(errorMessage);
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 60000
+      }
+    );
+  };
+
+  // Event handlers
+  const handleOpenAddModal = () => {
+    clearForm();
+    setShowAddModal(true);
+  };
+
+  const handleOpenEditModal = (expense: ExpenseRecord) => {
+    setSelectedExpense(expense);
+    setFormDescription(expense.description);
+    setFormCategory(expense.category);
+    setFormAmount(expense.amount.toString());
+    setFormDate(expense.date);
+    setFormSupplier(expense.supplier);
+    setFormPaymentMethod(expense.paymentMethod);
+    setFormAddress(expense.location.address);
+    setFormAnimalId(expense.animalId || "");
+    setCurrentCoordinates({ lat: expense.location.lat, lng: expense.location.lng });
+    setShowEditModal(true);
+  };
+
+  const handleOpenViewModal = (expense: ExpenseRecord) => {
+    setSelectedExpense(expense);
+    setShowViewModal(true);
+  };
+
+  const handleOpenDeleteModal = (expense: ExpenseRecord) => {
+    setSelectedExpense(expense);
+    setShowDeleteModal(true);
+  };
+
+  const handleSaveExpense = () => {
+    if (!formDescription.trim() || !formAmount.trim() || !formDate.trim() || !formSupplier.trim()) {
+      alert("Por favor completa todos los campos obligatorios");
+      return;
+    }
+
+    const newExpense: ExpenseRecord = {
+      id: `exp_${Date.now()}`,
+      date: formDate,
+      description: formDescription,
+      category: formCategory as ExpenseRecord['category'],
+      amount: parseFloat(formAmount),
+      location: {
+        lat: currentCoordinates?.lat || 17.9895,
+        lng: currentCoordinates?.lng || -92.9475,
+        address: formAddress,
+      },
+      animalId: formAnimalId || undefined,
+      supplier: formSupplier,
+      status: "pending",
+      paymentMethod: formPaymentMethod as ExpenseRecord['paymentMethod'],
+    };
+
+    setExpenseRecords(prev => [newExpense, ...prev]);
+    setShowAddModal(false);
+    clearForm();
+  };
+
+  const handleUpdateExpense = () => {
+    if (!selectedExpense || !formDescription.trim() || !formAmount.trim() || !formDate.trim() || !formSupplier.trim()) {
+      alert("Por favor completa todos los campos obligatorios");
+      return;
+    }
+
+    const updatedExpense: ExpenseRecord = {
+      ...selectedExpense,
+      date: formDate,
+      description: formDescription,
+      category: formCategory as ExpenseRecord['category'],
+      amount: parseFloat(formAmount),
+      supplier: formSupplier,
+      paymentMethod: formPaymentMethod as ExpenseRecord['paymentMethod'],
+      location: {
+        lat: currentCoordinates?.lat || selectedExpense.location.lat,
+        lng: currentCoordinates?.lng || selectedExpense.location.lng,
+        address: formAddress,
+      },
+      animalId: formAnimalId || undefined,
+    };
+
+    setExpenseRecords(prev => 
+      prev.map(expense => 
+        expense.id === selectedExpense.id ? updatedExpense : expense
+      )
+    );
+    
+    setShowEditModal(false);
+    setSelectedExpense(null);
+    clearForm();
+  };
+
+  const handleDeleteExpense = () => {
+    if (!selectedExpense) return;
+
+    setExpenseRecords(prev => 
+      prev.filter(expense => expense.id !== selectedExpense.id)
+    );
+    
+    setShowDeleteModal(false);
+    setSelectedExpense(null);
+  };
+
+  const handleExportCSV = () => {
+    const headers = [
+      'Fecha',
+      'Descripción',
+      'Categoría',
+      'Proveedor',
+      'Monto',
+      'Método de Pago',
+      'Estado',
+      'Ubicación'
+    ];
+
+    const csvData = expenseRecords.map(record => [
+      record.date,
+      record.description,
+      getCategoryName(record.category),
+      record.supplier,
+      record.amount.toString(),
+      getPaymentMethodText(record.paymentMethod),
+      getStatusText(record.status),
+      record.location.address
+    ]);
+
+    const csvContent = [headers, ...csvData]
+      .map(row => row.map(field => `"${field}"`).join(','))
+      .join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `gastos_${getCurrentDate()}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  // Effect
   useEffect(() => {
     const timer = setTimeout(() => {
+      setExpenseRecords(initialExpenseRecords);
+      setFormDate(getCurrentDate());
       setIsLoading(false);
-    }, 1300);
+    }, 1000);
 
     return () => clearTimeout(timer);
   }, []);
 
-  // Animaciones de Framer Motion
+  // Animations
   const containerVariants: Variants = {
     hidden: { opacity: 0 },
     visible: {
@@ -325,106 +445,17 @@ const ExpenseTracker: React.FC = () => {
     },
   };
 
-  // Función para formatear números a moneda
-  const formatCurrency = (value: number): string => {
-    return new Intl.NumberFormat("es-MX", {
-      style: "currency",
-      currency: "MXN",
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(value);
-  };
-
-  // Función para formatear fechas
-  const formatDate = (dateString: string): string => {
-    return new Date(dateString).toLocaleDateString("es-MX", {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-    });
-  };
-
-  // Obtener el nombre de la categoría
-  const getCategoryName = (category: string): string => {
-    const categoryMap: Record<string, string> = {
-      vacunacion: "Vacunación",
-      tratamientos: "Tratamientos",
-      alimentacion: "Alimentación",
-      instalaciones: "Instalaciones",
-      transporte: "Transporte",
-      otros: "Otros",
-    };
-    return categoryMap[category] || category;
-  };
-
-  // Obtener el color del estado
-  const getStatusColor = (status: string): string => {
-    const statusColors: Record<string, string> = {
-      paid: "bg-green-500",
-      pending: "bg-yellow-500",
-      overdue: "bg-red-500",
-    };
-    return statusColors[status] || "bg-gray-500";
-  };
-
-  // Obtener el texto del estado
-  const getStatusText = (status: string): string => {
-    const statusTexts: Record<string, string> = {
-      paid: "Pagado",
-      pending: "Pendiente",
-      overdue: "Vencido",
-    };
-    return statusTexts[status] || status;
-  };
-
-  // Obtener el método de pago
-  const getPaymentMethodText = (method: string): string => {
-    const methodTexts: Record<string, string> = {
-      efectivo: "Efectivo",
-      transferencia: "Transferencia",
-      cheque: "Cheque",
-      credito: "Crédito",
-    };
-    return methodTexts[method] || method;
-  };
-
-  // Filtrar registros de gastos
-  const filteredRecords = expenseRecords.filter((record) => {
-    const matchesSearch =
-      record.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      record.supplier.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesCategory =
-      selectedCategory === "all" || record.category === selectedCategory;
-    const matchesStatus =
-      selectedStatus === "all" || record.status === selectedStatus;
-    return matchesSearch && matchesCategory && matchesStatus;
-  });
-
-  // Calcular totales
-  const totalExpenses = expenseCategories.reduce(
-    (sum, cat) => sum + cat.total,
-    0
-  );
-  const monthlyAverage = totalExpenses / 6; // 6 meses de datos
-  const pendingPayments = expenseRecords
-    .filter(
-      (record) => record.status === "pending" || record.status === "overdue"
-    )
-    .reduce((sum, record) => sum + record.amount, 0);
-
-  // Componente de Loading con fondo degradado del layout principal
-  const LoadingSpinner: React.FC = () => (
-    <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-green-400 via-green-500 to-yellow-400">
-      <motion.div
-        animate={{ rotate: 360 }}
-        transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-        className="w-16 h-16 border-4 border-white border-t-transparent rounded-full"
-      />
-    </div>
-  );
-
+  // Loading component
   if (isLoading) {
-    return <LoadingSpinner />;
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-green-400 via-green-500 to-yellow-400">
+        <motion.div
+          animate={{ rotate: 360 }}
+          transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+          className="w-16 h-16 border-4 border-white border-t-transparent rounded-full"
+        />
+      </div>
+    );
   }
 
   return (
@@ -435,300 +466,28 @@ const ExpenseTracker: React.FC = () => {
         animate="visible"
         className="max-w-7xl mx-auto space-y-6"
       >
-        {/* Botones de acción principales */}
+        {/* Header con botones */}
         <motion.div
           variants={itemVariants}
           className="flex justify-end space-x-3 mb-6"
         >
           <button
-            onClick={() => setShowAddModal(true)}
+            onClick={handleOpenAddModal}
             className="flex items-center px-6 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium transition-all duration-300 shadow-lg"
           >
             <Plus className="w-5 h-5 mr-2" />
             Nuevo Gasto
           </button>
-          <button className="flex items-center px-6 py-3 bg-teal-600 hover:bg-teal-700 text-white rounded-lg font-medium transition-all duration-300 shadow-lg">
+          <button 
+            onClick={handleExportCSV}
+            className="flex items-center px-6 py-3 bg-teal-600 hover:bg-teal-700 text-white rounded-lg font-medium transition-all duration-300 shadow-lg"
+          >
             <Download className="w-5 h-5 mr-2" />
-            Exportar
+            Exportar CSV
           </button>
         </motion.div>
 
-        {/* Tarjetas de resumen */}
-        <motion.div
-          variants={itemVariants}
-          className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
-        >
-          {expenseCategories.slice(0, 6).map((category) => (
-            <motion.div
-              key={category.name}
-              whileHover={{ scale: 1.02, y: -2 }}
-              whileTap={{ scale: 0.98 }}
-              className="bg-white/95 backdrop-blur-md rounded-xl p-6 border border-white/20 shadow-xl hover:shadow-2xl transition-shadow duration-300"
-            >
-              <div className="flex items-center justify-between mb-4">
-                <div
-                  className={`p-3 rounded-lg bg-gradient-to-r ${category.color} text-white`}
-                >
-                  {category.icon}
-                </div>
-                <div className="text-right">
-                  <p className="text-gray-600 text-sm">
-                    {category.count} registros
-                  </p>
-                  <p className="text-gray-500 text-xs">
-                    {category.percentage}% del total
-                  </p>
-                </div>
-              </div>
-
-              <h3 className="text-gray-700 text-sm font-medium mb-1">
-                {category.name}
-              </h3>
-              <p className="text-gray-900 text-2xl font-bold">
-                {formatCurrency(category.total)}
-              </p>
-            </motion.div>
-          ))}
-        </motion.div>
-
-        {/* Filtros y búsqueda */}
-        <motion.div
-          variants={itemVariants}
-          className="bg-white/90 backdrop-blur-md rounded-xl p-6 border border-white/20 shadow-xl"
-        >
-          <div className="flex flex-col lg:flex-row gap-4">
-            {/* Búsqueda */}
-            <div className="flex-1">
-              <div className="relative">
-                <Search className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
-                <input
-                  type="text"
-                  placeholder="Buscar por descripción o proveedor..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 bg-gray-50 border border-gray-300 rounded-lg text-gray-900 placeholder-gray-500 focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors duration-200"
-                />
-              </div>
-            </div>
-
-            {/* Filtro por categoría */}
-            <div className="lg:w-48">
-              <select
-                value={selectedCategory}
-                onChange={(e) => setSelectedCategory(e.target.value)}
-                className="w-full px-4 py-2 bg-gray-50 border border-gray-300 rounded-lg text-gray-900 focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors duration-200"
-              >
-                <option value="all">Todas las categorías</option>
-                <option value="vacunacion">Vacunación</option>
-                <option value="tratamientos">Tratamientos</option>
-                <option value="alimentacion">Alimentación</option>
-                <option value="instalaciones">Instalaciones</option>
-                <option value="transporte">Transporte</option>
-                <option value="otros">Otros</option>
-              </select>
-            </div>
-
-            {/* Filtro por estado */}
-            <div className="lg:w-40">
-              <select
-                value={selectedStatus}
-                onChange={(e) => setSelectedStatus(e.target.value)}
-                className="w-full px-4 py-2 bg-gray-50 border border-gray-300 rounded-lg text-gray-900 focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors duration-200"
-              >
-                <option value="all">Todos los estados</option>
-                <option value="paid">Pagado</option>
-                <option value="pending">Pendiente</option>
-                <option value="overdue">Vencido</option>
-              </select>
-            </div>
-
-            {/* Selector de período */}
-            <div className="flex space-x-2">
-              {(["weekly", "monthly", "yearly"] as const).map((period) => (
-                <button
-                  key={period}
-                  onClick={() => setSelectedPeriod(period)}
-                  className={`px-4 py-2 rounded-lg font-medium transition-all duration-300 ${
-                    selectedPeriod === period
-                      ? "bg-green-600 text-white shadow-lg"
-                      : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                  }`}
-                >
-                  {period === "weekly"
-                    ? "Semanal"
-                    : period === "monthly"
-                    ? "Mensual"
-                    : "Anual"}
-                </button>
-              ))}
-            </div>
-          </div>
-        </motion.div>
-
-        {/* Gráficos de gastos */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Gráfico de líneas - Tendencia de gastos */}
-          <motion.div
-            variants={itemVariants}
-            className="bg-white/90 backdrop-blur-md rounded-xl p-6 border border-white/20 shadow-xl"
-          >
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-xl font-semibold text-gray-800">
-                Tendencia de Gastos Mensuales
-              </h3>
-              <TrendingDown className="w-6 h-6 text-green-500" />
-            </div>
-
-            <ResponsiveContainer width="100%" height={300}>
-              <LineChart data={monthlyExpenseData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
-                <XAxis dataKey="month" stroke="#6B7280" />
-                <YAxis stroke="#6B7280" />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: "#FFFFFF",
-                    border: "1px solid #E5E7EB",
-                    borderRadius: "8px",
-                    color: "#111827",
-                    boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.1)",
-                  }}
-                />
-                <Legend />
-                <Line
-                  type="monotone"
-                  dataKey="total"
-                  stroke="#059669"
-                  strokeWidth={3}
-                  name="Total Gastos"
-                />
-                <Line
-                  type="monotone"
-                  dataKey="alimentacion"
-                  stroke="#10B981"
-                  strokeWidth={2}
-                  name="Alimentación"
-                />
-                <Line
-                  type="monotone"
-                  dataKey="vacunacion"
-                  stroke="#0D9488"
-                  strokeWidth={2}
-                  name="Vacunación"
-                />
-              </LineChart>
-            </ResponsiveContainer>
-          </motion.div>
-
-          {/* Gráfico de torta - Distribución de gastos */}
-          <motion.div
-            variants={itemVariants}
-            className="bg-white/90 backdrop-blur-md rounded-xl p-6 border border-white/20 shadow-xl"
-          >
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-xl font-semibold text-gray-800">
-                Distribución de Gastos
-              </h3>
-              <PieChart className="w-6 h-6 text-green-500" />
-            </div>
-
-            <ResponsiveContainer width="100%" height={300}>
-              <RechartsPieChart>
-                <Pie
-                  data={pieData}
-                  cx="50%"
-                  cy="50%"
-                  outerRadius={80}
-                  fill="#8884d8"
-                  dataKey="value"
-                  label={false}
-                >
-                  {pieData.map((entry: ExpensePieData, index: number) => (
-                    <Cell key={`cell-${index}`} fill={entry.color} />
-                  ))}
-                </Pie>
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: "#FFFFFF",
-                    border: "1px solid #E5E7EB",
-                    borderRadius: "8px",
-                    color: "#111827",
-                    boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.1)",
-                  }}
-                  formatter={(value: number) => [`${value}%`, "Porcentaje"]}
-                />
-                <Legend />
-              </RechartsPieChart>
-            </ResponsiveContainer>
-          </motion.div>
-        </div>
-
-        {/* Gráfico de barras - Gastos por categoría mensual */}
-        <motion.div
-          variants={itemVariants}
-          className="bg-white/90 backdrop-blur-md rounded-xl p-6 border border-white/20 shadow-xl"
-        >
-          <div className="flex items-center justify-between mb-6">
-            <h3 className="text-xl font-semibold text-gray-800">
-              Gastos por Categoría - Evolución Mensual
-            </h3>
-          </div>
-
-          <ResponsiveContainer width="100%" height={400}>
-            <BarChart data={monthlyExpenseData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
-              <XAxis dataKey="month" stroke="#6B7280" />
-              <YAxis stroke="#6B7280" />
-              <Tooltip
-                contentStyle={{
-                  backgroundColor: "#FFFFFF",
-                  border: "1px solid #E5E7EB",
-                  borderRadius: "8px",
-                  color: "#111827",
-                  boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.1)",
-                }}
-              />
-              <Legend />
-              <Bar
-                dataKey="alimentacion"
-                fill="#10B981"
-                name="Alimentación"
-                radius={[2, 2, 0, 0]}
-              />
-              <Bar
-                dataKey="instalaciones"
-                fill="#059669"
-                name="Instalaciones"
-                radius={[2, 2, 0, 0]}
-              />
-              <Bar
-                dataKey="vacunacion"
-                fill="#0D9488"
-                name="Vacunación"
-                radius={[2, 2, 0, 0]}
-              />
-              <Bar
-                dataKey="tratamientos"
-                fill="#65A30D"
-                name="Tratamientos"
-                radius={[2, 2, 0, 0]}
-              />
-              <Bar
-                dataKey="transporte"
-                fill="#16A34A"
-                name="Transporte"
-                radius={[2, 2, 0, 0]}
-              />
-              <Bar
-                dataKey="otros"
-                fill="#6B7280"
-                name="Otros"
-                radius={[2, 2, 0, 0]}
-              />
-            </BarChart>
-          </ResponsiveContainer>
-        </motion.div>
-
-        {/* Tabla de registros de gastos */}
+        {/* Tabla de gastos */}
         <motion.div
           variants={itemVariants}
           className="bg-white/90 backdrop-blur-md rounded-xl p-6 border border-white/20 shadow-xl"
@@ -738,7 +497,7 @@ const ExpenseTracker: React.FC = () => {
               Registros de Gastos Recientes
             </h3>
             <div className="text-sm text-gray-600">
-              {filteredRecords.length} de {expenseRecords.length} registros
+              {expenseRecords.length} registros
             </div>
           </div>
 
@@ -746,80 +505,56 @@ const ExpenseTracker: React.FC = () => {
             <table className="w-full">
               <thead>
                 <tr className="border-b border-gray-200">
-                  <th className="text-left py-3 px-4 text-gray-700 font-medium">
-                    Fecha
-                  </th>
-                  <th className="text-left py-3 px-4 text-gray-700 font-medium">
-                    Descripción
-                  </th>
-                  <th className="text-left py-3 px-4 text-gray-700 font-medium">
-                    Categoría
-                  </th>
-                  <th className="text-left py-3 px-4 text-gray-700 font-medium">
-                    Proveedor
-                  </th>
-                  <th className="text-right py-3 px-4 text-gray-700 font-medium">
-                    Monto
-                  </th>
-                  <th className="text-center py-3 px-4 text-gray-700 font-medium">
-                    Pago
-                  </th>
-                  <th className="text-center py-3 px-4 text-gray-700 font-medium">
-                    Estado
-                  </th>
-                  <th className="text-center py-3 px-4 text-gray-700 font-medium">
-                    Acciones
-                  </th>
+                  <th className="text-left py-3 px-4 text-gray-700 font-medium">Fecha</th>
+                  <th className="text-left py-3 px-4 text-gray-700 font-medium">Descripción</th>
+                  <th className="text-left py-3 px-4 text-gray-700 font-medium">Categoría</th>
+                  <th className="text-left py-3 px-4 text-gray-700 font-medium">Proveedor</th>
+                  <th className="text-right py-3 px-4 text-gray-700 font-medium">Monto</th>
+                  <th className="text-center py-3 px-4 text-gray-700 font-medium">Pago</th>
+                  <th className="text-center py-3 px-4 text-gray-700 font-medium">Estado</th>
+                  <th className="text-center py-3 px-4 text-gray-700 font-medium">Acciones</th>
                 </tr>
               </thead>
               <tbody>
-                {filteredRecords.map((record) => (
+                {expenseRecords.map((record) => (
                   <motion.tr
                     key={record.id}
-                    whileHover={{
-                      backgroundColor: "#F9FAFB",
-                    }}
+                    whileHover={{ backgroundColor: "#F9FAFB" }}
                     className="border-b border-gray-100 transition-colors duration-200"
                   >
-                    <td className="py-4 px-4 text-gray-600">
-                      {formatDate(record.date)}
-                    </td>
-                    <td className="py-4 px-4 text-gray-900 font-medium">
-                      {record.description}
-                    </td>
-                    <td className="py-4 px-4 text-gray-600">
-                      {getCategoryName(record.category)}
-                    </td>
-                    <td className="py-4 px-4 text-gray-600">
-                      {record.supplier}
-                    </td>
-                    <td className="py-4 px-4 text-right text-gray-900 font-semibold">
-                      {formatCurrency(record.amount)}
-                    </td>
-                    <td className="py-4 px-4 text-center text-gray-600 text-sm">
-                      {getPaymentMethodText(record.paymentMethod)}
-                    </td>
+                    <td className="py-4 px-4 text-gray-600">{formatDate(record.date)}</td>
+                    <td className="py-4 px-4 text-gray-900 font-medium">{record.description}</td>
+                    <td className="py-4 px-4 text-gray-600">{getCategoryName(record.category)}</td>
+                    <td className="py-4 px-4 text-gray-600">{record.supplier}</td>
+                    <td className="py-4 px-4 text-right text-gray-900 font-semibold">{formatCurrency(record.amount)}</td>
+                    <td className="py-4 px-4 text-center text-gray-600 text-sm">{getPaymentMethodText(record.paymentMethod)}</td>
                     <td className="py-4 px-4 text-center">
                       <div className="flex items-center justify-center space-x-2">
-                        <span
-                          className={`inline-block w-3 h-3 rounded-full ${getStatusColor(
-                            record.status
-                          )}`}
-                        ></span>
-                        <span className="text-gray-600 text-sm">
-                          {getStatusText(record.status)}
-                        </span>
+                        <span className={`inline-block w-3 h-3 rounded-full ${getStatusColor(record.status)}`}></span>
+                        <span className="text-gray-600 text-sm">{getStatusText(record.status)}</span>
                       </div>
                     </td>
                     <td className="py-4 px-4 text-center">
                       <div className="flex justify-center space-x-2">
-                        <button className="p-2 text-blue-500 hover:bg-blue-50 rounded-lg transition-colors duration-200">
+                        <button 
+                          onClick={() => handleOpenViewModal(record)}
+                          className="p-2 text-blue-500 hover:bg-blue-50 rounded-lg transition-colors duration-200"
+                          title="Ver detalles"
+                        >
                           <Eye className="w-4 h-4" />
                         </button>
-                        <button className="p-2 text-yellow-500 hover:bg-yellow-50 rounded-lg transition-colors duration-200">
+                        <button 
+                          onClick={() => handleOpenEditModal(record)}
+                          className="p-2 text-yellow-500 hover:bg-yellow-50 rounded-lg transition-colors duration-200"
+                          title="Editar"
+                        >
                           <Edit className="w-4 h-4" />
                         </button>
-                        <button className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors duration-200">
+                        <button 
+                          onClick={() => handleOpenDeleteModal(record)}
+                          className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors duration-200"
+                          title="Eliminar"
+                        >
                           <Trash2 className="w-4 h-4" />
                         </button>
                       </div>
@@ -830,46 +565,550 @@ const ExpenseTracker: React.FC = () => {
             </table>
           </div>
         </motion.div>
+      </motion.div>
 
-        {/* Resumen financiero - simplificado sin pie de página */}
-        <motion.div
-          variants={itemVariants}
-          className="bg-white/90 backdrop-blur-md rounded-xl p-6 border border-white/20 shadow-xl"
-        >
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-center">
-            <div>
-              <h4 className="text-lg font-semibold text-gray-800 mb-2">
-                Gastos Este Mes
-              </h4>
-              <p className="text-3xl font-bold text-green-600">
-                {formatCurrency(157000)}
-              </p>
-              <div className="flex items-center justify-center mt-2 text-green-600">
-                <ArrowUpRight className="w-4 h-4 mr-1" />
-                <span className="text-sm">+12.1% vs mes anterior</span>
+      {/* Modal Agregar */}
+      {showAddModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between p-6 border-b border-gray-200">
+              <h2 className="text-xl font-semibold text-gray-800">Agregar Nuevo Gasto</h2>
+              <button
+                onClick={() => {
+                  setShowAddModal(false);
+                  clearForm();
+                }}
+                className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <FileText className="w-4 h-4 inline mr-2" />
+                    Descripción *
+                  </label>
+                  <textarea
+                    value={formDescription}
+                    onChange={(e) => setFormDescription(e.target.value)}
+                    rows={3}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                    placeholder="Descripción detallada del gasto..."
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Categoría *</label>
+                  <select
+                    value={formCategory}
+                    onChange={(e) => setFormCategory(e.target.value)}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                  >
+                    <option value="alimentacion">Alimentación</option>
+                    <option value="vacunacion">Vacunación</option>
+                    <option value="tratamientos">Tratamientos</option>
+                    <option value="instalaciones">Instalaciones</option>
+                    <option value="transporte">Transporte</option>
+                    <option value="otros">Otros</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <DollarSign className="w-4 h-4 inline mr-2" />
+                    Monto *
+                  </label>
+                  <input
+                    type="number"
+                    value={formAmount}
+                    onChange={(e) => setFormAmount(e.target.value)}
+                    min="0"
+                    step="0.01"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                    placeholder="0.00"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <Calendar className="w-4 h-4 inline mr-2" />
+                    Fecha *
+                  </label>
+                  <input
+                    type="date"
+                    value={formDate}
+                    onChange={(e) => setFormDate(e.target.value)}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <User className="w-4 h-4 inline mr-2" />
+                    Proveedor *
+                  </label>
+                  <input
+                    type="text"
+                    value={formSupplier}
+                    onChange={(e) => setFormSupplier(e.target.value)}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                    placeholder="Nombre del proveedor"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <CreditCard className="w-4 h-4 inline mr-2" />
+                    Método de Pago
+                  </label>
+                  <select
+                    value={formPaymentMethod}
+                    onChange={(e) => setFormPaymentMethod(e.target.value)}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                  >
+                    <option value="efectivo">Efectivo</option>
+                    <option value="transferencia">Transferencia</option>
+                    <option value="cheque">Cheque</option>
+                    <option value="credito">Crédito</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <MapPin className="w-4 h-4 inline mr-2" />
+                    Ubicación
+                  </label>
+                  <div className="flex space-x-2">
+                    <input
+                      type="text"
+                      value={formAddress}
+                      onChange={(e) => setFormAddress(e.target.value)}
+                      className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                      placeholder="Dirección o ubicación"
+                    />
+                    <button
+                      type="button"
+                      onClick={getCurrentLocation}
+                      disabled={isGettingLocation}
+                      className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white rounded-lg transition-colors duration-200 flex items-center"
+                      title="Obtener ubicación actual"
+                    >
+                      {isGettingLocation ? (
+                        <motion.div
+                          animate={{ rotate: 360 }}
+                          transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                          className="w-4 h-4 border-2 border-white border-t-transparent rounded-full"
+                        />
+                      ) : (
+                        <Navigation className="w-4 h-4" />
+                      )}
+                    </button>
+                  </div>
+                  {currentCoordinates && (
+                    <p className="text-xs text-gray-500 mt-1">
+                      Coordenadas: {currentCoordinates.lat.toFixed(6)}, {currentCoordinates.lng.toFixed(6)}
+                    </p>
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">ID de Animal (opcional)</label>
+                  <input
+                    type="text"
+                    value={formAnimalId}
+                    onChange={(e) => setFormAnimalId(e.target.value)}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                    placeholder="ID del animal (si aplica)"
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-end space-x-4 pt-6 border-t border-gray-200 mt-6">
+                <button
+                  onClick={() => {
+                    setShowAddModal(false);
+                    clearForm();
+                  }}
+                  className="px-6 py-2 text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleSaveExpense}
+                  className="flex items-center px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                >
+                  <Save className="w-4 h-4 mr-2" />
+                  Guardar Gasto
+                </button>
               </div>
             </div>
-            <div>
-              <h4 className="text-lg font-semibold text-gray-800 mb-2">
-                Promedio Mensual
-              </h4>
-              <p className="text-3xl font-bold text-teal-600">
-                {formatCurrency(monthlyAverage)}
-              </p>
-              <p className="text-gray-600 text-sm mt-2">últimos 6 meses</p>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Editar */}
+      {showEditModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between p-6 border-b border-gray-200">
+              <h2 className="text-xl font-semibold text-gray-800">Editar Gasto</h2>
+              <button
+                onClick={() => {
+                  setShowEditModal(false);
+                  setSelectedExpense(null);
+                  clearForm();
+                }}
+                className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
             </div>
-            <div>
-              <h4 className="text-lg font-semibold text-gray-800 mb-2">
-                Pagos Pendientes
-              </h4>
-              <p className="text-3xl font-bold text-yellow-600">
-                {formatCurrency(pendingPayments)}
-              </p>
-              <p className="text-gray-600 text-sm mt-2">requieren atención</p>
+            <div className="p-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <FileText className="w-4 h-4 inline mr-2" />
+                    Descripción *
+                  </label>
+                  <textarea
+                    value={formDescription}
+                    onChange={(e) => setFormDescription(e.target.value)}
+                    rows={3}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                    placeholder="Descripción detallada del gasto..."
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Categoría *</label>
+                  <select
+                    value={formCategory}
+                    onChange={(e) => setFormCategory(e.target.value)}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                  >
+                    <option value="alimentacion">Alimentación</option>
+                    <option value="vacunacion">Vacunación</option>
+                    <option value="tratamientos">Tratamientos</option>
+                    <option value="instalaciones">Instalaciones</option>
+                    <option value="transporte">Transporte</option>
+                    <option value="otros">Otros</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <DollarSign className="w-4 h-4 inline mr-2" />
+                    Monto *
+                  </label>
+                  <input
+                    type="number"
+                    value={formAmount}
+                    onChange={(e) => setFormAmount(e.target.value)}
+                    min="0"
+                    step="0.01"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                    placeholder="0.00"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <Calendar className="w-4 h-4 inline mr-2" />
+                    Fecha *
+                  </label>
+                  <input
+                    type="date"
+                    value={formDate}
+                    onChange={(e) => setFormDate(e.target.value)}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <User className="w-4 h-4 inline mr-2" />
+                    Proveedor *
+                  </label>
+                  <input
+                    type="text"
+                    value={formSupplier}
+                    onChange={(e) => setFormSupplier(e.target.value)}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                    placeholder="Nombre del proveedor"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <CreditCard className="w-4 h-4 inline mr-2" />
+                    Método de Pago
+                  </label>
+                  <select
+                    value={formPaymentMethod}
+                    onChange={(e) => setFormPaymentMethod(e.target.value)}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                  >
+                    <option value="efectivo">Efectivo</option>
+                    <option value="transferencia">Transferencia</option>
+                    <option value="cheque">Cheque</option>
+                    <option value="credito">Crédito</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <MapPin className="w-4 h-4 inline mr-2" />
+                    Ubicación
+                  </label>
+                  <div className="flex space-x-2">
+                    <input
+                      type="text"
+                      value={formAddress}
+                      onChange={(e) => setFormAddress(e.target.value)}
+                      className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                      placeholder="Dirección o ubicación"
+                    />
+                    <button
+                      type="button"
+                      onClick={getCurrentLocation}
+                      disabled={isGettingLocation}
+                      className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white rounded-lg transition-colors duration-200 flex items-center"
+                      title="Obtener ubicación actual"
+                    >
+                      {isGettingLocation ? (
+                        <motion.div
+                          animate={{ rotate: 360 }}
+                          transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                          className="w-4 h-4 border-2 border-white border-t-transparent rounded-full"
+                        />
+                      ) : (
+                        <Navigation className="w-4 h-4" />
+                      )}
+                    </button>
+                  </div>
+                  {currentCoordinates && (
+                    <p className="text-xs text-gray-500 mt-1">
+                      Coordenadas: {currentCoordinates.lat.toFixed(6)}, {currentCoordinates.lng.toFixed(6)}
+                    </p>
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">ID de Animal (opcional)</label>
+                  <input
+                    type="text"
+                    value={formAnimalId}
+                    onChange={(e) => setFormAnimalId(e.target.value)}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                    placeholder="ID del animal (si aplica)"
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-end space-x-4 pt-6 border-t border-gray-200 mt-6">
+                <button
+                  onClick={() => {
+                    setShowEditModal(false);
+                    setSelectedExpense(null);
+                    clearForm();
+                  }}
+                  className="px-6 py-2 text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleUpdateExpense}
+                  className="flex items-center px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                >
+                  <Save className="w-4 h-4 mr-2" />
+                  Actualizar Gasto
+                </button>
+              </div>
             </div>
           </div>
-        </motion.div>
-      </motion.div>
+        </div>
+      )}
+
+      {/* Modal Ver */}
+      {showViewModal && selectedExpense && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between p-6 border-b border-gray-200">
+              <h2 className="text-xl font-semibold text-gray-800">Detalles del Gasto</h2>
+              <button
+                onClick={() => {
+                  setShowViewModal(false);
+                  setSelectedExpense(null);
+                }}
+                className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="bg-gray-50 p-4 rounded-lg">
+                  <h4 className="font-medium text-gray-700 mb-2 flex items-center">
+                    <FileText className="w-4 h-4 mr-2" />
+                    Descripción
+                  </h4>
+                  <p className="text-gray-900">{selectedExpense.description}</p>
+                </div>
+
+                <div className="bg-gray-50 p-4 rounded-lg">
+                  <h4 className="font-medium text-gray-700 mb-2">Categoría</h4>
+                  <p className="text-gray-900">{getCategoryName(selectedExpense.category)}</p>
+                </div>
+
+                <div className="bg-gray-50 p-4 rounded-lg">
+                  <h4 className="font-medium text-gray-700 mb-2 flex items-center">
+                    <DollarSign className="w-4 h-4 mr-2" />
+                    Monto
+                  </h4>
+                  <p className="text-gray-900 text-xl font-bold">
+                    {formatCurrency(selectedExpense.amount)}
+                  </p>
+                </div>
+
+                <div className="bg-gray-50 p-4 rounded-lg">
+                  <h4 className="font-medium text-gray-700 mb-2 flex items-center">
+                    <Calendar className="w-4 h-4 mr-2" />
+                    Fecha
+                  </h4>
+                  <p className="text-gray-900">{formatDate(selectedExpense.date)}</p>
+                </div>
+
+                <div className="bg-gray-50 p-4 rounded-lg">
+                  <h4 className="font-medium text-gray-700 mb-2 flex items-center">
+                    <User className="w-4 h-4 mr-2" />
+                    Proveedor
+                  </h4>
+                  <p className="text-gray-900">{selectedExpense.supplier}</p>
+                </div>
+
+                <div className="bg-gray-50 p-4 rounded-lg">
+                  <h4 className="font-medium text-gray-700 mb-2 flex items-center">
+                    <CreditCard className="w-4 h-4 mr-2" />
+                    Método de Pago
+                  </h4>
+                  <p className="text-gray-900">{getPaymentMethodText(selectedExpense.paymentMethod)}</p>
+                </div>
+
+                <div className="bg-gray-50 p-4 rounded-lg">
+                  <h4 className="font-medium text-gray-700 mb-2">Estado</h4>
+                  <div className="flex items-center space-x-2">
+                    <span className={`inline-block w-3 h-3 rounded-full ${getStatusColor(selectedExpense.status)}`}></span>
+                    <span className="text-gray-900">{getStatusText(selectedExpense.status)}</span>
+                  </div>
+                </div>
+
+                <div className="bg-gray-50 p-4 rounded-lg">
+                  <h4 className="font-medium text-gray-700 mb-2 flex items-center">
+                    <MapPin className="w-4 h-4 mr-2" />
+                    Ubicación
+                  </h4>
+                  <p className="text-gray-900">{selectedExpense.location.address}</p>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Coordenadas: {selectedExpense.location.lat.toFixed(6)}, {selectedExpense.location.lng.toFixed(6)}
+                  </p>
+                </div>
+
+                {selectedExpense.animalId && (
+                  <div className="bg-gray-50 p-4 rounded-lg">
+                    <h4 className="font-medium text-gray-700 mb-2">ID de Animal</h4>
+                    <p className="text-gray-900">{selectedExpense.animalId}</p>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex justify-end space-x-4 pt-6 border-t border-gray-200 mt-6">
+                <button
+                  onClick={() => {
+                    setShowViewModal(false);
+                    handleOpenEditModal(selectedExpense);
+                  }}
+                  className="flex items-center px-6 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 transition-colors"
+                >
+                  <Edit className="w-4 h-4 mr-2" />
+                  Editar
+                </button>
+                <button
+                  onClick={() => {
+                    setShowViewModal(false);
+                    setSelectedExpense(null);
+                  }}
+                  className="px-6 py-2 text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  Cerrar
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Eliminar */}
+      {showDeleteModal && selectedExpense && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full">
+            <div className="flex items-center justify-between p-6 border-b border-gray-200">
+              <h2 className="text-xl font-semibold text-gray-800">Confirmar Eliminación</h2>
+              <button
+                onClick={() => {
+                  setShowDeleteModal(false);
+                  setSelectedExpense(null);
+                }}
+                className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-6">
+              <div className="text-center">
+                <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100 mb-4">
+                  <Trash2 className="h-6 w-6 text-red-600" />
+                </div>
+                <h3 className="text-lg font-medium text-gray-900 mb-2">¿Estás seguro?</h3>
+                <p className="text-sm text-gray-500 mb-4">
+                  Esta acción no se puede deshacer. El gasto será eliminado permanentemente.
+                </p>
+                <div className="bg-gray-50 p-4 rounded-lg text-left">
+                  <p className="text-sm text-gray-700">
+                    <strong>Descripción:</strong> {selectedExpense.description}
+                  </p>
+                  <p className="text-sm text-gray-700">
+                    <strong>Monto:</strong> {formatCurrency(selectedExpense.amount)}
+                  </p>
+                  <p className="text-sm text-gray-700">
+                    <strong>Fecha:</strong> {formatDate(selectedExpense.date)}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex justify-end space-x-4 pt-6 border-t border-gray-200 mt-6">
+                <button
+                  onClick={() => {
+                    setShowDeleteModal(false);
+                    setSelectedExpense(null);
+                  }}
+                  className="px-6 py-2 text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleDeleteExpense}
+                  className="flex items-center px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+                >
+                  <Trash2 className="w-4 h-4 mr-2" />
+                  Eliminar
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

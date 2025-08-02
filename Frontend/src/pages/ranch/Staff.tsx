@@ -1,9 +1,3 @@
-// ============================================================================
-// STAFF.TSX - GESTIÓN DE PERSONAL DEL RANCHO (CRUD COMPLETO)
-// ============================================================================
-// Componente CRUD completo para gestionar todo el personal del rancho
-// con funciones de crear, leer, actualizar y eliminar empleados
-
 import React, { useState, useEffect } from "react";
 import { motion, Variants, AnimatePresence } from "framer-motion";
 import {
@@ -24,8 +18,9 @@ import {
   Shield,
   Award,
   Filter,
-  Download,
   UserCheck,
+  AlertCircle,
+  CheckCircle,
 } from "lucide-react";
 
 // ============================================================================
@@ -59,6 +54,10 @@ interface StaffMember {
   };
   skills: string[];
   photo?: string;
+}
+
+interface FormErrors {
+  [key: string]: string;
 }
 
 // ============================================================================
@@ -245,6 +244,25 @@ const modalVariants: Variants = {
 };
 
 // ============================================================================
+// FUNCIONES DE VALIDACIÓN
+// ============================================================================
+
+const validateEmail = (email: string): boolean => {
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  return emailRegex.test(email);
+};
+
+const validatePhone = (phone: string): boolean => {
+  const phoneRegex = /^(\+52\s?)?[0-9\s\-]{10,15}$/;
+  return phoneRegex.test(phone);
+};
+
+const validateCURP = (curp: string): boolean => {
+  const curpRegex = /^[A-Z]{1}[AEIOU]{1}[A-Z]{2}[0-9]{2}(0[1-9]|1[0-2])(0[1-9]|1[0-9]|2[0-9]|3[0-1])[HM]{1}(AS|BC|BS|CC|CS|CH|CL|CM|DF|DG|GT|GR|HG|JC|MC|MN|MS|NT|NL|OC|PL|QT|QR|SP|SL|SR|TC|TS|TL|VZ|YN|ZS|NE)[B-DF-HJ-NP-TV-Z]{3}[0-9A-Z]{1}[0-9]{1}$/;
+  return curpRegex.test(curp);
+};
+
+// ============================================================================
 // COMPONENTE PRINCIPAL
 // ============================================================================
 
@@ -264,7 +282,13 @@ const Staff: React.FC = () => {
 
   // Estados para formulario
   const [formData, setFormData] = useState<Partial<StaffMember>>({});
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setSaveLoading] = useState(false);
+  const [formErrors, setFormErrors] = useState<FormErrors>({});
+  const [skillInput, setSkillInput] = useState("");
+
+  // Estados para notificaciones
+  const [showSuccessMessage, setShowSuccessMessage] = useState(false);
+  const [successMessage, setSuccessMessage] = useState("");
 
   // Departamentos únicos para filtro
   const departments = ["Todos", ...Array.from(new Set(staffMembers.map(member => member.employment.department)))];
@@ -307,6 +331,71 @@ const Staff: React.FC = () => {
     return `EMP-${String(maxId + 1).padStart(3, '0')}`;
   };
 
+  // Función para validar formulario
+  const validateForm = (): boolean => {
+    const errors: FormErrors = {};
+
+    // Validaciones de información personal
+    if (!formData.personalInfo?.firstName?.trim()) {
+      errors.firstName = "El nombre es obligatorio";
+    } else if (formData.personalInfo.firstName.length < 2) {
+      errors.firstName = "El nombre debe tener al menos 2 caracteres";
+    }
+
+    if (!formData.personalInfo?.lastName?.trim()) {
+      errors.lastName = "Los apellidos son obligatorios";
+    } else if (formData.personalInfo.lastName.length < 2) {
+      errors.lastName = "Los apellidos deben tener al menos 2 caracteres";
+    }
+
+    if (formData.personalInfo?.email && !validateEmail(formData.personalInfo.email)) {
+      errors.email = "El formato del email no es válido";
+    }
+
+    if (formData.personalInfo?.phone && !validatePhone(formData.personalInfo.phone)) {
+      errors.phone = "El formato del teléfono no es válido";
+    }
+
+    if (formData.personalInfo?.nationalId && !validateCURP(formData.personalInfo.nationalId)) {
+      errors.nationalId = "El formato de la CURP no es válido";
+    }
+
+    // Validaciones de información laboral
+    if (!formData.employment?.position?.trim()) {
+      errors.position = "El puesto es obligatorio";
+    }
+
+    if (!formData.employment?.department?.trim()) {
+      errors.department = "El departamento es obligatorio";
+    }
+
+    if (formData.employment?.salary && formData.employment.salary < 0) {
+      errors.salary = "El salario debe ser un número positivo";
+    }
+
+    // Validar fecha de nacimiento (debe ser mayor de 18 años)
+    if (formData.personalInfo?.dateOfBirth) {
+      const birthDate = new Date(formData.personalInfo.dateOfBirth);
+      const today = new Date();
+      const age = today.getFullYear() - birthDate.getFullYear();
+      if (age < 18) {
+        errors.dateOfBirth = "El empleado debe ser mayor de 18 años";
+      }
+    }
+
+    // Validar fecha de contratación (no puede ser futura)
+    if (formData.employment?.hireDate) {
+      const hireDate = new Date(formData.employment.hireDate);
+      const today = new Date();
+      if (hireDate > today) {
+        errors.hireDate = "La fecha de contratación no puede ser futura";
+      }
+    }
+
+    setFormErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
   // Función para agregar personal
   const handleAddStaff = () => {
     setFormData({
@@ -335,6 +424,8 @@ const Staff: React.FC = () => {
       },
       skills: []
     });
+    setFormErrors({});
+    setSkillInput("");
     setShowAddModal(true);
   };
 
@@ -342,6 +433,8 @@ const Staff: React.FC = () => {
   const handleEditStaff = (member: StaffMember) => {
     setFormData(member);
     setSelectedMember(member);
+    setFormErrors({});
+    setSkillInput("");
     setShowEditModal(true);
   };
 
@@ -355,19 +448,43 @@ const Staff: React.FC = () => {
   const handleDeleteStaff = (member: StaffMember) => {
     if (confirm(`¿Estás seguro de que quieres eliminar a ${member.personalInfo.firstName} ${member.personalInfo.lastName}?`)) {
       setStaffMembers(prev => prev.filter(m => m.id !== member.id));
+      setSuccessMessage("Personal eliminado exitosamente");
+      setShowSuccessMessage(true);
+      setTimeout(() => setShowSuccessMessage(false), 3000);
     }
   };
 
+  // Función para agregar habilidad
+  const handleAddSkill = () => {
+    if (skillInput.trim() && formData.skills && !formData.skills.includes(skillInput.trim())) {
+      setFormData(prev => ({
+        ...prev,
+        skills: [...(prev.skills || []), skillInput.trim()]
+      }));
+      setSkillInput("");
+    }
+  };
+
+  // Función para eliminar habilidad
+  const handleRemoveSkill = (skillToRemove: string) => {
+    setFormData(prev => ({
+      ...prev,
+      skills: prev.skills?.filter(skill => skill !== skillToRemove) || []
+    }));
+  };
+
   // Función para guardar (agregar o editar)
-  const handleSaveStaff = () => {
-    if (!formData.personalInfo?.firstName || !formData.personalInfo?.lastName || !formData.employment?.position) {
-      alert("Por favor, completa los campos obligatorios");
+  const handleSaveStaff = async () => {
+    if (!validateForm()) {
       return;
     }
 
-    setIsLoading(true);
+    setSaveLoading(true);
 
-    setTimeout(() => {
+    try {
+      // Simular llamada a API
+      await new Promise(resolve => setTimeout(resolve, 1500));
+
       const newMember: StaffMember = {
         id: selectedMember?.id || generateId(),
         personalInfo: formData.personalInfo!,
@@ -379,17 +496,28 @@ const Staff: React.FC = () => {
       if (selectedMember) {
         // Editar
         setStaffMembers(prev => prev.map(m => m.id === selectedMember.id ? newMember : m));
+        setSuccessMessage("Personal actualizado exitosamente");
       } else {
         // Agregar
         setStaffMembers(prev => [...prev, newMember]);
+        setSuccessMessage("Personal agregado exitosamente");
       }
 
-      setIsLoading(false);
       setShowAddModal(false);
       setShowEditModal(false);
       setFormData({});
       setSelectedMember(null);
-    }, 1000);
+      setFormErrors({});
+      
+      setShowSuccessMessage(true);
+      setTimeout(() => setShowSuccessMessage(false), 3000);
+
+    } catch (error) {
+      console.error("Error al guardar:", error);
+      // Aquí podrías mostrar un mensaje de error
+    } finally {
+      setSaveLoading(false);
+    }
   };
 
   // Función para cancelar
@@ -398,6 +526,8 @@ const Staff: React.FC = () => {
     setShowEditModal(false);
     setFormData({});
     setSelectedMember(null);
+    setFormErrors({});
+    setSkillInput("");
   };
 
   // Función para obtener color del estado
@@ -430,6 +560,21 @@ const Staff: React.FC = () => {
         animate="visible"
         className="max-w-7xl mx-auto"
       >
+        {/* Notificación de éxito */}
+        <AnimatePresence>
+          {showSuccessMessage && (
+            <motion.div
+              initial={{ opacity: 0, y: -50 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -50 }}
+              className="fixed top-4 right-4 z-50 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg flex items-center"
+            >
+              <CheckCircle className="w-5 h-5 mr-2" />
+              {successMessage}
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         {/* Header */}
         <motion.div variants={itemVariants} className="mb-8">
           <div className="flex items-center justify-between">
@@ -443,15 +588,6 @@ const Staff: React.FC = () => {
             </div>
 
             <div className="flex items-center space-x-3">
-              <motion.button
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                onClick={() => console.log("Exportar datos")}
-                className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors flex items-center"
-              >
-                <Download className="w-4 h-4 mr-2" />
-                Exportar
-              </motion.button>
               <motion.button
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
@@ -756,6 +892,21 @@ const Staff: React.FC = () => {
               </div>
 
               <div className="p-6">
+                {/* Mostrar errores generales si existen */}
+                {Object.keys(formErrors).length > 0 && (
+                  <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
+                    <div className="flex items-center mb-2">
+                      <AlertCircle className="w-5 h-5 text-red-500 mr-2" />
+                      <h4 className="text-red-800 font-medium">Por favor corrige los siguientes errores:</h4>
+                    </div>
+                    <ul className="text-red-700 text-sm list-disc list-inside">
+                      {Object.values(formErrors).map((error, index) => (
+                        <li key={index}>{error}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
                 {/* Formulario */}
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                   {/* Información Personal */}
@@ -779,9 +930,14 @@ const Staff: React.FC = () => {
                             firstName: e.target.value
                           }
                         }))}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
+                        className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent ${
+                          formErrors.firstName ? 'border-red-300' : 'border-gray-300'
+                        }`}
                         placeholder="Ingresa el nombre"
                       />
+                      {formErrors.firstName && (
+                        <p className="text-red-500 text-sm mt-1">{formErrors.firstName}</p>
+                      )}
                     </div>
 
                     <div>
@@ -798,9 +954,14 @@ const Staff: React.FC = () => {
                             lastName: e.target.value
                           }
                         }))}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
+                        className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent ${
+                          formErrors.lastName ? 'border-red-300' : 'border-gray-300'
+                        }`}
                         placeholder="Ingresa los apellidos"
                       />
+                      {formErrors.lastName && (
+                        <p className="text-red-500 text-sm mt-1">{formErrors.lastName}</p>
+                      )}
                     </div>
 
                     <div>
@@ -817,8 +978,13 @@ const Staff: React.FC = () => {
                             dateOfBirth: e.target.value
                           }
                         }))}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
+                        className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent ${
+                          formErrors.dateOfBirth ? 'border-red-300' : 'border-gray-300'
+                        }`}
                       />
+                      {formErrors.dateOfBirth && (
+                        <p className="text-red-500 text-sm mt-1">{formErrors.dateOfBirth}</p>
+                      )}
                     </div>
 
                     <div>
@@ -835,10 +1001,15 @@ const Staff: React.FC = () => {
                             nationalId: e.target.value.toUpperCase()
                           }
                         }))}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
+                        className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent ${
+                          formErrors.nationalId ? 'border-red-300' : 'border-gray-300'
+                        }`}
                         placeholder="CURP de 18 caracteres"
                         maxLength={18}
                       />
+                      {formErrors.nationalId && (
+                        <p className="text-red-500 text-sm mt-1">{formErrors.nationalId}</p>
+                      )}
                     </div>
 
                     <div>
@@ -855,9 +1026,14 @@ const Staff: React.FC = () => {
                             phone: e.target.value
                           }
                         }))}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
+                        className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent ${
+                          formErrors.phone ? 'border-red-300' : 'border-gray-300'
+                        }`}
                         placeholder="+52 993 123 4567"
                       />
+                      {formErrors.phone && (
+                        <p className="text-red-500 text-sm mt-1">{formErrors.phone}</p>
+                      )}
                     </div>
 
                     <div>
@@ -874,9 +1050,14 @@ const Staff: React.FC = () => {
                             email: e.target.value
                           }
                         }))}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
+                        className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent ${
+                          formErrors.email ? 'border-red-300' : 'border-gray-300'
+                        }`}
                         placeholder="ejemplo@rancho.com"
                       />
+                      {formErrors.email && (
+                        <p className="text-red-500 text-sm mt-1">{formErrors.email}</p>
+                      )}
                     </div>
 
                     <div>
@@ -932,14 +1113,19 @@ const Staff: React.FC = () => {
                             position: e.target.value
                           }
                         }))}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
+                        className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent ${
+                          formErrors.position ? 'border-red-300' : 'border-gray-300'
+                        }`}
                         placeholder="Ej: Veterinario, Vaquero, Administrador"
                       />
+                      {formErrors.position && (
+                        <p className="text-red-500 text-sm mt-1">{formErrors.position}</p>
+                      )}
                     </div>
 
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Departamento
+                        Departamento *
                       </label>
                       <select
                         value={formData.employment?.department || ""}
@@ -950,7 +1136,9 @@ const Staff: React.FC = () => {
                             department: e.target.value
                           }
                         }))}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
+                        className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent ${
+                          formErrors.department ? 'border-red-300' : 'border-gray-300'
+                        }`}
                       >
                         <option value="">Selecciona un departamento</option>
                         <option value="Administración">Administración</option>
@@ -959,6 +1147,9 @@ const Staff: React.FC = () => {
                         <option value="Mantenimiento">Mantenimiento</option>
                         <option value="Seguridad">Seguridad</option>
                       </select>
+                      {formErrors.department && (
+                        <p className="text-red-500 text-sm mt-1">{formErrors.department}</p>
+                      )}
                     </div>
 
                     <div>
@@ -975,8 +1166,13 @@ const Staff: React.FC = () => {
                             hireDate: e.target.value
                           }
                         }))}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
+                        className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent ${
+                          formErrors.hireDate ? 'border-red-300' : 'border-gray-300'
+                        }`}
                       />
+                      {formErrors.hireDate && (
+                        <p className="text-red-500 text-sm mt-1">{formErrors.hireDate}</p>
+                      )}
                     </div>
 
                     <div>
@@ -993,9 +1189,15 @@ const Staff: React.FC = () => {
                             salary: parseFloat(e.target.value) || 0
                           }
                         }))}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
+                        className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent ${
+                          formErrors.salary ? 'border-red-300' : 'border-gray-300'
+                        }`}
                         placeholder="15000"
+                        min="0"
                       />
+                      {formErrors.salary && (
+                        <p className="text-red-500 text-sm mt-1">{formErrors.salary}</p>
+                      )}
                     </div>
 
                     <div>
@@ -1039,6 +1241,54 @@ const Staff: React.FC = () => {
                         <option value="Vacaciones">Vacaciones</option>
                         <option value="Suspendido">Suspendido</option>
                       </select>
+                    </div>
+
+                    {/* Habilidades */}
+                    <div className="pt-4 border-t border-gray-200">
+                      <h4 className="font-medium text-gray-800 mb-3">Habilidades</h4>
+                      
+                      <div className="flex gap-2 mb-3">
+                        <input
+                          type="text"
+                          value={skillInput}
+                          onChange={(e) => setSkillInput(e.target.value)}
+                          onKeyPress={(e) => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                              handleAddSkill();
+                            }
+                          }}
+                          className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
+                          placeholder="Ej: Liderazgo, Manejo de ganado..."
+                        />
+                        <button
+                          type="button"
+                          onClick={handleAddSkill}
+                          className="px-4 py-2 bg-[#519a7c] text-white rounded-lg hover:bg-[#2d5a45] transition-colors"
+                        >
+                          <Plus className="w-4 h-4" />
+                        </button>
+                      </div>
+
+                      {formData.skills && formData.skills.length > 0 && (
+                        <div className="flex flex-wrap gap-2">
+                          {formData.skills.map((skill, index) => (
+                            <span
+                              key={index}
+                              className="inline-flex items-center px-3 py-1 bg-[#519a7c] bg-opacity-10 text-[#519a7c] text-sm rounded-full border border-[#519a7c] border-opacity-20"
+                            >
+                              {skill}
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveSkill(skill)}
+                                className="ml-2 text-[#519a7c] hover:text-red-500"
+                              >
+                                <X className="w-3 h-3" />
+                              </button>
+                            </span>
+                          ))}
+                        </div>
+                      )}
                     </div>
 
                     {/* Contacto de Emergencia */}
@@ -1108,6 +1358,7 @@ const Staff: React.FC = () => {
                     whileTap={{ scale: 0.95 }}
                     onClick={handleCancel}
                     className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                    disabled={isLoading}
                   >
                     Cancelar
                   </motion.button>

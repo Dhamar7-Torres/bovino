@@ -1,1114 +1,1206 @@
-import React, { useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import {
-  Card,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-  CardContent,
-} from "../../components/ui/Card";
-import { Button } from "../../components/ui/Button";
-import { Input } from "../../components/ui/Input";
-import { Modal, ModalHeader, ModalBody, ModalFooter } from "../../components/ui/Modal";
-import { Badge } from "../../components/ui/Badge";
-import {
-  MapPin,
-  ShoppingCart,
-  DollarSign,
-  User,
-  Calendar as CalendarIcon,
-  Camera,
-  FileText,
-  Truck,
-  ArrowLeft,
-  Save,
-  Plus,
-  Edit,
-  Trash2,
-  Eye,
-  Search,
+import React, { useState, useEffect, useCallback } from 'react';
+import { 
+  Plus, 
+  Edit, 
+  Trash2, 
+  Search, 
   Download,
-} from "lucide-react";
+  Eye,
+  Package,
+  MapPin,
+  X,
+  Save,
+  Navigation
+} from 'lucide-react';
 
-// Interfaz para el evento de compra
-interface PurchaseEvent {
-  id?: string;
-  bovineId: string;
-  bovineName?: string;
-  sellerId: string;
-  sellerName: string;
-  sellerContact: string;
-  purchaseDate: string;
-  purchasePrice: number;
-  weight: number;
-  condition: string;
-  location: {
-    lat: number;
-    lng: number;
-    address: string;
-  };
-  transportMethod: string;
-  veterinaryCheckup: boolean;
-  documents: string[];
-  notes: string;
-  paymentMethod: string;
-  paymentStatus: string;
-  createdAt: string;
-  updatedAt: string;
+// ============================================================================
+// INTERFACES Y TIPOS
+// ============================================================================
+
+interface Purchase {
+  id: string;
+  purchaseCode: string;
+  date: Date;
+  vendorName: string;
+  vendorContact?: string;
+  description: string;
+  category: PurchaseCategory;
+  items: PurchaseItem[];
+  totalAmount: number;
+  currency: string;
+  paymentMethod: PaymentMethod;
+  status: PurchaseStatus;
+  location?: string;
+  notes?: string;
+  invoiceNumber?: string;
+  receiptUrl?: string;
+  createdBy: string;
+  createdAt: Date;
+  updatedAt: Date;
 }
 
-// Datos mock para la tabla
-const mockPurchaseEvents: PurchaseEvent[] = [
-  {
-    id: "PUR-001",
-    bovineId: "BOV-001",
-    bovineName: "Luna",
-    sellerId: "SELL-001",
-    sellerName: "Juan Pérez",
-    sellerContact: "993-123-4567",
-    purchaseDate: "2025-07-20",
-    purchasePrice: 25000,
-    weight: 450,
-    condition: "excellent",
-    location: {
-      lat: 17.9995,
-      lng: -92.9476,
-      address: "Villahermosa, Tabasco, México",
-    },
-    transportMethod: "own_truck",
-    veterinaryCheckup: true,
-    documents: ["cert_001.pdf"],
-    notes: "Animal en excelente estado",
-    paymentMethod: "transfer",
-    paymentStatus: "completed",
-    createdAt: "2025-07-20T10:30:00Z",
-    updatedAt: "2025-07-20T10:30:00Z",
-  },
-  {
-    id: "PUR-002",
-    bovineId: "BOV-002",
-    bovineName: "Estrella",
-    sellerId: "SELL-002",
-    sellerName: "María González",
-    sellerContact: "993-987-6543",
-    purchaseDate: "2025-07-18",
-    purchasePrice: 28000,
-    weight: 480,
-    condition: "good",
-    location: {
-      lat: 18.1,
-      lng: -93.2,
-      address: "Comalcalco, Tabasco, México",
-    },
-    transportMethod: "hired_transport",
-    veterinaryCheckup: true,
-    documents: ["cert_002.pdf", "transport_002.pdf"],
-    notes: "Transporte sin incidentes",
-    paymentMethod: "cash",
-    paymentStatus: "completed",
-    createdAt: "2025-07-18T14:15:00Z",
-    updatedAt: "2025-07-18T14:15:00Z",
-  },
-  {
-    id: "PUR-003",
-    bovineId: "BOV-003",
-    bovineName: "Paloma",
-    sellerId: "SELL-003",
-    sellerName: "Carlos Mendoza",
-    sellerContact: "993-555-7890",
-    purchaseDate: "2025-07-15",
-    purchasePrice: 22000,
-    weight: 420,
-    condition: "fair",
-    location: {
-      lat: 17.8,
-      lng: -92.7,
-      address: "Macuspana, Tabasco, México",
-    },
-    transportMethod: "seller_delivery",
-    veterinaryCheckup: false,
-    documents: [],
-    notes: "Pendiente chequeo veterinario",
-    paymentMethod: "check",
-    paymentStatus: "pending",
-    createdAt: "2025-07-15T09:00:00Z",
-    updatedAt: "2025-07-15T09:00:00Z",
-  },
-];
+interface PurchaseItem {
+  id: string;
+  name: string;
+  description?: string;
+  quantity: number;
+  unit: string;
+  unitPrice: number;
+  totalPrice: number;
+  category?: string;
+}
 
-type ViewMode = "list" | "create" | "edit" | "view";
+enum PurchaseCategory {
+  FEED = 'feed',
+  MEDICATION = 'medication',
+  EQUIPMENT = 'equipment',
+  SERVICES = 'services',
+  MAINTENANCE = 'maintenance',
+  UTILITIES = 'utilities',
+  OTHER = 'other'
+}
+
+enum PaymentMethod {
+  CASH = 'cash',
+  TRANSFER = 'transfer',
+  CHECK = 'check',
+  CREDIT_CARD = 'credit_card',
+  DEBIT_CARD = 'debit_card'
+}
+
+enum PurchaseStatus {
+  PENDING = 'pending',
+  COMPLETED = 'completed',
+  CANCELLED = 'cancelled',
+  REFUNDED = 'refunded'
+}
+
+interface PurchaseFilters {
+  search?: string;
+}
+
+interface PaginationInfo {
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
+}
+
+// ============================================================================
+// COMPONENTE PRINCIPAL
+// ============================================================================
 
 const EventPurchase: React.FC = () => {
   // Estados principales
-  const [viewMode, setViewMode] = useState<ViewMode>("list");
-  const [events, setEvents] = useState<PurchaseEvent[]>(mockPurchaseEvents);
-  const [selectedEvent, setSelectedEvent] = useState<PurchaseEvent | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [searchTerm, setSearchTerm] = useState("");
-  const [filterStatus, setFilterStatus] = useState("all");
-  const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize] = useState(10);
-
-  // Estados para modales
-  const [deleteModal, setDeleteModal] = useState({
-    isOpen: false,
-    eventId: "",
-    eventName: "",
+  const [purchases, setPurchases] = useState<Purchase[]>([]);
+  const [loading, setLoading] = useState<boolean>(true); // Empezar en true para la carga inicial
+  const [error, setError] = useState<string>('');
+  const [selectedPurchase, setSelectedPurchase] = useState<Purchase | null>(null);
+  
+  // Estados del modal
+  const [showModal, setShowModal] = useState<boolean>(false);
+  const [modalMode, setModalMode] = useState<'view' | 'create' | 'edit'>('view');
+  
+  // Estados de filtros y búsqueda
+  const [filters, setFilters] = useState<PurchaseFilters>({
+    search: ''
+  });
+  
+  // Estados para el formulario
+  const [formData, setFormData] = useState<Partial<Purchase>>({});
+  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+  const [gettingLocation, setGettingLocation] = useState<boolean>(false);
+  
+  // Estados de paginación
+  const [pagination, setPagination] = useState<PaginationInfo>({
+    page: 1,
+    limit: 20,
+    total: 0,
+    totalPages: 0
   });
 
-  // Estado para el formulario
-  const [formData, setFormData] = useState<PurchaseEvent>({
-    bovineId: "",
-    bovineName: "",
-    sellerId: "",
-    sellerName: "",
-    sellerContact: "",
-    purchaseDate: new Date().toISOString().split("T")[0],
-    purchasePrice: 0,
-    weight: 0,
-    condition: "",
-    location: {
-      lat: 17.9995,
-      lng: -92.9476,
-      address: "Villahermosa, Tabasco, México",
-    },
-    transportMethod: "",
-    veterinaryCheckup: false,
-    documents: [],
-    notes: "",
-    paymentMethod: "",
-    paymentStatus: "pending",
-    createdAt: "",
-    updatedAt: "",
-  });
+  // ============================================================================
+  // EFECTOS Y HOOKS
+  // ============================================================================
 
-  // Animaciones
-  const containerVariants = {
-    hidden: { opacity: 0, y: 20 },
-    visible: {
-      opacity: 1,
-      y: 0,
-      transition: {
-        duration: 0.6,
-        staggerChildren: 0.1,
-      },
-    },
-  };
+  useEffect(() => {
+    loadPurchases();
+  }, [pagination.page, filters]);
 
-  const itemVariants = {
-    hidden: { opacity: 0, y: 20 },
-    visible: { opacity: 1, y: 0 },
-  };
+  // ============================================================================
+  // FUNCIONES DE API
+  // ============================================================================
 
-  // Funciones utilitarias
-  const generateId = () => `PUR-${String(Date.now()).slice(-6)}`;
-
-  const resetForm = () => {
-    setFormData({
-      bovineId: "",
-      bovineName: "",
-      sellerId: "",
-      sellerName: "",
-      sellerContact: "",
-      purchaseDate: new Date().toISOString().split("T")[0],
-      purchasePrice: 0,
-      weight: 0,
-      condition: "",
-      location: {
-        lat: 17.9995,
-        lng: -92.9476,
-        address: "Villahermosa, Tabasco, México",
-      },
-      transportMethod: "",
-      veterinaryCheckup: false,
-      documents: [],
-      notes: "",
-      paymentMethod: "",
-      paymentStatus: "pending",
-      createdAt: "",
-      updatedAt: "",
-    });
-  };
-
-  // Funciones CRUD
-  const handleCreate = async () => {
+  const loadPurchases = useCallback(async () => {
     setLoading(true);
-    try {
-      const newEvent: PurchaseEvent = {
-        ...formData,
-        id: generateId(),
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
-      
-      setEvents(prev => [newEvent, ...prev]);
-      resetForm();
-      setViewMode("list");
-      
-      // Simular llamada a API
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      alert("Evento de compra creado exitosamente");
-    } catch (error) {
-      console.error("Error creando evento:", error);
-      alert("Error al crear el evento");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleUpdate = async () => {
-    if (!selectedEvent?.id) return;
+    setError('');
     
-    setLoading(true);
     try {
-      const updatedEvent: PurchaseEvent = {
-        ...formData,
-        id: selectedEvent.id,
-        createdAt: selectedEvent.createdAt,
-        updatedAt: new Date().toISOString(),
-      };
+      // Datos de prueba - simula una base de datos local
+      const mockPurchases: Purchase[] = [
+        {
+          id: '1',
+          purchaseCode: 'COMP-2025-001',
+          date: new Date('2025-01-15'),
+          vendorName: 'Forrajes del Norte S.A.',
+          vendorContact: 'juan.perez@forrajes.com',
+          description: 'Compra de alimento balanceado',
+          category: PurchaseCategory.FEED,
+          items: [
+            {
+              id: '1-1',
+              name: 'Alimento balanceado 18% proteína',
+              description: 'Saco de 40kg',
+              quantity: 50,
+              unit: 'saco',
+              unitPrice: 280,
+              totalPrice: 14000
+            }
+          ],
+          totalAmount: 14000,
+          currency: 'MXN',
+          paymentMethod: PaymentMethod.TRANSFER,
+          status: PurchaseStatus.COMPLETED,
+          location: '17.989242, -92.947472 (Villahermosa, Tabasco)',
+          notes: 'Entrega completa sin problemas',
+          invoiceNumber: 'F-2025-0215',
+          createdBy: 'admin',
+          createdAt: new Date('2025-01-15'),
+          updatedAt: new Date('2025-01-15')
+        },
+        {
+          id: '2',
+          purchaseCode: 'COMP-2025-002',
+          date: new Date('2025-01-20'),
+          vendorName: 'Veterinaria San Marcos',
+          vendorContact: 'contacto@vetsanmarcos.com',
+          description: 'Medicamentos y vacunas',
+          category: PurchaseCategory.MEDICATION,
+          items: [
+            {
+              id: '2-1',
+              name: 'Vacuna Triple Bovina',
+              description: 'Frasco 50 dosis',
+              quantity: 5,
+              unit: 'frasco',
+              unitPrice: 450,
+              totalPrice: 2250
+            },
+            {
+              id: '2-2',
+              name: 'Ivermectina 1%',
+              description: 'Frasco 500ml',
+              quantity: 2,
+              unit: 'frasco',
+              unitPrice: 320,
+              totalPrice: 640
+            }
+          ],
+          totalAmount: 2890,
+          currency: 'MXN',
+          paymentMethod: PaymentMethod.CASH,
+          status: PurchaseStatus.PENDING,
+          location: 'Clínica Veterinaria',
+          notes: 'Pendiente de aplicación',
+          invoiceNumber: 'VM-2025-0045',
+          createdBy: 'veterinario',
+          createdAt: new Date('2025-01-20'),
+          updatedAt: new Date('2025-01-20')
+        },
+        {
+          id: '3',
+          purchaseCode: 'COMP-2025-003',
+          date: new Date('2025-01-25'),
+          vendorName: 'Equipos Ganaderos MX',
+          vendorContact: 'ventas@equiposganaderos.mx',
+          description: 'Comederos automáticos',
+          category: PurchaseCategory.EQUIPMENT,
+          items: [
+            {
+              id: '3-1',
+              name: 'Comedero automático 200L',
+              description: 'Acero inoxidable con temporizador',
+              quantity: 3,
+              unit: 'pieza',
+              unitPrice: 1850,
+              totalPrice: 5550
+            }
+          ],
+          totalAmount: 5550,
+          currency: 'MXN',
+          paymentMethod: PaymentMethod.CREDIT_CARD,
+          status: PurchaseStatus.COMPLETED,
+          location: '17.995123, -92.943567 (Corral 3, Rancho San José)',
+          notes: 'Instalación incluida',
+          invoiceNumber: 'EQ-2025-0123',
+          createdBy: 'admin',
+          createdAt: new Date('2025-01-25'),
+          updatedAt: new Date('2025-01-25')
+        }
+      ];
+
+      // Simular filtrado por búsqueda
+      let filteredPurchases = mockPurchases;
       
-      setEvents(prev => 
-        prev.map(event => 
-          event.id === selectedEvent.id ? updatedEvent : event
-        )
-      );
+      if (filters.search) {
+        const searchLower = filters.search.toLowerCase();
+        filteredPurchases = filteredPurchases.filter(purchase =>
+          purchase.purchaseCode.toLowerCase().includes(searchLower) ||
+          purchase.vendorName.toLowerCase().includes(searchLower) ||
+          purchase.description.toLowerCase().includes(searchLower)
+        );
+      }
+
+      // Simular paginación
+      const total = filteredPurchases.length;
+      const totalPages = Math.ceil(total / pagination.limit);
+      const startIndex = (pagination.page - 1) * pagination.limit;
+      const endIndex = startIndex + pagination.limit;
+      const paginatedPurchases = filteredPurchases.slice(startIndex, endIndex);
+
+      setPurchases(paginatedPurchases);
+      setPagination(prev => ({
+        ...prev,
+        total,
+        totalPages
+      }));
       
-      resetForm();
-      setSelectedEvent(null);
-      setViewMode("list");
-      
-      // Simular llamada a API
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      alert("Evento actualizado exitosamente");
-    } catch (error) {
-      console.error("Error actualizando evento:", error);
-      alert("Error al actualizar el evento");
+    } catch (err) {
+      console.error('Error loading purchases:', err);
+      setError(err instanceof Error ? err.message : 'Error al cargar compras');
+      setPurchases([]);
+      setPagination(prev => ({
+        ...prev,
+        total: 0,
+        totalPages: 0
+      }));
     } finally {
       setLoading(false);
     }
-  };
+  }, [pagination.page, pagination.limit, filters]);
 
-  const handleDelete = async (eventId: string) => {
+  const savePurchase = async (purchaseData: Partial<Purchase>) => {
     setLoading(true);
+    setError('');
+    
     try {
-      setEvents(prev => prev.filter(event => event.id !== eventId));
-      setDeleteModal({ isOpen: false, eventId: "", eventName: "" });
-      
-      // Simular llamada a API
       await new Promise(resolve => setTimeout(resolve, 500));
       
-      alert("Evento eliminado exitosamente");
-    } catch (error) {
-      console.error("Error eliminando evento:", error);
-      alert("Error al eliminar el evento");
+      if (modalMode === 'edit' && selectedPurchase) {
+        // Actualizar compra existente
+        setPurchases(prev => prev.map(purchase => 
+          purchase.id === selectedPurchase.id 
+            ? { ...purchase, ...purchaseData, updatedAt: new Date() }
+            : purchase
+        ));
+      } else {
+        // Crear nueva compra
+        const newPurchase: Purchase = {
+          id: Date.now().toString(),
+          purchaseCode: `COMP-2025-${String(Date.now()).slice(-3)}`,
+          date: new Date(),
+          createdBy: 'admin',
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          currency: 'MXN',
+          items: [],
+          totalAmount: 0,
+          ...purchaseData
+        } as Purchase;
+        
+        setPurchases(prev => [newPurchase, ...prev]);
+      }
+      
+      setShowModal(false);
+      setSelectedPurchase(null);
+      setFormData({});
+      setFormErrors({});
+      setGettingLocation(false);
+      
+    } catch (err) {
+      console.error('Error saving purchase:', err);
+      setError(err instanceof Error ? err.message : 'Error al guardar compra');
     } finally {
       setLoading(false);
     }
   };
 
-  // Funciones de navegación
-  const handleCreateNew = () => {
-    resetForm();
-    setSelectedEvent(null);
-    setViewMode("create");
-  };
-
-  const handleEdit = (event: PurchaseEvent) => {
-    setFormData({ ...event });
-    setSelectedEvent(event);
-    setViewMode("edit");
-  };
-
-  const handleView = (event: PurchaseEvent) => {
-    setFormData({ ...event });
-    setSelectedEvent(event);
-    setViewMode("view");
-  };
-
-  const handleBackToList = () => {
-    resetForm();
-    setSelectedEvent(null);
-    setViewMode("list");
-    setCurrentPage(1); // Reset pagination when going back to list
-  };
-
-  // Función para manejar cambios en el formulario
-  const handleInputChange = (field: string, value: any) => {
-    setFormData(prev => ({
-      ...prev,
-      [field]: value,
-    }));
-  };
-
-  const handleLocationChange = (field: string, value: any) => {
-    setFormData(prev => ({
-      ...prev,
-      location: {
-        ...prev.location,
-        [field]: value,
-      },
-    }));
-  };
-
-  // Funciones de filtrado
-  const filteredEvents = events.filter(event => {
-    const matchesSearch = 
-      event.bovineName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      event.sellerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      event.bovineId.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      event.id?.toLowerCase().includes(searchTerm.toLowerCase());
+  const deletePurchase = async (id: string) => {
+    if (!confirm('¿Está seguro de eliminar esta compra? Esta acción no se puede deshacer.')) return;
     
-    const matchesFilter = 
-      filterStatus === "all" || 
-      event.paymentStatus === filterStatus;
+    setLoading(true);
+    setError('');
     
-    return matchesSearch && matchesFilter;
-  });
-
-  // Configuración de columnas para la tabla
-
-  // Función para obtener ubicación actual
-  const getCurrentLocation = () => {
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          const { latitude, longitude } = position.coords;
-          handleLocationChange("lat", latitude);
-          handleLocationChange("lng", longitude);
-        },
-        (error) => {
-          console.error("Error obteniendo ubicación:", error);
-          alert("No se pudo obtener la ubicación actual");
-        }
-      );
-    } else {
-      alert("Geolocalización no soportada por este navegador");
+    try {
+      await new Promise(resolve => setTimeout(resolve, 300));
+      
+      setPurchases(prev => prev.filter(purchase => purchase.id !== id));
+      
+    } catch (err) {
+      console.error('Error deleting purchase:', err);
+      setError(err instanceof Error ? err.message : 'Error al eliminar compra');
+    } finally {
+      setLoading(false);
     }
   };
 
-  // Renderizado principal
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-[#519a7c] via-[#f2e9d8] to-[#f4ac3a] p-6">
-      <motion.div
-        className="max-w-7xl mx-auto"
-        variants={containerVariants}
-        initial="hidden"
-        animate="visible"
-      >
-        <AnimatePresence mode="wait">
-          {viewMode === "list" ? (
-            // VISTA DE LISTA
-            <motion.div
-              key="list"
-              variants={itemVariants}
-              initial="hidden"
-              animate="visible"
-              exit="hidden"
-            >
-              {/* Header */}
-              <div className="flex items-center justify-between mb-8">
-                <div>
-                  <h1 className="text-3xl font-bold text-gray-900">
-                    Eventos de Compra
-                  </h1>
-                  <p className="text-gray-600">
-                    Gestiona los eventos de compra de ganado
-                  </p>
-                </div>
-                <Button
-                  onClick={handleCreateNew}
-                  variant="primary"
-                  leftIcon={<Plus className="h-4 w-4" />}
-                >
-                  Nuevo Evento
-                </Button>
-              </div>
+  const exportToCSV = () => {
+    try {
+      const headers = ['Código', 'Fecha', 'Proveedor', 'Categoría', 'Descripción', 'Monto', 'Estado'];
+      const csvContent = [
+        headers.join(','),
+        ...purchases.map(purchase => [
+          purchase.purchaseCode,
+          formatDate(purchase.date),
+          purchase.vendorName,
+          getCategoryLabel(purchase.category),
+          `"${purchase.description}"`,
+          purchase.totalAmount,
+          getStatusLabel(purchase.status)
+        ].join(','))
+      ].join('\n');
 
-              {/* Filtros y búsqueda */}
-              <Card className="mb-6">
-                <CardContent>
-                  <div className="flex flex-col md:flex-row md:items-center space-y-4 md:space-y-0 md:space-x-4">
-                    <div className="flex-1">
-                      <Input
-                        placeholder="Buscar por animal, vendedor o ID..."
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        leftIcon={<Search className="h-4 w-4" />}
-                      />
-                    </div>
-                    <div className="flex space-x-2">
-                      <select
-                        className="px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
-                        value={filterStatus}
-                        onChange={(e) => setFilterStatus(e.target.value)}
-                      >
-                        <option value="all">Todos los estados</option>
-                        <option value="completed">Completado</option>
-                        <option value="pending">Pendiente</option>
-                        <option value="partial">Parcial</option>
-                      </select>
-                      <Button variant="outline" leftIcon={<Download className="h-4 w-4" />}>
-                        Exportar
-                      </Button>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      const url = URL.createObjectURL(blob);
+      link.setAttribute('href', url);
+      link.setAttribute('download', `compras_${new Date().toISOString().split('T')[0]}.csv`);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (err) {
+      setError('Error al exportar datos');
+    }
+  };
 
-              {/* Tabla de eventos */}
-              <Card>
-                <CardContent>
-                  <div className="overflow-x-auto">
-                    <table className="min-w-full divide-y divide-gray-200">
-                      <thead className="bg-gray-50">
-                        <tr>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            ID
-                          </th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Animal
-                          </th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Vendedor
-                          </th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Fecha
-                          </th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Precio
-                          </th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Condición
-                          </th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Estado Pago
-                          </th>
-                          <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Acciones
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody className="bg-white divide-y divide-gray-200">
-                        {loading ? (
-                          <tr>
-                            <td colSpan={8} className="px-6 py-12 text-center">
-                              <div className="flex items-center justify-center">
-                                <motion.div
-                                  animate={{ rotate: 360 }}
-                                  transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-                                  className="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full"
-                                />
-                                <span className="ml-2 text-gray-500">Cargando...</span>
-                              </div>
-                            </td>
-                          </tr>
-                        ) : filteredEvents.length === 0 ? (
-                          <tr>
-                            <td colSpan={8} className="px-6 py-12 text-center text-gray-500">
-                              No se encontraron eventos de compra
-                            </td>
-                          </tr>
-                        ) : (
-                          filteredEvents
-                            .slice((currentPage - 1) * pageSize, currentPage * pageSize)
-                            .map((event) => (
-                              <tr key={event.id} className="hover:bg-gray-50">
-                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                                  {event.id}
-                                </td>
-                                <td className="px-6 py-4 whitespace-nowrap">
-                                  <div>
-                                    <div className="text-sm font-medium text-gray-900">
-                                      {event.bovineName || "Sin nombre"}
-                                    </div>
-                                    <div className="text-sm text-gray-500">{event.bovineId}</div>
-                                  </div>
-                                </td>
-                                <td className="px-6 py-4 whitespace-nowrap">
-                                  <div>
-                                    <div className="text-sm font-medium text-gray-900">
-                                      {event.sellerName}
-                                    </div>
-                                    <div className="text-sm text-gray-500">{event.sellerContact}</div>
-                                  </div>
-                                </td>
-                                <td className="px-6 py-4 whitespace-nowrap">
-                                  <div>
-                                    <div className="text-sm text-gray-900">
-                                      {new Date(event.purchaseDate).toLocaleDateString()}
-                                    </div>
-                                  </div>
-                                </td>
-                                <td className="px-6 py-4 whitespace-nowrap">
-                                  <div className="text-sm font-semibold text-green-600">
-                                    ${event.purchasePrice.toLocaleString()}
-                                  </div>
-                                </td>
-                                <td className="px-6 py-4 whitespace-nowrap">
-                                  <Badge
-                                    className={
-                                      event.condition === "excellent"
-                                        ? "bg-green-100 text-green-800"
-                                        : event.condition === "good"
-                                        ? "bg-blue-100 text-blue-800"
-                                        : event.condition === "fair"
-                                        ? "bg-yellow-100 text-yellow-800"
-                                        : "bg-red-100 text-red-800"
-                                    }
-                                  >
-                                    {event.condition === "excellent"
-                                      ? "Excelente"
-                                      : event.condition === "good"
-                                      ? "Buena"
-                                      : event.condition === "fair"
-                                      ? "Regular"
-                                      : "Pobre"}
-                                  </Badge>
-                                </td>
-                                <td className="px-6 py-4 whitespace-nowrap">
-                                  <Badge
-                                    className={
-                                      event.paymentStatus === "completed"
-                                        ? "bg-green-100 text-green-800"
-                                        : event.paymentStatus === "pending"
-                                        ? "bg-yellow-100 text-yellow-800"
-                                        : "bg-orange-100 text-orange-800"
-                                    }
-                                  >
-                                    {event.paymentStatus === "completed"
-                                      ? "Completado"
-                                      : event.paymentStatus === "pending"
-                                      ? "Pendiente"
-                                      : "Parcial"}
-                                  </Badge>
-                                </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                  <div className="flex justify-end space-x-1">
-                                    <Button
-                                      size="sm"
-                                      variant="ghost"
-                                      onClick={() => handleView(event)}
-                                    >
-                                      <Eye className="h-4 w-4" />
-                                    </Button>
-                                    <Button
-                                      size="sm"
-                                      variant="ghost"
-                                      onClick={() => handleEdit(event)}
-                                    >
-                                      <Edit className="h-4 w-4" />
-                                    </Button>
-                                    <Button
-                                      size="sm"
-                                      variant="ghost"
-                                      onClick={() =>
-                                        setDeleteModal({
-                                          isOpen: true,
-                                          eventId: event.id!,
-                                          eventName: event.bovineName || event.bovineId,
-                                        })
-                                      }
-                                    >
-                                      <Trash2 className="h-4 w-4 text-red-500" />
-                                    </Button>
-                                  </div>
-                                </td>
-                              </tr>
-                            ))
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
+  // ============================================================================
+  // MANEJADORES DE EVENTOS
+  // ============================================================================
 
-                  {/* Paginación simple */}
-                  {filteredEvents.length > 0 && (
-                    <div className="flex items-center justify-between px-6 py-3 bg-white border-t border-gray-200">
-                      <div className="flex items-center text-sm text-gray-700">
-                        <span>
-                          Mostrando {((currentPage - 1) * pageSize) + 1} a{" "}
-                          {Math.min(currentPage * pageSize, filteredEvents.length)} de{" "}
-                          {filteredEvents.length} resultados
-                        </span>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                          disabled={currentPage === 1}
-                        >
-                          Anterior
-                        </Button>
-                        <span className="text-sm text-gray-700">
-                          Página {currentPage} de {Math.ceil(filteredEvents.length / pageSize)}
-                        </span>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => setCurrentPage(prev => 
-                            Math.min(Math.ceil(filteredEvents.length / pageSize), prev + 1)
-                          )}
-                          disabled={currentPage >= Math.ceil(filteredEvents.length / pageSize)}
-                        >
-                          Siguiente
-                        </Button>
-                      </div>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            </motion.div>
-          ) : (
-            // VISTA DE FORMULARIO
-            <motion.div
-              key="form"
-              variants={itemVariants}
-              initial="hidden"
-              animate="visible"
-              exit="hidden"
-            >
-              {/* Header del formulario */}
-              <div className="flex items-center justify-between mb-8">
-                <div className="flex items-center space-x-4">
-                  <Button variant="outline" size="icon" onClick={handleBackToList}>
-                    <ArrowLeft className="h-4 w-4" />
-                  </Button>
-                  <div>
-                    <h1 className="text-3xl font-bold text-gray-900">
-                      {viewMode === "create" && "Nuevo Evento de Compra"}
-                      {viewMode === "edit" && "Editar Evento de Compra"}
-                      {viewMode === "view" && "Ver Evento de Compra"}
-                    </h1>
-                    <p className="text-gray-600">
-                      {viewMode === "create" && "Registra un nuevo evento de compra de ganado"}
-                      {viewMode === "edit" && "Modifica los datos del evento de compra"}
-                      {viewMode === "view" && "Información detallada del evento de compra"}
-                    </p>
-                  </div>
-                </div>
-                <div className="flex space-x-2">
-                  <Button variant="outline" onClick={handleBackToList}>
-                    Cancelar
-                  </Button>
-                  {viewMode !== "view" && (
-                    <Button
-                      onClick={viewMode === "create" ? handleCreate : handleUpdate}
-                      disabled={loading}
-                      variant="success"
-                      leftIcon={
-                        loading ? (
-                          <motion.div
-                            animate={{ rotate: 360 }}
-                            transition={{
-                              duration: 1,
-                              repeat: Infinity,
-                              ease: "linear",
-                            }}
-                          >
-                            <Save className="h-4 w-4" />
-                          </motion.div>
-                        ) : (
-                          <Save className="h-4 w-4" />
-                        )
-                      }
-                    >
-                      {loading ? "Guardando..." : viewMode === "create" ? "Crear Evento" : "Actualizar Evento"}
-                    </Button>
-                  )}
-                </div>
-              </div>
+  const handleCreate = () => {
+    setSelectedPurchase(null);
+    setFormData({
+      vendorName: '',
+      description: '',
+      category: PurchaseCategory.OTHER,
+      totalAmount: 0,
+      paymentMethod: PaymentMethod.CASH,
+      status: PurchaseStatus.PENDING,
+      location: '',
+      notes: '',
+      invoiceNumber: ''
+    });
+    setFormErrors({});
+    setGettingLocation(false);
+    setModalMode('create');
+    setShowModal(true);
+  };
 
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                {/* Columna izquierda - Información básica */}
-                <div className="lg:col-span-2 space-y-6">
-                  {/* Información del Animal */}
-                  <Card>
-                    <CardHeader icon={<ShoppingCart className="h-5 w-5 text-green-600" />}>
-                      <div>
-                        <CardTitle>Información del Animal</CardTitle>
-                        <CardDescription>
-                          Datos del bovino que se está comprando
-                        </CardDescription>
-                      </div>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="space-y-4">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <Input
-                            label="ID del Animal"
-                            placeholder="Ingresa el ID del animal"
-                            value={formData.bovineId}
-                            onChange={(e) => handleInputChange("bovineId", e.target.value)}
-                            required
-                            readOnly={viewMode === "view"}
-                          />
-                          <Input
-                            label="Nombre del Animal"
-                            placeholder="Nombre del animal (opcional)"
-                            value={formData.bovineName || ""}
-                            onChange={(e) => handleInputChange("bovineName", e.target.value)}
-                            readOnly={viewMode === "view"}
-                          />
-                        </div>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <Input
-                            label="Peso (kg)"
-                            type="number"
-                            placeholder="Peso del animal"
-                            value={formData.weight.toString()}
-                            onChange={(e) => handleInputChange("weight", parseFloat(e.target.value) || 0)}
-                            required
-                            readOnly={viewMode === "view"}
-                          />
-                          <div className="space-y-2">
-                            <label className="block text-sm font-medium text-gray-700">
-                              Condición del Animal <span className="text-red-500">*</span>
-                            </label>
-                            <select
-                              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
-                              value={formData.condition}
-                              onChange={(e) => handleInputChange("condition", e.target.value)}
-                              required
-                              disabled={viewMode === "view"}
-                            >
-                              <option value="">Selecciona la condición</option>
-                              <option value="excellent">Excelente</option>
-                              <option value="good">Buena</option>
-                              <option value="fair">Regular</option>
-                              <option value="poor">Pobre</option>
-                            </select>
-                          </div>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
+  const handleEdit = (purchase: Purchase) => {
+    setSelectedPurchase(purchase);
+    setFormData(purchase);
+    setFormErrors({});
+    setGettingLocation(false);
+    setModalMode('edit');
+    setShowModal(true);
+  };
 
-                  {/* Información del Vendedor */}
-                  <Card>
-                    <CardHeader icon={<User className="h-5 w-5 text-blue-600" />}>
-                      <div>
-                        <CardTitle>Información del Vendedor</CardTitle>
-                        <CardDescription>
-                          Datos de contacto del vendedor
-                        </CardDescription>
-                      </div>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="space-y-4">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <Input
-                            label="ID del Vendedor"
-                            placeholder="ID o RFC del vendedor"
-                            value={formData.sellerId}
-                            onChange={(e) => handleInputChange("sellerId", e.target.value)}
-                            required
-                            readOnly={viewMode === "view"}
-                          />
-                          <Input
-                            label="Nombre del Vendedor"
-                            placeholder="Nombre completo"
-                            value={formData.sellerName}
-                            onChange={(e) => handleInputChange("sellerName", e.target.value)}
-                            required
-                            readOnly={viewMode === "view"}
-                          />
-                        </div>
-                        <Input
-                          label="Contacto del Vendedor"
-                          placeholder="Teléfono o email"
-                          value={formData.sellerContact}
-                          onChange={(e) => handleInputChange("sellerContact", e.target.value)}
-                          description="Número de teléfono o correo electrónico"
-                          readOnly={viewMode === "view"}
-                        />
-                      </div>
-                    </CardContent>
-                  </Card>
+  const handleView = (purchase: Purchase) => {
+    setSelectedPurchase(purchase);
+    setGettingLocation(false);
+    setModalMode('view');
+    setShowModal(true);
+  };
 
-                  {/* Detalles de la Compra */}
-                  <Card>
-                    <CardHeader icon={<DollarSign className="h-5 w-5 text-purple-600" />}>
-                      <div>
-                        <CardTitle>Detalles de la Compra</CardTitle>
-                        <CardDescription>
-                          Información financiera y de pago
-                        </CardDescription>
-                      </div>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="space-y-4">
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                          <Input
-                            label="Precio de Compra"
-                            type="number"
-                            placeholder="$0.00"
-                            value={formData.purchasePrice.toString()}
-                            onChange={(e) => handleInputChange("purchasePrice", parseFloat(e.target.value) || 0)}
-                            leftIcon={<DollarSign className="h-4 w-4" />}
-                            required
-                            readOnly={viewMode === "view"}
-                          />
-                          <div className="space-y-2">
-                            <label className="block text-sm font-medium text-gray-700">
-                              Método de Pago
-                            </label>
-                            <select
-                              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
-                              value={formData.paymentMethod}
-                              onChange={(e) => handleInputChange("paymentMethod", e.target.value)}
-                              disabled={viewMode === "view"}
-                            >
-                              <option value="">Selecciona método</option>
-                              <option value="cash">Efectivo</option>
-                              <option value="transfer">Transferencia</option>
-                              <option value="check">Cheque</option>
-                              <option value="credit">Crédito</option>
-                            </select>
-                          </div>
-                          <div className="space-y-2">
-                            <label className="block text-sm font-medium text-gray-700">
-                              Estado del Pago
-                            </label>
-                            <select
-                              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
-                              value={formData.paymentStatus}
-                              onChange={(e) => handleInputChange("paymentStatus", e.target.value)}
-                              disabled={viewMode === "view"}
-                            >
-                              <option value="pending">Pendiente</option>
-                              <option value="partial">Parcial</option>
-                              <option value="completed">Completado</option>
-                            </select>
-                          </div>
-                        </div>
+  const handleFilterChange = (filterKey: keyof PurchaseFilters, value: any) => {
+    setFilters(prev => ({
+      ...prev,
+      [filterKey]: value
+    }));
+    setPagination(prev => ({ ...prev, page: 1 }));
+  };
 
-                        <Input
-                          label="Fecha de Compra"
-                          type="date"
-                          value={formData.purchaseDate}
-                          onChange={(e) => handleInputChange("purchaseDate", e.target.value)}
-                          rightIcon={<CalendarIcon className="h-4 w-4" />}
-                          required
-                          readOnly={viewMode === "view"}
-                        />
-                      </div>
-                    </CardContent>
-                  </Card>
+  const validateForm = (): boolean => {
+    const errors: Record<string, string> = {};
 
-                  {/* Notas Adicionales */}
-                  <Card>
-                    <CardHeader icon={<FileText className="h-5 w-5 text-orange-600" />}>
-                      <CardTitle>Notas Adicionales</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <textarea
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 min-h-[100px] resize-vertical bg-white"
-                        placeholder="Observaciones, condiciones especiales, etc."
-                        value={formData.notes}
-                        onChange={(e) => handleInputChange("notes", e.target.value)}
-                        readOnly={viewMode === "view"}
-                      />
-                    </CardContent>
-                  </Card>
-                </div>
+    if (!formData.vendorName?.trim()) {
+      errors.vendorName = 'El nombre del proveedor es obligatorio';
+    }
 
-                {/* Columna derecha - Ubicación y Transporte */}
-                <div className="space-y-6">
-                  {/* Ubicación */}
-                  <Card>
-                    <CardHeader icon={<MapPin className="h-5 w-5 text-red-600" />}>
-                      <div>
-                        <CardTitle>Ubicación de Compra</CardTitle>
-                        <CardDescription>
-                          Lugar donde se realizó la compra
-                        </CardDescription>
-                      </div>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="space-y-4">
-                        <Input
-                          label="Dirección"
-                          placeholder="Dirección del lugar"
-                          value={formData.location.address}
-                          onChange={(e) => handleLocationChange("address", e.target.value)}
-                          readOnly={viewMode === "view"}
-                        />
+    if (!formData.description?.trim()) {
+      errors.description = 'La descripción es obligatoria';
+    }
 
-                        <div className="grid grid-cols-2 gap-2">
-                          <Input
-                            label="Latitud"
-                            type="number"
-                            step="any"
-                            size="sm"
-                            value={formData.location.lat.toString()}
-                            onChange={(e) => handleLocationChange("lat", parseFloat(e.target.value))}
-                            readOnly={viewMode === "view"}
-                          />
-                          <Input
-                            label="Longitud"
-                            type="number"
-                            step="any"
-                            size="sm"
-                            value={formData.location.lng.toString()}
-                            onChange={(e) => handleLocationChange("lng", parseFloat(e.target.value))}
-                            readOnly={viewMode === "view"}
-                          />
-                        </div>
+    if (!formData.category) {
+      errors.category = 'La categoría es obligatoria';
+    }
 
-                        {viewMode !== "view" && (
-                          <Button
-                            onClick={getCurrentLocation}
-                            variant="primary"
-                            fullWidth
-                            leftIcon={<MapPin className="h-4 w-4" />}
-                          >
-                            Obtener Mi Ubicación
-                          </Button>
-                        )}
+    if (!formData.totalAmount || formData.totalAmount <= 0) {
+      errors.totalAmount = 'El monto debe ser mayor a 0';
+    }
 
-                        {/* Mapa simple */}
-                        <div className="h-48 bg-gray-200 rounded-lg flex items-center justify-center border">
-                          <div className="text-center text-gray-500">
-                            <MapPin className="h-8 w-8 mx-auto mb-2" />
-                            <p className="text-sm">Mapa Interactivo</p>
-                            <p className="text-xs">
-                              Lat: {formData.location.lat.toFixed(4)}
-                            </p>
-                            <p className="text-xs">
-                              Lng: {formData.location.lng.toFixed(4)}
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
+    if (!formData.paymentMethod) {
+      errors.paymentMethod = 'El método de pago es obligatorio';
+    }
 
-                  {/* Transporte */}
-                  <Card>
-                    <CardHeader icon={<Truck className="h-5 w-5 text-indigo-600" />}>
-                      <CardTitle>Información de Transporte</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="space-y-4">
-                        <div className="space-y-2">
-                          <label className="block text-sm font-medium text-gray-700">
-                            Método de Transporte
-                          </label>
-                          <select
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
-                            value={formData.transportMethod}
-                            onChange={(e) => handleInputChange("transportMethod", e.target.value)}
-                            disabled={viewMode === "view"}
-                          >
-                            <option value="">Selecciona método</option>
-                            <option value="own_truck">Camión Propio</option>
-                            <option value="hired_transport">Transporte Contratado</option>
-                            <option value="seller_delivery">Entrega del Vendedor</option>
-                            <option value="walking">A pie</option>
-                          </select>
-                        </div>
+    if (!formData.status) {
+      errors.status = 'El estado es obligatorio';
+    }
 
-                        <div className="flex items-center space-x-2">
-                          <input
-                            type="checkbox"
-                            id="veterinaryCheckup"
-                            checked={formData.veterinaryCheckup}
-                            onChange={(e) => handleInputChange("veterinaryCheckup", e.target.checked)}
-                            className="rounded border-gray-300"
-                            disabled={viewMode === "view"}
-                          />
-                          <label
-                            htmlFor="veterinaryCheckup"
-                            className="text-sm text-gray-700"
-                          >
-                            Chequeo veterinario realizado
-                          </label>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
+    setFormErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
 
-                  {/* Documentos */}
-                  <Card>
-                    <CardHeader icon={<Camera className="h-5 w-5 text-teal-600" />}>
-                      <CardTitle>Documentos</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      {viewMode !== "view" ? (
-                        <Button
-                          variant="info"
-                          fullWidth
-                          leftIcon={<Plus className="h-4 w-4" />}
-                        >
-                          Agregar Documento
-                        </Button>
-                      ) : (
-                        <div className="text-sm text-gray-500">
-                          {formData.documents.length === 0 
-                            ? "No hay documentos adjuntos"
-                            : `${formData.documents.length} documento(s) adjunto(s)`
-                          }
-                        </div>
-                      )}
-                    </CardContent>
-                  </Card>
-                </div>
-              </div>
-            </motion.div>
+  const handleSubmit = () => {
+    if (validateForm()) {
+      savePurchase(formData);
+    }
+  };
+
+  const handleFormChange = (field: string, value: any) => {
+    setFormData(prev => ({
+      ...prev,
+      [field]: value
+    }));
+
+    // Limpiar error del campo cuando el usuario empiece a escribir
+    if (formErrors[field]) {
+      setFormErrors(prev => ({
+        ...prev,
+        [field]: ''
+      }));
+    }
+  };
+
+  const getCurrentLocation = () => {
+    if (!navigator.geolocation) {
+      setError('La geolocalización no está disponible en este navegador');
+      return;
+    }
+
+    setGettingLocation(true);
+    setError('');
+
+    const options = {
+      enableHighAccuracy: true,
+      timeout: 10000,
+      maximumAge: 60000 // Cache por 1 minuto
+    };
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const { latitude, longitude } = position.coords;
+        const locationString = `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`;
+        
+        handleFormChange('location', locationString);
+        setGettingLocation(false);
+        
+        // Opcional: También mostrar una dirección aproximada si hay servicio disponible
+        reverseGeocode(latitude, longitude);
+      },
+      (error) => {
+        setGettingLocation(false);
+        let errorMessage = 'Error al obtener la ubicación';
+        
+        switch (error.code) {
+          case error.PERMISSION_DENIED:
+            errorMessage = 'Permiso de ubicación denegado. Permite el acceso a la ubicación para usar esta función.';
+            break;
+          case error.POSITION_UNAVAILABLE:
+            errorMessage = 'Información de ubicación no disponible.';
+            break;
+          case error.TIMEOUT:
+            errorMessage = 'Tiempo de espera agotado al obtener la ubicación.';
+            break;
+          default:
+            errorMessage = 'Error desconocido al obtener la ubicación.';
+            break;
+        }
+        
+        setError(errorMessage);
+      },
+      options
+    );
+  };
+
+  const reverseGeocode = async (lat: number, lng: number) => {
+    try {
+      // Usar un servicio gratuito de geocodificación inversa
+      // Nota: En producción, considera usar un servicio más robusto como Google Maps API
+      const response = await fetch(
+        `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lng}&localityLanguage=es`
+      );
+      
+      if (response.ok) {
+        const data = await response.json();
+        const address = data.locality || data.city || data.principalSubdivision || 'Ubicación desconocida';
+        const fullLocation = `${lat.toFixed(6)}, ${lng.toFixed(6)} (${address})`;
+        handleFormChange('location', fullLocation);
+      }
+    } catch (error) {
+      // Si falla la geocodificación inversa, mantener solo las coordenadas
+      console.log('No se pudo obtener la dirección:', error);
+    }
+  };
+
+  // ============================================================================
+  // FUNCIONES DE UTILIDAD
+  // ============================================================================
+
+  const formatCurrency = (amount: number, currency: string = 'MXN') => {
+    return new Intl.NumberFormat('es-MX', {
+      style: 'currency',
+      currency: currency
+    }).format(amount);
+  };
+
+  const formatDate = (date: Date | string) => {
+    return new Date(date).toLocaleDateString('es-MX');
+  };
+
+  const getCategoryLabel = (category: PurchaseCategory) => {
+    const labels = {
+      [PurchaseCategory.FEED]: 'Alimento',
+      [PurchaseCategory.MEDICATION]: 'Medicamento',
+      [PurchaseCategory.EQUIPMENT]: 'Equipo',
+      [PurchaseCategory.SERVICES]: 'Servicios',
+      [PurchaseCategory.MAINTENANCE]: 'Mantenimiento',
+      [PurchaseCategory.UTILITIES]: 'Servicios Públicos',
+      [PurchaseCategory.OTHER]: 'Otros'
+    };
+    return labels[category] || category;
+  };
+
+  const getStatusColor = (status: PurchaseStatus) => {
+    const colors = {
+      [PurchaseStatus.PENDING]: 'bg-yellow-100 text-yellow-800',
+      [PurchaseStatus.COMPLETED]: 'bg-green-100 text-green-800',
+      [PurchaseStatus.CANCELLED]: 'bg-red-100 text-red-800',
+      [PurchaseStatus.REFUNDED]: 'bg-blue-100 text-blue-800'
+    };
+    return colors[status] || 'bg-gray-100 text-gray-800';
+  };
+
+  const getStatusLabel = (status: PurchaseStatus) => {
+    const labels = {
+      [PurchaseStatus.PENDING]: 'Pendiente',
+      [PurchaseStatus.COMPLETED]: 'Completada',
+      [PurchaseStatus.CANCELLED]: 'Cancelada',
+      [PurchaseStatus.REFUNDED]: 'Reembolsada'
+    };
+    return labels[status] || status;
+  };
+
+  // ============================================================================
+  // COMPONENTES DE RENDERIZADO
+  // ============================================================================
+
+  const renderPurchaseForm = () => (
+    <div className="space-y-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Proveedor *
+          </label>
+          <input
+            type="text"
+            value={formData.vendorName || ''}
+            onChange={(e) => handleFormChange('vendorName', e.target.value)}
+            className={`w-full border rounded-md px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+              formErrors.vendorName ? 'border-red-300' : 'border-gray-300'
+            }`}
+            placeholder="Nombre del proveedor"
+            disabled={modalMode === 'view'}
+          />
+          {formErrors.vendorName && (
+            <p className="mt-1 text-sm text-red-600">{formErrors.vendorName}</p>
           )}
-        </AnimatePresence>
+        </div>
 
-        {/* Modal de confirmación de eliminación */}
-        <Modal
-          isOpen={deleteModal.isOpen}
-          onClose={() => setDeleteModal({ isOpen: false, eventId: "", eventName: "" })}
-          size="default"
-        >
-          <ModalHeader
-            onClose={() => setDeleteModal({ isOpen: false, eventId: "", eventName: "" })}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Categoría *
+          </label>
+          <select
+            value={formData.category || ''}
+            onChange={(e) => handleFormChange('category', e.target.value)}
+            className={`w-full border rounded-md px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+              formErrors.category ? 'border-red-300' : 'border-gray-300'
+            }`}
+            disabled={modalMode === 'view'}
           >
-            <div className="flex items-center space-x-3">
-              <div className="flex-shrink-0 w-10 h-10 bg-red-100 rounded-full flex items-center justify-center">
-                <Trash2 className="h-5 w-5 text-red-600" />
-              </div>
-              <div>
-                <h3 className="text-lg font-semibold text-gray-900">
-                  Eliminar Evento de Compra
-                </h3>
-                <p className="text-sm text-gray-500">
-                  Esta acción no se puede deshacer
-                </p>
-              </div>
-            </div>
-          </ModalHeader>
-          <ModalBody>
-            <p className="text-gray-700">
-              ¿Estás seguro de que deseas eliminar el evento de compra del animal{" "}
-              <span className="font-semibold">"{deleteModal.eventName}"</span>? 
-              Toda la información asociada se perderá permanentemente.
+            <option value="">Seleccionar categoría</option>
+            {Object.values(PurchaseCategory).map(category => (
+              <option key={category} value={category}>
+                {getCategoryLabel(category)}
+              </option>
+            ))}
+          </select>
+          {formErrors.category && (
+            <p className="mt-1 text-sm text-red-600">{formErrors.category}</p>
+          )}
+        </div>
+
+        <div className="md:col-span-2">
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Descripción *
+          </label>
+          <textarea
+            value={formData.description || ''}
+            onChange={(e) => handleFormChange('description', e.target.value)}
+            rows={3}
+            className={`w-full border rounded-md px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+              formErrors.description ? 'border-red-300' : 'border-gray-300'
+            }`}
+            placeholder="Descripción de la compra"
+            disabled={modalMode === 'view'}
+          />
+          {formErrors.description && (
+            <p className="mt-1 text-sm text-red-600">{formErrors.description}</p>
+          )}
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Monto Total *
+          </label>
+          <input
+            type="number"
+            step="0.01"
+            value={formData.totalAmount || ''}
+            onChange={(e) => handleFormChange('totalAmount', parseFloat(e.target.value))}
+            className={`w-full border rounded-md px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+              formErrors.totalAmount ? 'border-red-300' : 'border-gray-300'
+            }`}
+            placeholder="0.00"
+            disabled={modalMode === 'view'}
+          />
+          {formErrors.totalAmount && (
+            <p className="mt-1 text-sm text-red-600">{formErrors.totalAmount}</p>
+          )}
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Método de Pago *
+          </label>
+          <select
+            value={formData.paymentMethod || ''}
+            onChange={(e) => handleFormChange('paymentMethod', e.target.value)}
+            className={`w-full border rounded-md px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+              formErrors.paymentMethod ? 'border-red-300' : 'border-gray-300'
+            }`}
+            disabled={modalMode === 'view'}
+          >
+            <option value="">Seleccionar método</option>
+            <option value={PaymentMethod.CASH}>Efectivo</option>
+            <option value={PaymentMethod.TRANSFER}>Transferencia</option>
+            <option value={PaymentMethod.CHECK}>Cheque</option>
+            <option value={PaymentMethod.CREDIT_CARD}>Tarjeta de Crédito</option>
+            <option value={PaymentMethod.DEBIT_CARD}>Tarjeta de Débito</option>
+          </select>
+          {formErrors.paymentMethod && (
+            <p className="mt-1 text-sm text-red-600">{formErrors.paymentMethod}</p>
+          )}
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Estado *
+          </label>
+          <select
+            value={formData.status || ''}
+            onChange={(e) => handleFormChange('status', e.target.value)}
+            className={`w-full border rounded-md px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+              formErrors.status ? 'border-red-300' : 'border-gray-300'
+            }`}
+            disabled={modalMode === 'view'}
+          >
+            <option value="">Seleccionar estado</option>
+            {Object.values(PurchaseStatus).map(status => (
+              <option key={status} value={status}>
+                {getStatusLabel(status)}
+              </option>
+            ))}
+          </select>
+          {formErrors.status && (
+            <p className="mt-1 text-sm text-red-600">{formErrors.status}</p>
+          )}
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Ubicación
+          </label>
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={formData.location || ''}
+              onChange={(e) => handleFormChange('location', e.target.value)}
+              className="flex-1 border border-gray-300 rounded-md px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              placeholder="Ubicación de entrega"
+              disabled={modalMode === 'view'}
+            />
+            {modalMode !== 'view' && (
+              <button
+                type="button"
+                onClick={getCurrentLocation}
+                disabled={gettingLocation}
+                className={`flex items-center gap-1 px-3 py-2 border border-gray-300 rounded-md transition-colors ${
+                  gettingLocation 
+                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed' 
+                    : 'text-gray-700 hover:bg-gray-50'
+                }`}
+                title="Obtener ubicación actual"
+              >
+                {gettingLocation ? (
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-400"></div>
+                ) : (
+                  <Navigation size={16} />
+                )}
+                <span className="text-sm">
+                  {gettingLocation ? 'Obteniendo...' : 'Mi ubicación'}
+                </span>
+              </button>
+            )}
+          </div>
+          <p className="mt-1 text-xs text-gray-500">
+            Puedes escribir manualmente o usar tu ubicación actual
+          </p>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Número de Factura
+          </label>
+          <input
+            type="text"
+            value={formData.invoiceNumber || ''}
+            onChange={(e) => handleFormChange('invoiceNumber', e.target.value)}
+            className="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            placeholder="Número de factura"
+            disabled={modalMode === 'view'}
+          />
+        </div>
+
+        <div className="md:col-span-2">
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Notas
+          </label>
+          <textarea
+            value={formData.notes || ''}
+            onChange={(e) => handleFormChange('notes', e.target.value)}
+            rows={2}
+            className="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            placeholder="Notas adicionales"
+            disabled={modalMode === 'view'}
+          />
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderViewDetails = () => {
+    if (!selectedPurchase) return null;
+
+    return (
+      <div className="space-y-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Código de Compra</label>
+            <p className="mt-1 text-sm text-gray-900">{selectedPurchase.purchaseCode}</p>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Fecha</label>
+            <p className="mt-1 text-sm text-gray-900">{formatDate(selectedPurchase.date)}</p>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Proveedor</label>
+            <p className="mt-1 text-sm text-gray-900">{selectedPurchase.vendorName}</p>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Categoría</label>
+            <p className="mt-1 text-sm text-gray-900">{getCategoryLabel(selectedPurchase.category)}</p>
+          </div>
+          <div className="md:col-span-2">
+            <label className="block text-sm font-medium text-gray-700">Descripción</label>
+            <p className="mt-1 text-sm text-gray-900">{selectedPurchase.description}</p>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Monto Total</label>
+            <p className="mt-1 text-sm text-gray-900 font-semibold">
+              {formatCurrency(selectedPurchase.totalAmount, selectedPurchase.currency)}
             </p>
-          </ModalBody>
-          <ModalFooter>
-            <Button
-              variant="outline"
-              onClick={() => setDeleteModal({ isOpen: false, eventId: "", eventName: "" })}
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Estado</label>
+            <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(selectedPurchase.status)}`}>
+              {getStatusLabel(selectedPurchase.status)}
+            </span>
+          </div>
+          {selectedPurchase.location && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Ubicación</label>
+              <div className="mt-1 flex items-start gap-2">
+                <MapPin size={16} className="text-gray-400 mt-0.5 flex-shrink-0" />
+                <p className="text-sm text-gray-900">{selectedPurchase.location}</p>
+              </div>
+              {selectedPurchase.location.includes(',') && selectedPurchase.location.includes('.') && (
+                <p className="mt-1 text-xs text-gray-500">
+                  Coordenadas GPS registradas
+                </p>
+              )}
+            </div>
+          )}
+          {selectedPurchase.invoiceNumber && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Número de Factura</label>
+              <p className="mt-1 text-sm text-gray-900">{selectedPurchase.invoiceNumber}</p>
+            </div>
+          )}
+          {selectedPurchase.notes && (
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-gray-700">Notas</label>
+              <p className="mt-1 text-sm text-gray-900">{selectedPurchase.notes}</p>
+            </div>
+          )}
+        </div>
+
+        {selectedPurchase.items && selectedPurchase.items.length > 0 && (
+          <div>
+            <h4 className="text-lg font-medium text-gray-900 mb-3">Items de la Compra</h4>
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Item</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Cantidad</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Precio Unit.</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Total</th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {selectedPurchase.items.map((item) => (
+                    <tr key={item.id}>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div>
+                          <div className="text-sm font-medium text-gray-900">{item.name}</div>
+                          {item.description && (
+                            <div className="text-sm text-gray-500">{item.description}</div>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {item.quantity} {item.unit}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {formatCurrency(item.unitPrice)}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-medium">
+                        {formatCurrency(item.totalPrice)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const renderTable = () => (
+    <div className="bg-white rounded-lg shadow-sm overflow-hidden">
+      <div className="overflow-x-auto">
+        <table className="min-w-full divide-y divide-gray-200">
+          <thead className="bg-gray-50">
+            <tr>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Código
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Fecha
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Proveedor
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Categoría
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Monto
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Estado
+              </th>
+              <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Acciones
+              </th>
+            </tr>
+          </thead>
+          <tbody className="bg-white divide-y divide-gray-200">
+            {purchases.map((purchase) => (
+              <tr key={purchase.id} className="hover:bg-gray-50">
+                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                  {purchase.purchaseCode}
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                  {formatDate(purchase.date)}
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                  {purchase.vendorName}
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                  {getCategoryLabel(purchase.category)}
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                  {formatCurrency(purchase.totalAmount, purchase.currency)}
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap">
+                  <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(purchase.status)}`}>
+                    {getStatusLabel(purchase.status)}
+                  </span>
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-center text-sm font-medium">
+                  <div className="flex justify-center space-x-2">
+                    <button
+                      onClick={() => handleView(purchase)}
+                      className="text-blue-600 hover:text-blue-900 p-1"
+                      title="Ver detalles"
+                    >
+                      <Eye size={16} />
+                    </button>
+                    <button
+                      onClick={() => handleEdit(purchase)}
+                      className="text-green-600 hover:text-green-900 p-1"
+                      title="Editar"
+                    >
+                      <Edit size={16} />
+                    </button>
+                    <button
+                      onClick={() => deletePurchase(purchase.id)}
+                      className="text-red-600 hover:text-red-900 p-1"
+                      title="Eliminar"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+
+  const renderPagination = () => (
+    <div className="bg-white px-4 py-3 flex items-center justify-between border-t border-gray-200 sm:px-6 rounded-b-lg">
+      <div className="flex-1 flex justify-between sm:hidden">
+        <button
+          onClick={() => setPagination(prev => ({ ...prev, page: Math.max(1, prev.page - 1) }))}
+          disabled={pagination.page === 1}
+          className="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
+        >
+          Anterior
+        </button>
+        <button
+          onClick={() => setPagination(prev => ({ ...prev, page: Math.min(prev.totalPages, prev.page + 1) }))}
+          disabled={pagination.page === pagination.totalPages}
+          className="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
+        >
+          Siguiente
+        </button>
+      </div>
+      <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
+        <div>
+          <p className="text-sm text-gray-700">
+            Mostrando{' '}
+            <span className="font-medium">
+              {(pagination.page - 1) * pagination.limit + 1}
+            </span>{' '}
+            a{' '}
+            <span className="font-medium">
+              {Math.min(pagination.page * pagination.limit, pagination.total)}
+            </span>{' '}
+            de{' '}
+            <span className="font-medium">{pagination.total}</span> resultados
+          </p>
+        </div>
+        <div>
+          <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px">
+            <button
+              onClick={() => setPagination(prev => ({ ...prev, page: Math.max(1, prev.page - 1) }))}
+              disabled={pagination.page === 1}
+              className="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50"
             >
-              Cancelar
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={() => handleDelete(deleteModal.eventId)}
-              disabled={loading}
-              leftIcon={loading ? undefined : <Trash2 className="h-4 w-4" />}
+              Anterior
+            </button>
+            <button
+              onClick={() => setPagination(prev => ({ ...prev, page: Math.min(prev.totalPages, prev.page + 1) }))}
+              disabled={pagination.page === pagination.totalPages}
+              className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50"
             >
-              {loading ? "Eliminando..." : "Eliminar"}
-            </Button>
-          </ModalFooter>
-        </Modal>
-      </motion.div>
+              Siguiente
+            </button>
+          </nav>
+        </div>
+      </div>
+    </div>
+  );
+
+  // ============================================================================
+  // RENDER PRINCIPAL
+  // ============================================================================
+
+  return (
+    <div className="p-6 max-w-7xl mx-auto">
+      {/* Header */}
+      <div className="mb-6">
+        <h1 className="text-3xl font-bold text-gray-900 mb-2">
+          Gestión de Compras
+        </h1>
+        <p className="text-gray-600">
+          Registra, edita y gestiona todas las compras de tu rancho
+        </p>
+      </div>
+
+      {/* Mensajes de error */}
+      {error && (
+        <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-md">
+          <p className="text-red-800">{error}</p>
+        </div>
+      )}
+
+      {/* Barra de herramientas */}
+      <div className="mb-6 flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center">
+        <div className="relative flex-1 max-w-md">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
+          <input
+            type="text"
+            placeholder="Buscar compras..."
+            value={filters.search || ''}
+            onChange={(e) => handleFilterChange('search', e.target.value)}
+            className="pl-10 w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          />
+        </div>
+        
+        <div className="flex gap-2">
+          <button
+            onClick={handleCreate}
+            className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors"
+          >
+            <Plus size={20} />
+            Nueva Compra
+          </button>
+          <button 
+            onClick={exportToCSV}
+            className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 transition-colors"
+          >
+            <Download size={20} />
+            Exportar
+          </button>
+        </div>
+      </div>
+
+      {/* Loading */}
+      {loading && (
+        <div className="flex justify-center py-8">
+          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600"></div>
+        </div>
+      )}
+
+      {/* Tabla */}
+      {!loading && purchases.length > 0 && renderTable()}
+
+      {/* Estado vacío */}
+      {!loading && purchases.length === 0 && (
+        <div className="bg-white rounded-lg shadow-sm p-8 text-center">
+          <Package className="mx-auto h-12 w-12 text-gray-400 mb-4" />
+          <h3 className="text-lg font-medium text-gray-900 mb-2">
+            No hay compras registradas
+          </h3>
+          <p className="text-gray-500 mb-4">
+            Comienza registrando tu primera compra
+          </p>
+          <button
+            onClick={handleCreate}
+            className="inline-flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors"
+          >
+            <Plus size={20} />
+            Registrar Compra
+          </button>
+        </div>
+      )}
+
+      {/* Paginación */}
+      {!loading && purchases.length > 0 && renderPagination()}
+
+      {/* Modal */}
+      {showModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center p-6 border-b border-gray-200">
+              <h3 className="text-xl font-semibold text-gray-900">
+                {modalMode === 'create' && 'Nueva Compra'}
+                {modalMode === 'edit' && 'Editar Compra'}
+                {modalMode === 'view' && 'Detalles de Compra'}
+              </h3>
+              <button
+                onClick={() => {
+                  setShowModal(false);
+                  setGettingLocation(false);
+                  setFormData({});
+                  setFormErrors({});
+                }}
+                className="text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <X size={24} />
+              </button>
+            </div>
+            
+            <div className="p-6">
+              {modalMode === 'view' ? renderViewDetails() : renderPurchaseForm()}
+            </div>
+            
+            <div className="flex justify-end gap-3 p-6 border-t border-gray-200">
+              <button
+                onClick={() => {
+                  setShowModal(false);
+                  setGettingLocation(false);
+                  setFormData({});
+                  setFormErrors({});
+                }}
+                className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 transition-colors"
+                disabled={loading}
+              >
+                {modalMode === 'view' ? 'Cerrar' : 'Cancelar'}
+              </button>
+              {modalMode !== 'view' && (
+                <button
+                  onClick={handleSubmit}
+                  disabled={loading}
+                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50"
+                >
+                  {loading ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                      Guardando...
+                    </>
+                  ) : (
+                    <>
+                      <Save size={16} />
+                      {modalMode === 'create' ? 'Crear Compra' : 'Guardar Cambios'}
+                    </>
+                  )}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

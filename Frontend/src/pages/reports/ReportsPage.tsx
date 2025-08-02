@@ -1,21 +1,14 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { 
-  BarChart3, 
-  FileText, 
-  Activity, 
-  Package, 
-  TrendingUp,
-  Calendar,
-  AlertTriangle,
-  Settings,
-  RefreshCw,
   Heart,
+  TrendingUp,
+  Package,
   ArrowLeft
 } from 'lucide-react';
 
 // Importar los componentes de páginas hijas
-import { ReportDashboard } from './ReportDashboard';
 import { HealthReports } from './HealthReports';
 import { ProductionReports } from './ProductionReports';
 import { InventoryReports } from './InventoryReports';
@@ -33,6 +26,7 @@ interface ReportModule {
   icon: React.ReactNode;
   component: React.ComponentType<any>;
   color: string;
+  route: string; // Nueva propiedad para manejar rutas
   stats: {
     total: number;
     thisMonth: number;
@@ -42,36 +36,20 @@ interface ReportModule {
   isNew?: boolean;
 }
 
-
-
 // Props del componente principal
 interface ReportsPageProps {
   className?: string;
 }
 
-// Módulos de reportes disponibles con sus componentes
+// Módulos de reportes disponibles con sus componentes y rutas
 const REPORT_MODULES: ReportModule[] = [
-  {
-    id: 'dashboard',
-    name: 'Centro de Reportes',
-    description: 'Vista general y acceso rápido a todos los reportes',
-    icon: <BarChart3 className="w-6 h-6" />,
-    component: ReportDashboard,
-    color: '#2d6f51',
-    stats: {
-      total: 127,
-      thisMonth: 23,
-      trend: 8.5
-    },
-    features: ['Vista general', 'Acceso rápido', 'Estadísticas'],
-    isNew: false
-  },
   {
     id: 'health',
     name: 'Reportes de Salud',
     description: 'Análisis veterinarios y estado de salud del ganado',
     icon: <Heart className="w-6 h-6" />,
     component: HealthReports,
+    route: '/reports/health',
     color: '#4e9c75',
     stats: {
       total: 45,
@@ -87,6 +65,7 @@ const REPORT_MODULES: ReportModule[] = [
     description: 'Métricas de rendimiento y productividad',
     icon: <TrendingUp className="w-6 h-6" />,
     component: ProductionReports,
+    route: '/reports/production',
     color: '#519a7c',
     stats: {
       total: 38,
@@ -102,6 +81,7 @@ const REPORT_MODULES: ReportModule[] = [
     description: 'Conteo, valuación y movimientos del ganado',
     icon: <Package className="w-6 h-6" />,
     component: InventoryReports,
+    route: '/reports/inventory',
     color: '#3ca373',
     stats: {
       total: 22,
@@ -112,8 +92,6 @@ const REPORT_MODULES: ReportModule[] = [
     isNew: true
   },
 ];
-
-
 
 // Componente para tarjeta de módulo
 const ModuleCard: React.FC<{ module: ReportModule; index: number; onClick: () => void }> = ({ 
@@ -204,33 +182,38 @@ const ModuleCard: React.FC<{ module: ReportModule; index: number; onClick: () =>
   );
 };
 
-
-
 // Componente principal
 export const ReportsPage: React.FC<ReportsPageProps> = ({ className }) => {
+  const location = useLocation();
+  const navigate = useNavigate();
+  
+  // Obtener el módulo actual desde la URL
+  const getCurrentModuleFromUrl = () => {
+    const path = location.pathname;
+    const module = REPORT_MODULES.find(m => m.route === path);
+    return module?.id || null;
+  };
+
   // Estado para manejar la navegación interna
-  const [currentModule, setCurrentModule] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
+  const [currentModule, setCurrentModule] = useState<string | null>(getCurrentModuleFromUrl());
+
+  // Efecto para sincronizar con cambios de URL
+  useEffect(() => {
+    const moduleFromUrl = getCurrentModuleFromUrl();
+    setCurrentModule(moduleFromUrl);
+  }, [location.pathname]);
 
   // Obtener el módulo actual
   const activeModule = currentModule ? REPORT_MODULES.find(m => m.id === currentModule) : null;
 
   // Función para navegar a un módulo específico
   const handleModuleClick = (module: ReportModule) => {
-    setCurrentModule(module.id);
+    navigate(module.route);
   };
 
   // Función para volver al hub principal
   const handleBackToHub = () => {
-    setCurrentModule(null);
-  };
-
-  // Función para refrescar datos
-  const handleRefresh = async () => {
-    setIsLoading(true);
-    // Simular llamada a API
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    setIsLoading(false);
+    navigate('/reports');
   };
 
   // Renderizar página hija si hay un módulo seleccionado
@@ -263,20 +246,6 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({ className }) => {
                 </div>
               </div>
             </div>
-
-            <div className="flex items-center gap-2">
-              <button
-                onClick={handleRefresh}
-                disabled={isLoading}
-                className={cn(
-                  "flex items-center gap-2 px-3 py-2 bg-white/20 text-white rounded-lg hover:bg-white/30 transition-all duration-200",
-                  isLoading && "opacity-50 cursor-not-allowed"
-                )}
-              >
-                <RefreshCw className={cn("w-4 h-4", isLoading && "animate-spin")} />
-                Actualizar
-              </button>
-            </div>
           </div>
         </div>
 
@@ -286,7 +255,7 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({ className }) => {
     );
   }
 
-  // Renderizar hub principal
+  // Renderizar hub principal cuando no hay módulo específico seleccionado
   return (
     <div
       className={cn(
@@ -302,7 +271,7 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({ className }) => {
           <motion.div
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="flex items-center justify-between mb-8"
+            className="mb-8"
           >
             <div>
               <h1 className="text-4xl font-bold text-white drop-shadow-sm mb-3">
@@ -311,93 +280,6 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({ className }) => {
               <p className="text-white/90 text-lg">
                 Sistema integral de reportes para la gestión ganadera inteligente
               </p>
-            </div>
-
-            <div className="flex items-center gap-4">
-              <button
-                onClick={handleRefresh}
-                disabled={isLoading}
-                className={cn(
-                  "flex items-center gap-2 px-4 py-2 bg-white/20 text-white rounded-lg hover:bg-white/30 transition-all duration-200",
-                  isLoading && "opacity-50 cursor-not-allowed"
-                )}
-              >
-                <RefreshCw className={cn("w-4 h-4", isLoading && "animate-spin")} />
-                Actualizar
-              </button>
-
-              <button className="flex items-center gap-2 px-4 py-2 bg-white/20 text-white rounded-lg hover:bg-white/30 transition-all duration-200">
-                <Settings className="w-4 h-4" />
-                Configurar
-              </button>
-            </div>
-          </motion.div>
-
-          {/* Estadísticas principales */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 }}
-            className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8"
-          >
-            <div className="bg-white/95 backdrop-blur-sm rounded-xl p-6 shadow-lg border border-white/20">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-gray-600 text-sm">Total de Reportes</p>
-                  <p className="text-3xl font-bold text-[#2d6f51]">308</p>
-                  <p className="text-green-600 text-sm flex items-center">
-                    <span className="mr-1">↗</span> 12.5% este mes
-                  </p>
-                </div>
-                <div className="p-3 bg-[#2d6f51]/20 rounded-lg">
-                  <FileText className="w-6 h-6 text-[#2d6f51]" />
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-white/95 backdrop-blur-sm rounded-xl p-6 shadow-lg border border-white/20">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-gray-600 text-sm">Reportes Activos</p>
-                  <p className="text-3xl font-bold text-[#4e9c75]">67</p>
-                  <p className="text-green-600 text-sm flex items-center">
-                    <span className="mr-1">↗</span> 8.2% este mes
-                  </p>
-                </div>
-                <div className="p-3 bg-[#4e9c75]/20 rounded-lg">
-                  <Activity className="w-6 h-6 text-[#4e9c75]" />
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-white/95 backdrop-blur-sm rounded-xl p-6 shadow-lg border border-white/20">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-gray-600 text-sm">Programados</p>
-                  <p className="text-3xl font-bold text-[#519a7c]">23</p>
-                  <p className="text-blue-600 text-sm flex items-center">
-                    <span className="mr-1">→</span> Sin cambios
-                  </p>
-                </div>
-                <div className="p-3 bg-[#519a7c]/20 rounded-lg">
-                  <Calendar className="w-6 h-6 text-[#519a7c]" />
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-white/95 backdrop-blur-sm rounded-xl p-6 shadow-lg border border-white/20">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-gray-600 text-sm">Con Alertas</p>
-                  <p className="text-3xl font-bold text-[#f4ac3a]">8</p>
-                  <p className="text-red-600 text-sm flex items-center">
-                    <span className="mr-1">↘</span> 15.8% este mes
-                  </p>
-                </div>
-                <div className="p-3 bg-[#f4ac3a]/20 rounded-lg">
-                  <AlertTriangle className="w-6 h-6 text-[#f4ac3a]" />
-                </div>
-              </div>
             </div>
           </motion.div>
 
@@ -422,8 +304,6 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({ className }) => {
               ))}
             </div>
           </motion.div>
-
-
         </div>
       </div>
     </div>

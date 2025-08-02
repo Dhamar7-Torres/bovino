@@ -1,9 +1,3 @@
-// ============================================================================
-// PROPERTYINFO.TSX - GESTIÓN DE INFORMACIÓN DE LA PROPIEDAD
-// ============================================================================
-// Componente para visualizar y editar toda la información del rancho,
-// incluyendo documentos legales, fotos, coordenadas y datos operacionales
-
 import React, { useState, useRef, useCallback } from "react";
 import { motion, Variants } from "framer-motion";
 import {
@@ -15,7 +9,6 @@ import {
   Save,
   Edit3,
   X,
-  Plus,
   Download,
   Eye,
   Trash2,
@@ -27,12 +20,12 @@ import {
   Mail,
   CheckCircle,
   Shield,
-  Home,
   TreePine,
   Droplets,
-  Settings,
   Users,
-  Beef,
+  PlusCircle,
+  Navigation,
+  Loader,
 } from "lucide-react";
 
 // ============================================================================
@@ -123,17 +116,6 @@ interface PropertyInfo {
     };
   };
 
-  // Infraestructura
-  infrastructure: {
-    buildings: number;
-    corrals: number;
-    waterSources: number;
-    electricalSystems: string[];
-    roadAccess: "paved" | "gravel" | "dirt" | "limited";
-    internetAccess: boolean;
-    phoneService: boolean;
-  };
-
   // Documentos y fotos
   documents: PropertyDocument[];
   photos: PropertyPhoto[];
@@ -148,128 +130,72 @@ interface PropertyInfo {
 }
 
 // ============================================================================
-// DATOS SIMULADOS
+// DATOS INICIALES VACÍOS
 // ============================================================================
 
-const mockPropertyInfo: PropertyInfo = {
+const createEmptyPropertyInfo = (): PropertyInfo => ({
   basicInfo: {
-    id: "ranch-001",
-    name: "Rancho Los Ceibos",
-    description: "Rancho ganadero especializado en producción de leche y carne con tecnología moderna",
-    establishedYear: 1985,
-    registrationNumber: "RANCH-TAB-001-1985",
-    propertyType: "mixed"
+    id: "",
+    name: "",
+    description: "",
+    establishedYear: new Date().getFullYear(),
+    registrationNumber: "",
+    propertyType: "ranch"
   },
   location: {
-    address: "Carretera Villahermosa-Frontera Km 15",
-    city: "Villahermosa",
-    state: "Tabasco",
+    address: "",
+    city: "",
+    state: "",
     country: "México",
-    postalCode: "86035",
+    postalCode: "",
     coordinates: {
-      latitude: 17.9869,
-      longitude: -92.9303
+      latitude: 0,
+      longitude: 0
     },
-    elevation: 12,
+    elevation: 0,
     timezone: "America/Mexico_City"
   },
   dimensions: {
-    totalArea: 450.5,
-    usableArea: 425.0,
-    pastureArea: 380.0,
-    buildingArea: 2500,
-    waterBodyArea: 15.5,
-    forestArea: 30.0
+    totalArea: 0,
+    usableArea: 0,
+    pastureArea: 0,
+    buildingArea: 0,
+    waterBodyArea: 0,
+    forestArea: 0
   },
   ownership: {
-    ownerName: "Dr. Carlos Mendoza Jiménez",
+    ownerName: "",
     ownerType: "individual",
     contactInfo: {
-      email: "carlos.mendoza@rancholosceibos.com",
-      phone: "+52 993 123 4567",
-      alternatePhone: "+52 993 987 6543",
-      website: "www.rancholosceibos.com"
+      email: "",
+      phone: "",
+      alternatePhone: "",
+      website: ""
     },
-    administratorName: "Ing. María González López",
-    administratorContact: "maria.gonzalez@rancholosceibos.com"
+    administratorName: "",
+    administratorContact: ""
   },
   operations: {
-    primaryActivity: ["Producción de leche", "Cría de ganado bovino"],
-    secondaryActivity: ["Producción de forrajes", "Servicios veterinarios"],
-    certifications: ["Buenas Prácticas Ganaderas", "Certificación Orgánica"],
-    operatingLicense: "SENASICA-TAB-2024-001",
+    primaryActivity: [],
+    secondaryActivity: [],
+    certifications: [],
+    operatingLicense: "",
     capacity: {
-      maxAnimals: 350,
-      currentAnimals: 285,
-      staffCapacity: 20,
-      currentStaff: 15
+      maxAnimals: 0,
+      currentAnimals: 0,
+      staffCapacity: 0,
+      currentStaff: 0
     }
   },
-  infrastructure: {
-    buildings: 12,
-    corrals: 8,
-    waterSources: 6,
-    electricalSystems: ["Red eléctrica principal", "Planta solar", "Generador de emergencia"],
-    roadAccess: "paved",
-    internetAccess: true,
-    phoneService: true
-  },
-  documents: [
-    {
-      id: "doc1",
-      name: "Escritura de Propiedad",
-      type: "title",
-      uploadDate: "2024-01-15",
-      fileSize: 2.5,
-      fileType: "PDF",
-      status: "valid"
-    },
-    {
-      id: "doc2", 
-      name: "Permiso SENASICA",
-      type: "permit",
-      uploadDate: "2024-03-20",
-      expirationDate: "2025-03-20",
-      fileSize: 1.2,
-      fileType: "PDF",
-      status: "valid"
-    },
-    {
-      id: "doc3",
-      name: "Seguro de Ganado",
-      type: "insurance",
-      uploadDate: "2024-01-01",
-      expirationDate: "2024-12-31",
-      fileSize: 0.8,
-      fileType: "PDF",
-      status: "requires_renewal"
-    }
-  ],
-  photos: [
-    {
-      id: "photo1",
-      url: "/api/placeholder/400/300",
-      caption: "Vista aérea del rancho",
-      category: "aerial",
-      uploadDate: "2024-06-15",
-      isMain: true
-    },
-    {
-      id: "photo2",
-      url: "/api/placeholder/400/300", 
-      caption: "Instalaciones principales",
-      category: "facilities",
-      uploadDate: "2024-06-15",
-      isMain: false
-    }
-  ],
+  documents: [],
+  photos: [],
   dates: {
-    lastUpdate: "2025-07-16",
-    lastInspection: "2025-07-10",
-    nextInspection: "2025-10-10",
-    licenseRenewal: "2025-03-20"
+    lastUpdate: new Date().toISOString().split('T')[0],
+    lastInspection: "",
+    nextInspection: "",
+    licenseRenewal: ""
   }
-};
+});
 
 // ============================================================================
 // VARIANTES DE ANIMACIÓN
@@ -327,21 +253,28 @@ const EditableField: React.FC<{
   onChange: (value: string) => void;
   type?: "text" | "number" | "email" | "tel" | "url";
   icon?: React.ElementType;
-}> = ({ label, value, isEditing, onChange, type = "text", icon: Icon }) => {
+  required?: boolean;
+}> = ({ label, value, isEditing, onChange, type = "text", icon: Icon, required = false }) => {
   return (
     <div className="flex items-center space-x-3 p-3 bg-gray-50 rounded-lg">
       {Icon && <Icon className="w-5 h-5 text-[#519a7c] flex-shrink-0" />}
       <div className="flex-1">
-        <p className="text-sm font-medium text-gray-600 mb-1">{label}</p>
+        <p className="text-sm font-medium text-gray-600 mb-1">
+          {label} {required && <span className="text-red-500">*</span>}
+        </p>
         {isEditing ? (
           <input
             type={type}
             value={value}
             onChange={(e) => onChange(e.target.value)}
+            required={required}
             className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
+            placeholder={`Ingrese ${label.toLowerCase()}`}
           />
         ) : (
-          <p className="font-medium text-[#2d5a45]">{value}</p>
+          <p className="font-medium text-[#2d5a45]">
+            {value || <span className="text-gray-400 italic">Sin especificar</span>}
+          </p>
         )}
       </div>
     </div>
@@ -378,7 +311,7 @@ const DocumentCard: React.FC<{
     switch (type) {
       case "title": return FileText;
       case "permit": return Shield;
-      case "insurance": return Home;
+      case "insurance": return Shield;
       case "certification": return CheckCircle;
       case "map": return MapPin;
       default: return FileText;
@@ -463,7 +396,6 @@ const PhotoCard: React.FC<{
           alt={photo.caption}
           className="w-full h-full object-cover"
           onError={(e) => {
-            // Fallback para imágenes que no cargan
             e.currentTarget.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='300' viewBox='0 0 400 300'%3E%3Crect width='400' height='300' fill='%23f3f4f6'/%3E%3Ctext x='200' y='150' text-anchor='middle' dominant-baseline='middle' font-family='Arial' font-size='14' fill='%236b7280'%3EImagen no disponible%3C/text%3E%3C/svg%3E";
           }}
         />
@@ -513,32 +445,114 @@ const PhotoCard: React.FC<{
 
 const PropertyInfo: React.FC = () => {
   // Estados para manejo de datos y UI
-  const [propertyData, setPropertyData] = useState<PropertyInfo>(mockPropertyInfo);
+  const [propertyData, setPropertyData] = useState<PropertyInfo | null>(null);
   const [isEditing, setIsEditing] = useState(false);
-  const [activeTab, setActiveTab] = useState<"basic" | "documents" | "photos" | "infrastructure">("basic");
+  const [activeTab, setActiveTab] = useState<"basic" | "documents" | "photos">("basic");
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [isGettingLocation, setIsGettingLocation] = useState(false);
+  const [isSaved, setIsSaved] = useState(false);
 
   // Referencias para inputs de archivos
   const documentInputRef = useRef<HTMLInputElement>(null);
   const photoInputRef = useRef<HTMLInputElement>(null);
 
+  // Función para obtener ubicación actual
+  const getCurrentLocation = useCallback(() => {
+    if (!navigator.geolocation) {
+      alert("La geolocalización no está soportada en este navegador");
+      return;
+    }
+
+    setIsGettingLocation(true);
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const { latitude, longitude } = position.coords;
+        
+        setPropertyData(prev => prev ? ({
+          ...prev,
+          location: {
+            ...prev.location,
+            coordinates: { latitude, longitude }
+          }
+        }) : null);
+
+        // Intentar obtener la dirección usando reverse geocoding
+        fetch(`https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${latitude}&longitude=${longitude}&localityLanguage=es`)
+          .then(response => response.json())
+          .then(data => {
+            if (data && propertyData) {
+              setPropertyData(prev => prev ? ({
+                ...prev,
+                location: {
+                  ...prev.location,
+                  address: data.locality || prev.location.address,
+                  city: data.city || prev.location.city,
+                  state: data.principalSubdivision || prev.location.state,
+                  country: data.countryName || prev.location.country,
+                  postalCode: data.postcode || prev.location.postalCode
+                }
+              }) : null);
+            }
+          })
+          .catch(error => {
+            console.warn("No se pudo obtener la dirección:", error);
+          })
+          .finally(() => {
+            setIsGettingLocation(false);
+          });
+      },
+      (error) => {
+        setIsGettingLocation(false);
+        let errorMessage = "No se pudo obtener la ubicación";
+        
+        switch (error.code) {
+          case error.PERMISSION_DENIED:
+            errorMessage = "Permiso de ubicación denegado. Por favor, habilite la ubicación en su navegador.";
+            break;
+          case error.POSITION_UNAVAILABLE:
+            errorMessage = "Información de ubicación no disponible.";
+            break;
+          case error.TIMEOUT:
+            errorMessage = "Tiempo de espera agotado para obtener la ubicación.";
+            break;
+        }
+        
+        alert(errorMessage);
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 300000 // 5 minutos
+      }
+    );
+  }, [propertyData]);
+
+  // Función para crear nueva propiedad
+  const handleCreateNew = () => {
+    const newProperty = createEmptyPropertyInfo();
+    newProperty.basicInfo.id = `property-${Date.now()}`;
+    setPropertyData(newProperty);
+    setIsEditing(true);
+  };
+
   // Función para manejar la subida de documentos
   const handleDocumentUpload = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
+    if (!propertyData) return;
+    
     const files = event.target.files;
     if (!files || files.length === 0) return;
 
     setIsUploading(true);
     setUploadProgress(0);
 
-    // Simular subida de archivo
     const interval = setInterval(() => {
       setUploadProgress(prev => {
         if (prev >= 100) {
           clearInterval(interval);
           setIsUploading(false);
           
-          // Agregar documento simulado
           const newDocument: PropertyDocument = {
             id: `doc-${Date.now()}`,
             name: files[0].name,
@@ -549,10 +563,10 @@ const PropertyInfo: React.FC = () => {
             status: "valid"
           };
 
-          setPropertyData(prev => ({
+          setPropertyData(prev => prev ? ({
             ...prev,
             documents: [...prev.documents, newDocument]
-          }));
+          }) : null);
 
           return 100;
         }
@@ -560,39 +574,38 @@ const PropertyInfo: React.FC = () => {
       });
     }, 200);
 
-    // Reset input
     event.target.value = '';
-  }, []);
+  }, [propertyData]);
 
   // Función para manejar la subida de fotos
   const handlePhotoUpload = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
+    if (!propertyData) return;
+    
     const files = event.target.files;
     if (!files || files.length === 0) return;
 
     setIsUploading(true);
     setUploadProgress(0);
 
-    // Simular subida de foto
     const interval = setInterval(() => {
       setUploadProgress(prev => {
         if (prev >= 100) {
           clearInterval(interval);
           setIsUploading(false);
           
-          // Agregar foto simulada
           const newPhoto: PropertyPhoto = {
             id: `photo-${Date.now()}`,
             url: "/api/placeholder/400/300",
             caption: "Nueva foto del rancho",
             category: "general",
             uploadDate: new Date().toISOString().split('T')[0],
-            isMain: false
+            isMain: propertyData.photos.length === 0
           };
 
-          setPropertyData(prev => ({
+          setPropertyData(prev => prev ? ({
             ...prev,
             photos: [...prev.photos, newPhoto]
-          }));
+          }) : null);
 
           return 100;
         }
@@ -600,22 +613,63 @@ const PropertyInfo: React.FC = () => {
       });
     }, 200);
 
-    // Reset input
     event.target.value = '';
-  }, []);
+  }, [propertyData]);
 
   // Función para guardar cambios
   const handleSave = () => {
+    if (!propertyData) return;
+    
+    // Validar campos requeridos
+    const requiredFields = [
+      propertyData.basicInfo.name,
+      propertyData.ownership.ownerName,
+      propertyData.location.address,
+      propertyData.location.city,
+      propertyData.location.state
+    ];
+
+    if (requiredFields.some(field => !field.trim())) {
+      alert("Por favor complete los campos requeridos (marcados con *)");
+      return;
+    }
+
+    // Validar capacidades
+    if (propertyData.operations.capacity.currentAnimals > propertyData.operations.capacity.maxAnimals) {
+      alert("Los animales actuales no pueden ser mayores a la capacidad máxima");
+      return;
+    }
+
+    if (propertyData.operations.capacity.currentStaff > propertyData.operations.capacity.staffCapacity) {
+      alert("El personal actual no puede ser mayor a la capacidad de personal");
+      return;
+    }
+
     setIsEditing(false);
+    setIsSaved(true);
     // Aquí se enviarían los datos al backend
-    console.log("Guardando cambios:", propertyData);
+    console.log("Guardando propiedad:", propertyData);
+    alert("Información guardada exitosamente");
   };
 
   // Función para cancelar edición
   const handleCancel = () => {
     setIsEditing(false);
-    // Revertir cambios
-    setPropertyData(mockPropertyInfo);
+    if (propertyData && !isSaved) {
+      // Si estaba creando una nueva propiedad y cancela, volver al estado inicial
+      setPropertyData(null);
+    }
+  };
+
+  // Función para eliminar información
+  const handleDelete = () => {
+    if (window.confirm("¿Está seguro que desea eliminar toda la información de la propiedad? Esta acción no se puede deshacer.")) {
+      setPropertyData(null);
+      setIsSaved(false);
+      setIsEditing(false);
+      setActiveTab("basic");
+      alert("Información eliminada exitosamente");
+    }
   };
 
   // Tabs de navegación
@@ -623,8 +677,75 @@ const PropertyInfo: React.FC = () => {
     { id: "basic", label: "Información Básica", icon: Building },
     { id: "documents", label: "Documentos", icon: FileText },
     { id: "photos", label: "Fotografías", icon: Camera },
-    { id: "infrastructure", label: "Infraestructura", icon: Settings },
   ] as const;
+
+  // Si no hay datos, mostrar pantalla de inicio
+  if (!propertyData) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-[#F5F5DC] via-[#E8E8C8] to-[#D3D3B8] p-6">
+        <div className="max-w-4xl mx-auto">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="text-center"
+          >
+            <div className="bg-white/90 backdrop-blur-sm rounded-2xl p-12 shadow-xl border border-white/20">
+              <motion.div
+                initial={{ scale: 0 }}
+                animate={{ scale: 1 }}
+                transition={{ delay: 0.2, type: "spring", stiffness: 200 }}
+                className="w-24 h-24 bg-[#519a7c] bg-opacity-10 rounded-full flex items-center justify-center mx-auto mb-6"
+              >
+                <Building className="w-12 h-12 text-[#519a7c]" />
+              </motion.div>
+              
+              <h1 className="text-4xl font-bold text-[#2d5a45] mb-4">
+                Sistema de Gestión de Propiedades
+              </h1>
+              
+              <p className="text-lg text-gray-600 mb-8 max-w-2xl mx-auto">
+                Crea la información de tu propiedad para gestionar todos los datos, 
+                documentos y fotografías de tu rancho de manera organizada. 
+                <span className="font-medium text-[#2d5a45]">Solo puedes tener una propiedad registrada.</span>
+              </p>
+              
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={handleCreateNew}
+                className="px-8 py-4 bg-[#519a7c] text-white rounded-xl hover:bg-[#2d5a45] transition-colors flex items-center mx-auto text-lg font-medium shadow-lg"
+              >
+                <PlusCircle className="w-6 h-6 mr-3" />
+                Crear Nueva Propiedad
+              </motion.button>
+              
+              <div className="mt-12 grid grid-cols-1 md:grid-cols-3 gap-6">
+                {[
+                  { icon: Building, title: "Información Básica", desc: "Datos generales y ubicación" },
+                  { icon: FileText, title: "Documentos", desc: "Gestión de archivos importantes" },
+                  { icon: Camera, title: "Fotografías", desc: "Galería visual de la propiedad" }
+                ].map((feature, index) => (
+                  <motion.div
+                    key={index}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.4 + index * 0.1 }}
+                    className="text-center p-4"
+                  >
+                    <div className="w-12 h-12 bg-[#519a7c] bg-opacity-10 rounded-lg flex items-center justify-center mx-auto mb-3">
+                      <feature.icon className="w-6 h-6 text-[#519a7c]" />
+                    </div>
+                    <h3 className="font-semibold text-[#2d5a45] mb-2">{feature.title}</h3>
+                    <p className="text-sm text-gray-600">{feature.desc}</p>
+                  </motion.div>
+                ))}
+              </div>
+            </div>
+          </motion.div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#F5F5DC] via-[#E8E8C8] to-[#D3D3B8] p-6">
@@ -639,10 +760,12 @@ const PropertyInfo: React.FC = () => {
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-4xl font-bold text-[#2d5a45] mb-2">
-                Información de la Propiedad
+                {propertyData.basicInfo.name || "Nueva Propiedad"}
               </h1>
               <p className="text-gray-600 text-lg">
-                Gestiona toda la información, documentos y fotos del rancho
+                {isEditing ? "Editando información" : 
+                 isSaved ? "Información guardada - Puede editar o eliminar la información actual" :
+                 "Gestiona toda la información, documentos y fotos del rancho"}
               </p>
             </div>
 
@@ -669,15 +792,28 @@ const PropertyInfo: React.FC = () => {
                   </motion.button>
                 </>
               ) : (
-                <motion.button
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                  onClick={() => setIsEditing(true)}
-                  className="px-4 py-2 bg-[#519a7c] text-white rounded-lg hover:bg-[#2d5a45] transition-colors flex items-center"
-                >
-                  <Edit3 className="w-4 h-4 mr-2" />
-                  Editar
-                </motion.button>
+                <>
+                  <motion.button
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={() => setIsEditing(true)}
+                    className="px-4 py-2 bg-[#519a7c] text-white rounded-lg hover:bg-[#2d5a45] transition-colors flex items-center"
+                  >
+                    <Edit3 className="w-4 h-4 mr-2" />
+                    Editar
+                  </motion.button>
+                  {isSaved && (
+                    <motion.button
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                      onClick={handleDelete}
+                      className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors flex items-center"
+                    >
+                      <Trash2 className="w-4 h-4 mr-2" />
+                      Eliminar
+                    </motion.button>
+                  )}
+                </>
               )}
             </div>
           </div>
@@ -750,30 +886,31 @@ const PropertyInfo: React.FC = () => {
                     label="Nombre del Rancho"
                     value={propertyData.basicInfo.name}
                     isEditing={isEditing}
-                    onChange={(value) => setPropertyData(prev => ({
+                    onChange={(value) => setPropertyData(prev => prev ? ({
                       ...prev,
                       basicInfo: { ...prev.basicInfo, name: value }
-                    }))}
+                    }) : null)}
                     icon={Building}
+                    required
                   />
                   <EditableField
                     label="Descripción"
                     value={propertyData.basicInfo.description}
                     isEditing={isEditing}
-                    onChange={(value) => setPropertyData(prev => ({
+                    onChange={(value) => setPropertyData(prev => prev ? ({
                       ...prev,
                       basicInfo: { ...prev.basicInfo, description: value }
-                    }))}
+                    }) : null)}
                     icon={FileText}
                   />
                   <EditableField
                     label="Año de Establecimiento"
                     value={propertyData.basicInfo.establishedYear}
                     isEditing={isEditing}
-                    onChange={(value) => setPropertyData(prev => ({
+                    onChange={(value) => setPropertyData(prev => prev ? ({
                       ...prev,
                       basicInfo: { ...prev.basicInfo, establishedYear: parseInt(value) || 0 }
-                    }))}
+                    }) : null)}
                     type="number"
                     icon={Calendar}
                   />
@@ -781,10 +918,10 @@ const PropertyInfo: React.FC = () => {
                     label="Número de Registro"
                     value={propertyData.basicInfo.registrationNumber}
                     isEditing={isEditing}
-                    onChange={(value) => setPropertyData(prev => ({
+                    onChange={(value) => setPropertyData(prev => prev ? ({
                       ...prev,
                       basicInfo: { ...prev.basicInfo, registrationNumber: value }
-                    }))}
+                    }) : null)}
                     icon={Shield}
                   />
                 </div>
@@ -795,48 +932,107 @@ const PropertyInfo: React.FC = () => {
                 variants={cardVariants}
                 className="bg-white/90 backdrop-blur-sm rounded-xl p-6 shadow-lg border border-white/20"
               >
-                <h3 className="text-lg font-semibold text-[#2d5a45] mb-4">Ubicación</h3>
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-semibold text-[#2d5a45]">Ubicación</h3>
+                  {isEditing && (
+                    <motion.button
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                      onClick={getCurrentLocation}
+                      disabled={isGettingLocation}
+                      className="px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center text-sm disabled:opacity-50"
+                    >
+                      {isGettingLocation ? (
+                        <Loader className="w-4 h-4 mr-2 animate-spin" />
+                      ) : (
+                        <Navigation className="w-4 h-4 mr-2" />
+                      )}
+                      {isGettingLocation ? "Obteniendo..." : "Mi Ubicación"}
+                    </motion.button>
+                  )}
+                </div>
                 <div className="space-y-4">
                   <EditableField
                     label="Dirección"
                     value={propertyData.location.address}
                     isEditing={isEditing}
-                    onChange={(value) => setPropertyData(prev => ({
+                    onChange={(value) => setPropertyData(prev => prev ? ({
                       ...prev,
                       location: { ...prev.location, address: value }
-                    }))}
+                    }) : null)}
                     icon={MapPin}
+                    required
                   />
                   <EditableField
                     label="Ciudad"
                     value={propertyData.location.city}
                     isEditing={isEditing}
-                    onChange={(value) => setPropertyData(prev => ({
+                    onChange={(value) => setPropertyData(prev => prev ? ({
                       ...prev,
                       location: { ...prev.location, city: value }
-                    }))}
+                    }) : null)}
                     icon={Building}
+                    required
                   />
                   <EditableField
                     label="Estado"
                     value={propertyData.location.state}
                     isEditing={isEditing}
-                    onChange={(value) => setPropertyData(prev => ({
+                    onChange={(value) => setPropertyData(prev => prev ? ({
                       ...prev,
                       location: { ...prev.location, state: value }
-                    }))}
+                    }) : null)}
                     icon={Globe}
+                    required
                   />
                   <EditableField
                     label="Código Postal"
                     value={propertyData.location.postalCode}
                     isEditing={isEditing}
-                    onChange={(value) => setPropertyData(prev => ({
+                    onChange={(value) => setPropertyData(prev => prev ? ({
                       ...prev,
                       location: { ...prev.location, postalCode: value }
-                    }))}
+                    }) : null)}
                     icon={Mail}
                   />
+                  
+                  {/* Coordenadas */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <EditableField
+                      label="Latitud"
+                      value={propertyData.location.coordinates.latitude}
+                      isEditing={isEditing}
+                      onChange={(value) => setPropertyData(prev => prev ? ({
+                        ...prev,
+                        location: { 
+                          ...prev.location, 
+                          coordinates: { 
+                            ...prev.location.coordinates, 
+                            latitude: parseFloat(value) || 0 
+                          }
+                        }
+                      }) : null)}
+                      type="number"
+                      icon={MapPin}
+                    />
+                    <EditableField
+                      label="Longitud"
+                      value={propertyData.location.coordinates.longitude}
+                      isEditing={isEditing}
+                      onChange={(value) => setPropertyData(prev => prev ? ({
+                        ...prev,
+                        location: { 
+                          ...prev.location, 
+                          coordinates: { 
+                            ...prev.location.coordinates, 
+                            longitude: parseFloat(value) || 0 
+                          }
+                        }
+                      }) : null)}
+                      type="number"
+                      icon={MapPin}
+                    />
+                  </div>
                 </div>
               </motion.div>
 
@@ -851,10 +1047,10 @@ const PropertyInfo: React.FC = () => {
                     label="Área Total (hectáreas)"
                     value={propertyData.dimensions.totalArea}
                     isEditing={isEditing}
-                    onChange={(value) => setPropertyData(prev => ({
+                    onChange={(value) => setPropertyData(prev => prev ? ({
                       ...prev,
                       dimensions: { ...prev.dimensions, totalArea: parseFloat(value) || 0 }
-                    }))}
+                    }) : null)}
                     type="number"
                     icon={Ruler}
                   />
@@ -862,10 +1058,10 @@ const PropertyInfo: React.FC = () => {
                     label="Área de Pastoreo (hectáreas)"
                     value={propertyData.dimensions.pastureArea}
                     isEditing={isEditing}
-                    onChange={(value) => setPropertyData(prev => ({
+                    onChange={(value) => setPropertyData(prev => prev ? ({
                       ...prev,
                       dimensions: { ...prev.dimensions, pastureArea: parseFloat(value) || 0 }
-                    }))}
+                    }) : null)}
                     type="number"
                     icon={TreePine}
                   />
@@ -873,10 +1069,10 @@ const PropertyInfo: React.FC = () => {
                     label="Área de Construcciones (m²)"
                     value={propertyData.dimensions.buildingArea}
                     isEditing={isEditing}
-                    onChange={(value) => setPropertyData(prev => ({
+                    onChange={(value) => setPropertyData(prev => prev ? ({
                       ...prev,
                       dimensions: { ...prev.dimensions, buildingArea: parseFloat(value) || 0 }
-                    }))}
+                    }) : null)}
                     type="number"
                     icon={Building}
                   />
@@ -884,10 +1080,10 @@ const PropertyInfo: React.FC = () => {
                     label="Área de Cuerpos de Agua (hectáreas)"
                     value={propertyData.dimensions.waterBodyArea}
                     isEditing={isEditing}
-                    onChange={(value) => setPropertyData(prev => ({
+                    onChange={(value) => setPropertyData(prev => prev ? ({
                       ...prev,
                       dimensions: { ...prev.dimensions, waterBodyArea: parseFloat(value) || 0 }
-                    }))}
+                    }) : null)}
                     type="number"
                     icon={Droplets}
                   />
@@ -905,23 +1101,24 @@ const PropertyInfo: React.FC = () => {
                     label="Nombre del Propietario"
                     value={propertyData.ownership.ownerName}
                     isEditing={isEditing}
-                    onChange={(value) => setPropertyData(prev => ({
+                    onChange={(value) => setPropertyData(prev => prev ? ({
                       ...prev,
                       ownership: { ...prev.ownership, ownerName: value }
-                    }))}
+                    }) : null)}
                     icon={User}
+                    required
                   />
                   <EditableField
                     label="Email"
                     value={propertyData.ownership.contactInfo.email}
                     isEditing={isEditing}
-                    onChange={(value) => setPropertyData(prev => ({
+                    onChange={(value) => setPropertyData(prev => prev ? ({
                       ...prev,
                       ownership: {
                         ...prev.ownership,
                         contactInfo: { ...prev.ownership.contactInfo, email: value }
                       }
-                    }))}
+                    }) : null)}
                     type="email"
                     icon={Mail}
                   />
@@ -929,13 +1126,13 @@ const PropertyInfo: React.FC = () => {
                     label="Teléfono"
                     value={propertyData.ownership.contactInfo.phone}
                     isEditing={isEditing}
-                    onChange={(value) => setPropertyData(prev => ({
+                    onChange={(value) => setPropertyData(prev => prev ? ({
                       ...prev,
                       ownership: {
                         ...prev.ownership,
                         contactInfo: { ...prev.ownership.contactInfo, phone: value }
                       }
-                    }))}
+                    }) : null)}
                     type="tel"
                     icon={Phone}
                   />
@@ -943,10 +1140,79 @@ const PropertyInfo: React.FC = () => {
                     label="Administrador"
                     value={propertyData.ownership.administratorName || ""}
                     isEditing={isEditing}
-                    onChange={(value) => setPropertyData(prev => ({
+                    onChange={(value) => setPropertyData(prev => prev ? ({
                       ...prev,
                       ownership: { ...prev.ownership, administratorName: value }
-                    }))}
+                    }) : null)}
+                    icon={Users}
+                  />
+                </div>
+              </motion.div>
+
+              {/* Capacidad Operacional */}
+              <motion.div
+                variants={cardVariants}
+                className="bg-white/90 backdrop-blur-sm rounded-xl p-6 shadow-lg border border-white/20 lg:col-span-2"
+              >
+                <h3 className="text-lg font-semibold text-[#2d5a45] mb-4">Capacidad Operacional</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <EditableField
+                    label="Capacidad Máxima de Animales"
+                    value={propertyData.operations.capacity.maxAnimals}
+                    isEditing={isEditing}
+                    onChange={(value) => setPropertyData(prev => prev ? ({
+                      ...prev,
+                      operations: {
+                        ...prev.operations,
+                        capacity: { ...prev.operations.capacity, maxAnimals: parseInt(value) || 0 }
+                      }
+                    }) : null)}
+                    type="number"
+                    icon={CheckCircle}
+                  />
+
+                  <EditableField
+                    label="Animales Actuales"
+                    value={propertyData.operations.capacity.currentAnimals}
+                    isEditing={isEditing}
+                    onChange={(value) => setPropertyData(prev => prev ? ({
+                      ...prev,
+                      operations: {
+                        ...prev.operations,
+                        capacity: { ...prev.operations.capacity, currentAnimals: parseInt(value) || 0 }
+                      }
+                    }) : null)}
+                    type="number"
+                    icon={CheckCircle}
+                  />
+
+                  <EditableField
+                    label="Capacidad de Personal"
+                    value={propertyData.operations.capacity.staffCapacity}
+                    isEditing={isEditing}
+                    onChange={(value) => setPropertyData(prev => prev ? ({
+                      ...prev,
+                      operations: {
+                        ...prev.operations,
+                        capacity: { ...prev.operations.capacity, staffCapacity: parseInt(value) || 0 }
+                      }
+                    }) : null)}
+                    type="number"
+                    icon={Users}
+                  />
+
+                  <EditableField
+                    label="Personal Actual"
+                    value={propertyData.operations.capacity.currentStaff}
+                    isEditing={isEditing}
+                    onChange={(value) => setPropertyData(prev => prev ? ({
+                      ...prev,
+                      operations: {
+                        ...prev.operations,
+                        capacity: { ...prev.operations.capacity, currentStaff: parseInt(value) || 0 }
+                      }
+                    }) : null)}
+                    type="number"
                     icon={Users}
                   />
                 </div>
@@ -987,10 +1253,10 @@ const PropertyInfo: React.FC = () => {
                     onView={() => console.log("Ver documento:", document.id)}
                     onDownload={() => console.log("Descargar documento:", document.id)}
                     onDelete={() => {
-                      setPropertyData(prev => ({
+                      setPropertyData(prev => prev ? ({
                         ...prev,
                         documents: prev.documents.filter(doc => doc.id !== document.id)
-                      }));
+                      }) : null);
                     }}
                   />
                 ))}
@@ -1049,19 +1315,19 @@ const PropertyInfo: React.FC = () => {
                     key={photo.id}
                     photo={photo}
                     onSetMain={() => {
-                      setPropertyData(prev => ({
+                      setPropertyData(prev => prev ? ({
                         ...prev,
                         photos: prev.photos.map(p => ({
                           ...p,
                           isMain: p.id === photo.id
                         }))
-                      }));
+                      }) : null);
                     }}
                     onDelete={() => {
-                      setPropertyData(prev => ({
+                      setPropertyData(prev => prev ? ({
                         ...prev,
                         photos: prev.photos.filter(p => p.id !== photo.id)
-                      }));
+                      }) : null);
                     }}
                   />
                 ))}
@@ -1085,182 +1351,6 @@ const PropertyInfo: React.FC = () => {
                   </motion.button>
                 </motion.div>
               )}
-            </div>
-          )}
-
-          {activeTab === "infrastructure" && (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Capacidad Operacional */}
-              <motion.div
-                variants={cardVariants}
-                className="bg-white/90 backdrop-blur-sm rounded-xl p-6 shadow-lg border border-white/20"
-              >
-                <h3 className="text-lg font-semibold text-[#2d5a45] mb-4">Capacidad Operacional</h3>
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                    <div className="flex items-center">
-                      <Building className="w-5 h-5 text-[#519a7c] mr-3" />
-                      <div>
-                        <p className="font-medium text-[#2d5a45]">Edificaciones</p>
-                        <p className="text-sm text-gray-600">Total de construcciones</p>
-                      </div>
-                    </div>
-                    <span className="text-2xl font-bold text-[#2d5a45]">{propertyData.infrastructure.buildings}</span>
-                  </div>
-
-                  <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                    <div className="flex items-center">
-                      <Home className="w-5 h-5 text-[#519a7c] mr-3" />
-                      <div>
-                        <p className="font-medium text-[#2d5a45]">Corrales</p>
-                        <p className="text-sm text-gray-600">Áreas de confinamiento</p>
-                      </div>
-                    </div>
-                    <span className="text-2xl font-bold text-[#2d5a45]">{propertyData.infrastructure.corrals}</span>
-                  </div>
-
-                  <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                    <div className="flex items-center">
-                      <Droplets className="w-5 h-5 text-[#519a7c] mr-3" />
-                      <div>
-                        <p className="font-medium text-[#2d5a45]">Fuentes de Agua</p>
-                        <p className="text-sm text-gray-600">Pozos, tanques, etc.</p>
-                      </div>
-                    </div>
-                    <span className="text-2xl font-bold text-[#2d5a45]">{propertyData.infrastructure.waterSources}</span>
-                  </div>
-
-                  <div className="p-3 bg-gray-50 rounded-lg">
-                    <div className="flex items-center mb-2">
-                      <Beef className="w-5 h-5 text-[#519a7c] mr-2" />
-                      <p className="font-medium text-[#2d5a45]">Capacidad Animal</p>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-gray-600">Actual / Máximo</span>
-                      <span className="text-lg font-bold text-[#2d5a45]">
-                        {propertyData.operations.capacity.currentAnimals} / {propertyData.operations.capacity.maxAnimals}
-                      </span>
-                    </div>
-                    <div className="w-full bg-gray-200 rounded-full h-2 mt-2">
-                      <div 
-                        className="bg-[#519a7c] h-2 rounded-full transition-all duration-300"
-                        style={{ 
-                          width: `${(propertyData.operations.capacity.currentAnimals / propertyData.operations.capacity.maxAnimals) * 100}%` 
-                        }}
-                      />
-                    </div>
-                  </div>
-                </div>
-              </motion.div>
-
-              {/* Servicios y Conectividad */}
-              <motion.div
-                variants={cardVariants}
-                className="bg-white/90 backdrop-blur-sm rounded-xl p-6 shadow-lg border border-white/20"
-              >
-                <h3 className="text-lg font-semibold text-[#2d5a45] mb-4">Servicios y Conectividad</h3>
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                    <div className="flex items-center">
-                      <Globe className="w-5 h-5 text-[#519a7c] mr-3" />
-                      <span className="font-medium text-[#2d5a45]">Internet</span>
-                    </div>
-                    <span className={`px-3 py-1 rounded-full text-sm font-medium ${
-                      propertyData.infrastructure.internetAccess 
-                        ? "bg-green-100 text-green-800" 
-                        : "bg-red-100 text-red-800"
-                    }`}>
-                      {propertyData.infrastructure.internetAccess ? "Disponible" : "No disponible"}
-                    </span>
-                  </div>
-
-                  <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                    <div className="flex items-center">
-                      <Phone className="w-5 h-5 text-[#519a7c] mr-3" />
-                      <span className="font-medium text-[#2d5a45]">Telefonía</span>
-                    </div>
-                    <span className={`px-3 py-1 rounded-full text-sm font-medium ${
-                      propertyData.infrastructure.phoneService 
-                        ? "bg-green-100 text-green-800" 
-                        : "bg-red-100 text-red-800"
-                    }`}>
-                      {propertyData.infrastructure.phoneService ? "Disponible" : "No disponible"}
-                    </span>
-                  </div>
-
-                  <div className="p-3 bg-gray-50 rounded-lg">
-                    <div className="flex items-center mb-2">
-                      <Settings className="w-5 h-5 text-[#519a7c] mr-2" />
-                      <span className="font-medium text-[#2d5a45]">Acceso por Carretera</span>
-                    </div>
-                    <span className="text-sm text-gray-600 capitalize">
-                      {propertyData.infrastructure.roadAccess === "paved" ? "Pavimentada" :
-                       propertyData.infrastructure.roadAccess === "gravel" ? "Grava" :
-                       propertyData.infrastructure.roadAccess === "dirt" ? "Terracería" : "Limitado"}
-                    </span>
-                  </div>
-
-                  <div className="p-3 bg-gray-50 rounded-lg">
-                    <div className="flex items-center mb-3">
-                      <CheckCircle className="w-5 h-5 text-[#519a7c] mr-2" />
-                      <span className="font-medium text-[#2d5a45]">Sistemas Eléctricos</span>
-                    </div>
-                    <div className="space-y-2">
-                      {propertyData.infrastructure.electricalSystems.map((system, index) => (
-                        <div key={index} className="flex items-center">
-                          <div className="w-2 h-2 bg-[#519a7c] rounded-full mr-2" />
-                          <span className="text-sm text-gray-700">{system}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              </motion.div>
-
-              {/* Actividades y Certificaciones */}
-              <motion.div
-                variants={cardVariants}
-                className="bg-white/90 backdrop-blur-sm rounded-xl p-6 shadow-lg border border-white/20 lg:col-span-2"
-              >
-                <h3 className="text-lg font-semibold text-[#2d5a45] mb-4">Actividades y Certificaciones</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div>
-                    <h4 className="font-medium text-[#2d5a45] mb-3">Actividades Principales</h4>
-                    <div className="space-y-2">
-                      {propertyData.operations.primaryActivity.map((activity, index) => (
-                        <div key={index} className="flex items-center p-2 bg-green-50 rounded-lg">
-                          <CheckCircle className="w-4 h-4 text-green-600 mr-2" />
-                          <span className="text-sm text-gray-700">{activity}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div>
-                    <h4 className="font-medium text-[#2d5a45] mb-3">Actividades Secundarias</h4>
-                    <div className="space-y-2">
-                      {propertyData.operations.secondaryActivity.map((activity, index) => (
-                        <div key={index} className="flex items-center p-2 bg-blue-50 rounded-lg">
-                          <Plus className="w-4 h-4 text-blue-600 mr-2" />
-                          <span className="text-sm text-gray-700">{activity}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="md:col-span-2">
-                    <h4 className="font-medium text-[#2d5a45] mb-3">Certificaciones</h4>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                      {propertyData.operations.certifications.map((cert, index) => (
-                        <div key={index} className="flex items-center p-2 bg-yellow-50 rounded-lg">
-                          <Shield className="w-4 h-4 text-yellow-600 mr-2" />
-                          <span className="text-sm text-gray-700">{cert}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              </motion.div>
             </div>
           )}
         </motion.div>

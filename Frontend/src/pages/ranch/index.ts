@@ -15,9 +15,6 @@ export { default as RanchPage } from "./RanchPage";
 // COMPONENTES ESPECIALIZADOS DEL RANCHO
 // ============================================================================
 
-// Vista general del rancho con estadísticas y estado operacional
-export { default as RanchOverview } from "./RanchOverview";
-
 // Información completa de la propiedad con documentación legal
 export { default as PropertyInfo } from "./PropertyInfo";
 

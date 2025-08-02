@@ -28,7 +28,6 @@ import {
 } from "lucide-react";
 
 // Importar componentes hijos
-import RanchOverview from "./RanchOverview";
 import PropertyInfo from "./PropertyInfo";
 import Staff from "./Staff";
 
@@ -500,14 +499,11 @@ const RanchPage: React.FC = () => {
     console.log('🎨 Renderizando sección:', currentSection);
     
     switch (currentSection) {
-      case "overview":
-        return <RanchOverview />;
       case "property":
         return <PropertyInfo />;
       case "staff":
         return <Staff />;
       default:
-        return <RanchOverview />;
     }
   };
 

@@ -29,6 +29,7 @@ import {
   CheckCircle,
   AlertCircle,
   X,
+  Loader2,
 } from "lucide-react";
 
 // Interfaz para el evento de venta
@@ -124,7 +125,7 @@ const EventSales: React.FC = () => {
     },
     deliveryMethod: "pickup",
     healthCertificate: false,
-    qualityGrade: "Standard",
+    qualityGrade: "",
     documents: [],
     notes: "",
     paymentMethod: "cash",
@@ -292,7 +293,7 @@ const EventSales: React.FC = () => {
       },
       deliveryMethod: "pickup",
       healthCertificate: false,
-      qualityGrade: "Standard",
+      qualityGrade: "",
       documents: [],
       notes: "",
       paymentMethod: "cash",
@@ -372,9 +373,9 @@ const EventSales: React.FC = () => {
               resetForm();
               setViewMode("create");
             }}
-            className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-xl flex items-center gap-2"
+            className="bg-green-600 hover:bg-green-700 text-white"
           >
-            <Plus size={20} />
+            <Plus size={20} className="mr-2" />
             Nueva Venta
           </Button>
         </div>
@@ -536,7 +537,7 @@ const EventSales: React.FC = () => {
                         onClick={() => viewEventDetail(event)}
                         variant="outline"
                         size="sm"
-                        className="flex items-center gap-1"
+                        className="border-gray-300 text-gray-700 hover:bg-gray-50 hover:border-gray-400"
                       >
                         <Eye size={16} />
                         Ver
@@ -545,7 +546,7 @@ const EventSales: React.FC = () => {
                         onClick={() => openEditForm(event)}
                         variant="outline"
                         size="sm"
-                        className="flex items-center gap-1"
+                        className="border-blue-300 text-blue-700 hover:bg-blue-50 hover:border-blue-400"
                       >
                         <Edit size={16} />
                         Editar
@@ -554,7 +555,7 @@ const EventSales: React.FC = () => {
                         onClick={() => handleDelete(event.id)}
                         variant="outline"
                         size="sm"
-                        className="flex items-center gap-1 text-red-600 hover:bg-red-50"
+                        className="border-red-300 text-red-700 hover:bg-red-50 hover:border-red-400"
                       >
                         <Trash2 size={16} />
                         Eliminar
@@ -637,7 +638,7 @@ const EventSales: React.FC = () => {
                     value={formData.bovineName || ""}
                     onChange={(e) => handleInputChange("bovineName", e.target.value)}
                     placeholder="Ej: Toro Premium 001"
-                    className={errors.bovineName ? "border-red-500" : ""}
+                    className={`bg-white/60 backdrop-blur-sm border-white/30 focus:bg-white ${errors.bovineName ? "border-red-500" : ""}`}
                   />
                   {errors.bovineName && (
                     <p className="text-red-500 text-sm">{errors.bovineName}</p>
@@ -654,7 +655,7 @@ const EventSales: React.FC = () => {
                     onChange={(e) => handleInputChange("weight", Number(e.target.value))}
                     placeholder="Ej: 500"
                     min="0"
-                    className={errors.weight ? "border-red-500" : ""}
+                    className={`bg-white/60 backdrop-blur-sm border-white/30 focus:bg-white ${errors.weight ? "border-red-500" : ""}`}
                   />
                   {errors.weight && (
                     <p className="text-red-500 text-sm">{errors.weight}</p>
@@ -665,17 +666,13 @@ const EventSales: React.FC = () => {
                   <label className="block text-sm font-medium text-gray-700">
                     Grado de Calidad
                   </label>
-                  <select
+                  <Input
                     value={formData.qualityGrade || ""}
                     onChange={(e) => handleInputChange("qualityGrade", e.target.value)}
-                    className="w-full px-4 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-transparent bg-white"
-                  >
-                    <option value="Standard">Standard</option>
-                    <option value="Premium">Premium</option>
-                    <option value="Select">Select</option>
-                    <option value="Choice">Choice</option>
-                    <option value="Prime">Prime</option>
-                  </select>
+                    placeholder="Ej: Premium, Standard, Select, Choice, Prime..."
+                    className="bg-white/60 backdrop-blur-sm border-white/30 focus:bg-white"
+                  />
+                  <p className="text-xs text-gray-500">Puedes escribir cualquier grado de calidad personalizado</p>
                 </div>
               </div>
             </div>
@@ -694,6 +691,7 @@ const EventSales: React.FC = () => {
                     value={formData.buyerId || ""}
                     onChange={(e) => handleInputChange("buyerId", e.target.value)}
                     placeholder="Ej: BUY001"
+                    className="bg-white/60 backdrop-blur-sm border-white/30 focus:bg-white"
                   />
                 </div>
 
@@ -705,7 +703,7 @@ const EventSales: React.FC = () => {
                     value={formData.buyerName || ""}
                     onChange={(e) => handleInputChange("buyerName", e.target.value)}
                     placeholder="Ej: Juan Pérez"
-                    className={errors.buyerName ? "border-red-500" : ""}
+                    className={`bg-white/60 backdrop-blur-sm border-white/30 focus:bg-white ${errors.buyerName ? "border-red-500" : ""}`}
                   />
                   {errors.buyerName && (
                     <p className="text-red-500 text-sm">{errors.buyerName}</p>
@@ -720,7 +718,7 @@ const EventSales: React.FC = () => {
                     value={formData.buyerContact || ""}
                     onChange={(e) => handleInputChange("buyerContact", e.target.value)}
                     placeholder="Ej: +52 993 123 4567"
-                    className={errors.buyerContact ? "border-red-500" : ""}
+                    className={`bg-white/60 backdrop-blur-sm border-white/30 focus:bg-white ${errors.buyerContact ? "border-red-500" : ""}`}
                   />
                   {errors.buyerContact && (
                     <p className="text-red-500 text-sm">{errors.buyerContact}</p>
@@ -743,7 +741,7 @@ const EventSales: React.FC = () => {
                     type="date"
                     value={formData.saleDate || ""}
                     onChange={(e) => handleInputChange("saleDate", e.target.value)}
-                    className={errors.saleDate ? "border-red-500" : ""}
+                    className={`bg-white/60 backdrop-blur-sm border-white/30 focus:bg-white ${errors.saleDate ? "border-red-500" : ""}`}
                   />
                   {errors.saleDate && (
                     <p className="text-red-500 text-sm">{errors.saleDate}</p>
@@ -758,6 +756,7 @@ const EventSales: React.FC = () => {
                     type="date"
                     value={formData.deliveryDate || ""}
                     onChange={(e) => handleInputChange("deliveryDate", e.target.value)}
+                    className="bg-white/60 backdrop-blur-sm border-white/30 focus:bg-white"
                   />
                 </div>
 
@@ -772,7 +771,7 @@ const EventSales: React.FC = () => {
                     placeholder="Ej: 45000"
                     min="0"
                     step="0.01"
-                    className={errors.salePrice ? "border-red-500" : ""}
+                    className={`bg-white/60 backdrop-blur-sm border-white/30 focus:bg-white ${errors.salePrice ? "border-red-500" : ""}`}
                   />
                   {errors.salePrice && (
                     <p className="text-red-500 text-sm">{errors.salePrice}</p>
@@ -787,7 +786,7 @@ const EventSales: React.FC = () => {
                     type="number"
                     value={formData.pricePerKg || ""}
                     readOnly
-                    className="bg-gray-50"
+                    className="bg-gray-100/60 backdrop-blur-sm border-gray-200/30 text-gray-600"
                     placeholder="Se calcula automáticamente"
                   />
                 </div>
@@ -800,7 +799,7 @@ const EventSales: React.FC = () => {
                     type="number"
                     value={formData.commission || ""}
                     readOnly
-                    className="bg-gray-50"
+                    className="bg-gray-100/60 backdrop-blur-sm border-gray-200/30 text-gray-600"
                     placeholder="Se calcula automáticamente (5%)"
                   />
                 </div>
@@ -812,7 +811,7 @@ const EventSales: React.FC = () => {
                   <select
                     value={formData.paymentMethod || ""}
                     onChange={(e) => handleInputChange("paymentMethod", e.target.value)}
-                    className="w-full px-4 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-transparent bg-white"
+                    className="w-full px-4 py-2 border border-white/30 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-transparent bg-white/60 backdrop-blur-sm hover:bg-white transition-all duration-200"
                   >
                     <option value="cash">Efectivo</option>
                     <option value="transfer">Transferencia</option>
@@ -828,7 +827,7 @@ const EventSales: React.FC = () => {
                   <select
                     value={formData.paymentStatus || ""}
                     onChange={(e) => handleInputChange("paymentStatus", e.target.value)}
-                    className="w-full px-4 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-transparent bg-white"
+                    className="w-full px-4 py-2 border border-white/30 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-transparent bg-white/60 backdrop-blur-sm hover:bg-white transition-all duration-200"
                   >
                     <option value="pending">Pendiente</option>
                     <option value="paid">Pagado</option>
@@ -843,7 +842,7 @@ const EventSales: React.FC = () => {
                   <select
                     value={formData.deliveryMethod || ""}
                     onChange={(e) => handleInputChange("deliveryMethod", e.target.value)}
-                    className="w-full px-4 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-transparent bg-white"
+                    className="w-full px-4 py-2 border border-white/30 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-transparent bg-white/60 backdrop-blur-sm hover:bg-white transition-all duration-200"
                   >
                     <option value="pickup">Recolección en granja</option>
                     <option value="delivery">Entrega a domicilio</option>
@@ -879,7 +878,7 @@ const EventSales: React.FC = () => {
                 <select
                   value={formData.contractType || ""}
                   onChange={(e) => handleInputChange("contractType", e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-transparent bg-white"
+                  className="w-full px-4 py-2 border border-white/30 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-transparent bg-white/60 backdrop-blur-sm hover:bg-white transition-all duration-200"
                 >
                   <option value="direct">Venta Directa</option>
                   <option value="auction">Subasta</option>
@@ -896,7 +895,7 @@ const EventSales: React.FC = () => {
                   onChange={(e) => handleInputChange("notes", e.target.value)}
                   placeholder="Información adicional sobre la venta..."
                   rows={4}
-                  className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-transparent bg-white resize-none"
+                  className="w-full px-4 py-3 border border-white/30 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-transparent bg-white/60 backdrop-blur-sm resize-none hover:bg-white transition-all duration-200"
                 />
               </div>
             </div>
@@ -915,13 +914,13 @@ const EventSales: React.FC = () => {
               </Button>
               <Button
                 onClick={viewMode === "create" ? handleCreate : handleUpdate}
-                className="bg-green-600 hover:bg-green-700 text-white flex items-center gap-2"
+                className="bg-green-600 hover:bg-green-700 text-white"
                 disabled={loading}
               >
                 {loading ? (
-                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  <Loader2 className="w-4 h-4 animate-spin mr-2" />
                 ) : (
-                  <Save size={20} />
+                  <Save size={20} className="mr-2" />
                 )}
                 {viewMode === "create" ? "Registrar Venta" : "Actualizar Venta"}
               </Button>
@@ -1000,7 +999,7 @@ const EventSales: React.FC = () => {
                   </div>
                   <div className="bg-gray-50 p-4 rounded-xl">
                     <p className="text-sm text-gray-500">Grado de Calidad</p>
-                    <p className="font-semibold text-gray-900">{selectedEvent.qualityGrade}</p>
+                    <p className="font-semibold text-gray-900">{selectedEvent.qualityGrade || "No especificado"}</p>
                   </div>
                 </div>
               </div>
@@ -1034,15 +1033,15 @@ const EventSales: React.FC = () => {
                   Detalles de la Venta
                 </h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                  <div className="bg-green-50 p-4 rounded-xl">
+                  <div className="bg-green-50 p-4 rounded-xl border border-green-200">
                     <p className="text-sm text-green-600">Precio Total</p>
                     <p className="text-2xl font-bold text-green-700">${selectedEvent.salePrice.toLocaleString()}</p>
                   </div>
-                  <div className="bg-blue-50 p-4 rounded-xl">
+                  <div className="bg-blue-50 p-4 rounded-xl border border-blue-200">
                     <p className="text-sm text-blue-600">Precio por Kg</p>
                     <p className="text-xl font-bold text-blue-700">${selectedEvent.pricePerKg}</p>
                   </div>
-                  <div className="bg-purple-50 p-4 rounded-xl">
+                  <div className="bg-purple-50 p-4 rounded-xl border border-purple-200">
                     <p className="text-sm text-purple-600">Comisión</p>
                     <p className="text-xl font-bold text-purple-700">${selectedEvent.commission.toLocaleString()}</p>
                   </div>
@@ -1112,7 +1111,7 @@ const EventSales: React.FC = () => {
                   Información Adicional
                 </h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="bg-gray-50 p-4 rounded-xl">
+                  <div className="bg-gradient-to-br from-gray-50 to-gray-100 p-4 rounded-xl border border-gray-200">
                     <p className="text-sm text-gray-500">Certificado de Salud</p>
                     <div className="flex items-center gap-2 mt-1">
                       {selectedEvent.healthCertificate ? (
@@ -1125,7 +1124,7 @@ const EventSales: React.FC = () => {
                       </span>
                     </div>
                   </div>
-                  <div className="bg-gray-50 p-4 rounded-xl">
+                  <div className="bg-gradient-to-br from-gray-50 to-gray-100 p-4 rounded-xl border border-gray-200">
                     <p className="text-sm text-gray-500">Tipo de Contrato</p>
                     <p className="font-semibold text-gray-900">
                       {selectedEvent.contractType === "direct" ? "Venta Directa" :
@@ -1135,7 +1134,7 @@ const EventSales: React.FC = () => {
                 </div>
 
                 {selectedEvent.notes && (
-                  <div className="bg-gray-50 p-4 rounded-xl">
+                  <div className="bg-gradient-to-br from-gray-50 to-gray-100 p-4 rounded-xl border border-gray-200">
                     <p className="text-sm text-gray-500 mb-2">Notas</p>
                     <p className="text-gray-900">{selectedEvent.notes}</p>
                   </div>
@@ -1148,7 +1147,7 @@ const EventSales: React.FC = () => {
                   <MapPin className="text-red-600" size={20} />
                   Ubicación
                 </h3>
-                <div className="bg-gray-50 p-4 rounded-xl">
+                <div className="bg-gradient-to-br from-gray-50 to-gray-100 p-4 rounded-xl border border-gray-200">
                   <p className="text-sm text-gray-500">Dirección</p>
                   <p className="font-semibold text-gray-900">{selectedEvent.location.address}</p>
                   <p className="text-sm text-gray-500 mt-1">
@@ -1164,13 +1163,13 @@ const EventSales: React.FC = () => {
                   Información del Sistema
                 </h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="bg-gray-50 p-4 rounded-xl">
+                  <div className="bg-gradient-to-br from-gray-50 to-gray-100 p-4 rounded-xl border border-gray-200">
                     <p className="text-sm text-gray-500">Fecha de Creación</p>
                     <p className="font-semibold text-gray-900">
                       {new Date(selectedEvent.createdAt).toLocaleString()}
                     </p>
                   </div>
-                  <div className="bg-gray-50 p-4 rounded-xl">
+                  <div className="bg-gradient-to-br from-gray-50 to-gray-100 p-4 rounded-xl border border-gray-200">
                     <p className="text-sm text-gray-500">Última Actualización</p>
                     <p className="font-semibold text-gray-900">
                       {new Date(selectedEvent.updatedAt).toLocaleString()}

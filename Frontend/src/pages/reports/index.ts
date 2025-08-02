@@ -5,28 +5,14 @@ import React from 'react';
 
 // Importar componentes principales
 import { ReportsPage } from './ReportsPage';
-import { ReportDashboard } from './ReportDashboard';
 
 // Importar componentes CRUD específicos
 import { HealthReports } from './HealthReports';
 import { ProductionReports } from './ProductionReports';
 import { InventoryReports } from './InventoryReports';
 
-// =================================================================
-// EXPORTS DEL MÓDULO DE REPORTES
-// =================================================================
-// Este archivo centraliza todas las exportaciones del módulo de reportes
-// para facilitar las importaciones desde otras partes de la aplicación
-
-// =================================================================
-// COMPONENTES PRINCIPALES
-// =================================================================
-
 // Página principal del módulo de reportes
 export { ReportsPage };
-
-// Dashboard central de reportes
-export { ReportDashboard };
 
 // =================================================================
 // COMPONENTES CRUD DE REPORTES ESPECÍFICOS
@@ -41,31 +27,6 @@ export { ProductionReports };
 // Reportes de inventario y valuación
 export { InventoryReports };
 
-// =================================================================
-// COMPONENTES ADICIONALES (Para futura implementación)
-// =================================================================
-
-// Reportes de vacunación (pendiente de implementación)
-// export { VaccinationReports } from './VaccinationReports';
-
-// Reportes geográficos (pendiente de implementación)
-// export { GeographicReports } from './GeographicReports';
-
-// Reportes financieros (pendiente de implementación)
-// export { FinancialReports } from './FinancialReports';
-
-// Reportes de cumplimiento (pendiente de implementación)
-// export { ComplianceReports } from './ComplianceReports';
-
-// Visualizador de reportes (pendiente de implementación)
-// export { ReportViewer } from './ReportViewer';
-
-// Programador de reportes (pendiente de implementación)
-// export { ReportScheduler } from './ReportScheduler';
-
-// =================================================================
-// TYPES E INTERFACES COMPARTIDAS
-// =================================================================
 
 // Interfaces base para reportes
 export interface BaseReport {
@@ -121,14 +82,6 @@ export const REPORT_ROUTES = {
   PRODUCTION: '/reports/production',
   INVENTORY: '/reports/inventory',
   VACCINATION: '/reports/vaccination',
-  GEOGRAPHIC: '/reports/geographic',
-  FINANCIAL: '/reports/financial',
-  COMPLIANCE: '/reports/compliance',
-  
-  // Utilidades
-  VIEWER: '/reports/viewer',
-  SCHEDULER: '/reports/scheduler',
-  SETTINGS: '/reports/settings'
 } as const;
 
 // Configuración de colores por tipo de reporte
@@ -315,7 +268,6 @@ export const PAGE_SIZE_OPTIONS = [5, 10, 20, 50, 100] as const;
 const ReportsModule = {
   // Componentes principales
   ReportsPage,
-  ReportDashboard,
   HealthReports,
   ProductionReports,
   InventoryReports,
