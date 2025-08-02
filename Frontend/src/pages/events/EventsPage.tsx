@@ -1,18 +1,8 @@
 import React from "react";
-import { Routes, Route, useLocation, useNavigate } from "react-router-dom";
+import { Routes, Route, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Activity,
-  Plus,
-  List,
-  Clock,
-  Syringe,
-  ShoppingCart,
-  ShoppingBag,
-  Truck,
-  Heart,
-  Utensils,
-  Users,
   BarChart3,
   TrendingUp,
   Bell,
@@ -50,56 +40,6 @@ const ComingSoonPage: React.FC<{
   </div>
 );
 
-// Componente de navegación secundaria
-const EventNavigation: React.FC = () => {
-  const navigate = useNavigate();
-  const location = useLocation();
-
-  const navItems = [
-    { label: "Todos los Eventos", path: "/events", icon: List, exact: true },
-    { label: "Línea de Tiempo", path: "/events/timeline", icon: Clock },
-    { label: "Crear Evento", path: "/events/create", icon: Plus },
-    { label: "Vacunaciones", path: "/events/vaccination", icon: Syringe },
-    { label: "Compras", path: "/events/purchase", icon: ShoppingCart },
-    { label: "Ventas", path: "/events/sales", icon: ShoppingBag },
-    { label: "Transporte", path: "/events/transport", icon: Truck },
-    { label: "Reproducción", path: "/events/breeding", icon: Users },
-    { label: "Salud", path: "/events/health", icon: Heart },
-    { label: "Alimentación", path: "/events/feeding", icon: Utensils },
-  ];
-
-  return (
-    <div className="bg-white/90 backdrop-blur-md border-b border-gray-200/50 sticky top-0 z-40 shadow-sm">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex space-x-6 overflow-x-auto py-4 scrollbar-hide">
-          {navItems.map((item) => {
-            const isActive = item.exact
-              ? location.pathname === item.path
-              : location.pathname.startsWith(item.path);
-
-            return (
-              <motion.button
-                key={item.path}
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-                onClick={() => navigate(item.path)}
-                className={`flex items-center space-x-2 px-4 py-2 rounded-lg font-medium transition-all duration-200 whitespace-nowrap ${
-                  isActive
-                    ? "bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-lg"
-                    : "text-gray-600 hover:text-gray-900 hover:bg-gray-100"
-                }`}
-              >
-                <item.icon className="w-4 h-4" />
-                <span>{item.label}</span>
-              </motion.button>
-            );
-          })}
-        </div>
-      </div>
-    </div>
-  );
-};
-
 // Wrapper para páginas internas
 const PageWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => (
   <div className="min-h-screen bg-gradient-to-br from-[#3d8b40] via-[#f2e9d8] to-[#f4ac3a]">
@@ -118,7 +58,6 @@ const pageTransition = {
 // Componente principal EventsPage
 const EventsPage: React.FC = () => {
   const location = useLocation();
-  const navigate = useNavigate();
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#3d8b40] via-[#f2e9d8] to-[#f4ac3a]">
@@ -140,202 +79,28 @@ const EventsPage: React.FC = () => {
             </div>
           </motion.div>
 
-          {/* Título y acciones */}
+          {/* Título solamente */}
           <div className="py-6">
-            <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between">
-              <motion.div
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
-                className="flex items-center space-x-4 mb-6 lg:mb-0"
-              >
-                <div className="bg-white/20 backdrop-blur-sm rounded-xl p-3">
-                  <Activity className="w-8 h-8 text-white" />
-                </div>
-                <div>
-                  <h1 className="text-3xl font-bold text-white mb-1">
-                    Módulo de Gestión de Eventos
-                  </h1>
-                  <p className="text-white/90">
-                    Sistema integral para la administración de eventos del ganado
-                  </p>
-                </div>
-              </motion.div>
-
-              {/* Botones de acción */}
-              <motion.div
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                className="flex items-center space-x-3"
-              >
-                <button 
-                  onClick={() => navigate("/events/create")}
-                  className="flex items-center space-x-2 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg transition-colors"
-                >
-                  <Plus className="w-4 h-4" />
-                  <span>Agregar Evento</span>
-                </button>
-                <button className="flex items-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors">
-                  <Bell className="w-4 h-4" />
-                  <span>Mapa de Ubicaciones</span>
-                </button>
-                <button 
-                  onClick={() => navigate("/events/reports")}
-                  className="flex items-center space-x-2 bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg transition-colors"
-                >
-                  <FileText className="w-4 h-4" />
-                  <span>Reportes</span>
-                </button>
-                <button className="flex items-center space-x-2 bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg transition-colors">
-                  <TrendingUp className="w-4 h-4" />
-                  <span>Actualizar</span>
-                </button>
-              </motion.div>
-            </div>
-
-            {/* Estadísticas horizontales */}
             <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.2 }}
-              className="mt-8"
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              className="flex items-center space-x-4"
             >
-              <div className="flex flex-wrap items-center gap-6">
-                <div className="flex items-center space-x-3 bg-white/10 backdrop-blur-sm rounded-xl px-6 py-4">
-                  <Users className="w-8 h-8 text-white" />
-                  <div>
-                    <div className="text-3xl font-bold text-white">247</div>
-                    <div className="text-white/90 text-sm font-medium">Total</div>
-                  </div>
-                </div>
-
-                <div className="flex items-center space-x-3 bg-white/10 backdrop-blur-sm rounded-xl px-6 py-4">
-                  <Heart className="w-8 h-8 text-green-200" />
-                  <div>
-                    <div className="text-3xl font-bold text-green-200">42</div>
-                    <div className="text-white/90 text-sm font-medium">Programados</div>
-                  </div>
-                </div>
-
-                <div className="flex items-center space-x-3 bg-white/10 backdrop-blur-sm rounded-xl px-6 py-4">
-                  <Clock className="w-8 h-8 text-yellow-200" />
-                  <div>
-                    <div className="text-3xl font-bold text-yellow-200">15</div>
-                    <div className="text-white/90 text-sm font-medium">En Progreso</div>
-                  </div>
-                </div>
-
-                <div className="flex items-center space-x-3 bg-white/10 backdrop-blur-sm rounded-xl px-6 py-4">
-                  <div>
-                    <div className="text-3xl font-bold text-blue-200">232</div>
-                    <div className="text-white/90 text-sm font-medium">Completados</div>
-                  </div>
-                </div>
-
-                <div className="ml-auto text-right">
-                  <div className="text-white/80 text-sm">
-                    Actualizado:{" "}
-                    {new Date().toLocaleTimeString("es-ES", {
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}{" "}
-                    p.m.
-                  </div>
-                </div>
+              <div className="bg-white/20 backdrop-blur-sm rounded-xl p-3">
+                <Activity className="w-8 h-8 text-white" />
+              </div>
+              <div>
+                <h1 className="text-3xl font-bold text-white mb-1">
+                  Módulo de Gestión de Eventos
+                </h1>
+                <p className="text-white/90">
+                  Sistema integral para la administración de eventos del ganado
+                </p>
               </div>
             </motion.div>
           </div>
         </div>
       </div>
-
-      {/* Navegación secundaria */}
-      <EventNavigation />
-
-      {/* Acciones rápidas */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.3 }}
-        className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6"
-      >
-        <div className="bg-white/20 backdrop-blur-md border border-white/30 rounded-xl p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">
-            Acciones Rápidas
-          </h3>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-            <motion.button
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              onClick={() => navigate("/events/vaccination")}
-              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-3 rounded-xl font-medium flex flex-col items-center space-y-2 transition-all duration-200 shadow-lg min-h-[80px] justify-center"
-            >
-              <Syringe className="w-5 h-5" />
-              <span className="text-xs text-center leading-tight">
-                Nueva Vacunación
-              </span>
-            </motion.button>
-
-            <motion.button
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              onClick={() => navigate("/events/purchase")}
-              className="bg-green-600 hover:bg-green-700 text-white px-4 py-3 rounded-xl font-medium flex flex-col items-center space-y-2 transition-all duration-200 shadow-lg min-h-[80px] justify-center"
-            >
-              <ShoppingCart className="w-5 h-5" />
-              <span className="text-xs text-center leading-tight">
-                Nueva Compra
-              </span>
-            </motion.button>
-
-            <motion.button
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              onClick={() => navigate("/events/sales")}
-              className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-3 rounded-xl font-medium flex flex-col items-center space-y-2 transition-all duration-200 shadow-lg min-h-[80px] justify-center"
-            >
-              <ShoppingBag className="w-5 h-5" />
-              <span className="text-xs text-center leading-tight">
-                Nueva Venta
-              </span>
-            </motion.button>
-
-            <motion.button
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              onClick={() => navigate("/events/transport")}
-              className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-3 rounded-xl font-medium flex flex-col items-center space-y-2 transition-all duration-200 shadow-lg min-h-[80px] justify-center"
-            >
-              <Truck className="w-5 h-5" />
-              <span className="text-xs text-center leading-tight">
-                Nuevo Transporte
-              </span>
-            </motion.button>
-
-            <motion.button
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              onClick={() => navigate("/events/breeding")}
-              className="bg-pink-600 hover:bg-pink-700 text-white px-4 py-3 rounded-xl font-medium flex flex-col items-center space-y-2 transition-all duration-200 shadow-lg min-h-[80px] justify-center"
-            >
-              <Heart className="w-5 h-5" />
-              <span className="text-xs text-center leading-tight">
-                Evento Reproducción
-              </span>
-            </motion.button>
-
-            <motion.button
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              onClick={() => navigate("/events/health")}
-              className="bg-red-600 hover:bg-red-700 text-white px-4 py-3 rounded-xl font-medium flex flex-col items-center space-y-2 transition-all duration-200 shadow-lg min-h-[80px] justify-center"
-            >
-              <Activity className="w-5 h-5" />
-              <span className="text-xs text-center leading-tight">
-                Evento Salud
-              </span>
-            </motion.button>
-          </div>
-        </div>
-      </motion.div>
 
       {/* Contenido principal con animaciones */}
       <div className="relative bg-gradient-to-br from-[#3d8b40] via-[#f2e9d8] to-[#f4ac3a] min-h-screen">
@@ -349,12 +114,10 @@ const EventsPage: React.FC = () => {
           >
             <Routes>
               {/* Rutas principales de eventos */}
-              <Route
-              />
-              <Route
-              />
-              <Route
-              />
+              <Route path="" element={<div className="p-8"><h2 className="text-2xl font-bold text-gray-900">Lista de Eventos</h2></div>} />
+              <Route path="timeline" element={<div className="p-8"><h2 className="text-2xl font-bold text-gray-900">Línea de Tiempo</h2></div>} />
+              <Route path="create" element={<div className="p-8"><h2 className="text-2xl font-bold text-gray-900">Crear Evento</h2></div>} />
+              
               {/* Rutas específicas por tipo de evento */}
               <Route
                 path="vaccination"

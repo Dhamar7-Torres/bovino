@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Heart,
@@ -21,7 +21,6 @@ import {
   DollarSign,
   Save,
 } from "lucide-react";
-import { useNavigate } from "react-router-dom";
 
 // Interfaces para TypeScript
 interface BreedingEvent {
@@ -82,6 +81,7 @@ interface BreedingEvent {
   };
 
   cost?: number;
+  currency?: string;
   veterinarian?: string;
   reminders: EventReminder[];
   attachments: string[];
@@ -144,7 +144,8 @@ interface EventFormData {
     section: string;
   };
   notes: string;
-  cost: number;
+  cost: string; // Cambiado a string para mejor manejo
+  currency: string;
   veterinarian: string;
   // Datos específicos según el tipo
   breedingMethod?: string;
@@ -186,7 +187,8 @@ const EventBreeding: React.FC = () => {
       section: "",
     },
     notes: "",
-    cost: 0,
+    cost: "", // Inicializado como string vacío
+    currency: "MXN",
     veterinarian: "",
   });
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
@@ -199,8 +201,6 @@ const EventBreeding: React.FC = () => {
     address: string;
   } | null>(null);
   const [loadingLocation, setLoadingLocation] = useState(false);
-
-  // Hook de navegación
 
   // Tipos de eventos de reproducción
   const breedingEventTypes: BreedingEventType[] = [
@@ -335,6 +335,7 @@ const EventBreeding: React.FC = () => {
               expectedDueDate: "2024-09-22",
             },
             cost: 250.0,
+            currency: "MXN",
             veterinarian: "Dr. María García",
             reminders: [],
             attachments: [],
@@ -368,6 +369,7 @@ const EventBreeding: React.FC = () => {
               nextCheckDate: "2024-01-25",
             },
             cost: 180.0,
+            currency: "MXN",
             veterinarian: "Dr. Carlos López",
             reminders: [
               {
@@ -477,8 +479,8 @@ const EventBreeding: React.FC = () => {
     dateFilter,
   ]);
 
-  // Funciones para manejar eventos
-  const handleCreateEvent = () => {
+  // Función para resetear formulario
+  const resetForm = useCallback(() => {
     setFormData({
       bovineId: "",
       bovineName: "",
@@ -493,11 +495,17 @@ const EventBreeding: React.FC = () => {
         section: "",
       },
       notes: "",
-      cost: 0,
+      cost: "",
+      currency: "MXN",
       veterinarian: "",
     });
     setFormErrors({});
     setSelectedEvent(null);
+  }, []);
+
+  // Funciones para manejar eventos
+  const handleCreateEvent = () => {
+    resetForm();
     setShowCreateModal(true);
   };
 
@@ -523,7 +531,8 @@ const EventBreeding: React.FC = () => {
         section: event.location.section || "",
       },
       notes: event.notes || "",
-      cost: event.cost || 0,
+      cost: event.cost ? event.cost.toString() : "", // Convertir a string
+      currency: event.currency || "MXN",
       veterinarian: event.veterinarian || "",
       breedingMethod: event.breedingData?.method,
       semenBatch: event.breedingData?.semenBatch,
@@ -594,8 +603,31 @@ const EventBreeding: React.FC = () => {
       errors.locationAddress = "La dirección es requerida";
     }
 
+    // Validar costo si se proporcionó
+    if (formData.cost && formData.cost.trim() !== "") {
+      const costValue = parseFloat(formData.cost);
+      if (isNaN(costValue) || costValue < 0) {
+        errors.cost = "El costo debe ser un número válido mayor o igual a 0";
+      }
+    }
+
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
+  };
+
+  // Manejar cambio en el campo de costo
+  const handleCostChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    
+    // Permitir cadena vacía, números y un solo punto decimal
+    if (value === "" || /^\d*\.?\d*$/.test(value)) {
+      setFormData(prev => ({ ...prev, cost: value }));
+      
+      // Limpiar error si existe
+      if (formErrors.cost) {
+        setFormErrors(prev => ({ ...prev, cost: "" }));
+      }
+    }
   };
 
   // Guardar evento (crear o editar)
@@ -621,6 +653,11 @@ const EventBreeding: React.FC = () => {
       // Generar ID único para el bovino si no existe
       const bovineId = formData.bovineId || `bovine_${Date.now()}`;
 
+      // Convertir el costo a número si se proporcionó
+      const costValue = formData.cost && formData.cost.trim() !== "" 
+        ? parseFloat(formData.cost) 
+        : undefined;
+
       const eventData: BreedingEvent = {
         id: selectedEvent ? selectedEvent.id : `event_${Date.now()}`,
         bovineId: bovineId,
@@ -637,7 +674,8 @@ const EventBreeding: React.FC = () => {
           section: formData.location.section,
         },
         notes: formData.notes,
-        cost: formData.cost,
+        cost: costValue,
+        currency: formData.currency,
         veterinarian: formData.veterinarian,
         reminders: [],
         attachments: [],
@@ -712,6 +750,388 @@ const EventBreeding: React.FC = () => {
       minute: "2-digit",
     });
   };
+
+  // Función para formatear costo
+  const formatCost = (cost?: number, currency?: string) => {
+    if (!cost) return "";
+    
+    const formatter = new Intl.NumberFormat("es-MX", {
+      style: "currency",
+      currency: currency || "MXN",
+    });
+    
+    return formatter.format(cost);
+  };
+
+  // Componente de formulario reutilizable
+  const EventForm = ({ isEdit = false }: { isEdit?: boolean }) => (
+    <form onSubmit={handleSaveEvent} className="space-y-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* Nombre del bovino */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Nombre del Bovino *
+          </label>
+          <input
+            type="text"
+            placeholder="Ej: Esperanza"
+            value={formData.bovineName}
+            onChange={(e) => setFormData(prev => ({ ...prev, bovineName: e.target.value }))}
+            className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+              formErrors.bovineName ? "border-red-500" : "border-gray-300"
+            }`}
+          />
+          {formErrors.bovineName && (
+            <p className="text-red-500 text-sm mt-1">{formErrors.bovineName}</p>
+          )}
+        </div>
+
+        {/* Tag del bovino */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Tag del Bovino *
+          </label>
+          <input
+            type="text"
+            placeholder="Ej: ESP-001"
+            value={formData.bovineTag}
+            onChange={(e) => setFormData(prev => ({ ...prev, bovineTag: e.target.value }))}
+            className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+              formErrors.bovineTag ? "border-red-500" : "border-gray-300"
+            }`}
+          />
+          {formErrors.bovineTag && (
+            <p className="text-red-500 text-sm mt-1">{formErrors.bovineTag}</p>
+          )}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* Tipo de evento */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Tipo de Evento *
+          </label>
+          <select
+            value={formData.eventTypeId}
+            onChange={(e) => setFormData(prev => ({ ...prev, eventTypeId: e.target.value }))}
+            className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+              formErrors.eventTypeId ? "border-red-500" : "border-gray-300"
+            }`}
+          >
+            <option value="">Seleccionar tipo</option>
+            {breedingEventTypes.map((type) => (
+              <option key={type.id} value={type.id}>
+                {type.name}
+              </option>
+            ))}
+          </select>
+          {formErrors.eventTypeId && (
+            <p className="text-red-500 text-sm mt-1">{formErrors.eventTypeId}</p>
+          )}
+        </div>
+
+        {/* Estado */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Estado
+          </label>
+          <select
+            value={formData.status}
+            onChange={(e) => setFormData(prev => ({ ...prev, status: e.target.value }))}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          >
+            <option value="scheduled">Programado</option>
+            <option value="completed">Completado</option>
+            <option value="pending">Pendiente</option>
+            <option value="cancelled">Cancelado</option>
+            <option value="failed">Fallido</option>
+          </select>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* Fecha */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Fecha *
+          </label>
+          <input
+            type="date"
+            value={formData.scheduledDate}
+            onChange={(e) => setFormData(prev => ({ ...prev, scheduledDate: e.target.value }))}
+            className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+              formErrors.scheduledDate ? "border-red-500" : "border-gray-300"
+            }`}
+          />
+          {formErrors.scheduledDate && (
+            <p className="text-red-500 text-sm mt-1">{formErrors.scheduledDate}</p>
+          )}
+        </div>
+
+        {/* Hora */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Hora *
+          </label>
+          <input
+            type="time"
+            value={formData.scheduledTime}
+            onChange={(e) => setFormData(prev => ({ ...prev, scheduledTime: e.target.value }))}
+            className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+              formErrors.scheduledTime ? "border-red-500" : "border-gray-300"
+            }`}
+          />
+          {formErrors.scheduledTime && (
+            <p className="text-red-500 text-sm mt-1">{formErrors.scheduledTime}</p>
+          )}
+        </div>
+      </div>
+
+      {/* Ubicación */}
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-2">
+          Ubicación *
+        </label>
+        <div className="flex space-x-2">
+          <input
+            type="text"
+            placeholder="Dirección del evento"
+            value={formData.location.address}
+            onChange={(e) => setFormData(prev => ({ 
+              ...prev, 
+              location: { ...prev.location, address: e.target.value }
+            }))}
+            className={`flex-1 px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+              formErrors.locationAddress ? "border-red-500" : "border-gray-300"
+            }`}
+          />
+          <motion.button
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            type="button"
+            onClick={getCurrentLocation}
+            disabled={loadingLocation}
+            className="flex items-center space-x-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50"
+          >
+            {loadingLocation ? (
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+            ) : (
+              <MapPin className="h-4 w-4" />
+            )}
+            <span className="hidden sm:inline">
+              {loadingLocation ? "Obteniendo..." : "Mi Ubicación"}
+            </span>
+          </motion.button>
+        </div>
+        {formErrors.locationAddress && (
+          <p className="text-red-500 text-sm mt-1">{formErrors.locationAddress}</p>
+        )}
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* Rancho */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Rancho
+          </label>
+          <input
+            type="text"
+            placeholder="Nombre del rancho"
+            value={formData.location.farm}
+            onChange={(e) => setFormData(prev => ({ 
+              ...prev, 
+              location: { ...prev.location, farm: e.target.value }
+            }))}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          />
+        </div>
+
+        {/* Sección */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Sección
+          </label>
+          <input
+            type="text"
+            placeholder="Sección del rancho"
+            value={formData.location.section}
+            onChange={(e) => setFormData(prev => ({ 
+              ...prev, 
+              location: { ...prev.location, section: e.target.value }
+            }))}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          />
+        </div>
+      </div>
+
+      {/* Campos específicos para inseminación artificial */}
+      {formData.eventTypeId === "artificial_insemination" && (
+        <div className="border-t pt-4">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">
+            Datos de Inseminación Artificial
+          </h3>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Lote de Semen
+              </label>
+              <input
+                type="text"
+                placeholder="Código del lote"
+                value={formData.semenBatch || ""}
+                onChange={(e) => setFormData(prev => ({ ...prev, semenBatch: e.target.value }))}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Proveedor de Semen
+              </label>
+              <input
+                type="text"
+                placeholder="Empresa proveedora"
+                value={formData.semenProvider || ""}
+                onChange={(e) => setFormData(prev => ({ ...prev, semenProvider: e.target.value }))}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Técnico
+              </label>
+              <input
+                type="text"
+                placeholder="Nombre del técnico"
+                value={formData.technician || ""}
+                onChange={(e) => setFormData(prev => ({ ...prev, technician: e.target.value }))}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Fecha Esperada de Parto
+              </label>
+              <input
+                type="date"
+                value={formData.expectedDueDate || ""}
+                onChange={(e) => setFormData(prev => ({ ...prev, expectedDueDate: e.target.value }))}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {/* Veterinario */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Veterinario
+          </label>
+          <input
+            type="text"
+            placeholder="Nombre del veterinario"
+            value={formData.veterinarian}
+            onChange={(e) => setFormData(prev => ({ ...prev, veterinarian: e.target.value }))}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          />
+        </div>
+
+        {/* Costo - CORREGIDO */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Costo
+          </label>
+          <input
+            type="text"
+            placeholder="0.00"
+            value={formData.cost}
+            onChange={handleCostChange}
+            className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+              formErrors.cost ? "border-red-500" : "border-gray-300"
+            }`}
+          />
+          {formErrors.cost && (
+            <p className="text-red-500 text-sm mt-1">{formErrors.cost}</p>
+          )}
+        </div>
+
+        {/* Moneda */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Moneda
+          </label>
+          <select
+            value={formData.currency}
+            onChange={(e) => setFormData(prev => ({ ...prev, currency: e.target.value }))}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          >
+            <option value="MXN">MXN (Pesos)</option>
+            <option value="USD">USD (Dólares)</option>
+            <option value="EUR">EUR (Euros)</option>
+          </select>
+        </div>
+      </div>
+
+      {/* Notas */}
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-2">
+          Notas
+        </label>
+        <textarea
+          rows={3}
+          placeholder="Observaciones adicionales..."
+          value={formData.notes}
+          onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
+          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+        />
+      </div>
+
+      {/* Botones */}
+      <div className="flex items-center justify-end space-x-3 pt-6 border-t border-gray-200">
+        <motion.button
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
+          type="button"
+          onClick={() => {
+            if (isEdit) {
+              setShowEditModal(false);
+            } else {
+              setShowCreateModal(false);
+            }
+          }}
+          className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+        >
+          Cancelar
+        </motion.button>
+
+        <motion.button
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
+          type="submit"
+          disabled={isSaving}
+          className="flex items-center space-x-2 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
+        >
+          {isSaving ? (
+            <>
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+              <span>Guardando...</span>
+            </>
+          ) : (
+            <>
+              <Save className="h-4 w-4" />
+              <span>{isEdit ? "Actualizar Evento" : "Crear Evento"}</span>
+            </>
+          )}
+        </motion.button>
+      </div>
+    </form>
+  );
 
   // Animaciones
   const itemVariants = {
@@ -964,7 +1384,7 @@ const EventBreeding: React.FC = () => {
                   {event.cost && (
                     <div className="flex items-center space-x-2 text-sm text-gray-600">
                       <DollarSign className="h-4 w-4" />
-                      <span>${event.cost.toFixed(2)}</span>
+                      <span>{formatCost(event.cost, event.currency)}</span>
                     </div>
                   )}
                 </div>
@@ -1062,347 +1482,7 @@ const EventBreeding: React.FC = () => {
                 </motion.button>
               </div>
 
-              <form onSubmit={handleSaveEvent} className="space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {/* Nombre del bovino */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Nombre del Bovino *
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="Ej: Esperanza"
-                      value={formData.bovineName}
-                      onChange={(e) => setFormData(prev => ({ ...prev, bovineName: e.target.value }))}
-                      className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                        formErrors.bovineName ? "border-red-500" : "border-gray-300"
-                      }`}
-                    />
-                    {formErrors.bovineName && (
-                      <p className="text-red-500 text-sm mt-1">{formErrors.bovineName}</p>
-                    )}
-                  </div>
-
-                  {/* Tag del bovino */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Tag del Bovino *
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="Ej: ESP-001"
-                      value={formData.bovineTag}
-                      onChange={(e) => setFormData(prev => ({ ...prev, bovineTag: e.target.value }))}
-                      className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                        formErrors.bovineTag ? "border-red-500" : "border-gray-300"
-                      }`}
-                    />
-                    {formErrors.bovineTag && (
-                      <p className="text-red-500 text-sm mt-1">{formErrors.bovineTag}</p>
-                    )}
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {/* Tipo de evento */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Tipo de Evento *
-                    </label>
-                    <select
-                      value={formData.eventTypeId}
-                      onChange={(e) => setFormData(prev => ({ ...prev, eventTypeId: e.target.value }))}
-                      className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                        formErrors.eventTypeId ? "border-red-500" : "border-gray-300"
-                      }`}
-                    >
-                      <option value="">Seleccionar tipo</option>
-                      {breedingEventTypes.map((type) => (
-                        <option key={type.id} value={type.id}>
-                          {type.name}
-                        </option>
-                      ))}
-                    </select>
-                    {formErrors.eventTypeId && (
-                      <p className="text-red-500 text-sm mt-1">{formErrors.eventTypeId}</p>
-                    )}
-                  </div>
-
-                  {/* Estado */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Estado
-                    </label>
-                    <select
-                      value={formData.status}
-                      onChange={(e) => setFormData(prev => ({ ...prev, status: e.target.value }))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    >
-                      <option value="scheduled">Programado</option>
-                      <option value="completed">Completado</option>
-                      <option value="pending">Pendiente</option>
-                      <option value="cancelled">Cancelado</option>
-                      <option value="failed">Fallido</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {/* Fecha */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Fecha *
-                    </label>
-                    <input
-                      type="date"
-                      value={formData.scheduledDate}
-                      onChange={(e) => setFormData(prev => ({ ...prev, scheduledDate: e.target.value }))}
-                      className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                        formErrors.scheduledDate ? "border-red-500" : "border-gray-300"
-                      }`}
-                    />
-                    {formErrors.scheduledDate && (
-                      <p className="text-red-500 text-sm mt-1">{formErrors.scheduledDate}</p>
-                    )}
-                  </div>
-
-                  {/* Hora */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Hora *
-                    </label>
-                    <input
-                      type="time"
-                      value={formData.scheduledTime}
-                      onChange={(e) => setFormData(prev => ({ ...prev, scheduledTime: e.target.value }))}
-                      className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                        formErrors.scheduledTime ? "border-red-500" : "border-gray-300"
-                      }`}
-                    />
-                    {formErrors.scheduledTime && (
-                      <p className="text-red-500 text-sm mt-1">{formErrors.scheduledTime}</p>
-                    )}
-                  </div>
-                </div>
-
-                {/* Ubicación */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Ubicación *
-                  </label>
-                  <div className="flex space-x-2">
-                    <input
-                      type="text"
-                      placeholder="Dirección del evento"
-                      value={formData.location.address}
-                      onChange={(e) => setFormData(prev => ({ 
-                        ...prev, 
-                        location: { ...prev.location, address: e.target.value }
-                      }))}
-                      className={`flex-1 px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                        formErrors.locationAddress ? "border-red-500" : "border-gray-300"
-                      }`}
-                    />
-                    <motion.button
-                      whileHover={{ scale: 1.05 }}
-                      whileTap={{ scale: 0.95 }}
-                      type="button"
-                      onClick={getCurrentLocation}
-                      disabled={loadingLocation}
-                      className="flex items-center space-x-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50"
-                    >
-                      {loadingLocation ? (
-                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                      ) : (
-                        <MapPin className="h-4 w-4" />
-                      )}
-                      <span className="hidden sm:inline">
-                        {loadingLocation ? "Obteniendo..." : "Mi Ubicación"}
-                      </span>
-                    </motion.button>
-                  </div>
-                  {formErrors.locationAddress && (
-                    <p className="text-red-500 text-sm mt-1">{formErrors.locationAddress}</p>
-                  )}
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {/* Rancho */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Rancho
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="Nombre del rancho"
-                      value={formData.location.farm}
-                      onChange={(e) => setFormData(prev => ({ 
-                        ...prev, 
-                        location: { ...prev.location, farm: e.target.value }
-                      }))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    />
-                  </div>
-
-                  {/* Sección */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Sección
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="Sección del rancho"
-                      value={formData.location.section}
-                      onChange={(e) => setFormData(prev => ({ 
-                        ...prev, 
-                        location: { ...prev.location, section: e.target.value }
-                      }))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    />
-                  </div>
-                </div>
-
-                {/* Campos específicos para inseminación artificial */}
-                {formData.eventTypeId === "artificial_insemination" && (
-                  <div className="border-t pt-4">
-                    <h3 className="text-lg font-semibold text-gray-900 mb-4">
-                      Datos de Inseminación Artificial
-                    </h3>
-                    
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Lote de Semen
-                        </label>
-                        <input
-                          type="text"
-                          placeholder="Código del lote"
-                          value={formData.semenBatch || ""}
-                          onChange={(e) => setFormData(prev => ({ ...prev, semenBatch: e.target.value }))}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Proveedor de Semen
-                        </label>
-                        <input
-                          type="text"
-                          placeholder="Empresa proveedora"
-                          value={formData.semenProvider || ""}
-                          onChange={(e) => setFormData(prev => ({ ...prev, semenProvider: e.target.value }))}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Técnico
-                        </label>
-                        <input
-                          type="text"
-                          placeholder="Nombre del técnico"
-                          value={formData.technician || ""}
-                          onChange={(e) => setFormData(prev => ({ ...prev, technician: e.target.value }))}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Fecha Esperada de Parto
-                        </label>
-                        <input
-                          type="date"
-                          value={formData.expectedDueDate || ""}
-                          onChange={(e) => setFormData(prev => ({ ...prev, expectedDueDate: e.target.value }))}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        />
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {/* Veterinario */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Veterinario
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="Nombre del veterinario"
-                      value={formData.veterinarian}
-                      onChange={(e) => setFormData(prev => ({ ...prev, veterinarian: e.target.value }))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    />
-                  </div>
-
-                  {/* Costo */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Costo ($)
-                    </label>
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      placeholder="0.00"
-                      value={formData.cost}
-                      onChange={(e) => setFormData(prev => ({ ...prev, cost: parseFloat(e.target.value) || 0 }))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    />
-                  </div>
-                </div>
-
-                {/* Notas */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Notas
-                  </label>
-                  <textarea
-                    rows={3}
-                    placeholder="Observaciones adicionales..."
-                    value={formData.notes}
-                    onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
-                </div>
-
-                {/* Botones */}
-                <div className="flex items-center justify-end space-x-3 pt-6 border-t border-gray-200">
-                  <motion.button
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                    type="button"
-                    onClick={() => setShowCreateModal(false)}
-                    className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
-                  >
-                    Cancelar
-                  </motion.button>
-
-                  <motion.button
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                    type="submit"
-                    disabled={isSaving}
-                    className="flex items-center space-x-2 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
-                  >
-                    {isSaving ? (
-                      <>
-                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                        <span>Guardando...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Save className="h-4 w-4" />
-                        <span>Crear Evento</span>
-                      </>
-                    )}
-                  </motion.button>
-                </div>
-              </form>
+              <EventForm isEdit={false} />
             </motion.div>
           </motion.div>
         )}
@@ -1439,347 +1519,7 @@ const EventBreeding: React.FC = () => {
                 </motion.button>
               </div>
 
-              <form onSubmit={handleSaveEvent} className="space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {/* Nombre del bovino */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Nombre del Bovino *
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="Ej: Esperanza"
-                      value={formData.bovineName}
-                      onChange={(e) => setFormData(prev => ({ ...prev, bovineName: e.target.value }))}
-                      className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                        formErrors.bovineName ? "border-red-500" : "border-gray-300"
-                      }`}
-                    />
-                    {formErrors.bovineName && (
-                      <p className="text-red-500 text-sm mt-1">{formErrors.bovineName}</p>
-                    )}
-                  </div>
-
-                  {/* Tag del bovino */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Tag del Bovino *
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="Ej: ESP-001"
-                      value={formData.bovineTag}
-                      onChange={(e) => setFormData(prev => ({ ...prev, bovineTag: e.target.value }))}
-                      className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                        formErrors.bovineTag ? "border-red-500" : "border-gray-300"
-                      }`}
-                    />
-                    {formErrors.bovineTag && (
-                      <p className="text-red-500 text-sm mt-1">{formErrors.bovineTag}</p>
-                    )}
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {/* Tipo de evento */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Tipo de Evento *
-                    </label>
-                    <select
-                      value={formData.eventTypeId}
-                      onChange={(e) => setFormData(prev => ({ ...prev, eventTypeId: e.target.value }))}
-                      className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                        formErrors.eventTypeId ? "border-red-500" : "border-gray-300"
-                      }`}
-                    >
-                      <option value="">Seleccionar tipo</option>
-                      {breedingEventTypes.map((type) => (
-                        <option key={type.id} value={type.id}>
-                          {type.name}
-                        </option>
-                      ))}
-                    </select>
-                    {formErrors.eventTypeId && (
-                      <p className="text-red-500 text-sm mt-1">{formErrors.eventTypeId}</p>
-                    )}
-                  </div>
-
-                  {/* Estado */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Estado
-                    </label>
-                    <select
-                      value={formData.status}
-                      onChange={(e) => setFormData(prev => ({ ...prev, status: e.target.value }))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    >
-                      <option value="scheduled">Programado</option>
-                      <option value="completed">Completado</option>
-                      <option value="pending">Pendiente</option>
-                      <option value="cancelled">Cancelado</option>
-                      <option value="failed">Fallido</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {/* Fecha */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Fecha *
-                    </label>
-                    <input
-                      type="date"
-                      value={formData.scheduledDate}
-                      onChange={(e) => setFormData(prev => ({ ...prev, scheduledDate: e.target.value }))}
-                      className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                        formErrors.scheduledDate ? "border-red-500" : "border-gray-300"
-                      }`}
-                    />
-                    {formErrors.scheduledDate && (
-                      <p className="text-red-500 text-sm mt-1">{formErrors.scheduledDate}</p>
-                    )}
-                  </div>
-
-                  {/* Hora */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Hora *
-                    </label>
-                    <input
-                      type="time"
-                      value={formData.scheduledTime}
-                      onChange={(e) => setFormData(prev => ({ ...prev, scheduledTime: e.target.value }))}
-                      className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                        formErrors.scheduledTime ? "border-red-500" : "border-gray-300"
-                      }`}
-                    />
-                    {formErrors.scheduledTime && (
-                      <p className="text-red-500 text-sm mt-1">{formErrors.scheduledTime}</p>
-                    )}
-                  </div>
-                </div>
-
-                {/* Ubicación */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Ubicación *
-                  </label>
-                  <div className="flex space-x-2">
-                    <input
-                      type="text"
-                      placeholder="Dirección del evento"
-                      value={formData.location.address}
-                      onChange={(e) => setFormData(prev => ({ 
-                        ...prev, 
-                        location: { ...prev.location, address: e.target.value }
-                      }))}
-                      className={`flex-1 px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                        formErrors.locationAddress ? "border-red-500" : "border-gray-300"
-                      }`}
-                    />
-                    <motion.button
-                      whileHover={{ scale: 1.05 }}
-                      whileTap={{ scale: 0.95 }}
-                      type="button"
-                      onClick={getCurrentLocation}
-                      disabled={loadingLocation}
-                      className="flex items-center space-x-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50"
-                    >
-                      {loadingLocation ? (
-                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                      ) : (
-                        <MapPin className="h-4 w-4" />
-                      )}
-                      <span className="hidden sm:inline">
-                        {loadingLocation ? "Obteniendo..." : "Mi Ubicación"}
-                      </span>
-                    </motion.button>
-                  </div>
-                  {formErrors.locationAddress && (
-                    <p className="text-red-500 text-sm mt-1">{formErrors.locationAddress}</p>
-                  )}
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {/* Rancho */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Rancho
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="Nombre del rancho"
-                      value={formData.location.farm}
-                      onChange={(e) => setFormData(prev => ({ 
-                        ...prev, 
-                        location: { ...prev.location, farm: e.target.value }
-                      }))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    />
-                  </div>
-
-                  {/* Sección */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Sección
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="Sección del rancho"
-                      value={formData.location.section}
-                      onChange={(e) => setFormData(prev => ({ 
-                        ...prev, 
-                        location: { ...prev.location, section: e.target.value }
-                      }))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    />
-                  </div>
-                </div>
-
-                {/* Campos específicos para inseminación artificial */}
-                {formData.eventTypeId === "artificial_insemination" && (
-                  <div className="border-t pt-4">
-                    <h3 className="text-lg font-semibold text-gray-900 mb-4">
-                      Datos de Inseminación Artificial
-                    </h3>
-                    
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Lote de Semen
-                        </label>
-                        <input
-                          type="text"
-                          placeholder="Código del lote"
-                          value={formData.semenBatch || ""}
-                          onChange={(e) => setFormData(prev => ({ ...prev, semenBatch: e.target.value }))}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Proveedor de Semen
-                        </label>
-                        <input
-                          type="text"
-                          placeholder="Empresa proveedora"
-                          value={formData.semenProvider || ""}
-                          onChange={(e) => setFormData(prev => ({ ...prev, semenProvider: e.target.value }))}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Técnico
-                        </label>
-                        <input
-                          type="text"
-                          placeholder="Nombre del técnico"
-                          value={formData.technician || ""}
-                          onChange={(e) => setFormData(prev => ({ ...prev, technician: e.target.value }))}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Fecha Esperada de Parto
-                        </label>
-                        <input
-                          type="date"
-                          value={formData.expectedDueDate || ""}
-                          onChange={(e) => setFormData(prev => ({ ...prev, expectedDueDate: e.target.value }))}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        />
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {/* Veterinario */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Veterinario
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="Nombre del veterinario"
-                      value={formData.veterinarian}
-                      onChange={(e) => setFormData(prev => ({ ...prev, veterinarian: e.target.value }))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    />
-                  </div>
-
-                  {/* Costo */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Costo ($)
-                    </label>
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      placeholder="0.00"
-                      value={formData.cost}
-                      onChange={(e) => setFormData(prev => ({ ...prev, cost: parseFloat(e.target.value) || 0 }))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    />
-                  </div>
-                </div>
-
-                {/* Notas */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Notas
-                  </label>
-                  <textarea
-                    rows={3}
-                    placeholder="Observaciones adicionales..."
-                    value={formData.notes}
-                    onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
-                </div>
-
-                {/* Botones */}
-                <div className="flex items-center justify-end space-x-3 pt-6 border-t border-gray-200">
-                  <motion.button
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                    type="button"
-                    onClick={() => setShowEditModal(false)}
-                    className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
-                  >
-                    Cancelar
-                  </motion.button>
-
-                  <motion.button
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                    type="submit"
-                    disabled={isSaving}
-                    className="flex items-center space-x-2 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
-                  >
-                    {isSaving ? (
-                      <>
-                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                        <span>Guardando...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Save className="h-4 w-4" />
-                        <span>Actualizar Evento</span>
-                      </>
-                    )}
-                  </motion.button>
-                </div>
-              </form>
+              <EventForm isEdit={true} />
             </motion.div>
           </motion.div>
         )}
@@ -1907,7 +1647,7 @@ const EventBreeding: React.FC = () => {
                         </label>
                         <div className="flex items-center space-x-2 text-gray-900">
                           <DollarSign className="h-4 w-4 text-gray-500" />
-                          <span>${selectedEvent.cost.toFixed(2)}</span>
+                          <span>{formatCost(selectedEvent.cost, selectedEvent.currency)}</span>
                         </div>
                       </div>
                     )}

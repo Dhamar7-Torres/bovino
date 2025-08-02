@@ -172,6 +172,21 @@ interface WeatherInfo {
   precipitation: number;
 }
 
+// Interfaz para estadísticas de salud (opcional)
+interface HealthStatistics {
+  totalEvents: number;
+  emergencyEvents: number;
+  completedTreatments: number;
+  activePatients: number;
+  upcomingCheckups: number;
+  averageRecoveryTime: number;
+  healthyAnimals: number;
+  sickAnimals: number;
+  totalCost: number;
+  upcomingFollowUps: number;
+  medicationCompliance: number;
+}
+
 // ==================== CONFIGURACIONES ====================
 const healthEventTypes: HealthEventType[] = [
   {
@@ -263,6 +278,34 @@ const healthCheckTypes: HealthCheckType[] = [
   },
 ];
 
+// Función para obtener ubicación actual - MOVIDA ANTES DEL COMPONENTE
+const getCurrentLocation = (): Promise<{ latitude: number; longitude: number }> => {
+  return new Promise((resolve, reject) => {
+    if (!navigator.geolocation) {
+      reject(new Error('Geolocalización no soportada'));
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        resolve({
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude,
+        });
+      },
+      (error) => {
+        console.error('Error obteniendo ubicación:', error);
+        // Fallback a ubicación por defecto (Cunduacán, Tabasco)
+        resolve({
+          latitude: 17.9869,
+          longitude: -92.9303,
+        });
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 300000 }
+    );
+  });
+};
+
 // ==================== COMPONENTE PRINCIPAL ====================
 const EventHealth: React.FC = () => {
   // Estados principales
@@ -310,20 +353,20 @@ const EventHealth: React.FC = () => {
     attachments: [],
   });
 
-  // Estados para estadísticas
-  const [statistics, setStatistics] = useState<HealthStatistics>({
-    totalEvents: 0,
-    emergencyEvents: 0,
-    completedTreatments: 0,
-    activePatients: 0,
-    upcomingCheckups: 0,
-    averageRecoveryTime: 7,
-    healthyAnimals: 0,
-    sickAnimals: 0,
-    totalCost: 0,
-    upcomingFollowUps: 0,
-    medicationCompliance: 85,
-  });
+  // Estados para estadísticas (opcional para futuras funcionalidades)
+  // const [statistics, setStatistics] = useState<HealthStatistics>({
+  //   totalEvents: 0,
+  //   emergencyEvents: 0,
+  //   completedTreatments: 0,
+  //   activePatients: 0,
+  //   upcomingCheckups: 0,
+  //   averageRecoveryTime: 7,
+  //   healthyAnimals: 0,
+  //   sickAnimals: 0,
+  //   totalCost: 0,
+  //   upcomingFollowUps: 0,
+  //   medicationCompliance: 85,
+  // });
 
   // Hooks de React Router
   const navigate = useNavigate();
@@ -546,37 +589,70 @@ const EventHealth: React.FC = () => {
   };
 
   const handleCreateEvent = async () => {
-    // Obtener ubicación actual
-    const currentLocation = await getCurrentLocation();
-    
-    setFormData({
-      bovineId: "",
-      bovineName: "",
-      bovineTag: "",
-      eventType: healthEventTypes[0],
-      scheduledDate: "",
-      priority: "medium",
-      status: "scheduled",
-      location: {
-        latitude: currentLocation.latitude,
-        longitude: currentLocation.longitude,
-        address: `${currentLocation.latitude.toFixed(6)}, ${currentLocation.longitude.toFixed(6)}`,
-        farm: "El Progreso",
-        section: "",
-        facility: "",
-      },
-      healthData: {
-        checkType: healthCheckTypes[0],
-        followUpRequired: false,
-        prognosis: "good",
-        symptoms: [],
-        findings: [],
-        recommendations: [],
-      },
-      reminders: [],
-      attachments: [],
-    });
-    setShowCreateModal(true);
+    try {
+      // Obtener ubicación actual
+      const currentLocation = await getCurrentLocation();
+      
+      setFormData({
+        bovineId: "",
+        bovineName: "",
+        bovineTag: "",
+        eventType: healthEventTypes[0],
+        scheduledDate: "",
+        priority: "medium",
+        status: "scheduled",
+        location: {
+          latitude: currentLocation.latitude,
+          longitude: currentLocation.longitude,
+          address: `${currentLocation.latitude.toFixed(6)}, ${currentLocation.longitude.toFixed(6)}`,
+          farm: "El Progreso",
+          section: "",
+          facility: "",
+        },
+        healthData: {
+          checkType: healthCheckTypes[0],
+          followUpRequired: false,
+          prognosis: "good",
+          symptoms: [],
+          findings: [],
+          recommendations: [],
+        },
+        reminders: [],
+        attachments: [],
+      });
+      setShowCreateModal(true);
+    } catch (error) {
+      console.error('Error al preparar el formulario:', error);
+      // Si falla la geolocalización, usar valores por defecto
+      setFormData({
+        bovineId: "",
+        bovineName: "",
+        bovineTag: "",
+        eventType: healthEventTypes[0],
+        scheduledDate: "",
+        priority: "medium",
+        status: "scheduled",
+        location: {
+          latitude: 17.9869,
+          longitude: -92.9303,
+          address: "17.986900, -92.930300",
+          farm: "El Progreso",
+          section: "",
+          facility: "",
+        },
+        healthData: {
+          checkType: healthCheckTypes[0],
+          followUpRequired: false,
+          prognosis: "good",
+          symptoms: [],
+          findings: [],
+          recommendations: [],
+        },
+        reminders: [],
+        attachments: [],
+      });
+      setShowCreateModal(true);
+    }
   };
 
   const handleEditEvent = (event: HealthEvent) => {
@@ -1091,34 +1167,6 @@ const EventHealth: React.FC = () => {
       </div>
     );
   }
-
-  // Función para obtener ubicación actual
-  const getCurrentLocation = (): Promise<{ latitude: number; longitude: number }> => {
-    return new Promise((resolve, reject) => {
-      if (!navigator.geolocation) {
-        reject(new Error('Geolocalización no soportada'));
-        return;
-      }
-
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          resolve({
-            latitude: position.coords.latitude,
-            longitude: position.coords.longitude,
-          });
-        },
-        (error) => {
-          console.error('Error obteniendo ubicación:', error);
-          // Fallback a ubicación por defecto (Cunduacán, Tabasco)
-          resolve({
-            latitude: 17.9869,
-            longitude: -92.9303,
-          });
-        },
-        { enableHighAccuracy: true, timeout: 10000, maximumAge: 300000 }
-      );
-    });
-  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#519a7c] via-[#f2e9d8] to-[#f4ac3a]">

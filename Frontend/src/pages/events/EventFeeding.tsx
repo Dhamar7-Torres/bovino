@@ -12,8 +12,6 @@ import {
   Eye,
   X,
   Save,
-  Scale,
-  DollarSign,
   CheckCircle,
 } from "lucide-react";
 
@@ -62,7 +60,7 @@ const EventFeeding: React.FC = () => {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState<FeedingEvent | null>(null);
-  const [statistics, setStatistics] = useState<FeedingStatistics | null>(null);
+  const [, setStatistics] = useState<FeedingStatistics | null>(null);
 
   // Estados para formulario
   const [formData, setFormData] = useState<Partial<FeedingEvent>>({
@@ -502,72 +500,12 @@ const EventFeeding: React.FC = () => {
         </div>
       </motion.div>
 
-      {/* Estadísticas */}
-      {statistics && (
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
-          className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6"
-        >
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-            <div className="bg-white/70 backdrop-blur-sm rounded-2xl p-6 border border-gray-200 hover:shadow-lg transition-all">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-600">Total Eventos</p>
-                  <p className="text-3xl font-bold text-green-600">{statistics.totalEvents}</p>
-                </div>
-                <div className="p-3 bg-green-100 rounded-xl">
-                  <Package className="h-8 w-8 text-green-600" />
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-white/70 backdrop-blur-sm rounded-2xl p-6 border border-gray-200 hover:shadow-lg transition-all">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-600">Consumo Total</p>
-                  <p className="text-3xl font-bold text-blue-600">{statistics.totalFeedConsumed} kg</p>
-                </div>
-                <div className="p-3 bg-blue-100 rounded-xl">
-                  <Scale className="h-8 w-8 text-blue-600" />
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-white/70 backdrop-blur-sm rounded-2xl p-6 border border-gray-200 hover:shadow-lg transition-all">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-600">Costo Total</p>
-                  <p className="text-3xl font-bold text-purple-600">${statistics.totalCost.toLocaleString()}</p>
-                </div>
-                <div className="p-3 bg-purple-100 rounded-xl">
-                  <DollarSign className="h-8 w-8 text-purple-600" />
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-white/70 backdrop-blur-sm rounded-2xl p-6 border border-gray-200 hover:shadow-lg transition-all">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-600">Eficiencia</p>
-                  <p className="text-3xl font-bold text-orange-600">{statistics.feedEfficiency}%</p>
-                </div>
-                <div className="p-3 bg-orange-100 rounded-xl">
-                  <CheckCircle className="h-8 w-8 text-orange-600" />
-                </div>
-              </div>
-            </div>
-          </div>
-        </motion.div>
-      )}
-
       {/* Filtros */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.2 }}
-        className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-6"
+        transition={{ delay: 0.1 }}
+        className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6"
       >
         <div className="bg-white/70 backdrop-blur-sm rounded-2xl p-6 border border-gray-200">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">

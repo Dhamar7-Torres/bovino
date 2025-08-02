@@ -58,7 +58,6 @@ interface Pasture {
   notes?: string;
   lastInspectionDate: Date;
   nextInspectionDate: Date;
-  // Nueva propiedad para ubicación
   address?: string;
   centerPoint?: [number, number];
 }
@@ -109,13 +108,12 @@ interface MapControls {
   selectedFilter: string;
 }
 
-// Nuevo estado para agregar pasturas
+// Nuevo estado para agregar pasturas (simplificado)
 interface NewPasture {
   name: string;
   area: number;
   grassType: string;
-  coordinates: [number, number][];
-  centerPoint?: [number, number];
+  location?: [number, number];
   address?: string;
 }
 
@@ -269,12 +267,12 @@ const PastureSimulatedMap: React.FC<{
   controls: MapControls;
   onPastureClick: (pasture: Pasture) => void;
   userLocation: [number, number] | null;
-  newPasturePoints: [number, number][];
+  newPastureLocation: [number, number] | null;
   onMapClick: (lat: number, lng: number) => void;
-}> = ({ pastures, controls, onPastureClick, userLocation, newPasturePoints, onMapClick }) => {
+}> = ({ pastures, controls, onPastureClick, userLocation, newPastureLocation, onMapClick }) => {
+  
   // Función para obtener color según el estado del potrero
   const getPastureColor = (pasture: Pasture) => {
-    // Siempre mostrar por estado
     switch (pasture.status) {
       case "occupied": return "#ef4444";
       case "resting": return "#f59e0b";
@@ -295,31 +293,40 @@ const PastureSimulatedMap: React.FC<{
     }
   };
 
+  const handleMapClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (controls.editMode) {
+      const rect = e.currentTarget.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+      // Convertir coordenadas de pantalla a coordenadas geográficas simuladas
+      const lat = 17.995 - (y / rect.height) * 0.02;
+      const lng = -92.955 + (x / rect.width) * 0.02;
+      onMapClick(lat, lng);
+    }
+  };
+
   return (
     <div 
-      className="w-full h-full bg-gradient-to-br from-green-50 to-yellow-50 relative overflow-hidden rounded-lg cursor-crosshair"
-      onClick={(e) => {
-        if (controls.editMode) {
-          const rect = e.currentTarget.getBoundingClientRect();
-          const x = e.clientX - rect.left;
-          const y = e.clientY - rect.top;
-          // Convertir coordenadas de pantalla a coordenadas geográficas simuladas
-          const lat = 17.995 - (y / rect.height) * 0.02;
-          const lng = -92.955 + (x / rect.width) * 0.02;
-          onMapClick(lat, lng);
-        }
-      }}
+      className="w-full h-full bg-gradient-to-br from-green-100 to-yellow-100 relative overflow-hidden rounded-lg border-2 border-green-200"
+      onClick={handleMapClick}
     >
-      {/* Fondo del mapa simulado */}
+      {/* Fondo del mapa más visible */}
       <div
-        className="absolute inset-0"
+        className="absolute inset-0 bg-green-50"
         style={{
-          backgroundImage: `url("data:image/svg+xml,%3Csvg width='80' height='80' viewBox='0 0 80 80' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='%23059669' fill-opacity='0.05'%3E%3Cpath d='M0 0h80v80H0V0zm20 20v40h40V20H20zm20 35a15 15 0 1 1 0-30 15 15 0 0 1 0 30z' fill-opacity='0.05'/%3E%3C/g%3E%3C/svg%3E")`,
+          backgroundImage: `url("data:image/svg+xml,%3Csvg width='40' height='40' viewBox='0 0 40 40' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='%23059669' fill-opacity='0.1'%3E%3Cpath d='M0 0h40v40H0V0zm10 10v20h20V10H10zm10 18a8 8 0 1 1 0-16 8 8 0 0 1 0 16z'/%3E%3C/g%3E%3C/svg%3E")`,
         }}
       />
 
+      {/* Indicador central del mapa */}
+      <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+        <div className="bg-white/80 rounded-lg px-4 py-2 shadow-md">
+          <div className="text-gray-600 text-sm font-medium">🗺️ Mapa de Potreros Interactivo</div>
+        </div>
+      </div>
+
       {/* Título del mapa */}
-      <div className="absolute top-4 left-1/2 transform -translate-x-1/2 bg-white/90 backdrop-blur-sm rounded-lg px-4 py-2 shadow-md">
+      <div className="absolute top-4 left-1/2 transform -translate-x-1/2 bg-white/90 backdrop-blur-sm rounded-lg px-4 py-2 shadow-md z-10">
         <div className="flex items-center gap-2">
           <TreePine className="w-5 h-5 text-green-600" />
           <span className="font-medium text-[#2d5a45]">
@@ -328,7 +335,7 @@ const PastureSimulatedMap: React.FC<{
         </div>
       </div>
 
-      {/* Renderizado de potreros */}
+      {/* Renderizado de potreros existentes */}
       {controls.showPastures &&
         pastures.map((pasture, index) => (
           <motion.div
@@ -338,12 +345,15 @@ const PastureSimulatedMap: React.FC<{
             transition={{ delay: index * 0.1 }}
             className="absolute cursor-pointer hover:scale-105 transition-all duration-200 group"
             style={{
-              left: `${15 + index * 30}%`,
-              top: `${25 + index * 20}%`,
+              left: `${15 + index * 25}%`,
+              top: `${25 + index * 15}%`,
               width: "140px",
               height: "100px",
             }}
-            onClick={() => onPastureClick(pasture)}
+            onClick={(e) => {
+              e.stopPropagation();
+              onPastureClick(pasture);
+            }}
           >
             <div
               className="w-full h-full rounded-lg border-2 shadow-lg relative overflow-hidden"
@@ -370,16 +380,10 @@ const PastureSimulatedMap: React.FC<{
                     {pasture.name}
                   </div>
                   <div className="text-xs text-gray-600">{pasture.area} ha</div>
-
-                  {/* Mostrar información del estado */}
                   <div className="text-xs text-gray-600">
-                    {pasture.status === "occupied"
-                      ? "Ocupado"
-                      : pasture.status === "resting"
-                      ? "Descansando"
-                      : pasture.status === "available"
-                      ? "Disponible"
-                      : "Mantenimiento"}
+                    {pasture.status === "occupied" ? "Ocupado" :
+                     pasture.status === "resting" ? "Descansando" :
+                     pasture.status === "available" ? "Disponible" : "Mantenimiento"}
                   </div>
                 </div>
 
@@ -436,9 +440,9 @@ const PastureSimulatedMap: React.FC<{
                 <Droplets className="w-4 h-4 text-white" />
               </div>
               <div className="absolute -bottom-6 left-1/2 transform -translate-x-1/2 bg-white/90 px-2 py-1 rounded text-xs font-medium text-blue-700 whitespace-nowrap shadow-sm">
-                {waterSource.type === "artificial_tank" ? "Tanque"
-                  : waterSource.type === "pond" ? "Estanque"
-                  : waterSource.type === "well" ? "Pozo" : "Arroyo"}
+                {waterSource.type === "artificial_tank" ? "Tanque" :
+                 waterSource.type === "pond" ? "Estanque" :
+                 waterSource.type === "well" ? "Pozo" : "Arroyo"}
               </div>
             </motion.div>
           ))}
@@ -448,10 +452,10 @@ const PastureSimulatedMap: React.FC<{
         <motion.div
           initial={{ opacity: 0, scale: 0 }}
           animate={{ opacity: 1, scale: 1 }}
-          className="absolute"
+          className="absolute z-20"
           style={{
-            left: `${50}%`,
-            top: `${50}%`,
+            left: `50%`,
+            top: `50%`,
             transform: 'translate(-50%, -50%)'
           }}
         >
@@ -465,83 +469,50 @@ const PastureSimulatedMap: React.FC<{
         </motion.div>
       )}
 
-      {/* Puntos de nueva pastura */}
-      {newPasturePoints.map((point, index) => (
+      {/* Ubicación de nueva pastura */}
+      {newPastureLocation && (
         <motion.div
-          key={index}
           initial={{ opacity: 0, scale: 0 }}
           animate={{ opacity: 1, scale: 1 }}
-          className="absolute"
+          className="absolute z-20"
           style={{
-            // Convertir coordenadas reales a posición en el mapa simulado
-            left: `${20 + (index * 15) + Math.random() * 40}%`,
-            top: `${30 + (index * 10) + Math.random() * 30}%`,
+            left: `65%`,
+            top: `40%`,
             transform: 'translate(-50%, -50%)'
           }}
         >
           <div className="relative">
-            <div className="w-4 h-4 bg-red-500 rounded-full border-2 border-white shadow-lg flex items-center justify-center">
-              <span className="text-white text-xs font-bold">{index + 1}</span>
+            <div className="w-6 h-6 bg-green-500 rounded-full border-2 border-white shadow-lg flex items-center justify-center">
+              <TreePine className="w-4 h-4 text-white" />
             </div>
-            <div className="absolute inset-0 w-4 h-4 bg-red-500 rounded-full animate-ping opacity-50"></div>
+            <div className="absolute inset-0 w-6 h-6 bg-green-500 rounded-full animate-ping opacity-50"></div>
           </div>
-          <div className="absolute -bottom-6 left-1/2 transform -translate-x-1/2 bg-red-600 text-white px-2 py-1 rounded text-xs whitespace-nowrap">
-            Punto {index + 1}
+          <div className="absolute -bottom-8 left-1/2 transform -translate-x-1/2 bg-green-600 text-white px-2 py-1 rounded text-xs whitespace-nowrap">
+            Nueva Pastura
           </div>
         </motion.div>
-      ))}
-
-      {/* Líneas conectando los puntos */}
-      {newPasturePoints.length > 1 && (
-        <svg className="absolute inset-0 w-full h-full pointer-events-none">
-          {newPasturePoints.slice(0, -1).map((point, index) => {
-            const nextPoint = newPasturePoints[index + 1];
-            // Convertir coordenadas a posiciones en el SVG
-            const x1 = 20 + (index * 15) + Math.random() * 40;
-            const y1 = 30 + (index * 10) + Math.random() * 30;
-            const x2 = 20 + ((index + 1) * 15) + Math.random() * 40;
-            const y2 = 30 + ((index + 1) * 10) + Math.random() * 30;
-            
-            return (
-              <line
-                key={index}
-                x1={`${x1}%`}
-                y1={`${y1}%`}
-                x2={`${x2}%`}
-                y2={`${y2}%`}
-                stroke="#ef4444"
-                strokeWidth="2"
-                strokeDasharray="5,5"
-                className="animate-pulse"
-              />
-            );
-          })}
-          
-          {/* Línea de cierre si hay más de 2 puntos */}
-          {newPasturePoints.length > 2 && (
-            <line
-              x1={`${20 + ((newPasturePoints.length - 1) * 15) + Math.random() * 40}%`}
-              y1={`${30 + ((newPasturePoints.length - 1) * 10) + Math.random() * 30}%`}
-              x2={`${20 + Math.random() * 40}%`}
-              y2={`${30 + Math.random() * 30}%`}
-              stroke="#ef4444"
-              strokeWidth="2"
-              strokeDasharray="5,5"
-              className="animate-pulse opacity-50"
-            />
-          )}
-        </svg>
       )}
 
-      {/* Indicador de modo edición */}
+      {/* Indicador de modo edición más visible */}
       {controls.editMode && (
-        <div className="absolute bottom-4 left-4 bg-blue-500/10 border border-blue-500 rounded-lg px-3 py-2">
-          <div className="flex items-center gap-2 text-xs text-blue-700">
-            <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
-            <span>Modo de Edición - Haz clic para agregar puntos</span>
+        <div className="absolute inset-0 bg-blue-500/10 border-4 border-blue-500 border-dashed rounded-lg flex items-center justify-center pointer-events-none">
+          <div className="bg-blue-600 text-white px-6 py-3 rounded-lg shadow-lg">
+            <div className="flex items-center gap-3 text-lg font-bold">
+              <Crosshair className="w-6 h-6 animate-pulse" />
+              <span>HAZ CLIC AQUÍ PARA ESTABLECER UBICACIÓN</span>
+              <Crosshair className="w-6 h-6 animate-pulse" />
+            </div>
           </div>
         </div>
       )}
+
+      {/* Indicador de mapa simulado */}
+      <div className="absolute bottom-4 right-4 bg-blue-500/10 border border-blue-500 rounded-lg px-3 py-2 z-10">
+        <div className="flex items-center gap-2 text-xs text-blue-700">
+          <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
+          <span>Vista de Potreros - Desarrollo</span>
+        </div>
+      </div>
     </div>
   );
 };
@@ -560,7 +531,6 @@ export const PastureMap: React.FC<PastureMapProps> = ({ className }) => {
   const [selectedPasture, setSelectedPasture] = useState<Pasture | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  const [isLeafletLoaded, setIsLeafletLoaded] = useState(false);
 
   // Estados para geolocalización y agregar pasturas
   const [userLocation, setUserLocation] = useState<[number, number] | null>(null);
@@ -569,15 +539,9 @@ export const PastureMap: React.FC<PastureMapProps> = ({ className }) => {
     name: "",
     area: 0,
     grassType: "",
-    coordinates: [],
   });
-  const [newPasturePoints, setNewPasturePoints] = useState<[number, number][]>([]);
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [isGettingLocation, setIsGettingLocation] = useState(false);
-
-  // Referencias
-  const mapRef = useRef<HTMLDivElement>(null);
-  const mapInstance = useRef<any>(null);
 
   // Coordenadas del centro del área de potreros (Villahermosa, Tabasco)
   const PASTURES_CENTER: [number, number] = [17.9895, -92.946];
@@ -603,62 +567,55 @@ export const PastureMap: React.FC<PastureMapProps> = ({ className }) => {
     }
   };
 
-  // Función para agregar ubicación actual como punto de pastura
-  const addCurrentLocationPoint = async () => {
-    if (!userLocation) {
-      setIsGettingLocation(true);
-      
-      if (navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition(
-          async (position) => {
-            const { latitude, longitude } = position.coords;
-            const newPoint: [number, number] = [latitude, longitude];
-            
-            // Agregar el punto
-            const updatedPoints = [...newPasturePoints, newPoint];
-            setNewPasturePoints(updatedPoints);
-            
-            // Si es el primer punto, obtener la dirección
-            if (updatedPoints.length === 1) {
-              const address = await getAddressFromCoordinates(latitude, longitude);
-              setNewPasture(prev => ({
-                ...prev,
-                centerPoint: newPoint,
-                address: address
-              }));
-            }
-            
-            setUserLocation([latitude, longitude]);
-            setIsGettingLocation(false);
-            console.log("📍 Punto agregado desde ubicación actual:", latitude, longitude);
-          },
-          (error) => {
-            console.error("❌ Error obteniendo ubicación:", error);
-            setIsGettingLocation(false);
-            alert("No se pudo obtener la ubicación actual. Por favor, intenta hacer clic en el mapa.");
-          }
-        );
-      } else {
-        setIsGettingLocation(false);
-        alert("Geolocalización no soportada en este dispositivo");
-      }
+  // Función para agregar ubicación actual (SIMPLIFICADA)
+  const addCurrentLocationPoint = () => {
+    setIsGettingLocation(true);
+    
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const { latitude, longitude } = position.coords;
+          const location: [number, number] = [latitude, longitude];
+          
+          // Actualizar inmediatamente el estado
+          setNewPasture(prev => ({
+            ...prev,
+            location: location,
+            address: `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`
+          }));
+          
+          setUserLocation(location);
+          setIsGettingLocation(false);
+          
+          console.log("✅ Ubicación establecida:", latitude, longitude);
+        },
+        (error) => {
+          console.error("❌ Error:", error);
+          setIsGettingLocation(false);
+          
+          // Usar ubicación de ejemplo si falla GPS
+          const defaultLocation: [number, number] = [17.9895, -92.946];
+          setNewPasture(prev => ({
+            ...prev,
+            location: defaultLocation,
+            address: "Villahermosa, Tabasco (ubicación de ejemplo)"
+          }));
+          setUserLocation(defaultLocation);
+          
+          alert("Se usó una ubicación de ejemplo. El GPS puede no estar disponible.");
+        }
+      );
     } else {
-      // Usar la ubicación ya conocida
-      const newPoint: [number, number] = userLocation;
-      const updatedPoints = [...newPasturePoints, newPoint];
-      setNewPasturePoints(updatedPoints);
-      
-      // Si es el primer punto, obtener la dirección
-      if (updatedPoints.length === 1) {
-        const address = await getAddressFromCoordinates(userLocation[0], userLocation[1]);
-        setNewPasture(prev => ({
-          ...prev,
-          centerPoint: newPoint,
-          address: address
-        }));
-      }
-      
-      console.log("📍 Punto agregado desde ubicación guardada:", userLocation);
+      setIsGettingLocation(false);
+      // Usar ubicación de ejemplo si no hay GPS
+      const defaultLocation: [number, number] = [17.9895, -92.946];
+      setNewPasture(prev => ({
+        ...prev,
+        location: defaultLocation,
+        address: "Villahermosa, Tabasco (ubicación de ejemplo)"
+      }));
+      setUserLocation(defaultLocation);
+      alert("Geolocalización no disponible. Se usó una ubicación de ejemplo.");
     }
   };
 
@@ -676,268 +633,100 @@ export const PastureMap: React.FC<PastureMapProps> = ({ className }) => {
     }
   };
 
-  // Verificar si Leaflet está disponible
-  useEffect(() => {
-    const checkLeaflet = () => {
-      if (typeof window !== "undefined" && window.L) {
-        setIsLeafletLoaded(true);
-        initializeMap();
-      } else {
-        console.log("🗺️ Leaflet no disponible, usando mapa simulado de potreros");
-      }
-    };
+  // Manejar click en el mapa (SIMPLIFICADO)
+  const handleMapClick = (lat: number, lng: number) => {
+    if (mapControls.editMode) {
+      const location: [number, number] = [lat, lng];
+      
+      setNewPasture(prev => ({
+        ...prev,
+        location: location,
+        address: `${lat.toFixed(6)}, ${lng.toFixed(6)}`
+      }));
+      
+      console.log("📍 Ubicación establecida desde mapa:", lat, lng);
+    }
+  };
 
-    checkLeaflet();
-    getCurrentLocation();
-
-    if (!isLeafletLoaded) {
-      const script = document.createElement("script");
-      script.src = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
-      script.onload = checkLeaflet;
-      document.head.appendChild(script);
-
-      const link = document.createElement("link");
-      link.rel = "stylesheet";
-      link.href = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
-      document.head.appendChild(link);
+  // Función para crear pastura (SIMPLIFICADA)
+  const finishPastureCreation = () => {
+    // Validación simple
+    if (!newPasture.name || !newPasture.area || !newPasture.location) {
+      alert("Por favor completa: Nombre, Área y Ubicación");
+      return;
     }
 
-    return () => {
-      if (mapInstance.current) {
-        mapInstance.current.remove();
-      }
+    // Generar coordenadas del área
+    const [centerLat, centerLng] = newPasture.location;
+    const offset = 0.001;
+    
+    const coordinates: [number, number][] = [
+      [centerLat + offset, centerLng - offset],
+      [centerLat + offset, centerLng + offset],
+      [centerLat - offset, centerLng + offset],
+      [centerLat - offset, centerLng - offset],
+    ];
+
+    const newPastureData: Pasture = {
+      id: `pasture-${Date.now()}`,
+      name: newPasture.name,
+      code: `P-${String(pastures.length + 1).padStart(3, '0')}`,
+      area: newPasture.area,
+      coordinates: coordinates,
+      centerPoint: newPasture.location,
+      address: newPasture.address,
+      status: "available",
+      grassCondition: "good",
+      grassType: [newPasture.grassType || "Pasto Natural"],
+      carryingCapacity: Math.floor(newPasture.area * 3),
+      currentAnimals: 0,
+      recommendedAnimals: Math.floor(newPasture.area * 2.5),
+      lastGrazingDate: new Date(),
+      restPeriodDays: 21,
+      restingDays: 0,
+      nextAvailableDate: new Date(),
+      soilType: "loam",
+      drainage: "good",
+      slope: "gentle",
+      waterSources: [],
+      shadedAreas: 10,
+      fencing: {
+        type: "electric",
+        condition: "good",
+        lastMaintenanceDate: new Date(),
+        needsRepair: false,
+        segments: []
+      },
+      productivity: {
+        averageDailyGain: 0.7,
+        grassGrowthRate: 10,
+        biomassPerHectare: 4000,
+        nutritionalValue: { protein: 12, energy: 2.4, fiber: 30 },
+        seasonalVariation: { spring: 1.1, summer: 1.0, autumn: 0.8, winter: 0.6 }
+      },
+      lastInspectionDate: new Date(),
+      nextInspectionDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
     };
+
+    // Guardar la nueva pastura
+    setPastures(prev => [...prev, newPastureData]);
+    
+    // Limpiar formulario
+    setNewPasture({ name: "", area: 0, grassType: "" });
+    setMapControls(prev => ({ ...prev, editMode: false }));
+    setShowAddDialog(false);
+    setIsAddingPasture(false);
+
+    alert(`🎉 ¡ÉXITO! Pastura "${newPastureData.name}" creada y guardada en el mapa!`);
+    console.log("✅ Nueva pastura creada:", newPastureData);
+  };
+
+  // Inicialización simple
+  useEffect(() => {
+    getCurrentLocation();
   }, []);
 
-  // Actualizar mapa cuando cambien los puntos de nueva pastura
-  useEffect(() => {
-    if (mapInstance.current && isLeafletLoaded) {
-      addPasturesToMap(mapInstance.current);
-    }
-  }, [newPasturePoints, userLocation, pastures, mapControls]);
-
-  // Inicializar mapa de Leaflet para potreros
-  const initializeMap = () => {
-    if (!mapRef.current || !window.L) return;
-
-    try {
-      const map = window.L.map(mapRef.current, {
-        center: userLocation || PASTURES_CENTER,
-        zoom: 15,
-        zoomControl: true,
-        attributionControl: true,
-      });
-
-      window.L.tileLayer(
-        "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
-        {
-          attribution: "Tiles &copy; Esri",
-          maxZoom: 18,
-        }
-      ).addTo(map);
-
-      mapInstance.current = map;
-
-      // Agregar evento de click para modo edición
-      map.on('click', (e: any) => {
-        if (mapControls.editMode) {
-          handleMapClick(e.latlng.lat, e.latlng.lng);
-        }
-      });
-
-      addPasturesToMap(map);
-      console.log("✅ Mapa de Leaflet para potreros inicializado correctamente");
-    } catch (error) {
-      console.error("❌ Error inicializando mapa de potreros:", error);
-    }
-  };
-
-  // Agregar potreros al mapa de Leaflet
-  const addPasturesToMap = (map: any) => {
-    if (!map || !window.L) return;
-
-    // Limpiar capas anteriores
-    map.eachLayer((layer: any) => {
-      if (layer instanceof window.L.Marker || layer instanceof window.L.Polygon || layer instanceof window.L.Polyline) {
-        map.removeLayer(layer);
-      }
-    });
-
-    if (mapControls.showPastures) {
-      pastures.forEach((pasture) => {
-        const color = getPastureColorByMode(pasture);
-
-        const polygon = window.L.polygon(pasture.coordinates, {
-          color: color,
-          fillColor: color,
-          fillOpacity: 0.6,
-          weight: 3,
-        }).addTo(map);
-
-        polygon.bindPopup(`
-          <div style="padding: 12px; min-width: 250px;">
-            <h3 style="margin: 0 0 8px 0; color: #2d5a45; font-weight: bold;">${pasture.name}</h3>
-            <div style="margin-bottom: 8px;">
-              <span style="background: ${color}; color: white; padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: bold;">
-                ${pasture.code}
-              </span>
-            </div>
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 8px 0;">
-              <div><strong>Área:</strong> ${pasture.area} ha</div>
-              <div><strong>Estado:</strong> ${getStatusText(pasture.status)}</div>
-              <div><strong>Animales:</strong> ${pasture.currentAnimals}/${pasture.carryingCapacity}</div>
-              <div><strong>Condición:</strong> ${getConditionText(pasture.grassCondition)}</div>
-            </div>
-            ${pasture.address ? `<div style="margin: 8px 0; font-size: 12px; color: #666;"><strong>Dirección:</strong> ${pasture.address}</div>` : ""}
-            <div style="margin: 8px 0;">
-              <strong>Pastos:</strong> ${pasture.grassType.join(", ")}
-            </div>
-            ${pasture.status === "resting" ? `<div style="color: #f59e0b;"><strong>Descanso:</strong> ${pasture.restingDays}/${pasture.restPeriodDays} días</div>` : ""}
-          </div>
-        `);
-
-        polygon.on("click", () => setSelectedPasture(pasture));
-      });
-    }
-
-    // Agregar marcador de ubicación del usuario
-    if (userLocation) {
-      const userMarker = window.L.marker(userLocation, {
-        icon: window.L.divIcon({
-          className: 'user-location-marker',
-          html: `<div style="width: 16px; height: 16px; background: #3b82f6; border: 2px solid white; border-radius: 50%; box-shadow: 0 2px 6px rgba(0,0,0,0.3);"></div>`,
-          iconSize: [16, 16],
-          iconAnchor: [8, 8]
-        })
-      }).addTo(map);
-      
-      userMarker.bindPopup("Tu ubicación actual");
-    }
-
-    // Agregar puntos de nueva pastura
-    newPasturePoints.forEach((point, index) => {
-      const marker = window.L.marker(point, {
-        icon: window.L.divIcon({
-          className: 'pasture-point-marker',
-          html: `<div style="width: 20px; height: 20px; background: #ef4444; color: white; border: 2px solid white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: bold; box-shadow: 0 2px 6px rgba(0,0,0,0.3);">${index + 1}</div>`,
-          iconSize: [20, 20],
-          iconAnchor: [10, 10]
-        })
-      }).addTo(map);
-      
-      marker.bindPopup(`Punto ${index + 1} de la nueva pastura`);
-    });
-
-    // Agregar líneas conectando los puntos de nueva pastura
-    if (newPasturePoints.length > 1) {
-      const polyline = window.L.polyline(newPasturePoints, {
-        color: '#ef4444',
-        weight: 3,
-        dashArray: '10, 5',
-        opacity: 0.7
-      }).addTo(map);
-      
-      // Si hay 3 o más puntos, agregar línea de cierre
-      if (newPasturePoints.length >= 3) {
-        const closingLine = window.L.polyline([newPasturePoints[newPasturePoints.length - 1], newPasturePoints[0]], {
-          color: '#ef4444',
-          weight: 2,
-          dashArray: '5, 5',
-          opacity: 0.5
-        }).addTo(map);
-      }
-    }
-  };
-
-  // Manejar click en el mapa para agregar puntos de pastura
-  const handleMapClick = async (lat: number, lng: number) => {
-    if (mapControls.editMode) {
-      const newPoints = [...newPasturePoints, [lat, lng] as [number, number]];
-      setNewPasturePoints(newPoints);
-
-      if (newPoints.length === 1) {
-        // Obtener dirección del primer punto
-        const address = await getAddressFromCoordinates(lat, lng);
-        setNewPasture(prev => ({
-          ...prev,
-          centerPoint: [lat, lng],
-          address: address
-        }));
-      }
-    }
-  };
-
-  // Función para finalizar la creación de pastura
-  const finishPastureCreation = async () => {
-    if (newPasturePoints.length >= 3 && newPasture.name && newPasture.area > 0) {
-      try {
-        const newPastureData: Pasture = {
-          id: `pasture-${Date.now()}`,
-          name: newPasture.name,
-          code: `P-${String(pastures.length + 1).padStart(3, '0')}`,
-          area: newPasture.area,
-          coordinates: newPasturePoints,
-          centerPoint: newPasture.centerPoint,
-          address: newPasture.address,
-          status: "available",
-          grassCondition: "good",
-          grassType: [newPasture.grassType || "Pasto Natural"],
-          carryingCapacity: Math.floor(newPasture.area * 3), // 3 animales por hectárea
-          currentAnimals: 0,
-          recommendedAnimals: Math.floor(newPasture.area * 2.5),
-          lastGrazingDate: new Date(),
-          restPeriodDays: 21,
-          restingDays: 0,
-          nextAvailableDate: new Date(),
-          soilType: "loam",
-          drainage: "good",
-          slope: "gentle",
-          waterSources: [],
-          shadedAreas: 10,
-          fencing: {
-            type: "electric",
-            condition: "good",
-            lastMaintenanceDate: new Date(),
-            needsRepair: false,
-            segments: []
-          },
-          productivity: {
-            averageDailyGain: 0.7,
-            grassGrowthRate: 10,
-            biomassPerHectare: 4000,
-            nutritionalValue: { protein: 12, energy: 2.4, fiber: 30 },
-            seasonalVariation: { spring: 1.1, summer: 1.0, autumn: 0.8, winter: 0.6 }
-          },
-          lastInspectionDate: new Date(),
-          nextInspectionDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-        };
-
-        // Actualizar el estado de pasturas
-        setPastures(prevPastures => [...prevPastures, newPastureData]);
-        
-        // Resetear estado
-        setNewPasture({ name: "", area: 0, grassType: "", coordinates: [] });
-        setNewPasturePoints([]);
-        setMapControls(prev => ({ ...prev, editMode: false }));
-        setShowAddDialog(false);
-        setIsAddingPasture(false);
-
-        console.log("✅ Nueva pastura creada exitosamente:", newPastureData);
-        
-        // Mostrar mensaje de éxito
-        alert(`¡Pastura "${newPastureData.name}" creada exitosamente!`);
-        
-      } catch (error) {
-        console.error("❌ Error creando pastura:", error);
-        alert("Error al crear la pastura. Por favor, intenta de nuevo.");
-      }
-    } else {
-      alert("Por favor, completa todos los campos y marca al menos 3 puntos en el mapa.");
-    }
-  };
-
   const getPastureColorByMode = (pasture: Pasture) => {
-    // Siempre mostrar por estado
     switch (pasture.status) {
       case "occupied": return "#ef4444";
       case "resting": return "#f59e0b";
@@ -1160,10 +949,10 @@ export const PastureMap: React.FC<PastureMapProps> = ({ className }) => {
                 <div className="bg-blue-50 p-3 rounded-md">
                   <div className="flex items-center gap-2 text-blue-700 mb-2">
                     <MapPin className="w-4 h-4" />
-                    <span className="text-sm font-medium">Definir Límites</span>
+                    <span className="text-sm font-medium">Establecer Ubicación</span>
                   </div>
                   <p className="text-xs text-blue-600 mb-3">
-                    Define los límites de la pastura usando tu ubicación actual o haciendo clic en el mapa (mínimo 3 puntos).
+                    Establece la ubicación de la pastura usando tu GPS actual o haciendo clic en el mapa.
                   </p>
                   
                   <div className="grid grid-cols-2 gap-2 mb-3">
@@ -1180,12 +969,8 @@ export const PastureMap: React.FC<PastureMapProps> = ({ className }) => {
                     </button>
                     
                     <button
-                      onClick={async () => {
-                        setMapControls(prev => ({ ...prev, editMode: true }));
-                        setShowAddDialog(false);
-                        setIsAddingPasture(true);
-                        // Agregar inmediatamente la ubicación actual
-                        await addCurrentLocationPoint();
+                      onClick={() => {
+                        addCurrentLocationPoint();
                       }}
                       disabled={isGettingLocation}
                       className="flex items-center justify-center gap-2 px-3 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:bg-green-400 transition-colors text-sm"
@@ -1193,47 +978,37 @@ export const PastureMap: React.FC<PastureMapProps> = ({ className }) => {
                       {isGettingLocation ? (
                         <>
                           <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                          GPS...
+                          Obteniendo...
                         </>
                       ) : (
                         <>
                           <Navigation className="w-4 h-4" />
-                          Mi Ubicación
+                          Mi Ubicación GPS
                         </>
                       )}
                     </button>
                   </div>
                   
-                  {newPasturePoints.length > 0 && (
+                  {newPasture.location && (
                     <div className="bg-white rounded p-2 mb-2">
                       <div className="text-xs font-medium text-gray-700 mb-1">
-                        Puntos marcados: {newPasturePoints.length}
+                        Ubicación establecida ✓
                       </div>
                       <div className="text-xs text-green-600">
-                        ✓ {newPasturePoints.length >= 3 ? 'Suficientes puntos para crear la pastura' : `Necesitas ${3 - newPasturePoints.length} puntos más`}
+                        Lat: {newPasture.location[0].toFixed(6)}, Lng: {newPasture.location[1].toFixed(6)}
                       </div>
                     </div>
                   )}
                 </div>
 
-                {newPasturePoints.length > 0 && (
-                  <div className="bg-green-50 p-3 rounded-md">
-                    <div className="flex items-center gap-2 text-green-700 mb-1">
-                      <CheckCircle className="w-4 h-4" />
-                      <span className="text-sm font-medium">
-                        {newPasturePoints.length} puntos marcados
-                      </span>
-                    </div>
-                    {newPasturePoints.length >= 3 && newPasture.name && newPasture.area > 0 && (
-                      <button
-                        onClick={finishPastureCreation}
-                        className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors text-sm mt-2"
-                      >
-                        <Save className="w-4 h-4" />
-                        Crear Pastura
-                      </button>
-                    )}
-                  </div>
+                {newPasture.location && newPasture.name && newPasture.area > 0 && (
+                  <button
+                    onClick={finishPastureCreation}
+                    className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-[#519a7c] text-white rounded-md hover:bg-[#457e68] transition-colors"
+                  >
+                    <Save className="w-4 h-4" />
+                    Crear Pastura
+                  </button>
                 )}
               </div>
             </motion.div>
@@ -1377,30 +1152,17 @@ export const PastureMap: React.FC<PastureMapProps> = ({ className }) => {
         )}
       </AnimatePresence>
 
-      {/* Contenedor del mapa */}
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ duration: 0.5 }}
-        className="w-full h-full"
-      >
-        {isLeafletLoaded ? (
-          <div
-            ref={mapRef}
-            className="w-full h-full rounded-lg overflow-hidden"
-            style={{ height: "100%", width: "100%" }}
-          />
-        ) : (
-          <PastureSimulatedMap
-            pastures={filteredPastures}
-            controls={mapControls}
-            onPastureClick={setSelectedPasture}
-            userLocation={userLocation}
-            newPasturePoints={newPasturePoints}
-            onMapClick={handleMapClick}
-          />
-        )}
-      </motion.div>
+      {/* Contenedor del mapa - SIEMPRE VISIBLE */}
+      <div className="w-full h-full">
+        <PastureSimulatedMap
+          pastures={filteredPastures}
+          controls={mapControls}
+          onPastureClick={setSelectedPasture}
+          userLocation={userLocation}
+          newPastureLocation={newPasture.location || null}
+          onMapClick={handleMapClick}
+        />
+      </div>
 
       {/* Panel de progreso para agregar pastura */}
       {isAddingPasture && (
@@ -1411,100 +1173,96 @@ export const PastureMap: React.FC<PastureMapProps> = ({ className }) => {
         >
           <div className="text-center">
             <h4 className="font-medium text-[#2d5a45] mb-2">
-              Definiendo límites de pastura
+              Estableciendo ubicación de pastura
             </h4>
             <p className="text-sm text-gray-600 mb-3">
-              Puntos marcados: {newPasturePoints.length}
-              {newPasturePoints.length < 3 && ` (mínimo 3 requeridos)`}
+              {newPasture.location ? "✓ Ubicación establecida" : "Establece la ubicación de la pastura"}
             </p>
             
-            {/* Botones para agregar puntos */}
-            <div className="grid grid-cols-2 gap-2 mb-3">
-              <button
-                onClick={addCurrentLocationPoint}
-                disabled={isGettingLocation}
-                className="flex items-center justify-center gap-2 px-3 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-blue-400 transition-colors text-sm"
-              >
-                {isGettingLocation ? (
-                  <>
-                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                    Obteniendo...
-                  </>
-                ) : (
-                  <>
-                    <Crosshair className="w-4 h-4" />
-                    Usar Mi Ubicación
-                  </>
-                )}
-              </button>
-              
-              <button
-                onClick={() => {
-                  setNewPasturePoints([]);
-                  setNewPasture(prev => ({ ...prev, centerPoint: undefined, address: undefined }));
-                }}
-                disabled={newPasturePoints.length === 0}
-                className="flex items-center justify-center gap-2 px-3 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 disabled:bg-gray-100 disabled:text-gray-400 transition-colors text-sm"
-              >
-                <X className="w-4 h-4" />
-                Limpiar Puntos
-              </button>
-            </div>
-
-            {/* Lista de puntos marcados */}
-            {newPasturePoints.length > 0 && (
-              <div className="bg-gray-50 rounded-lg p-3 mb-3">
-                <div className="text-sm font-medium text-gray-700 mb-2">Puntos marcados:</div>
-                <div className="space-y-1 max-h-24 overflow-y-auto">
-                  {newPasturePoints.map((point, index) => (
-                    <div key={index} className="flex items-center justify-between text-xs bg-white rounded px-2 py-1">
-                      <span>Punto {index + 1}: {point[0].toFixed(6)}, {point[1].toFixed(6)}</span>
-                      <button
-                        onClick={() => {
-                          const updatedPoints = newPasturePoints.filter((_, i) => i !== index);
-                          setNewPasturePoints(updatedPoints);
-                          
-                          // Si eliminamos el primer punto y hay otros, actualizar dirección
-                          if (index === 0 && updatedPoints.length > 0) {
-                            getAddressFromCoordinates(updatedPoints[0][0], updatedPoints[0][1])
-                              .then(address => {
-                                setNewPasture(prev => ({
-                                  ...prev,
-                                  centerPoint: updatedPoints[0],
-                                  address: address
-                                }));
-                              });
-                          } else if (updatedPoints.length === 0) {
-                            setNewPasture(prev => ({ ...prev, centerPoint: undefined, address: undefined }));
-                          }
-                        }}
-                        className="text-red-500 hover:text-red-700 ml-2"
-                      >
-                        <X className="w-3 h-3" />
-                      </button>
-                    </div>
-                  ))}
+            {/* Botones para establecer ubicación */}
+            {!newPasture.location && (
+              <div className="space-y-3">
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    onClick={addCurrentLocationPoint}
+                    disabled={isGettingLocation}
+                    className="flex items-center justify-center gap-2 px-3 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-blue-400 transition-colors text-sm"
+                  >
+                    {isGettingLocation ? (
+                      <>
+                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                        Obteniendo...
+                      </>
+                    ) : (
+                      <>
+                        <Crosshair className="w-4 h-4" />
+                        Usar Mi GPS
+                      </>
+                    )}
+                  </button>
+                  
+                  <div className="text-xs text-gray-500 flex items-center justify-center">
+                    o haz clic en el mapa
+                  </div>
                 </div>
+                
+                {/* Botón de prueba rápida */}
+                <button
+                  onClick={() => {
+                    const testLocation: [number, number] = [17.9895, -92.946];
+                    setNewPasture(prev => ({
+                      name: prev.name || "Potrero de Prueba",
+                      area: prev.area || 15.5,
+                      grassType: prev.grassType || "Pasto Estrella",
+                      location: testLocation,
+                      address: "Ubicación de prueba - Villahermosa, Tabasco"
+                    }));
+                  }}
+                  className="w-full px-3 py-2 bg-gray-500 text-white rounded-md hover:bg-gray-600 transition-colors text-sm"
+                >
+                  🚀 Crear Pastura de Prueba Rápida
+                </button>
+              </div>
+            )}
+
+            {/* Información de ubicación establecida */}
+            {newPasture.location && (
+              <div className="bg-gray-50 rounded-lg p-3 mb-3">
+                <div className="text-sm font-medium text-gray-700 mb-2">Ubicación:</div>
+                <div className="text-xs text-gray-600">
+                  Lat: {newPasture.location[0].toFixed(6)}, Lng: {newPasture.location[1].toFixed(6)}
+                </div>
+                {newPasture.address && (
+                  <div className="text-xs text-gray-500 mt-1">{newPasture.address}</div>
+                )}
+                <button
+                  onClick={() => {
+                    setNewPasture(prev => ({ ...prev, location: undefined, address: undefined }));
+                  }}
+                  className="text-red-500 hover:text-red-700 text-xs mt-2"
+                >
+                  Cambiar ubicación
+                </button>
               </div>
             )}
 
             <div className="text-xs text-gray-500 mb-3">
-              💡 Puedes usar tu ubicación actual o hacer clic en el mapa para agregar puntos
+              💡 La pastura se creará como un área aproximada alrededor de este punto
             </div>
             
             <div className="flex gap-2">
               <button
                 onClick={() => {
-                  setNewPasturePoints([]);
                   setMapControls(prev => ({ ...prev, editMode: false }));
                   setIsAddingPasture(false);
-                  setNewPasture({ name: "", area: 0, grassType: "", coordinates: [] });
+                  setNewPasture({ name: "", area: 0, grassType: "" });
+                  setShowAddDialog(true);
                 }}
                 className="flex-1 px-3 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 transition-colors text-sm"
               >
-                Cancelar
+                Volver
               </button>
-              {newPasturePoints.length >= 3 && newPasture.name && newPasture.area > 0 && (
+              {newPasture.location && newPasture.name && newPasture.area > 0 && (
                 <button
                   onClick={finishPastureCreation}
                   className="flex-1 px-3 py-2 bg-[#519a7c] text-white rounded-md hover:bg-[#457e68] transition-colors text-sm"
@@ -1544,11 +1302,11 @@ export const PastureMap: React.FC<PastureMapProps> = ({ className }) => {
             <div className="w-3 h-3 bg-gray-500 rounded"></div>
             <span>Mantenimiento</span>
           </div>
-          {isAddingPasture && (
+          {isAddingPasture && newPasture.location && (
             <div className="border-t pt-2 mt-2">
               <div className="flex items-center gap-2">
-                <div className="w-3 h-3 bg-red-500 rounded-full border border-white"></div>
-                <span>Puntos de nueva pastura</span>
+                <div className="w-3 h-3 bg-green-500 rounded-full border border-white"></div>
+                <span>Nueva pastura</span>
               </div>
             </div>
           )}

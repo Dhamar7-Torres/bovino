@@ -678,23 +678,14 @@ const EventVaccination: React.FC = () => {
               <p className="text-gray-600">Gestiona las vacunas de tu ganado</p>
             </div>
           </div>
-          <div className="flex space-x-3">
-            <Button
-              variant="outline"
-              leftIcon={<Calendar className="h-4 w-4" />}
-              className="bg-green-500 text-white border-green-500 hover:bg-green-600"
-            >
-              Ver Timeline
-            </Button>
-            <Button
-              onClick={() => setShowForm(true)}
-              variant="success"
-              leftIcon={<Plus className="h-4 w-4" />}
-              className="bg-emerald-500 hover:bg-emerald-600"
-            >
-              Nuevo Evento
-            </Button>
-          </div>
+          <Button
+            onClick={() => setShowForm(true)}
+            variant="success"
+            leftIcon={<Plus className="h-4 w-4" />}
+            className="bg-emerald-500 hover:bg-emerald-600"
+          >
+            Nuevo Evento
+          </Button>
         </div>
 
         {/* Estadísticas */}
