@@ -249,6 +249,7 @@ const Modal: React.FC<{
   children: React.ReactNode;
   size?: "sm" | "md" | "lg" | "xl";
 }> = ({ isOpen, onClose, title, children, size = "md" }) => {
+  // Early return si el modal no está abierto
   if (!isOpen) return null;
 
   const sizeClasses = {
@@ -257,6 +258,37 @@ const Modal: React.FC<{
     lg: "max-w-4xl",
     xl: "max-w-6xl",
   };
+
+  // Efecto para prevenir scroll del body cuando el modal está abierto
+  useEffect(() => {
+    if (isOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = 'unset';
+    }
+
+    // Cleanup
+    return () => {
+      document.body.style.overflow = 'unset';
+    };
+  }, [isOpen]);
+
+  // Manejar escape key
+  useEffect(() => {
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        onClose();
+      }
+    };
+
+    if (isOpen) {
+      document.addEventListener('keydown', handleEscape);
+    }
+
+    return () => {
+      document.removeEventListener('keydown', handleEscape);
+    };
+  }, [isOpen, onClose]);
 
   return (
     <AnimatePresence>
@@ -284,11 +316,12 @@ const Modal: React.FC<{
           exit="exit"
         >
           {/* Header */}
-          <div className="flex items-center justify-between p-6 border-b border-gray-200">
+          <div className="flex items-center justify-between p-6 border-b border-gray-200 bg-white">
             <h2 className="text-2xl font-bold text-gray-900">{title}</h2>
             <button
               onClick={onClose}
               className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+              aria-label="Cerrar modal"
             >
               <X className="w-5 h-5" />
             </button>
@@ -310,7 +343,30 @@ const BullDetailModal: React.FC<{
   isOpen: boolean;
   onClose: () => void;
 }> = ({ bull, isOpen, onClose }) => {
-  const age = new Date().getFullYear() - new Date(bull.birthDate).getFullYear();
+  const age = useMemo(() => {
+    return new Date().getFullYear() - new Date(bull.birthDate).getFullYear();
+  }, [bull.birthDate]);
+
+  const healthStatusText = useMemo(() => {
+    const statusMap = {
+      excellent: "Excelente",
+      good: "Bueno", 
+      fair: "Regular",
+      poor: "Malo",
+      quarantine: "Cuarentena"
+    };
+    return statusMap[bull.healthStatus];
+  }, [bull.healthStatus]);
+
+  const reproductiveStatusText = useMemo(() => {
+    const statusMap = {
+      active: "Activo",
+      resting: "Descanso",
+      retired: "Retirado",
+      testing: "Prueba"
+    };
+    return statusMap[bull.reproductiveStatus];
+  }, [bull.reproductiveStatus]);
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title={`Detalles de ${bull.name}`} size="lg">
@@ -331,7 +387,7 @@ const BullDetailModal: React.FC<{
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-600">Registro:</span>
-                  <span className="font-medium">{bull.registrationNumber}</span>
+                  <span className="font-medium">{bull.registrationNumber || "N/A"}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-600">Raza:</span>
@@ -366,10 +422,7 @@ const BullDetailModal: React.FC<{
                     bull.healthStatus === "poor" ? "bg-orange-100 text-orange-800" :
                     "bg-red-100 text-red-800"
                   }`}>
-                    {bull.healthStatus === "excellent" ? "Excelente" :
-                     bull.healthStatus === "good" ? "Bueno" :
-                     bull.healthStatus === "fair" ? "Regular" :
-                     bull.healthStatus === "poor" ? "Malo" : "Cuarentena"}
+                    {healthStatusText}
                   </span>
                 </div>
                 <div className="flex items-center justify-between">
@@ -380,9 +433,7 @@ const BullDetailModal: React.FC<{
                     bull.reproductiveStatus === "retired" ? "bg-gray-100 text-gray-800" :
                     "bg-purple-100 text-purple-800"
                   }`}>
-                    {bull.reproductiveStatus === "active" ? "Activo" :
-                     bull.reproductiveStatus === "resting" ? "Descanso" :
-                     bull.reproductiveStatus === "retired" ? "Retirado" : "Prueba"}
+                    {reproductiveStatusText}
                   </span>
                 </div>
               </div>
@@ -399,7 +450,7 @@ const BullDetailModal: React.FC<{
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-600">Dirección:</span>
-                  <span className="font-medium text-right">{bull.currentLocation.address}</span>
+                  <span className="font-medium text-right text-sm">{bull.currentLocation.address}</span>
                 </div>
               </div>
             </div>
@@ -614,7 +665,7 @@ const BullFormModal: React.FC<{
   }, [bull, isOpen]);
 
   // Función para obtener ubicación actual
-  const getCurrentLocation = () => {
+  const getCurrentLocation = useCallback(() => {
     setIsGettingLocation(true);
     
     if (!navigator.geolocation) {
@@ -624,7 +675,7 @@ const BullFormModal: React.FC<{
     }
 
     navigator.geolocation.getCurrentPosition(
-      (position) => {
+      async (position) => {
         const { latitude, longitude } = position.coords;
         
         setFormData(prev => ({
@@ -633,8 +684,8 @@ const BullFormModal: React.FC<{
           lng: longitude,
         }));
 
-        // Obtener dirección desde coordenadas (opcional)
-        getAddressFromCoords(latitude, longitude);
+        // Obtener dirección desde coordenadas
+        await getAddressFromCoords(latitude, longitude);
         setIsGettingLocation(false);
       },
       (error) => {
@@ -662,10 +713,10 @@ const BullFormModal: React.FC<{
         maximumAge: 0
       }
     );
-  };
+  }, []);
 
   // Función para obtener dirección desde coordenadas (usando API de geocodificación)
-  const getAddressFromCoords = async (lat: number, lng: number) => {
+  const getAddressFromCoords = useCallback(async (lat: number, lng: number) => {
     try {
       // Usar un servicio gratuito de geocodificación inversa
       const response = await fetch(
@@ -683,9 +734,9 @@ const BullFormModal: React.FC<{
     } catch (error) {
       console.error("Error obteniendo dirección:", error);
     }
-  };
+  }, []);
 
-  const validateForm = () => {
+  const validateForm = useCallback(() => {
     const newErrors: Record<string, string> = {};
 
     if (!formData.name.trim()) newErrors.name = "El nombre es requerido";
@@ -695,24 +746,34 @@ const BullFormModal: React.FC<{
     if (formData.weight <= 0) newErrors.weight = "El peso debe ser mayor a 0";
     if (!formData.paddock.trim()) newErrors.paddock = "El potrero es requerido";
 
+    // Validar que la fecha de nacimiento no sea en el futuro
+    if (formData.birthDate && new Date(formData.birthDate) > new Date()) {
+      newErrors.birthDate = "La fecha de nacimiento no puede ser en el futuro";
+    }
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
-  };
+  }, [formData]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = useCallback((e: React.FormEvent) => {
     e.preventDefault();
     
     if (validateForm()) {
       onSave(formData);
     }
-  };
+  }, [formData, validateForm, onSave]);
 
-  const handleInputChange = (field: keyof BullFormData, value: any) => {
+  const handleInputChange = useCallback((field: keyof BullFormData, value: any) => {
     setFormData(prev => ({ ...prev, [field]: value }));
     if (errors[field]) {
       setErrors(prev => ({ ...prev, [field]: "" }));
     }
-  };
+  }, [errors]);
+
+  const breeds = [
+    "Brahman", "Angus", "Charolais", "Simmental", "Limousin", 
+    "Hereford", "Brangus", "Nelore", "Gyr", "Holstein"
+  ];
 
   return (
     <Modal 
@@ -721,16 +782,17 @@ const BullFormModal: React.FC<{
       title={bull ? `Editar ${bull.name}` : "Nuevo Toro"} 
       size="lg"
     >
-      <div className="p-6 space-y-6">
+      <form onSubmit={handleSubmit} className="p-6 space-y-6">
         {/* Información Básica */}
         <div>
           <h3 className="text-lg font-semibold text-gray-900 mb-4">Información Básica</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-1">
                 Nombre *
               </label>
               <input
+                id="name"
                 type="text"
                 value={formData.name}
                 onChange={(e) => handleInputChange("name", e.target.value)}
@@ -743,10 +805,11 @@ const BullFormModal: React.FC<{
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="earTag" className="block text-sm font-medium text-gray-700 mb-1">
                 Arete *
               </label>
               <input
+                id="earTag"
                 type="text"
                 value={formData.earTag}
                 onChange={(e) => handleInputChange("earTag", e.target.value)}
@@ -759,10 +822,11 @@ const BullFormModal: React.FC<{
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="registrationNumber" className="block text-sm font-medium text-gray-700 mb-1">
                 Número de Registro
               </label>
               <input
+                id="registrationNumber"
                 type="text"
                 value={formData.registrationNumber}
                 onChange={(e) => handleInputChange("registrationNumber", e.target.value)}
@@ -772,10 +836,11 @@ const BullFormModal: React.FC<{
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="breed" className="block text-sm font-medium text-gray-700 mb-1">
                 Raza *
               </label>
               <select
+                id="breed"
                 value={formData.breed}
                 onChange={(e) => handleInputChange("breed", e.target.value)}
                 className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent ${
@@ -783,26 +848,23 @@ const BullFormModal: React.FC<{
                 }`}
               >
                 <option value="">Seleccionar raza</option>
-                <option value="Brahman">Brahman</option>
-                <option value="Angus">Angus</option>
-                <option value="Charolais">Charolais</option>
-                <option value="Simmental">Simmental</option>
-                <option value="Limousin">Limousin</option>
-                <option value="Hereford">Hereford</option>
-                <option value="Brangus">Brangus</option>
-                <option value="Nelore">Nelore</option>
+                {breeds.map(breed => (
+                  <option key={breed} value={breed}>{breed}</option>
+                ))}
               </select>
               {errors.breed && <p className="text-red-500 text-xs mt-1">{errors.breed}</p>}
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="birthDate" className="block text-sm font-medium text-gray-700 mb-1">
                 Fecha de Nacimiento *
               </label>
               <input
+                id="birthDate"
                 type="date"
                 value={formData.birthDate}
                 onChange={(e) => handleInputChange("birthDate", e.target.value)}
+                max={new Date().toISOString().split('T')[0]}
                 className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent ${
                   errors.birthDate ? "border-red-500" : "border-gray-300"
                 }`}
@@ -811,12 +873,13 @@ const BullFormModal: React.FC<{
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="weight" className="block text-sm font-medium text-gray-700 mb-1">
                 Peso (kg) *
               </label>
               <input
+                id="weight"
                 type="number"
-                value={formData.weight}
+                value={formData.weight || ""}
                 onChange={(e) => handleInputChange("weight", Number(e.target.value))}
                 className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent ${
                   errors.weight ? "border-red-500" : "border-gray-300"
@@ -828,12 +891,13 @@ const BullFormModal: React.FC<{
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="height" className="block text-sm font-medium text-gray-700 mb-1">
                 Altura (cm)
               </label>
               <input
+                id="height"
                 type="number"
-                value={formData.height}
+                value={formData.height || ""}
                 onChange={(e) => handleInputChange("height", Number(e.target.value))}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
                 placeholder="Altura en centímetros"
@@ -842,10 +906,11 @@ const BullFormModal: React.FC<{
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="paddock" className="block text-sm font-medium text-gray-700 mb-1">
                 Potrero *
               </label>
               <input
+                id="paddock"
                 type="text"
                 value={formData.paddock}
                 onChange={(e) => handleInputChange("paddock", e.target.value)}
@@ -864,10 +929,11 @@ const BullFormModal: React.FC<{
           <h3 className="text-lg font-semibold text-gray-900 mb-4">Estados</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="healthStatus" className="block text-sm font-medium text-gray-700 mb-1">
                 Estado de Salud
               </label>
               <select
+                id="healthStatus"
                 value={formData.healthStatus}
                 onChange={(e) => handleInputChange("healthStatus", e.target.value)}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
@@ -881,10 +947,11 @@ const BullFormModal: React.FC<{
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="reproductiveStatus" className="block text-sm font-medium text-gray-700 mb-1">
                 Estado Reproductivo
               </label>
               <select
+                id="reproductiveStatus"
                 value={formData.reproductiveStatus}
                 onChange={(e) => handleInputChange("reproductiveStatus", e.target.value)}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
@@ -903,10 +970,11 @@ const BullFormModal: React.FC<{
           <h3 className="text-lg font-semibold text-gray-900 mb-4">Nutrición</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="diet" className="block text-sm font-medium text-gray-700 mb-1">
                 Dieta
               </label>
               <input
+                id="diet"
                 type="text"
                 value={formData.diet}
                 onChange={(e) => handleInputChange("diet", e.target.value)}
@@ -916,12 +984,13 @@ const BullFormModal: React.FC<{
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="dailyFeed" className="block text-sm font-medium text-gray-700 mb-1">
                 Alimento Diario (kg)
               </label>
               <input
+                id="dailyFeed"
                 type="number"
-                value={formData.dailyFeed}
+                value={formData.dailyFeed || ""}
                 onChange={(e) => handleInputChange("dailyFeed", Number(e.target.value))}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
                 placeholder="Cantidad diaria de alimento"
@@ -931,10 +1000,11 @@ const BullFormModal: React.FC<{
             </div>
 
             <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="supplements" className="block text-sm font-medium text-gray-700 mb-1">
                 Suplementos
               </label>
               <input
+                id="supplements"
                 type="text"
                 value={formData.supplements}
                 onChange={(e) => handleInputChange("supplements", e.target.value)}
@@ -950,10 +1020,11 @@ const BullFormModal: React.FC<{
           <h3 className="text-lg font-semibold text-gray-900 mb-4">Ubicación</h3>
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="address" className="block text-sm font-medium text-gray-700 mb-1">
                 Dirección
               </label>
               <input
+                id="address"
                 type="text"
                 value={formData.address}
                 onChange={(e) => handleInputChange("address", e.target.value)}
@@ -964,12 +1035,13 @@ const BullFormModal: React.FC<{
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="lat" className="block text-sm font-medium text-gray-700 mb-1">
                   Latitud
                 </label>
                 <input
+                  id="lat"
                   type="number"
-                  value={formData.lat}
+                  value={formData.lat || ""}
                   onChange={(e) => handleInputChange("lat", Number(e.target.value))}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
                   placeholder="Latitud"
@@ -978,12 +1050,13 @@ const BullFormModal: React.FC<{
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="lng" className="block text-sm font-medium text-gray-700 mb-1">
                   Longitud
                 </label>
                 <input
+                  id="lng"
                   type="number"
-                  value={formData.lng}
+                  value={formData.lng || ""}
                   onChange={(e) => handleInputChange("lng", Number(e.target.value))}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
                   placeholder="Longitud"
@@ -1023,12 +1096,12 @@ const BullFormModal: React.FC<{
         <div>
           <h3 className="text-lg font-semibold text-gray-900 mb-4">Información Adicional</h3>
           <div className="space-y-4">
-
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="veterinarian" className="block text-sm font-medium text-gray-700 mb-1">
                 Veterinario
               </label>
               <input
+                id="veterinarian"
                 type="text"
                 value={formData.veterinarian}
                 onChange={(e) => handleInputChange("veterinarian", e.target.value)}
@@ -1038,10 +1111,11 @@ const BullFormModal: React.FC<{
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="notes" className="block text-sm font-medium text-gray-700 mb-1">
                 Notas
               </label>
               <textarea
+                id="notes"
                 value={formData.notes}
                 onChange={(e) => handleInputChange("notes", e.target.value)}
                 rows={3}
@@ -1062,15 +1136,14 @@ const BullFormModal: React.FC<{
             Cancelar
           </button>
           <button
-            type="button"
-            onClick={handleSubmit}
+            type="submit"
             className="inline-flex items-center px-4 py-2 bg-[#519a7c] text-white rounded-lg hover:bg-[#4a8970] transition-colors"
           >
             <Save className="w-4 h-4 mr-2" />
             {bull ? "Actualizar" : "Crear"} Toro
           </button>
         </div>
-      </div>
+      </form>
     </Modal>
   );
 };
@@ -1168,8 +1241,7 @@ const BullManagement: React.FC = () => {
     try {
       // Eliminar el toro del estado
       setBulls(prevBulls => {
-        const newBulls = prevBulls.filter(bull => bull.id !== bullId);
-        return newBulls;
+        return prevBulls.filter(bull => bull.id !== bullId);
       });
 
       // Eliminar registros de empadre relacionados
@@ -1336,9 +1408,31 @@ const BullManagement: React.FC = () => {
   }, [matingRecords, showNotification]);
 
   const handleExport = useCallback(() => {
-    console.log("Exportar datos");
-    // Aquí implementarías la lógica para exportar
-  }, []);
+    try {
+      const dataToExport = {
+        bulls: bulls,
+        matingRecords: matingRecords,
+        exportDate: new Date().toISOString(),
+        totalBulls: bulls.length,
+        totalMatingRecords: matingRecords.length
+      };
+      
+      const blob = new Blob([JSON.stringify(dataToExport, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `bull-management-export-${new Date().toISOString().split('T')[0]}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      
+      showNotification("Datos exportados exitosamente", "success");
+    } catch (error) {
+      console.error("Error al exportar:", error);
+      showNotification("Error al exportar los datos", "error");
+    }
+  }, [bulls, matingRecords, showNotification]);
 
   // Datos mock para desarrollo
   useEffect(() => {
@@ -1753,7 +1847,7 @@ const BullManagement: React.FC = () => {
   }> = ({ title, value, icon, color = "", subtitle }) => (
     <motion.div
       variants={itemVariants}
-      className={`bg-white rounded-xl p-4 shadow-md border border-gray-200 ${color}`}
+      className={`bg-white/80 backdrop-blur-sm rounded-xl p-4 shadow-md border border-white/20 ${color}`}
     >
       <div className="flex items-center justify-between">
         <div>
@@ -1770,12 +1864,14 @@ const BullManagement: React.FC = () => {
 
   // Componente de tarjeta de toro CORREGIDO
   const BullCard: React.FC<{ bull: Bull }> = ({ bull }) => {
-    const age = new Date().getFullYear() - new Date(bull.birthDate).getFullYear();
+    const age = useMemo(() => {
+      return new Date().getFullYear() - new Date(bull.birthDate).getFullYear();
+    }, [bull.birthDate]);
     
     return (
       <motion.div
         variants={itemVariants}
-        className="bg-white rounded-xl p-6 shadow-md border border-gray-200 hover:shadow-lg transition-all duration-300"
+        className="bg-white/80 backdrop-blur-sm rounded-xl p-6 shadow-md border border-white/20 hover:shadow-lg transition-all duration-300"
       >
         <div className="flex justify-between items-start mb-4">
           <div>
@@ -1784,7 +1880,7 @@ const BullManagement: React.FC = () => {
               <Crown className="w-5 h-5 text-yellow-600" />
             </div>
             <p className="text-sm text-gray-600">Arete: {bull.earTag}</p>
-            <p className="text-sm text-gray-600">Registro: {bull.registrationNumber}</p>
+            <p className="text-sm text-gray-600">Registro: {bull.registrationNumber || "N/A"}</p>
           </div>
           <div className="flex flex-col items-end space-y-2">
             <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${getHealthStatusColor(bull.healthStatus)}`}>
@@ -1822,7 +1918,7 @@ const BullManagement: React.FC = () => {
           </div>
         </div>
 
-        <div className="bg-gray-50 rounded-lg p-3 mb-4">
+        <div className="bg-gray-50/50 rounded-lg p-3 mb-4">
           <h4 className="text-xs font-medium text-gray-600 mb-2">Rendimiento Reproductivo</h4>
           <div className="grid grid-cols-2 gap-2 text-xs">
             <div>
@@ -1882,7 +1978,7 @@ const BullManagement: React.FC = () => {
 
   // Componente de fila de empadre
   const MatingRow: React.FC<{ record: MatingRecord }> = ({ record }) => (
-    <tr className="hover:bg-gray-50 transition-colors">
+    <tr className="hover:bg-gray-50/50 transition-colors">
       <td className="px-6 py-4">
         <div className="flex items-center space-x-3">
           <Crown className="w-5 h-5 text-yellow-600" />
@@ -1987,9 +2083,9 @@ const BullManagement: React.FC = () => {
   // Pantalla de carga
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-br from-[#519a7c] via-[#f2e9d8] to-[#f4ac3a] flex items-center justify-center">
         <motion.div
-          className="bg-white rounded-2xl p-8 shadow-xl"
+          className="bg-white/90 backdrop-blur-sm rounded-2xl p-8 shadow-xl"
           initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ duration: 0.5 }}
@@ -2007,18 +2103,18 @@ const BullManagement: React.FC = () => {
     );
   }
 
-  // LAYOUT CORREGIDO - SIN ESPACIOS VACÍOS
+  // LAYOUT CORREGIDO CON GRADIENTE
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gradient-to-br from-[#519a7c] via-[#f2e9d8] to-[#f4ac3a] p-6">
       <motion.div
-        className="max-w-7xl mx-auto p-4"
+        className="max-w-7xl mx-auto"
         variants={containerVariants}
         initial="hidden"
         animate="visible"
       >
         {/* Header */}
         <motion.div
-          className="bg-white rounded-xl shadow-md p-6 mb-6 border border-gray-200"
+          className="bg-white/80 backdrop-blur-sm rounded-xl shadow-md p-6 mb-6 border border-white/20"
           variants={itemVariants}
         >
           <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
@@ -2042,7 +2138,7 @@ const BullManagement: React.FC = () => {
                 className={`px-4 py-2 rounded-xl border-2 transition-all duration-200 flex items-center space-x-2 ${
                   showFilters 
                     ? "bg-[#519a7c] text-white border-[#519a7c]" 
-                    : "bg-white text-gray-700 border-gray-300 hover:border-[#519a7c]"
+                    : "bg-white/80 text-gray-700 border-gray-300 hover:border-[#519a7c] backdrop-blur-sm"
                 }`}
               >
                 <Filter className="w-4 h-4" />
@@ -2050,7 +2146,7 @@ const BullManagement: React.FC = () => {
               </button>
               <button
                 onClick={handleExport}
-                className="px-4 py-2 bg-white text-gray-700 rounded-xl border-2 border-gray-300 hover:border-blue-400 transition-colors flex items-center space-x-2"
+                className="px-4 py-2 bg-white/80 text-gray-700 rounded-xl border-2 border-gray-300 hover:border-blue-400 transition-colors flex items-center space-x-2 backdrop-blur-sm"
               >
                 <Download className="w-4 h-4" />
                 <span>Exportar</span>
@@ -2106,36 +2202,36 @@ const BullManagement: React.FC = () => {
                   title="Total Toros"
                   value={bullStatistics.total}
                   icon={<Crown className="w-8 h-8" />}
-                  color="hover:bg-yellow-50"
+                  color="hover:bg-yellow-50/50"
                 />
                 <StatCard
                   title="Activos"
                   value={bullStatistics.active}
                   icon={<Zap className="w-8 h-8" />}
-                  color="hover:bg-green-50"
+                  color="hover:bg-green-50/50"
                 />
                 <StatCard
                   title="Peso Promedio"
                   value={`${bullStatistics.avgWeight} kg`}
                   icon={<Scale className="w-8 h-8" />}
-                  color="hover:bg-blue-50"
+                  color="hover:bg-blue-50/50"
                 />
                 <StatCard
                   title="Edad Promedio"
                   value={`${bullStatistics.avgAge} años`}
                   icon={<Clock className="w-8 h-8" />}
-                  color="hover:bg-purple-50"
+                  color="hover:bg-purple-50/50"
                 />
                 <StatCard
                   title="Tasa Preñez Prom."
                   value={`${bullStatistics.avgPregnancyRate}%`}
                   icon={<TrendingUp className="w-8 h-8" />}
-                  color="hover:bg-orange-50"
+                  color="hover:bg-orange-50/50"
                 />
               </motion.div>
 
               {/* Controles para toros */}
-              <motion.div variants={itemVariants} className="bg-white rounded-xl p-6 shadow-md border border-gray-200">
+              <motion.div variants={itemVariants} className="bg-white/80 backdrop-blur-sm rounded-xl p-6 shadow-md border border-white/20">
                 <div className="flex flex-col md:flex-row md:items-center md:justify-between space-y-4 md:space-y-0">
                   <div className="relative flex-1 md:max-w-md">
                     <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
@@ -2146,7 +2242,7 @@ const BullManagement: React.FC = () => {
                       onChange={(e) =>
                         setBullFilters(prev => ({ ...prev, searchTerm: e.target.value }))
                       }
-                      className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
+                      className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent bg-white/50 backdrop-blur-sm"
                     />
                   </div>
                   <div className="flex items-center space-x-3">
@@ -2165,7 +2261,7 @@ const BullManagement: React.FC = () => {
               {/* Grid de toros */}
               <motion.div variants={itemVariants}>
                 {filteredBulls.length === 0 ? (
-                  <div className="bg-white rounded-xl p-12 text-center shadow-md border border-gray-200">
+                  <div className="bg-white/80 backdrop-blur-sm rounded-xl p-12 text-center shadow-md border border-white/20">
                     <Crown className="w-16 h-16 text-gray-400 mx-auto mb-4" />
                     <h3 className="text-xl font-semibold text-gray-900 mb-2">
                       No se encontraron toros
@@ -2208,42 +2304,42 @@ const BullManagement: React.FC = () => {
                   title="Total Empadres"
                   value={matingStatistics.total}
                   icon={<Heart className="w-8 h-8" />}
-                  color="hover:bg-pink-50"
+                  color="hover:bg-pink-50/50"
                 />
                 <StatCard
                   title="Exitosos"
                   value={matingStatistics.successful}
                   icon={<CheckCircle className="w-8 h-8" />}
-                  color="hover:bg-green-50"
+                  color="hover:bg-green-50/50"
                 />
                 <StatCard
                   title="Embarazadas"
                   value={matingStatistics.pregnant}
                   icon={<Users className="w-8 h-8" />}
-                  color="hover:bg-purple-50"
+                  color="hover:bg-purple-50/50"
                 />
                 <StatCard
                   title="Pendientes"
                   value={matingStatistics.pending}
                   icon={<Clock className="w-8 h-8" />}
-                  color="hover:bg-yellow-50"
+                  color="hover:bg-yellow-50/50"
                 />
                 <StatCard
                   title="Tasa de Éxito"
                   value={`${matingStatistics.successRate}%`}
                   icon={<Target className="w-8 h-8" />}
-                  color="hover:bg-blue-50"
+                  color="hover:bg-blue-50/50"
                 />
                 <StatCard
                   title="Este Mes"
                   value={matingStatistics.thisMonth}
                   icon={<Calendar className="w-8 h-8" />}
-                  color="hover:bg-orange-50"
+                  color="hover:bg-orange-50/50"
                 />
               </motion.div>
 
               {/* Controles para tabla de empadre */}
-              <motion.div variants={itemVariants} className="bg-white rounded-xl p-6 shadow-md border border-gray-200">
+              <motion.div variants={itemVariants} className="bg-white/80 backdrop-blur-sm rounded-xl p-6 shadow-md border border-white/20">
                 <div className="flex flex-col md:flex-row md:items-center md:justify-between space-y-4 md:space-y-0">
                   <div className="relative flex-1 md:max-w-md">
                     <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
@@ -2254,7 +2350,7 @@ const BullManagement: React.FC = () => {
                       onChange={(e) =>
                         setMatingFilters(prev => ({ ...prev, searchTerm: e.target.value }))
                       }
-                      className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
+                      className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent bg-white/50 backdrop-blur-sm"
                     />
                   </div>
                   <div className="flex items-center space-x-3">
@@ -2270,7 +2366,7 @@ const BullManagement: React.FC = () => {
               </motion.div>
 
               {/* Tabla de empadre */}
-              <motion.div variants={itemVariants} className="bg-white rounded-xl shadow-md border border-gray-200 overflow-hidden">
+              <motion.div variants={itemVariants} className="bg-white/80 backdrop-blur-sm rounded-xl shadow-md border border-white/20 overflow-hidden">
                 {filteredMatingRecords.length === 0 ? (
                   <div className="p-12 text-center">
                     <Heart className="w-16 h-16 text-gray-400 mx-auto mb-4" />
@@ -2291,7 +2387,7 @@ const BullManagement: React.FC = () => {
                 ) : (
                   <div className="overflow-x-auto">
                     <table className="min-w-full divide-y divide-gray-200">
-                      <thead className="bg-gray-50">
+                      <thead className="bg-gray-50/50">
                         <tr>
                           <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                             Toro
@@ -2362,10 +2458,10 @@ const BullManagement: React.FC = () => {
               transition={{ duration: 0.3 }}
             >
               <div className={`
-                px-6 py-4 rounded-lg shadow-lg border-l-4 min-w-80 max-w-96
-                ${notification.type === "success" ? "bg-green-50 border-green-400 text-green-800" :
-                  notification.type === "error" ? "bg-red-50 border-red-400 text-red-800" :
-                  "bg-blue-50 border-blue-400 text-blue-800"}
+                px-6 py-4 rounded-lg shadow-lg border-l-4 min-w-80 max-w-96 backdrop-blur-sm
+                ${notification.type === "success" ? "bg-green-50/90 border-green-400 text-green-800" :
+                  notification.type === "error" ? "bg-red-50/90 border-red-400 text-red-800" :
+                  "bg-blue-50/90 border-blue-400 text-blue-800"}
               `}>
                 <div className="flex items-center">
                   <div className="flex-shrink-0">

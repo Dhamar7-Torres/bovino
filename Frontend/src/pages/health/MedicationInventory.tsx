@@ -6,18 +6,15 @@ import {
   Search,
   Filter,
   Plus,
-  TrendingDown,
   BarChart3,
-  DollarSign,
-  AlertCircle,
   Eye,
   Edit,
   Trash2,
   AlertTriangle,
-  MapPin,
-  User,
   X,
   Save,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 
 interface Medication {
@@ -113,64 +110,50 @@ interface NewMedicationForm {
   isControlled: boolean;
 }
 
+// Componentes base ajustados para evitar overflow
 const Card: React.FC<{ children: React.ReactNode; className?: string }> = ({ children, className = "" }) => (
-  <div className={`bg-white rounded-lg shadow-md border border-gray-200 ${className}`}>
+  <div className={`bg-white/90 backdrop-blur-sm rounded-2xl shadow-lg border border-white/20 overflow-hidden w-full max-w-full ${className}`}>
     {children}
   </div>
-);
-
-const CardHeader: React.FC<{ children: React.ReactNode; className?: string }> = ({ children, className = "" }) => (
-  <div className={`px-4 sm:px-6 py-4 border-b border-gray-200 ${className}`}>
-    {children}
-  </div>
-);
-
-const CardTitle: React.FC<{ children: React.ReactNode; className?: string }> = ({ children, className = "" }) => (
-  <h3 className={`text-lg font-semibold text-gray-900 ${className}`}>
-    {children}
-  </h3>
-);
-
-const CardDescription: React.FC<{ children: React.ReactNode; className?: string }> = ({ children, className = "" }) => (
-  <p className={`text-sm text-gray-600 mt-1 ${className}`}>
-    {children}
-  </p>
 );
 
 const CardContent: React.FC<{ children: React.ReactNode; className?: string }> = ({ children, className = "" }) => (
-  <div className={`px-4 sm:px-6 py-4 ${className}`}>{children}</div>
+  <div className={`p-2 sm:p-3 w-full max-w-full ${className}`}>{children}</div>
 );
 
 const Button: React.FC<{
   children: React.ReactNode;
   onClick?: () => void;
   variant?: "default" | "outline" | "success" | "danger" | "warning";
-  size?: "sm" | "default";
+  size?: "xs" | "sm" | "default" | "lg";
   className?: string;
   type?: "button" | "submit";
   disabled?: boolean;
-}> = ({ children, onClick, variant = "default", size = "default", className = "", type = "button", disabled = false }) => {
-  const baseClasses = "inline-flex items-center justify-center font-medium rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed";
+  fullWidth?: boolean;
+}> = ({ children, onClick, variant = "default", size = "default", className = "", type = "button", disabled = false, fullWidth = false }) => {
+  const baseClasses = "inline-flex items-center justify-center font-medium rounded-xl transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 min-w-0";
   const variantClasses = {
-    default: "bg-blue-600 text-white hover:bg-blue-700 focus:ring-blue-500",
-    outline: "border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 focus:ring-blue-500",
-    success: "bg-green-600 text-white hover:bg-green-700 focus:ring-green-500",
-    danger: "bg-red-600 text-white hover:bg-red-700 focus:ring-red-500",
-    warning: "bg-yellow-600 text-white hover:bg-yellow-700 focus:ring-yellow-500",
+    default: "bg-[#519a7c] text-white hover:bg-[#4a8770] focus:ring-[#519a7c] shadow-lg hover:shadow-xl",
+    outline: "border-2 border-[#519a7c] bg-white/80 text-[#519a7c] hover:bg-[#519a7c] hover:text-white focus:ring-[#519a7c]",
+    success: "bg-green-600 text-white hover:bg-green-700 focus:ring-green-500 shadow-lg",
+    danger: "bg-red-600 text-white hover:bg-red-700 focus:ring-red-500 shadow-lg",
+    warning: "bg-amber-600 text-white hover:bg-amber-700 focus:ring-amber-500 shadow-lg",
   };
   const sizeClasses = {
-    sm: "px-3 py-2 text-sm",
-    default: "px-4 py-2 text-sm",
+    xs: "px-2 py-1 text-xs",
+    sm: "px-2 sm:px-3 py-1.5 text-xs sm:text-sm",
+    default: "px-3 sm:px-4 py-2 text-xs sm:text-sm",
+    lg: "px-4 sm:px-6 py-3 text-sm sm:text-base",
   };
 
   return (
     <button
       type={type}
       disabled={disabled}
-      className={`${baseClasses} ${variantClasses[variant]} ${sizeClasses[size]} ${className}`}
+      className={`${baseClasses} ${variantClasses[variant]} ${sizeClasses[size]} ${fullWidth ? 'w-full' : ''} ${className}`}
       onClick={onClick}
     >
-      {children}
+      <span className="truncate">{children}</span>
     </button>
   );
 };
@@ -178,32 +161,33 @@ const Button: React.FC<{
 const Badge: React.FC<{ children: React.ReactNode; variant: string; className?: string }> = ({ children, variant, className = "" }) => {
   const getVariantClasses = (variant: string) => {
     switch (variant) {
-      case "available": return "bg-green-100 text-green-800 border-green-200";
-      case "low_stock": return "bg-yellow-100 text-yellow-800 border-yellow-200";
-      case "out_of_stock": return "bg-red-100 text-red-800 border-red-200";
-      case "expired": return "bg-red-100 text-red-800 border-red-200";
-      case "near_expiry": return "bg-orange-100 text-orange-800 border-orange-200";
-      case "antibiotic": return "bg-blue-100 text-blue-800 border-blue-200";
-      case "vaccine": return "bg-purple-100 text-purple-800 border-purple-200";
-      case "antiparasitic": return "bg-green-100 text-green-800 border-green-200";
-      case "antiinflammatory": return "bg-yellow-100 text-yellow-800 border-yellow-200";
-      case "vitamin": return "bg-orange-100 text-orange-800 border-orange-200";
-      case "hormone": return "bg-pink-100 text-pink-800 border-pink-200";
-      case "anesthetic": return "bg-indigo-100 text-indigo-800 border-indigo-200";
-      case "other": return "bg-gray-100 text-gray-800 border-gray-200";
-      case "success": return "bg-green-100 text-green-800 border-green-200";
-      case "warning": return "bg-yellow-100 text-yellow-800 border-yellow-200";
-      default: return "bg-gray-100 text-gray-800 border-gray-200";
+      case "available": return "bg-green-100 text-green-800 ring-green-600/30";
+      case "low_stock": return "bg-amber-100 text-amber-800 ring-amber-600/30";
+      case "out_of_stock": return "bg-red-100 text-red-800 ring-red-600/30";
+      case "expired": return "bg-red-100 text-red-800 ring-red-600/30";
+      case "near_expiry": return "bg-orange-100 text-orange-800 ring-orange-600/30";
+      case "antibiotic": return "bg-blue-100 text-blue-800 ring-blue-600/30";
+      case "vaccine": return "bg-purple-100 text-purple-800 ring-purple-600/30";
+      case "antiparasitic": return "bg-green-100 text-green-800 ring-green-600/30";
+      case "antiinflammatory": return "bg-amber-100 text-amber-800 ring-amber-600/30";
+      case "vitamin": return "bg-orange-100 text-orange-800 ring-orange-600/30";
+      case "hormone": return "bg-pink-100 text-pink-800 ring-pink-600/30";
+      case "anesthetic": return "bg-indigo-100 text-indigo-800 ring-indigo-600/30";
+      case "other": return "bg-gray-100 text-gray-800 ring-gray-600/30";
+      case "success": return "bg-green-100 text-green-800 ring-green-600/30";
+      case "warning": return "bg-amber-100 text-amber-800 ring-amber-600/30";
+      default: return "bg-gray-100 text-gray-800 ring-gray-600/30";
     }
   };
 
   return (
-    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${getVariantClasses(variant)} ${className}`}>
+    <span className={`inline-flex items-center px-1.5 sm:px-2 py-0.5 rounded-lg text-xs font-medium ring-1 ring-inset whitespace-nowrap max-w-full truncate ${getVariantClasses(variant)} ${className}`}>
       {children}
     </span>
   );
 };
 
+// Modal completamente responsivo
 const NewMedicationModal: React.FC<{
   isOpen: boolean;
   onClose: () => void;
@@ -304,334 +288,612 @@ const NewMedicationModal: React.FC<{
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <motion.div
-        initial={{ opacity: 0, scale: 0.95 }}
-        animate={{ opacity: 1, scale: 1 }}
-        exit={{ opacity: 0, scale: 0.95 }}
-        className="bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-screen overflow-y-auto"
-      >
-        <div className="sticky top-0 bg-white px-6 py-4 border-b border-gray-200 flex items-center justify-between">
-          <h2 className="text-xl font-semibold text-gray-900">
-            {editingMedication ? "Editar Medicamento" : "Agregar Nuevo Medicamento"}
-          </h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
-            <X className="w-6 h-6" />
-          </button>
-        </div>
-
-        <form onSubmit={handleSubmit} className="p-6 space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Nombre Comercial *</label>
-              <input
-                type="text"
-                required
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Nombre Genérico</label>
-              <input
-                type="text"
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                value={formData.genericName}
-                onChange={(e) => setFormData({ ...formData, genericName: e.target.value })}
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Categoría *</label>
-              <select
-                required
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                value={formData.category}
-                onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-              >
-                <option value="antibiotic">Antibiótico</option>
-                <option value="vaccine">Vacuna</option>
-                <option value="antiparasitic">Antiparasitario</option>
-                <option value="antiinflammatory">Antiinflamatorio</option>
-                <option value="vitamin">Vitamina</option>
-                <option value="hormone">Hormona</option>
-                <option value="anesthetic">Anestésico</option>
-                <option value="other">Otro</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Fabricante *</label>
-              <input
-                type="text"
-                required
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                value={formData.manufacturer}
-                onChange={(e) => setFormData({ ...formData, manufacturer: e.target.value })}
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Proveedor *</label>
-              <input
-                type="text"
-                required
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                value={formData.supplier}
-                onChange={(e) => setFormData({ ...formData, supplier: e.target.value })}
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Principio Activo *</label>
-              <input
-                type="text"
-                required
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                value={formData.activeIngredient}
-                onChange={(e) => setFormData({ ...formData, activeIngredient: e.target.value })}
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Concentración *</label>
-              <input
-                type="text"
-                required
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                value={formData.concentration}
-                onChange={(e) => setFormData({ ...formData, concentration: e.target.value })}
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Presentación *</label>
-              <select
-                required
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                value={formData.presentation}
-                onChange={(e) => setFormData({ ...formData, presentation: e.target.value })}
-              >
-                <option value="injectable">Inyectable</option>
-                <option value="oral">Oral</option>
-                <option value="topical">Tópico</option>
-                <option value="powder">Polvo</option>
-                <option value="tablet">Tableta</option>
-                <option value="suspension">Suspensión</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Stock Actual *</label>
-              <input
-                type="number"
-                required
-                min="0"
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                value={formData.currentStock}
-                onChange={(e) => setFormData({ ...formData, currentStock: parseInt(e.target.value) || 0 })}
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Stock Mínimo *</label>
-              <input
-                type="number"
-                required
-                min="0"
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                value={formData.minStock}
-                onChange={(e) => setFormData({ ...formData, minStock: parseInt(e.target.value) || 0 })}
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Stock Máximo *</label>
-              <input
-                type="number"
-                required
-                min="0"
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                value={formData.maxStock}
-                onChange={(e) => setFormData({ ...formData, maxStock: parseInt(e.target.value) || 0 })}
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Unidad *</label>
-              <input
-                type="text"
-                required
-                placeholder="ej: frascos 100ml, tabletas, kg"
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                value={formData.unit}
-                onChange={(e) => setFormData({ ...formData, unit: e.target.value })}
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Costo Unitario ($) *</label>
-              <input
-                type="number"
-                required
-                min="0"
-                step="0.01"
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                value={formData.unitCost}
-                onChange={(e) => setFormData({ ...formData, unitCost: parseFloat(e.target.value) || 0 })}
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Almacén *</label>
-              <select
-                required
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                value={formData.warehouse}
-                onChange={(e) => setFormData({ ...formData, warehouse: e.target.value })}
-              >
-                <option value="Almacén Principal">Almacén Principal</option>
-                <option value="Almacén Secundario">Almacén Secundario</option>
-                <option value="Refrigerador">Refrigerador</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Estante *</label>
-              <input
-                type="text"
-                required
-                placeholder="ej: A-1, B-2"
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                value={formData.shelf}
-                onChange={(e) => setFormData({ ...formData, shelf: e.target.value })}
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Posición *</label>
-              <input
-                type="text"
-                required
-                placeholder="ej: 01, 02, 03"
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                value={formData.position}
-                onChange={(e) => setFormData({ ...formData, position: e.target.value })}
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Fecha de Vencimiento *</label>
-              <input
-                type="date"
-                required
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                value={formData.expirationDate}
-                onChange={(e) => setFormData({ ...formData, expirationDate: e.target.value })}
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Número de Lote *</label>
-              <input
-                type="text"
-                required
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                value={formData.batchNumber}
-                onChange={(e) => setFormData({ ...formData, batchNumber: e.target.value })}
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Registro SENASA</label>
-              <input
-                type="text"
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                value={formData.registrationNumber}
-                onChange={(e) => setFormData({ ...formData, registrationNumber: e.target.value })}
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Período de Retiro (días)</label>
-              <input
-                type="number"
-                min="0"
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                value={formData.withdrawalPeriod}
-                onChange={(e) => setFormData({ ...formData, withdrawalPeriod: parseInt(e.target.value) || 0 })}
-              />
+    <div className="fixed inset-0 z-50 overflow-y-auto overflow-x-hidden">
+      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+      
+      <div className="flex min-h-full items-end justify-center p-0 sm:p-2 text-center sm:items-center">
+        <motion.div
+          initial={{ opacity: 0, y: 100, scale: 0.95 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          exit={{ opacity: 0, y: 100, scale: 0.95 }}
+          className="relative transform overflow-hidden rounded-t-3xl sm:rounded-3xl bg-white/95 backdrop-blur-sm text-left shadow-2xl transition-all w-full max-w-3xl sm:max-h-[90vh] max-h-full"
+        >
+          {/* Fixed header */}
+          <div className="sticky top-0 z-10 bg-white/95 backdrop-blur-sm px-3 sm:px-6 py-3 sm:py-4 border-b border-gray-200/50">
+            <div className="flex items-center justify-between min-w-0">
+              <h3 className="text-base sm:text-lg font-semibold text-gray-900 truncate pr-2">
+                {editingMedication ? "Editar Medicamento" : "Nuevo Medicamento"}
+              </h3>
+              <button onClick={onClose} className="rounded-full p-2 hover:bg-gray-100 transition-colors flex-shrink-0">
+                <X className="w-4 h-4 sm:w-5 sm:h-5 text-gray-500" />
+              </button>
             </div>
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Descripción *</label>
-            <textarea
-              required
-              rows={3}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              value={formData.description}
-              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-            />
+          {/* Scrollable content */}
+          <div className="overflow-y-auto max-h-[calc(100vh-140px)] sm:max-h-[calc(90vh-140px)] overflow-x-hidden">
+            <form onSubmit={handleSubmit} className="p-3 sm:p-6 w-full max-w-full">
+              <div className="space-y-4 sm:space-y-6 w-full max-w-full">
+                {/* Basic Info Section */}
+                <div className="space-y-2 sm:space-y-3 w-full max-w-full">
+                  <h4 className="text-sm sm:text-base font-medium text-gray-900 border-b border-gray-200 pb-2">
+                    Información Básica
+                  </h4>
+                  
+                  <div className="space-y-3 sm:space-y-4 w-full max-w-full">
+                    <div className="w-full max-w-full">
+                      <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
+                        Nombre Comercial *
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        className="w-full max-w-full px-2 sm:px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-[#519a7c] text-xs sm:text-sm"
+                        value={formData.name}
+                        onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 w-full max-w-full">
+                      <div className="w-full max-w-full min-w-0">
+                        <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
+                          Nombre Genérico
+                        </label>
+                        <input
+                          type="text"
+                          className="w-full max-w-full px-2 sm:px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-[#519a7c] text-xs sm:text-sm"
+                          value={formData.genericName}
+                          onChange={(e) => setFormData({ ...formData, genericName: e.target.value })}
+                        />
+                      </div>
+
+                      <div className="w-full max-w-full min-w-0">
+                        <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
+                          Categoría *
+                        </label>
+                        <select
+                          required
+                          className="w-full max-w-full px-2 sm:px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-[#519a7c] text-xs sm:text-sm"
+                          value={formData.category}
+                          onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                        >
+                          <option value="antibiotic">Antibiótico</option>
+                          <option value="vaccine">Vacuna</option>
+                          <option value="antiparasitic">Antiparasitario</option>
+                          <option value="antiinflammatory">Antiinflamatorio</option>
+                          <option value="vitamin">Vitamina</option>
+                          <option value="hormone">Hormona</option>
+                          <option value="anesthetic">Anestésico</option>
+                          <option value="other">Otro</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 w-full max-w-full">
+                      <div className="w-full max-w-full min-w-0">
+                        <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
+                          Fabricante *
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          className="w-full max-w-full px-2 sm:px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-[#519a7c] text-xs sm:text-sm"
+                          value={formData.manufacturer}
+                          onChange={(e) => setFormData({ ...formData, manufacturer: e.target.value })}
+                        />
+                      </div>
+
+                      <div className="w-full max-w-full min-w-0">
+                        <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
+                          Proveedor *
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          className="w-full max-w-full px-2 sm:px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-[#519a7c] text-xs sm:text-sm"
+                          value={formData.supplier}
+                          onChange={(e) => setFormData({ ...formData, supplier: e.target.value })}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Pharmaceutical Info */}
+                <div className="space-y-3 sm:space-y-4 w-full max-w-full">
+                  <h4 className="text-sm sm:text-base font-medium text-gray-900 border-b border-gray-200 pb-2">
+                    Información Farmacológica
+                  </h4>
+                  
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 w-full max-w-full">
+                    <div className="w-full max-w-full min-w-0">
+                      <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
+                        Principio Activo *
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        className="w-full max-w-full px-2 sm:px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-[#519a7c] text-xs sm:text-sm"
+                        value={formData.activeIngredient}
+                        onChange={(e) => setFormData({ ...formData, activeIngredient: e.target.value })}
+                      />
+                    </div>
+
+                    <div className="w-full max-w-full min-w-0">
+                      <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
+                        Concentración *
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        className="w-full max-w-full px-2 sm:px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-[#519a7c] text-xs sm:text-sm"
+                        value={formData.concentration}
+                        onChange={(e) => setFormData({ ...formData, concentration: e.target.value })}
+                      />
+                    </div>
+
+                    <div className="sm:col-span-2 w-full max-w-full">
+                      <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
+                        Presentación *
+                      </label>
+                      <select
+                        required
+                        className="w-full max-w-full px-2 sm:px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-[#519a7c] text-xs sm:text-sm"
+                        value={formData.presentation}
+                        onChange={(e) => setFormData({ ...formData, presentation: e.target.value })}
+                      >
+                        <option value="injectable">Inyectable</option>
+                        <option value="oral">Oral</option>
+                        <option value="topical">Tópico</option>
+                        <option value="powder">Polvo</option>
+                        <option value="tablet">Tableta</option>
+                        <option value="suspension">Suspensión</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Inventory Info */}
+                <div className="space-y-3 sm:space-y-4 w-full max-w-full">
+                  <h4 className="text-sm sm:text-base font-medium text-gray-900 border-b border-gray-200 pb-2">
+                    Información de Inventario
+                  </h4>
+                  
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-4 w-full max-w-full">
+                    <div className="w-full max-w-full min-w-0">
+                      <label className="block text-xs font-medium text-gray-700 mb-1">
+                        Stock Actual *
+                      </label>
+                      <input
+                        type="number"
+                        required
+                        min="0"
+                        className="w-full max-w-full px-2 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-[#519a7c] text-xs"
+                        value={formData.currentStock}
+                        onChange={(e) => setFormData({ ...formData, currentStock: parseInt(e.target.value) || 0 })}
+                      />
+                    </div>
+
+                    <div className="w-full max-w-full min-w-0">
+                      <label className="block text-xs font-medium text-gray-700 mb-1">
+                        Stock Mínimo *
+                      </label>
+                      <input
+                        type="number"
+                        required
+                        min="0"
+                        className="w-full max-w-full px-2 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-[#519a7c] text-xs"
+                        value={formData.minStock}
+                        onChange={(e) => setFormData({ ...formData, minStock: parseInt(e.target.value) || 0 })}
+                      />
+                    </div>
+
+                    <div className="w-full max-w-full min-w-0">
+                      <label className="block text-xs font-medium text-gray-700 mb-1">
+                        Stock Máximo *
+                      </label>
+                      <input
+                        type="number"
+                        required
+                        min="0"
+                        className="w-full max-w-full px-2 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-[#519a7c] text-xs"
+                        value={formData.maxStock}
+                        onChange={(e) => setFormData({ ...formData, maxStock: parseInt(e.target.value) || 0 })}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 w-full max-w-full">
+                    <div className="w-full max-w-full min-w-0">
+                      <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
+                        Unidad *
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="ej: frascos 100ml"
+                        className="w-full max-w-full px-2 sm:px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-[#519a7c] text-xs sm:text-sm"
+                        value={formData.unit}
+                        onChange={(e) => setFormData({ ...formData, unit: e.target.value })}
+                      />
+                    </div>
+
+                    <div className="w-full max-w-full min-w-0">
+                      <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
+                        Costo Unitario ($) *
+                      </label>
+                      <input
+                        type="number"
+                        required
+                        min="0"
+                        step="0.01"
+                        className="w-full max-w-full px-2 sm:px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-[#519a7c] text-xs sm:text-sm"
+                        value={formData.unitCost}
+                        onChange={(e) => setFormData({ ...formData, unitCost: parseFloat(e.target.value) || 0 })}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Location Info */}
+                <div className="space-y-3 sm:space-y-4 w-full max-w-full">
+                  <h4 className="text-sm sm:text-base font-medium text-gray-900 border-b border-gray-200 pb-2">
+                    Ubicación
+                  </h4>
+                  
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-4 w-full max-w-full">
+                    <div className="w-full max-w-full min-w-0">
+                      <label className="block text-xs font-medium text-gray-700 mb-1">
+                        Almacén *
+                      </label>
+                      <select
+                        required
+                        className="w-full max-w-full px-2 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-[#519a7c] text-xs"
+                        value={formData.warehouse}
+                        onChange={(e) => setFormData({ ...formData, warehouse: e.target.value })}
+                      >
+                        <option value="Almacén Principal">Principal</option>
+                        <option value="Almacén Secundario">Secundario</option>
+                        <option value="Refrigerador">Refrigerador</option>
+                      </select>
+                    </div>
+
+                    <div className="w-full max-w-full min-w-0">
+                      <label className="block text-xs font-medium text-gray-700 mb-1">
+                        Estante *
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="A-1"
+                        className="w-full max-w-full px-2 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-[#519a7c] text-xs"
+                        value={formData.shelf}
+                        onChange={(e) => setFormData({ ...formData, shelf: e.target.value })}
+                      />
+                    </div>
+
+                    <div className="w-full max-w-full min-w-0">
+                      <label className="block text-xs font-medium text-gray-700 mb-1">
+                        Posición *
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="01"
+                        className="w-full max-w-full px-2 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-[#519a7c] text-xs"
+                        value={formData.position}
+                        onChange={(e) => setFormData({ ...formData, position: e.target.value })}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Batch Info */}
+                <div className="space-y-3 sm:space-y-4 w-full max-w-full">
+                  <h4 className="text-sm sm:text-base font-medium text-gray-900 border-b border-gray-200 pb-2">
+                    Información del Lote
+                  </h4>
+                  
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 w-full max-w-full">
+                    <div className="w-full max-w-full min-w-0">
+                      <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
+                        Fecha de Vencimiento *
+                      </label>
+                      <input
+                        type="date"
+                        required
+                        className="w-full max-w-full px-2 sm:px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-[#519a7c] text-xs sm:text-sm"
+                        value={formData.expirationDate}
+                        onChange={(e) => setFormData({ ...formData, expirationDate: e.target.value })}
+                      />
+                    </div>
+
+                    <div className="w-full max-w-full min-w-0">
+                      <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
+                        Número de Lote *
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        className="w-full max-w-full px-2 sm:px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-[#519a7c] text-xs sm:text-sm"
+                        value={formData.batchNumber}
+                        onChange={(e) => setFormData({ ...formData, batchNumber: e.target.value })}
+                      />
+                    </div>
+
+                    <div className="w-full max-w-full min-w-0">
+                      <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
+                        Registro SENASA
+                      </label>
+                      <input
+                        type="text"
+                        className="w-full max-w-full px-2 sm:px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-[#519a7c] text-xs sm:text-sm"
+                        value={formData.registrationNumber}
+                        onChange={(e) => setFormData({ ...formData, registrationNumber: e.target.value })}
+                      />
+                    </div>
+
+                    <div className="w-full max-w-full min-w-0">
+                      <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
+                        Período de Retiro (días)
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        className="w-full max-w-full px-2 sm:px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-[#519a7c] text-xs sm:text-sm"
+                        value={formData.withdrawalPeriod}
+                        onChange={(e) => setFormData({ ...formData, withdrawalPeriod: parseInt(e.target.value) || 0 })}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Additional Info */}
+                <div className="space-y-3 sm:space-y-4 w-full max-w-full">
+                  <h4 className="text-sm sm:text-base font-medium text-gray-900 border-b border-gray-200 pb-2">
+                    Información Adicional
+                  </h4>
+                  
+                  <div className="w-full max-w-full">
+                    <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
+                      Descripción *
+                    </label>
+                    <textarea
+                      required
+                      rows={3}
+                      className="w-full max-w-full px-2 sm:px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-[#519a7c] text-xs sm:text-sm resize-none"
+                      value={formData.description}
+                      onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                    />
+                  </div>
+
+                  <div className="w-full max-w-full">
+                    <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
+                      Condiciones de Almacenamiento *
+                    </label>
+                    <textarea
+                      required
+                      rows={2}
+                      placeholder="ej: Refrigeración 2-8°C"
+                      className="w-full max-w-full px-2 sm:px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-[#519a7c] text-xs sm:text-sm resize-none"
+                      value={formData.storageConditions}
+                      onChange={(e) => setFormData({ ...formData, storageConditions: e.target.value })}
+                    />
+                  </div>
+
+                  <div className="space-y-2 sm:space-y-3 w-full max-w-full">
+                    <div className="flex items-center">
+                      <input
+                        type="checkbox"
+                        id="requiresPrescription"
+                        className="h-4 w-4 text-[#519a7c] focus:ring-[#519a7c] border-gray-300 rounded"
+                        checked={formData.requiresPrescription}
+                        onChange={(e) => setFormData({ ...formData, requiresPrescription: e.target.checked })}
+                      />
+                      <label htmlFor="requiresPrescription" className="ml-2 text-xs sm:text-sm text-gray-700">
+                        Requiere Prescripción Veterinaria
+                      </label>
+                    </div>
+
+                    <div className="flex items-center">
+                      <input
+                        type="checkbox"
+                        id="isControlled"
+                        className="h-4 w-4 text-[#519a7c] focus:ring-[#519a7c] border-gray-300 rounded"
+                        checked={formData.isControlled}
+                        onChange={(e) => setFormData({ ...formData, isControlled: e.target.checked })}
+                      />
+                      <label htmlFor="isControlled" className="ml-2 text-xs sm:text-sm text-gray-700">
+                        Sustancia Controlada
+                      </label>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </form>
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Condiciones de Almacenamiento *</label>
-            <textarea
-              required
-              rows={2}
-              placeholder="ej: Refrigeración 2-8°C, proteger de la luz"
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              value={formData.storageConditions}
-              onChange={(e) => setFormData({ ...formData, storageConditions: e.target.value })}
-            />
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="flex items-center">
-              <input
-                type="checkbox"
-                id="requiresPrescription"
-                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                checked={formData.requiresPrescription}
-                onChange={(e) => setFormData({ ...formData, requiresPrescription: e.target.checked })}
-              />
-              <label htmlFor="requiresPrescription" className="ml-2 text-sm text-gray-700">
-                Requiere Prescripción Veterinaria
-              </label>
+          {/* Fixed bottom buttons */}
+          <div className="sticky bottom-0 bg-white/95 backdrop-blur-sm border-t border-gray-200/50 px-3 sm:px-6 py-3 sm:py-4">
+            <div className="flex flex-col-reverse sm:flex-row gap-2 sm:gap-3 w-full max-w-full">
+              <Button variant="outline" onClick={onClose} fullWidth className="sm:w-auto">
+                Cancelar
+              </Button>
+              <Button type="submit" fullWidth className="sm:w-auto">
+                <Save className="w-3 h-3 sm:w-4 sm:h-4 mr-2" />
+                <span className="truncate">{editingMedication ? "Actualizar" : "Guardar"}</span>
+              </Button>
             </div>
-
-            <div className="flex items-center">
-              <input
-                type="checkbox"
-                id="isControlled"
-                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                checked={formData.isControlled}
-                onChange={(e) => setFormData({ ...formData, isControlled: e.target.checked })}
-              />
-              <label htmlFor="isControlled" className="ml-2 text-sm text-gray-700">
-                Sustancia Controlada
-              </label>
-            </div>
           </div>
-
-          <div className="flex items-center justify-end gap-3 pt-6 border-t border-gray-200">
-            <Button variant="outline" onClick={onClose}>
-              Cancelar
-            </Button>
-            <Button type="submit">
-              <Save className="w-4 h-4 mr-2" />
-              {editingMedication ? "Actualizar Medicamento" : "Guardar Medicamento"}
-            </Button>
-          </div>
-        </form>
-      </motion.div>
+        </motion.div>
+      </div>
     </div>
   );
 };
 
+// Componente de tarjeta totalmente responsivo
+const MedicationCard: React.FC<{
+  medication: Medication;
+  onView: (medication: Medication) => void;
+  onEdit: (medication: Medication) => void;
+  onDelete: (medication: Medication) => void;
+}> = ({ medication, onView, onEdit, onDelete }) => {
+  const [isExpanded, setIsExpanded] = useState(false);
+
+  return (
+    <Card className="overflow-hidden hover:shadow-xl transition-all duration-300 w-full max-w-full">
+      {/* Compact header for mobile */}
+      <div className="p-3 bg-gradient-to-r from-[#519a7c]/10 to-[#f4ac3a]/10 border-b border-gray-100 w-full max-w-full">
+        <div className="flex items-start justify-between gap-2 min-w-0 w-full max-w-full">
+          <div className="min-w-0 flex-1 max-w-full">
+            <div className="flex items-center gap-2 mb-2 flex-wrap">
+              <h3 className="font-semibold text-gray-900 text-xs sm:text-sm truncate min-w-0 max-w-full">
+                {medication.name}
+              </h3>
+              <Badge variant={medication.status}>
+                {medication.status === "available" ? "✓" :
+                 medication.status === "low_stock" ? "⚠" :
+                 medication.status === "out_of_stock" ? "✗" :
+                 medication.status === "near_expiry" ? "⏰" : "❌"}
+              </Badge>
+            </div>
+            
+            <div className="flex items-center justify-between text-xs text-gray-600 w-full max-w-full">
+              <span className="flex items-center gap-1 min-w-0 flex-1">
+                <Package className="w-3 h-3 flex-shrink-0" />
+                <span className={`font-medium ${
+                  medication.currentStock <= medication.minStock ? "text-red-600" :
+                  medication.currentStock <= medication.minStock * 1.5 ? "text-amber-600" : "text-green-600"
+                }`}>
+                  {medication.currentStock}
+                </span>
+                <span className="truncate">/ {medication.minStock} {medication.unit}</span>
+              </span>
+              <span className="font-medium flex-shrink-0">${medication.totalValue.toFixed(0)}</span>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-1 flex-shrink-0">
+            <button
+              onClick={() => onView(medication)}
+              className="p-1.5 rounded-lg hover:bg-[#519a7c]/10 text-[#519a7c] transition-colors"
+            >
+              <Eye className="w-3 h-3 sm:w-4 sm:h-4" />
+            </button>
+            <button
+              onClick={() => onEdit(medication)}
+              className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-600 transition-colors"
+            >
+              <Edit className="w-3 h-3 sm:w-4 sm:h-4" />
+            </button>
+            <button
+              onClick={() => onDelete(medication)}
+              className="p-1.5 rounded-lg hover:bg-red-50 text-red-600 transition-colors"
+            >
+              <Trash2 className="w-3 h-3 sm:w-4 sm:h-4" />
+            </button>
+            <button
+              onClick={() => setIsExpanded(!isExpanded)}
+              className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-600 transition-colors"
+            >
+              {isExpanded ? <ChevronUp className="w-3 h-3 sm:w-4 sm:h-4" /> : <ChevronDown className="w-3 h-3 sm:w-4 sm:h-4" />}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Expandable content */}
+      <AnimatePresence>
+        {isExpanded && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="overflow-hidden w-full max-w-full"
+          >
+            <div className="p-3 space-y-3 text-xs bg-gradient-to-r from-white to-gray-50/50 w-full max-w-full">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 w-full max-w-full">
+                <div className="min-w-0 max-w-full">
+                  <span className="text-gray-500">Categoría:</span>
+                  <div className="mt-1">
+                    <Badge variant={medication.category}>
+                      {medication.category === "antibiotic" ? "Antibiótico" :
+                       medication.category === "vaccine" ? "Vacuna" :
+                       medication.category === "antiparasitic" ? "Antiparasitario" :
+                       medication.category === "antiinflammatory" ? "Antiinflamatorio" :
+                       medication.category === "vitamin" ? "Vitamina" :
+                       medication.category === "hormone" ? "Hormona" :
+                       medication.category === "anesthetic" ? "Anestésico" : "Otro"}
+                    </Badge>
+                  </div>
+                </div>
+                <div className="min-w-0 max-w-full">
+                  <span className="text-gray-500">Presentación:</span>
+                  <p className="font-medium mt-1 break-words">
+                    {medication.presentation === "injectable" ? "Inyectable" :
+                     medication.presentation === "oral" ? "Oral" :
+                     medication.presentation === "topical" ? "Tópico" :
+                     medication.presentation === "powder" ? "Polvo" :
+                     medication.presentation === "tablet" ? "Tableta" : "Suspensión"}
+                  </p>
+                </div>
+              </div>
+
+              <div className="min-w-0 max-w-full">
+                <span className="text-gray-500">Principio Activo:</span>
+                <p className="font-medium break-words">{medication.activeIngredient}</p>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 w-full max-w-full">
+                <div className="min-w-0 max-w-full">
+                  <span className="text-gray-500">Concentración:</span>
+                  <p className="font-medium break-words">{medication.concentration}</p>
+                </div>
+                <div className="min-w-0 max-w-full">
+                  <span className="text-gray-500">Lote:</span>
+                  <p className="font-medium break-words">{medication.batchNumber}</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 w-full max-w-full">
+                <div className="min-w-0 max-w-full">
+                  <span className="text-gray-500">Ubicación:</span>
+                  <p className="font-medium break-words">
+                    {medication.location.warehouse} - {medication.location.shelf}-{medication.location.position}
+                  </p>
+                </div>
+                <div className="min-w-0 max-w-full">
+                  <span className="text-gray-500">Vencimiento:</span>
+                  <p className={`font-medium ${
+                    new Date(medication.expirationDate).getTime() - new Date().getTime() < 30 * 24 * 60 * 60 * 1000 ? "text-red-600" :
+                    new Date(medication.expirationDate).getTime() - new Date().getTime() < 60 * 24 * 60 * 60 * 1000 ? "text-amber-600" : "text-gray-900"
+                  }`}>
+                    {medication.expirationDate.toLocaleDateString()}
+                  </p>
+                </div>
+              </div>
+
+              <div className="min-w-0 max-w-full">
+                <span className="text-gray-500">Descripción:</span>
+                <p className="text-gray-700 break-words">{medication.description}</p>
+              </div>
+
+              {(medication.requiresPrescription || medication.isControlled) && (
+                <div className="flex flex-wrap gap-1 pt-2 border-t border-gray-100 w-full max-w-full">
+                  {medication.requiresPrescription && <Badge variant="other">Receta</Badge>}
+                  {medication.isControlled && <Badge variant="other">Controlada</Badge>}
+                </div>
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </Card>
+  );
+};
+
+// Modal de detalles responsivo
 const MedicationDetailsModal: React.FC<{
   medication: Medication | null;
   isOpen: boolean;
@@ -640,199 +902,187 @@ const MedicationDetailsModal: React.FC<{
   if (!isOpen || !medication) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <motion.div
-        initial={{ opacity: 0, scale: 0.95 }}
-        animate={{ opacity: 1, scale: 1 }}
-        exit={{ opacity: 0, scale: 0.95 }}
-        className="bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-screen overflow-y-auto"
-      >
-        <div className="sticky top-0 bg-white px-6 py-4 border-b border-gray-200 flex items-center justify-between">
-          <h2 className="text-xl font-semibold text-gray-900">Detalles del Medicamento</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
-            <X className="w-6 h-6" />
-          </button>
-        </div>
-
-        <div className="p-6 space-y-6">
-          <div>
-            <h3 className="text-lg font-medium text-gray-900 mb-4">Información General</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="text-sm text-gray-600">Nombre Comercial</label>
-                <p className="font-medium">{medication.name}</p>
-              </div>
-              {medication.genericName && (
-                <div>
-                  <label className="text-sm text-gray-600">Nombre Genérico</label>
-                  <p className="font-medium">{medication.genericName}</p>
-                </div>
-              )}
-              <div>
-                <label className="text-sm text-gray-600">Categoría</label>
-                <div className="mt-1">
-                  <Badge variant={medication.category}>
-                    {medication.category === "antibiotic" ? "Antibiótico" :
-                     medication.category === "vaccine" ? "Vacuna" :
-                     medication.category === "antiparasitic" ? "Antiparasitario" :
-                     medication.category === "antiinflammatory" ? "Antiinflamatorio" :
-                     medication.category === "vitamin" ? "Vitamina" :
-                     medication.category === "hormone" ? "Hormona" :
-                     medication.category === "anesthetic" ? "Anestésico" : "Otro"}
-                  </Badge>
-                </div>
-              </div>
-              <div>
-                <label className="text-sm text-gray-600">Estado</label>
-                <div className="mt-1">
-                  <Badge variant={medication.status}>
-                    {medication.status === "available" ? "Disponible" :
-                     medication.status === "low_stock" ? "Stock bajo" :
-                     medication.status === "out_of_stock" ? "Sin stock" :
-                     medication.status === "near_expiry" ? "Por vencer" : "Vencido"}
-                  </Badge>
-                </div>
-              </div>
-              <div>
-                <label className="text-sm text-gray-600">Fabricante</label>
-                <p className="font-medium">{medication.manufacturer}</p>
-              </div>
-              <div>
-                <label className="text-sm text-gray-600">Proveedor</label>
-                <p className="font-medium">{medication.supplier}</p>
-              </div>
+    <div className="fixed inset-0 z-50 overflow-y-auto overflow-x-hidden">
+      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+      
+      <div className="flex min-h-full items-end justify-center p-0 sm:p-2 text-center sm:items-center">
+        <motion.div
+          initial={{ opacity: 0, y: 100 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: 100 }}
+          className="relative transform overflow-hidden rounded-t-3xl sm:rounded-3xl bg-white/95 backdrop-blur-sm text-left shadow-2xl transition-all w-full max-w-xl max-h-full"
+        >
+          <div className="sticky top-0 z-10 bg-white/95 backdrop-blur-sm px-3 sm:px-4 py-3 sm:py-4 border-b border-gray-200/50">
+            <div className="flex items-center justify-between min-w-0">
+              <h3 className="text-base sm:text-lg font-semibold text-gray-900 truncate pr-2">
+                {medication.name}
+              </h3>
+              <button onClick={onClose} className="rounded-full p-2 hover:bg-gray-100 transition-colors flex-shrink-0">
+                <X className="w-4 h-4 sm:w-5 sm:h-5 text-gray-500" />
+              </button>
             </div>
           </div>
 
-          <div>
-            <h3 className="text-lg font-medium text-gray-900 mb-4">Información Farmacológica</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="text-sm text-gray-600">Principio Activo</label>
-                <p className="font-medium">{medication.activeIngredient}</p>
-              </div>
-              <div>
-                <label className="text-sm text-gray-600">Concentración</label>
-                <p className="font-medium">{medication.concentration}</p>
-              </div>
-              <div>
-                <label className="text-sm text-gray-600">Presentación</label>
-                <p className="font-medium">
-                  {medication.presentation === "injectable" ? "Inyectable" :
-                   medication.presentation === "oral" ? "Oral" :
-                   medication.presentation === "topical" ? "Tópico" :
-                   medication.presentation === "powder" ? "Polvo" :
-                   medication.presentation === "tablet" ? "Tableta" : "Suspensión"}
-                </p>
-              </div>
-              {medication.withdrawalPeriod && (
-                <div>
-                  <label className="text-sm text-gray-600">Período de Retiro</label>
-                  <p className="font-medium">{medication.withdrawalPeriod} días</p>
-                </div>
-              )}
-            </div>
-          </div>
-
-          <div>
-            <h3 className="text-lg font-medium text-gray-900 mb-4">Inventario</h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div>
-                <label className="text-sm text-gray-600">Stock Actual</label>
-                <p className={`text-2xl font-bold ${
+          <div className="overflow-y-auto max-h-[calc(100vh-120px)] p-3 sm:p-4 space-y-4 overflow-x-hidden">
+            {/* Key metrics */}
+            <div className="grid grid-cols-2 gap-3 sm:gap-4 w-full max-w-full">
+              <div className="text-center p-3 sm:p-4 bg-gradient-to-br from-[#519a7c]/10 to-[#519a7c]/5 rounded-xl border border-[#519a7c]/20 min-w-0 max-w-full">
+                <div className={`text-xl sm:text-2xl font-bold ${
                   medication.currentStock <= medication.minStock ? "text-red-600" :
-                  medication.currentStock <= medication.minStock * 1.5 ? "text-yellow-600" : "text-green-600"
+                  medication.currentStock <= medication.minStock * 1.5 ? "text-amber-600" : "text-green-600"
                 }`}>
-                  {medication.currentStock} {medication.unit}
-                </p>
-              </div>
-              <div>
-                <label className="text-sm text-gray-600">Stock Mínimo</label>
-                <p className="font-medium">{medication.minStock} {medication.unit}</p>
-              </div>
-              <div>
-                <label className="text-sm text-gray-600">Stock Máximo</label>
-                <p className="font-medium">{medication.maxStock} {medication.unit}</p>
-              </div>
-              <div>
-                <label className="text-sm text-gray-600">Costo Unitario</label>
-                <p className="font-medium">${medication.unitCost.toFixed(2)}</p>
-              </div>
-              <div>
-                <label className="text-sm text-gray-600">Valor Total</label>
-                <p className="font-medium">${medication.totalValue.toFixed(2)}</p>
-              </div>
-              <div>
-                <label className="text-sm text-gray-600">Ubicación</label>
-                <p className="font-medium">
-                  {medication.location.warehouse} - {medication.location.shelf}-{medication.location.position}
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <div>
-            <h3 className="text-lg font-medium text-gray-900 mb-4">Información del Lote</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="text-sm text-gray-600">Número de Lote</label>
-                <p className="font-medium">{medication.batchNumber}</p>
-              </div>
-              <div>
-                <label className="text-sm text-gray-600">Fecha de Vencimiento</label>
-                <p className={`font-medium ${
-                  new Date(medication.expirationDate).getTime() - new Date().getTime() < 30 * 24 * 60 * 60 * 1000 ? "text-red-600" :
-                  new Date(medication.expirationDate).getTime() - new Date().getTime() < 60 * 24 * 60 * 60 * 1000 ? "text-yellow-600" : "text-gray-900"
-                }`}>
-                  {medication.expirationDate.toLocaleDateString()}
-                </p>
-              </div>
-              {medication.registrationNumber && (
-                <div>
-                  <label className="text-sm text-gray-600">Registro SENASA</label>
-                  <p className="font-medium">{medication.registrationNumber}</p>
+                  {medication.currentStock}
                 </div>
-              )}
-              <div>
-                <label className="text-sm text-gray-600">Última Actualización</label>
-                <p className="font-medium">{medication.lastUpdated.toLocaleDateString()}</p>
+                <div className="text-xs text-gray-600 break-words">{medication.unit} en stock</div>
+              </div>
+              <div className="text-center p-3 sm:p-4 bg-gradient-to-br from-[#f4ac3a]/10 to-[#f4ac3a]/5 rounded-xl border border-[#f4ac3a]/20 min-w-0 max-w-full">
+                <div className="text-xl sm:text-2xl font-bold text-gray-900">
+                  ${medication.totalValue.toFixed(0)}
+                </div>
+                <div className="text-xs text-gray-600">Valor total</div>
               </div>
             </div>
-          </div>
 
-          <div>
-            <h3 className="text-lg font-medium text-gray-900 mb-4">Información Adicional</h3>
-            <div className="space-y-4">
-              <div>
-                <label className="text-sm text-gray-600">Descripción</label>
-                <p className="font-medium">{medication.description}</p>
-              </div>
-              <div>
-                <label className="text-sm text-gray-600">Condiciones de Almacenamiento</label>
-                <p className="font-medium">{medication.storageConditions}</p>
-              </div>
-              {(medication.requiresPrescription || medication.isControlled) && (
-                <div>
-                  <label className="text-sm text-gray-600">Restricciones</label>
-                  <div className="flex gap-2 mt-1">
-                    {medication.requiresPrescription && <Badge variant="other">Requiere Receta</Badge>}
-                    {medication.isControlled && <Badge variant="other">Sustancia Controlada</Badge>}
+            {/* Status and category */}
+            <div className="flex flex-wrap gap-2 w-full max-w-full">
+              <Badge variant={medication.status}>
+                {medication.status === "available" ? "Disponible" :
+                 medication.status === "low_stock" ? "Stock bajo" :
+                 medication.status === "out_of_stock" ? "Sin stock" :
+                 medication.status === "near_expiry" ? "Por vencer" : "Vencido"}
+              </Badge>
+              <Badge variant={medication.category}>
+                {medication.category === "antibiotic" ? "Antibiótico" :
+                 medication.category === "vaccine" ? "Vacuna" :
+                 medication.category === "antiparasitic" ? "Antiparasitario" :
+                 medication.category === "antiinflammatory" ? "Antiinflamatorio" :
+                 medication.category === "vitamin" ? "Vitamina" :
+                 medication.category === "hormone" ? "Hormona" :
+                 medication.category === "anesthetic" ? "Anestésico" : "Otro"}
+              </Badge>
+              {medication.requiresPrescription && <Badge variant="other">Requiere Receta</Badge>}
+              {medication.isControlled && <Badge variant="other">Controlada</Badge>}
+            </div>
+
+            {/* Details sections */}
+            <div className="space-y-4 text-xs sm:text-sm w-full max-w-full">
+              <div className="bg-gradient-to-r from-white to-gray-50/50 p-3 sm:p-4 rounded-xl w-full max-w-full">
+                <h4 className="font-medium text-gray-900 mb-2">Información Farmacológica</h4>
+                <div className="space-y-2 w-full max-w-full">
+                  <div className="min-w-0 max-w-full">
+                    <span className="text-gray-600">Principio Activo: </span>
+                    <span className="font-medium break-words">{medication.activeIngredient}</span>
+                  </div>
+                  <div className="min-w-0 max-w-full">
+                    <span className="text-gray-600">Concentración: </span>
+                    <span className="font-medium break-words">{medication.concentration}</span>
+                  </div>
+                  <div className="min-w-0 max-w-full">
+                    <span className="text-gray-600">Presentación: </span>
+                    <span className="font-medium">
+                      {medication.presentation === "injectable" ? "Inyectable" :
+                       medication.presentation === "oral" ? "Oral" :
+                       medication.presentation === "topical" ? "Tópico" :
+                       medication.presentation === "powder" ? "Polvo" :
+                       medication.presentation === "tablet" ? "Tableta" : "Suspensión"}
+                    </span>
                   </div>
                 </div>
-              )}
+              </div>
+
+              <div className="bg-gradient-to-r from-white to-gray-50/50 p-3 sm:p-4 rounded-xl w-full max-w-full">
+                <h4 className="font-medium text-gray-900 mb-2">Inventario</h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 w-full max-w-full">
+                  <div className="min-w-0 max-w-full">
+                    <span className="text-gray-600">Mínimo: </span>
+                    <span className="font-medium break-words">{medication.minStock} {medication.unit}</span>
+                  </div>
+                  <div className="min-w-0 max-w-full">
+                    <span className="text-gray-600">Máximo: </span>
+                    <span className="font-medium break-words">{medication.maxStock} {medication.unit}</span>
+                  </div>
+                  <div className="min-w-0 max-w-full">
+                    <span className="text-gray-600">Costo unitario: </span>
+                    <span className="font-medium">${medication.unitCost.toFixed(2)}</span>
+                  </div>
+                  <div className="min-w-0 max-w-full">
+                    <span className="text-gray-600">Ubicación: </span>
+                    <span className="font-medium break-words">
+                      {medication.location.warehouse} - {medication.location.shelf}-{medication.location.position}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-gradient-to-r from-white to-gray-50/50 p-3 sm:p-4 rounded-xl w-full max-w-full">
+                <h4 className="font-medium text-gray-900 mb-2">Lote y Vencimiento</h4>
+                <div className="space-y-2 w-full max-w-full">
+                  <div className="min-w-0 max-w-full">
+                    <span className="text-gray-600">Número de Lote: </span>
+                    <span className="font-medium break-words">{medication.batchNumber}</span>
+                  </div>
+                  <div className="min-w-0 max-w-full">
+                    <span className="text-gray-600">Vencimiento: </span>
+                    <span className={`font-medium ${
+                      new Date(medication.expirationDate).getTime() - new Date().getTime() < 30 * 24 * 60 * 60 * 1000 ? "text-red-600" :
+                      new Date(medication.expirationDate).getTime() - new Date().getTime() < 60 * 24 * 60 * 60 * 1000 ? "text-amber-600" : "text-gray-900"
+                    }`}>
+                      {medication.expirationDate.toLocaleDateString()}
+                    </span>
+                  </div>
+                  {medication.registrationNumber && (
+                    <div className="min-w-0 max-w-full">
+                      <span className="text-gray-600">Registro SENASA: </span>
+                      <span className="font-medium break-words">{medication.registrationNumber}</span>
+                    </div>
+                  )}
+                  {medication.withdrawalPeriod && (
+                    <div className="min-w-0 max-w-full">
+                      <span className="text-gray-600">Período de Retiro: </span>
+                      <span className="font-medium">{medication.withdrawalPeriod} días</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="bg-gradient-to-r from-white to-gray-50/50 p-3 sm:p-4 rounded-xl w-full max-w-full">
+                <h4 className="font-medium text-gray-900 mb-2">Descripción</h4>
+                <p className="text-gray-700 break-words">{medication.description}</p>
+              </div>
+
+              <div className="bg-gradient-to-r from-white to-gray-50/50 p-3 sm:p-4 rounded-xl w-full max-w-full">
+                <h4 className="font-medium text-gray-900 mb-2">Almacenamiento</h4>
+                <p className="text-gray-700 break-words">{medication.storageConditions}</p>
+              </div>
+
+              <div className="bg-gradient-to-r from-white to-gray-50/50 p-3 sm:p-4 rounded-xl w-full max-w-full">
+                <h4 className="font-medium text-gray-900 mb-2">Proveedor</h4>
+                <div className="space-y-1 w-full max-w-full">
+                  <div className="min-w-0 max-w-full">
+                    <span className="text-gray-600">Fabricante: </span>
+                    <span className="font-medium break-words">{medication.manufacturer}</span>
+                  </div>
+                  <div className="min-w-0 max-w-full">
+                    <span className="text-gray-600">Proveedor: </span>
+                    <span className="font-medium break-words">{medication.supplier}</span>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
-        </div>
 
-        <div className="px-6 py-4 border-t border-gray-200 flex justify-end">
-          <Button variant="outline" onClick={onClose}>Cerrar</Button>
-        </div>
-      </motion.div>
+          <div className="sticky bottom-0 bg-white/95 backdrop-blur-sm border-t border-gray-200/50 px-3 sm:px-4 py-3 sm:py-4">
+            <Button variant="outline" onClick={onClose} fullWidth>
+              Cerrar
+            </Button>
+          </div>
+        </motion.div>
+      </div>
     </div>
   );
 };
 
-// Modal de confirmación para eliminar
+// Modal de confirmación responsivo
 const DeleteConfirmModal: React.FC<{
   isOpen: boolean;
   onClose: () => void;
@@ -842,44 +1092,48 @@ const DeleteConfirmModal: React.FC<{
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <motion.div
-        initial={{ opacity: 0, scale: 0.95 }}
-        animate={{ opacity: 1, scale: 1 }}
-        exit={{ opacity: 0, scale: 0.95 }}
-        className="bg-white rounded-lg shadow-xl w-full max-w-md"
-      >
-        <div className="p-6">
-          <div className="flex items-center gap-4 mb-4">
-            <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center">
-              <AlertTriangle className="w-6 h-6 text-red-600" />
+    <div className="fixed inset-0 z-50 overflow-y-auto overflow-x-hidden">
+      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+      
+      <div className="flex min-h-full items-center justify-center p-3 sm:p-4 text-center">
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          exit={{ opacity: 0, scale: 0.95 }}
+          className="relative transform overflow-hidden rounded-2xl bg-white/95 backdrop-blur-sm text-left shadow-2xl transition-all w-full max-w-md"
+        >
+          <div className="p-4 sm:p-6 w-full max-w-full">
+            <div className="flex items-center gap-3 sm:gap-4 mb-4 min-w-0 w-full max-w-full">
+              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-red-100 rounded-full flex items-center justify-center flex-shrink-0">
+                <AlertTriangle className="w-5 h-5 sm:w-6 sm:h-6 text-red-600" />
+              </div>
+              <div className="min-w-0 flex-1 max-w-full">
+                <h3 className="text-base sm:text-lg font-semibold text-gray-900">Eliminar Medicamento</h3>
+                <p className="text-xs sm:text-sm text-gray-600">Esta acción no se puede deshacer</p>
+              </div>
             </div>
-            <div>
-              <h3 className="text-lg font-semibold text-gray-900">Eliminar Medicamento</h3>
-              <p className="text-sm text-gray-600">Esta acción no se puede deshacer</p>
+            
+            <p className="text-sm text-gray-700 mb-4 sm:mb-6 w-full max-w-full">
+              ¿Estás seguro de que deseas eliminar <strong className="break-words">"{medicationName}"</strong>?
+            </p>
+            
+            <div className="flex flex-col-reverse sm:flex-row gap-2 sm:gap-3 w-full max-w-full">
+              <Button variant="outline" onClick={onClose} fullWidth className="sm:w-auto">
+                Cancelar
+              </Button>
+              <Button variant="danger" onClick={onConfirm} fullWidth className="sm:w-auto">
+                <Trash2 className="w-3 h-3 sm:w-4 sm:h-4 mr-2" />
+                <span className="truncate">Eliminar</span>
+              </Button>
             </div>
           </div>
-          
-          <p className="text-gray-700 mb-6">
-            ¿Estás seguro de que deseas eliminar el medicamento <strong>"{medicationName}"</strong>? 
-            Esta acción eliminará permanentemente toda la información relacionada.
-          </p>
-          
-          <div className="flex items-center justify-end gap-3">
-            <Button variant="outline" onClick={onClose}>
-              Cancelar
-            </Button>
-            <Button variant="danger" onClick={onConfirm}>
-              <Trash2 className="w-4 h-4 mr-2" />
-              Eliminar
-            </Button>
-          </div>
-        </div>
-      </motion.div>
+        </motion.div>
+      </div>
     </div>
   );
 };
 
+// Componente principal totalmente responsivo
 const MedicationInventory: React.FC = () => {
   const [medications, setMedications] = useState<Medication[]>([]);
   const [movements, setMovements] = useState<InventoryMovement[]>([]);
@@ -904,6 +1158,7 @@ const MedicationInventory: React.FC = () => {
   const [selectedMedication, setSelectedMedication] = useState<Medication | null>(null);
   const [editingMedication, setEditingMedication] = useState<Medication | null>(null);
   const [medicationToDelete, setMedicationToDelete] = useState<Medication | null>(null);
+  const [showFilters, setShowFilters] = useState(false);
 
   const generateId = () => Date.now().toString() + Math.random().toString(36).substr(2, 9);
 
@@ -1253,442 +1508,265 @@ const MedicationInventory: React.FC = () => {
   });
 
   return (
-    <div className="p-6 space-y-6">
-      {/* Header del módulo */}
-      <div className="bg-white rounded-lg border border-gray-200 p-6">
-        <div className="flex items-center justify-between flex-wrap gap-4">
-          <div className="min-w-0 flex-1">
-            <h2 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-              <Package className="w-7 h-7 text-blue-600" />
-              Inventario de Medicamentos
-            </h2>
-            <p className="text-gray-600 mt-1">Gestión y control de medicamentos veterinarios</p>
-          </div>
-          <div className="flex items-center gap-3">
-            <Button variant="outline" size="sm" onClick={() => setShowMovements(!showMovements)}>
-              <BarChart3 className="w-4 h-4 mr-2" />
-              {showMovements ? "Inventario" : "Movimientos"}
-            </Button>
-            <Button size="sm" onClick={() => setShowNewMedicationModal(true)}>
-              <Plus className="w-4 h-4 mr-2" />
-              Agregar Medicamento
-            </Button>
-          </div>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Estadísticas principales */}
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="lg:col-span-12">
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-            <Card className="border-blue-200">
-              <CardContent className="p-6">
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                    <Package className="w-6 h-6 text-blue-600" />
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium text-gray-600">Total Medicamentos</p>
-                    <p className="text-2xl font-bold text-gray-900">{stats.totalMedications}</p>
-                  </div>
+    <div className="min-h-screen bg-gradient-to-br from-[#519a7c] via-[#f2e9d8] to-[#f4ac3a] overflow-x-hidden max-w-screen">
+      {/* Layout totalmente responsivo */}
+      <div className="w-full max-w-5xl mx-auto p-2 sm:p-3 lg:p-4 space-y-3 sm:space-y-4 overflow-x-hidden">
+        {/* Header mejorado */}
+        <Card>
+          <CardContent className="p-3 sm:p-4 w-full max-w-full">
+            <div className="flex items-center justify-between mb-3 sm:mb-4 min-w-0 w-full max-w-full">
+              <div className="flex items-center gap-3 sm:gap-4 min-w-0 flex-1">
+                <div className="w-8 h-8 sm:w-10 sm:h-10 bg-gradient-to-br from-[#519a7c] to-[#4a8770] rounded-xl flex items-center justify-center shadow-lg flex-shrink-0">
+                  <Package className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
                 </div>
-              </CardContent>
-            </Card>
-
-            <Card className="border-green-200">
-              <CardContent className="p-6">
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                    <DollarSign className="w-6 h-6 text-green-600" />
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium text-gray-600">Valor Total</p>
-                    <p className="text-2xl font-bold text-gray-900">${stats.totalValue.toLocaleString()}</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="border-yellow-200">
-              <CardContent className="p-6">
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 bg-yellow-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                    <TrendingDown className="w-6 h-6 text-yellow-600" />
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium text-gray-600">Stock Bajo</p>
-                    <p className="text-2xl font-bold text-gray-900">{stats.lowStockItems}</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="border-red-200">
-              <CardContent className="p-6">
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 bg-red-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                    <AlertCircle className="w-6 h-6 text-red-600" />
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium text-gray-600">Por Vencer</p>
-                    <p className="text-2xl font-bold text-gray-900">{stats.nearExpiryItems}</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        </motion.div>
-
-        {/* Panel de filtros */}
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="lg:col-span-4 space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Filter className="w-5 h-5 text-blue-600" />
-                Filtros de Búsqueda
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Buscar</label>
-                <div className="relative">
-                  <Search className="w-4 h-4 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
-                  <input
-                    type="text"
-                    placeholder="Medicamento, principio activo..."
-                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                  />
+                <div className="min-w-0 flex-1 max-w-full">
+                  <h1 className="text-base sm:text-xl font-bold text-gray-900 truncate">Inventario de Medicamentos</h1>
+                  <p className="text-xs text-gray-600 truncate">Gestión y control veterinario</p>
                 </div>
               </div>
+              <Button onClick={() => setShowNewMedicationModal(true)} className="flex-shrink-0">
+                <Plus className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
+                <span className="hidden sm:inline">Agregar</span>
+                <span className="sm:hidden">+</span>
+              </Button>
+            </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Categoría</label>
-                <select
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
-                  value={selectedCategory}
-                  onChange={(e) => setSelectedCategory(e.target.value)}
+            {/* Stats grid mejorado */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3 mb-3 sm:mb-4 w-full max-w-full">
+              <div className="text-center p-2 sm:p-3 bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl border border-blue-200 min-w-0 max-w-full">
+                <div className="w-6 h-6 sm:w-8 sm:h-8 bg-blue-500 rounded-lg flex items-center justify-center mx-auto mb-2">
+                  <Package className="w-3 h-3 sm:w-4 sm:h-4 text-white" />
+                </div>
+                <div className="text-lg sm:text-2xl font-bold text-blue-600">{stats.totalMedications}</div>
+                <div className="text-xs text-blue-600 truncate">Total</div>
+              </div>
+              <div className="text-center p-2 sm:p-3 bg-gradient-to-br from-green-50 to-green-100 rounded-xl border border-green-200 min-w-0 max-w-full">
+                <div className="w-6 h-6 sm:w-8 sm:h-8 bg-green-500 rounded-lg flex items-center justify-center mx-auto mb-2">
+                  <div className="text-white text-xs font-bold">$</div>
+                </div>
+                <div className="text-lg sm:text-2xl font-bold text-green-600">${stats.totalValue.toLocaleString()}</div>
+                <div className="text-xs text-green-600 truncate">Valor</div>
+              </div>
+              <div className="text-center p-2 sm:p-3 bg-gradient-to-br from-amber-50 to-amber-100 rounded-xl border border-amber-200 min-w-0 max-w-full">
+                <div className="w-6 h-6 sm:w-8 sm:h-8 bg-amber-500 rounded-lg flex items-center justify-center mx-auto mb-2">
+                  <div className="text-white text-xs font-bold">⚠</div>
+                </div>
+                <div className="text-lg sm:text-2xl font-bold text-amber-600">{stats.lowStockItems}</div>
+                <div className="text-xs text-amber-600 truncate">Stock Bajo</div>
+              </div>
+              <div className="text-center p-2 sm:p-3 bg-gradient-to-br from-red-50 to-red-100 rounded-xl border border-red-200 min-w-0 max-w-full">
+                <div className="w-6 h-6 sm:w-8 sm:h-8 bg-red-500 rounded-lg flex items-center justify-center mx-auto mb-2">
+                  <div className="text-white text-xs font-bold">⏰</div>
+                </div>
+                <div className="text-lg sm:text-2xl font-bold text-red-600">{stats.nearExpiryItems}</div>
+                <div className="text-xs text-red-600 truncate">Por Vencer</div>
+              </div>
+            </div>
+
+            {/* Controles de búsqueda */}
+            <div className="space-y-3 sm:space-y-4 w-full max-w-full">
+              <div className="relative w-full max-w-full">
+                <Search className="w-4 h-4 sm:w-5 sm:h-5 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="Buscar medicamentos..."
+                  className="w-full max-w-full pl-9 sm:pl-10 pr-4 py-2 sm:py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#519a7c] focus:border-[#519a7c] text-xs sm:text-sm shadow-sm"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                />
+              </div>
+
+              <div className="flex gap-2 sm:gap-3 w-full max-w-full">
+                <Button 
+                  variant="outline" 
+                  onClick={() => setShowFilters(!showFilters)}
+                  className="flex-1 min-w-0"
                 >
-                  <option value="all">Todas las categorías</option>
-                  <option value="antibiotic">Antibióticos</option>
-                  <option value="vaccine">Vacunas</option>
-                  <option value="antiparasitic">Antiparasitarios</option>
-                  <option value="vitamin">Vitaminas</option>
-                  <option value="hormone">Hormonas</option>
-                  <option value="anesthetic">Anestésicos</option>
-                  <option value="other">Otros</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Estado</label>
-                <select
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
-                  value={selectedStatus}
-                  onChange={(e) => setSelectedStatus(e.target.value)}
+                  <Filter className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
+                  <span className="truncate">Filtros</span>
+                </Button>
+                <Button 
+                  variant="outline" 
+                  onClick={() => setShowMovements(!showMovements)}
+                  className="flex-1 min-w-0"
                 >
-                  <option value="all">Todos los estados</option>
-                  <option value="available">Disponible</option>
-                  <option value="low_stock">Stock bajo</option>
-                  <option value="out_of_stock">Sin stock</option>
-                  <option value="near_expiry">Por vencer</option>
-                  <option value="expired">Vencido</option>
-                </select>
+                  <BarChart3 className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
+                  <span className="truncate">{showMovements ? "Inventario" : "Movimientos"}</span>
+                </Button>
               </div>
+            </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Ubicación</label>
-                <select
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
-                  value={selectedLocation}
-                  onChange={(e) => setSelectedLocation(e.target.value)}
+            {/* Filtros colapsables */}
+            <AnimatePresence>
+              {showFilters && (
+                <motion.div
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: "auto", opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  transition={{ duration: 0.3 }}
+                  className="overflow-hidden w-full max-w-full"
                 >
-                  <option value="all">Todas las ubicaciones</option>
-                  <option value="Almacén Principal">Almacén Principal</option>
-                  <option value="Almacén Secundario">Almacén Secundario</option>
-                  <option value="Refrigerador">Refrigerador</option>
-                </select>
-              </div>
-            </CardContent>
-          </Card>
-        </motion.div>
+                  <div className="pt-4 sm:pt-6 space-y-3 sm:space-y-4 w-full max-w-full">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 w-full max-w-full">
+                      <select
+                        className="w-full max-w-full px-2 sm:px-3 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#519a7c] focus:border-[#519a7c] text-xs sm:text-sm"
+                        value={selectedCategory}
+                        onChange={(e) => setSelectedCategory(e.target.value)}
+                      >
+                        <option value="all">Todas las categorías</option>
+                        <option value="antibiotic">Antibióticos</option>
+                        <option value="vaccine">Vacunas</option>
+                        <option value="antiparasitic">Antiparasitarios</option>
+                        <option value="vitamin">Vitaminas</option>
+                        <option value="hormone">Hormonas</option>
+                        <option value="anesthetic">Anestésicos</option>
+                        <option value="other">Otros</option>
+                      </select>
+
+                      <select
+                        className="w-full max-w-full px-2 sm:px-3 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#519a7c] focus:border-[#519a7c] text-xs sm:text-sm"
+                        value={selectedStatus}
+                        onChange={(e) => setSelectedStatus(e.target.value)}
+                      >
+                        <option value="all">Todos los estados</option>
+                        <option value="available">Disponible</option>
+                        <option value="low_stock">Stock bajo</option>
+                        <option value="out_of_stock">Sin stock</option>
+                        <option value="near_expiry">Por vencer</option>
+                        <option value="expired">Vencido</option>
+                      </select>
+
+                      <select
+                        className="w-full max-w-full px-2 sm:px-3 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#519a7c] focus:border-[#519a7c] text-xs sm:text-sm"
+                        value={selectedLocation}
+                        onChange={(e) => setSelectedLocation(e.target.value)}
+                      >
+                        <option value="all">Todas las ubicaciones</option>
+                        <option value="Almacén Principal">Almacén Principal</option>
+                        <option value="Almacén Secundario">Almacén Secundario</option>
+                        <option value="Refrigerador">Refrigerador</option>
+                      </select>
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </CardContent>
+        </Card>
 
         {/* Contenido principal */}
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="lg:col-span-8">
-          <AnimatePresence mode="wait">
-            {!showMovements ? (
-              <motion.div key="inventory" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+        <AnimatePresence mode="wait">
+          {!showMovements ? (
+            <motion.div key="inventory" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+              {filteredMedications.length > 0 ? (
+                <div className="space-y-3 sm:space-y-4 w-full max-w-full">
+                  {filteredMedications.map((med) => (
+                    <MedicationCard
+                      key={med.id}
+                      medication={med}
+                      onView={handleViewMedication}
+                      onEdit={handleEditMedication}
+                      onDelete={handleDeleteMedication}
+                    />
+                  ))}
+                </div>
+              ) : (
                 <Card>
-                  <CardHeader>
-                    <CardTitle>
-                      Inventario de Medicamentos ({filteredMedications.length})
-                    </CardTitle>
-                    <CardDescription>
-                      Lista detallada de todos los medicamentos en inventario
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    {filteredMedications.length > 0 ? (
-                      <div className="space-y-4">
-                        {filteredMedications.map((med) => (
-                          <motion.div
-                            key={med.id}
-                            whileHover={{ scale: 1.01 }}
-                            className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-all duration-200"
-                          >
-                            <div className="flex items-start justify-between">
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-3 mb-2 flex-wrap">
-                                  <h4 className="text-lg font-semibold text-gray-900 break-words">
-                                    {med.name}
-                                  </h4>
-                                  <Badge variant={med.category}>
-                                    {med.category === "antibiotic" ? "Antibiótico" :
-                                     med.category === "vaccine" ? "Vacuna" :
-                                     med.category === "antiparasitic" ? "Antiparasitario" :
-                                     med.category === "antiinflammatory" ? "Antiinflamatorio" :
-                                     med.category === "vitamin" ? "Vitamina" :
-                                     med.category === "hormone" ? "Hormona" :
-                                     med.category === "anesthetic" ? "Anestésico" : "Otro"}
-                                  </Badge>
-                                  <Badge variant={med.status}>
-                                    {med.status === "available" ? "Disponible" :
-                                     med.status === "low_stock" ? "Stock bajo" :
-                                     med.status === "out_of_stock" ? "Sin stock" :
-                                     med.status === "near_expiry" ? "Por vencer" : "Vencido"}
-                                  </Badge>
-                                  {med.requiresPrescription && <Badge variant="other">Receta</Badge>}
-                                </div>
-
-                                <p className="text-gray-600 mb-3">{med.description}</p>
-
-                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 text-sm mb-3">
-                                  <div>
-                                    <p className="text-gray-600">Principio activo:</p>
-                                    <p className="font-medium break-words">{med.activeIngredient}</p>
-                                  </div>
-                                  <div>
-                                    <p className="text-gray-600">Concentración:</p>
-                                    <p className="font-medium">{med.concentration}</p>
-                                  </div>
-                                  <div>
-                                    <p className="text-gray-600">Presentación:</p>
-                                    <p className="font-medium">
-                                      {med.presentation === "injectable" ? "Inyectable" :
-                                       med.presentation === "oral" ? "Oral" :
-                                       med.presentation === "topical" ? "Tópico" :
-                                       med.presentation === "powder" ? "Polvo" :
-                                       med.presentation === "tablet" ? "Tableta" : "Suspensión"}
-                                    </p>
-                                  </div>
-                                </div>
-
-                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm mb-3">
-                                  <div>
-                                    <p className="text-gray-600">Stock actual:</p>
-                                    <p className={`font-bold text-lg ${
-                                      med.currentStock <= med.minStock ? "text-red-600" :
-                                      med.currentStock <= med.minStock * 1.5 ? "text-yellow-600" : "text-green-600"
-                                    }`}>
-                                      {med.currentStock} {med.unit}
-                                    </p>
-                                  </div>
-                                  <div>
-                                    <p className="text-gray-600">Stock mínimo:</p>
-                                    <p className="font-medium">{med.minStock} {med.unit}</p>
-                                  </div>
-                                  <div>
-                                    <p className="text-gray-600">Costo unitario:</p>
-                                    <p className="font-medium">${med.unitCost.toFixed(2)}</p>
-                                  </div>
-                                  <div>
-                                    <p className="text-gray-600">Valor total:</p>
-                                    <p className="font-medium">${med.totalValue.toFixed(2)}</p>
-                                  </div>
-                                </div>
-
-                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm mb-3">
-                                  <div>
-                                    <p className="text-gray-600">Ubicación:</p>
-                                    <p className="font-medium">{med.location.warehouse} - {med.location.shelf}-{med.location.position}</p>
-                                  </div>
-                                  <div>
-                                    <p className="text-gray-600">Lote:</p>
-                                    <p className="font-medium">{med.batchNumber}</p>
-                                  </div>
-                                  <div>
-                                    <p className="text-gray-600">Vencimiento:</p>
-                                    <p className={`font-medium ${
-                                      new Date(med.expirationDate).getTime() - new Date().getTime() < 30 * 24 * 60 * 60 * 1000 ? "text-red-600" :
-                                      new Date(med.expirationDate).getTime() - new Date().getTime() < 60 * 24 * 60 * 60 * 1000 ? "text-yellow-600" : "text-gray-900"
-                                    }`}>
-                                      {med.expirationDate.toLocaleDateString()}
-                                    </p>
-                                  </div>
-                                </div>
-
-                                <div className="text-sm text-gray-600">
-                                  <p><strong>Fabricante:</strong> {med.manufacturer}</p>
-                                  <p><strong>Proveedor:</strong> {med.supplier}</p>
-                                  <p><strong>Condiciones de almacenamiento:</strong> {med.storageConditions}</p>
-                                  {med.withdrawalPeriod && (
-                                    <p><strong>Período de retiro:</strong> {med.withdrawalPeriod} días</p>
-                                  )}
-                                </div>
-                              </div>
-
-                              <div className="flex items-center gap-2 ml-4 flex-shrink-0">
-                                <Button variant="outline" size="sm" onClick={() => handleViewMedication(med)}>
-                                  <Eye className="w-4 h-4" />
-                                </Button>
-                                <Button variant="outline" size="sm" onClick={() => handleEditMedication(med)}>
-                                  <Edit className="w-4 h-4" />
-                                </Button>
-                                <Button variant="danger" size="sm" onClick={() => handleDeleteMedication(med)}>
-                                  <Trash2 className="w-4 h-4" />
-                                </Button>
-                              </div>
-                            </div>
-                          </motion.div>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="text-center py-12">
-                        <Package className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                        <h3 className="text-lg font-medium text-gray-900 mb-2">No hay medicamentos</h3>
-                        <p className="text-gray-600 mb-4">
-                          No se encontraron medicamentos que coincidan con los filtros seleccionados.
-                        </p>
-                        <Button onClick={() => setShowNewMedicationModal(true)}>
-                          <Plus className="w-4 h-4 mr-2" />
-                          Agregar Primer Medicamento
-                        </Button>
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-              </motion.div>
-            ) : (
-              <motion.div key="movements" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                <Card>
-                  <CardHeader>
-                    <CardTitle>
-                      Movimientos de Inventario ({movements.length})
-                    </CardTitle>
-                    <CardDescription>
-                      Historial de entradas, salidas y ajustes de inventario
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-4">
-                      {movements.map((movement) => (
-                        <motion.div
-                          key={movement.id}
-                          whileHover={{ scale: 1.01 }}
-                          className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-all duration-200"
-                        >
-                          <div className="flex items-start justify-between">
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-3 mb-2 flex-wrap">
-                                <h4 className="text-lg font-semibold text-gray-900 break-words">
-                                  {movement.medicationName}
-                                </h4>
-                                <Badge variant={movement.type === "purchase" ? "success" : movement.type === "usage" ? "warning" : "other"}>
-                                  {movement.type === "purchase" ? "Compra" :
-                                   movement.type === "usage" ? "Uso" :
-                                   movement.type === "adjustment" ? "Ajuste" :
-                                   movement.type === "transfer" ? "Transferencia" :
-                                   movement.type === "disposal" ? "Descarte" : "Devolución"}
-                                </Badge>
-                                <span className={`text-lg font-bold ${
-                                  movement.quantity > 0 ? "text-green-600" : "text-red-600"
-                                }`}>
-                                  {movement.quantity > 0 ? "+" : ""}{movement.quantity}
-                                </span>
-                              </div>
-
-                              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 text-sm mb-3">
-                                <div className="flex items-center gap-2">
-                                  <Calendar className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                                  <span className="truncate">{movement.date.toLocaleDateString()}</span>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                  <User className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                                  <span className="truncate">{movement.performedBy}</span>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                  <MapPin className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                                  <span className="truncate">{movement.location}</span>
-                                </div>
-                              </div>
-
-                              <p className="text-gray-600 mb-2 text-sm">
-                                <strong>Motivo:</strong> {movement.reason}
-                              </p>
-
-                              {movement.notes && (
-                                <p className="text-gray-600 mb-2 text-sm">
-                                  <strong>Notas:</strong> {movement.notes}
-                                </p>
-                              )}
-
-                              {movement.animalName && (
-                                <p className="text-gray-600 mb-2 text-sm">
-                                  <strong>Animal:</strong> {movement.animalName} ({movement.animalId})
-                                </p>
-                              )}
-
-                              {movement.supplier && (
-                                <p className="text-gray-600 mb-2 text-sm">
-                                  <strong>Proveedor:</strong> {movement.supplier}
-                                </p>
-                              )}
-
-                              {movement.totalCost && (
-                                <p className="text-gray-600 mb-2 text-sm">
-                                  <strong>Costo total:</strong> ${movement.totalCost.toLocaleString()}
-                                </p>
-                              )}
-
-                              {movement.batchNumber && (
-                                <p className="text-gray-600 text-sm">
-                                  <strong>Lote:</strong> {movement.batchNumber}
-                                </p>
-                              )}
-                            </div>
-                          </div>
-                        </motion.div>
-                      ))}
+                  <CardContent className="p-8 sm:p-12 text-center w-full max-w-full">
+                    <div className="w-12 h-12 sm:w-16 sm:h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <Package className="w-6 h-6 sm:w-8 sm:h-8 text-gray-400" />
                     </div>
+                    <h3 className="text-base sm:text-lg font-medium text-gray-900 mb-2">No hay medicamentos</h3>
+                    <p className="text-sm sm:text-base text-gray-600 mb-4 sm:mb-6 max-w-full break-words">
+                      No se encontraron medicamentos que coincidan con los filtros seleccionados.
+                    </p>
+                    <Button onClick={() => setShowNewMedicationModal(true)}>
+                      <Plus className="w-3 h-3 sm:w-4 sm:h-4 mr-2" />
+                      <span className="truncate">Agregar Primer Medicamento</span>
+                    </Button>
                   </CardContent>
                 </Card>
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </motion.div>
+              )}
+            </motion.div>
+          ) : (
+            <motion.div key="movements" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+              <div className="space-y-3 sm:space-y-4 w-full max-w-full">
+                {movements.map((movement) => (
+                  <Card key={movement.id}>
+                    <CardContent className="p-3 sm:p-4 w-full max-w-full">
+                      <div className="flex items-start justify-between gap-3 min-w-0 w-full max-w-full">
+                        <div className="min-w-0 flex-1 max-w-full">
+                          <div className="flex items-center gap-2 mb-2 flex-wrap">
+                            <h3 className="font-semibold text-gray-900 text-xs sm:text-sm truncate min-w-0 max-w-full">
+                              {movement.medicationName}
+                            </h3>
+                            <Badge variant={movement.type === "purchase" ? "success" : movement.type === "usage" ? "warning" : "other"}>
+                              {movement.type === "purchase" ? "Compra" :
+                               movement.type === "usage" ? "Uso" :
+                               movement.type === "adjustment" ? "Ajuste" :
+                               movement.type === "transfer" ? "Transferencia" :
+                               movement.type === "disposal" ? "Descarte" : "Devolución"}
+                            </Badge>
+                          </div>
+                          
+                          <div className="flex items-center justify-between text-xs text-gray-600 mb-2 w-full max-w-full">
+                            <span className="flex items-center gap-1 min-w-0 flex-1">
+                              <Calendar className="w-3 h-3 flex-shrink-0" />
+                              <span className="truncate">{movement.date.toLocaleDateString()}</span>
+                            </span>
+                            <span className={`font-medium text-sm ${
+                              movement.quantity > 0 ? "text-green-600" : "text-red-600"
+                            } flex-shrink-0`}>
+                              {movement.quantity > 0 ? "+" : ""}{movement.quantity}
+                            </span>
+                          </div>
+
+                          <p className="text-xs text-gray-600 break-words w-full max-w-full">
+                            <strong>Motivo:</strong> {movement.reason}
+                          </p>
+
+                          {movement.notes && (
+                            <p className="text-xs text-gray-600 break-words mt-1 w-full max-w-full">
+                              <strong>Notas:</strong> {movement.notes}
+                            </p>
+                          )}
+
+                          {movement.totalCost && (
+                            <p className="text-xs text-gray-600 mt-1">
+                              <strong>Costo:</strong> ${movement.totalCost.toLocaleString()}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Modales */}
+        <NewMedicationModal
+          isOpen={showNewMedicationModal}
+          onClose={handleCloseModal}
+          onSave={handleNewMedication}
+          editingMedication={editingMedication}
+        />
+
+        <MedicationDetailsModal
+          medication={selectedMedication}
+          isOpen={showDetailsModal}
+          onClose={() => setShowDetailsModal(false)}
+        />
+
+        <DeleteConfirmModal
+          isOpen={showDeleteModal}
+          onClose={() => setShowDeleteModal(false)}
+          onConfirm={confirmDeleteMedication}
+          medicationName={medicationToDelete?.name || ""}
+        />
       </div>
-
-      {/* Modales */}
-      <NewMedicationModal
-        isOpen={showNewMedicationModal}
-        onClose={handleCloseModal}
-        onSave={handleNewMedication}
-        editingMedication={editingMedication}
-      />
-
-      <MedicationDetailsModal
-        medication={selectedMedication}
-        isOpen={showDetailsModal}
-        onClose={() => setShowDetailsModal(false)}
-      />
-
-      <DeleteConfirmModal
-        isOpen={showDeleteModal}
-        onClose={() => setShowDeleteModal(false)}
-        onConfirm={confirmDeleteMedication}
-        medicationName={medicationToDelete?.name || ""}
-      />
     </div>
   );
 };

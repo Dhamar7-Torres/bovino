@@ -31,7 +31,6 @@ import {
 // Importar componentes del módulo bovinos
 import BovineAdd from "./BovineAdd";
 import BovineDocuments from "./BovineDocuments";
-import BovineLocation from "./BovineLocation";
 
 // Contexto para el módulo de bovinos
 interface BovinesContextType {
@@ -487,9 +486,6 @@ const BovinesPage: React.FC = () => {
 
               {/* Documentos del bovino */}
               <Route path="documents/:id" element={<BovineDocuments />} />
-
-              {/* Ubicación del bovino */}
-              <Route path="location/:id" element={<BovineLocation />} />
 
               {/* Rutas adicionales del módulo */}
               <Route

@@ -744,7 +744,7 @@ const NewEventModal = ({
   );
 };
 
-// Componente principal ajustado al layout
+// Componente principal con el nuevo degradado implementado
 const ReproductiveHealth = () => {
   const [events, setEvents] = useState<ReproductiveEvent[]>([]);
   const [showNewEventModal, setShowNewEventModal] = useState(false);
@@ -894,9 +894,9 @@ const ReproductiveHealth = () => {
   };
 
   return (
-    <div className="w-full h-full bg-gradient-to-br from-blue-50 to-green-50">
+    <div className="min-h-screen bg-gradient-to-br from-[#519a7c] via-[#f2e9d8] to-[#f4ac3a] p-6">
       {/* Header ajustado al layout */}
-      <div className="bg-white/90 border-b border-gray-200 p-4 mb-4">
+      <div className="bg-white/90 backdrop-blur-sm border border-white/20 rounded-lg shadow-lg p-4 mb-4">
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">🐄 Salud Reproductiva</h1>
@@ -909,10 +909,10 @@ const ReproductiveHealth = () => {
       </div>
 
       {/* Contenido principal con scroll contenido */}
-      <div className="px-4 pb-4 h-full overflow-y-auto">
+      <div className="h-full overflow-y-auto">
         <div className="max-w-6xl mx-auto">
           {/* Eventos Reproductivos */}
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+          <div className="bg-white/90 backdrop-blur-sm rounded-lg shadow-lg border border-white/20">
             <div className="px-4 py-3 border-b border-gray-200">
               <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
                 📅 Eventos Reproductivos ({events.length})
@@ -932,7 +932,7 @@ const ReproductiveHealth = () => {
               ) : (
                 <div className="space-y-4">
                   {events.map((event) => (
-                    <div key={event.id} className="bg-gray-50 border border-gray-200 rounded-lg p-4 hover:shadow-sm hover:bg-white transition-all duration-200">
+                    <div key={event.id} className="bg-white/70 backdrop-blur-sm border border-white/30 rounded-lg p-4 hover:shadow-sm hover:bg-white/90 transition-all duration-200">
                       <div className="flex items-start justify-between">
                         <div className="flex-1">
                           <div className="flex items-center gap-3 mb-3">

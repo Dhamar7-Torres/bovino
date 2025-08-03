@@ -128,13 +128,6 @@ const Sidebar: React.FC<SidebarProps> = ({
               icon: FolderOpen,
               color: "text-[#4e9c75]",
             },
-            {
-              id: "bovine-location",
-              title: "Ubicación y Movimientos",
-              href: "/bovines/location/1", 
-              icon: MapPin,
-              color: "text-[#4e9c75]",
-            },
           ],
         },
         {

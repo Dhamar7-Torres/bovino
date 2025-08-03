@@ -317,7 +317,7 @@ interface CardProps {
 }
 
 const Card: React.FC<CardProps> = ({ children, className = "" }) => (
-  <div className={`rounded-lg border border-gray-200 bg-white shadow-sm ${className}`}>
+  <div className={`rounded-lg border border-white/20 bg-white/90 backdrop-blur-sm shadow-sm ${className}`}>
     {children}
   </div>
 );
@@ -1080,7 +1080,7 @@ const PregnancyTracking: React.FC = () => {
       variants={containerVariants}
       initial="hidden"
       animate="visible"
-      className="min-h-screen bg-gradient-to-br from-green-50 via-white to-green-50 p-3 sm:p-4 md:p-6"
+      className="min-h-screen bg-gradient-to-br from-[#519a7c] via-[#f2e9d8] to-[#f4ac3a] p-3 sm:p-4 md:p-6"
     >
       <div className="mx-auto max-w-7xl space-y-4 sm:space-y-6">
         {/* Header */}
@@ -1096,7 +1096,7 @@ const PregnancyTracking: React.FC = () => {
         {/* Estadísticas */}
         <motion.div variants={itemVariants}>
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-            <Card className="bg-gradient-to-r from-blue-500 to-blue-600 text-white">
+            <Card className="bg-gradient-to-r from-blue-500 to-blue-600 text-white border-white/30">
               <CardContent className="p-3 sm:p-6">
                 <div className="flex items-center justify-between">
                   <div>
@@ -1108,7 +1108,7 @@ const PregnancyTracking: React.FC = () => {
               </CardContent>
             </Card>
 
-            <Card className="bg-gradient-to-r from-green-500 to-green-600 text-white">
+            <Card className="bg-gradient-to-r from-green-500 to-green-600 text-white border-white/30">
               <CardContent className="p-3 sm:p-6">
                 <div className="flex items-center justify-between">
                   <div>
@@ -1120,7 +1120,7 @@ const PregnancyTracking: React.FC = () => {
               </CardContent>
             </Card>
 
-            <Card className="bg-gradient-to-r from-yellow-500 to-yellow-600 text-white">
+            <Card className="bg-gradient-to-r from-yellow-500 to-yellow-600 text-white border-white/30">
               <CardContent className="p-3 sm:p-6">
                 <div className="flex items-center justify-between">
                   <div>
@@ -1132,7 +1132,7 @@ const PregnancyTracking: React.FC = () => {
               </CardContent>
             </Card>
 
-            <Card className="bg-gradient-to-r from-red-500 to-red-600 text-white">
+            <Card className="bg-gradient-to-r from-red-500 to-red-600 text-white border-white/30">
               <CardContent className="p-3 sm:p-6">
                 <div className="flex items-center justify-between">
                   <div>
@@ -1148,7 +1148,7 @@ const PregnancyTracking: React.FC = () => {
 
         {/* Controles y filtros */}
         <motion.div variants={itemVariants}>
-          <Card className="bg-white/95 backdrop-blur-sm border border-white/20">
+          <Card>
             <CardContent className="p-3 sm:p-6">
               <div className="flex flex-col space-y-3 sm:space-y-4">
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
@@ -1277,7 +1277,7 @@ const PregnancyTracking: React.FC = () => {
         {/* Error Alert */}
         {error && (
           <motion.div variants={itemVariants}>
-            <Card className="border-red-200 bg-red-50">
+            <Card className="border-red-200 bg-red-50/90 backdrop-blur-sm">
               <CardContent className="p-4">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2 text-red-800">
@@ -1299,7 +1299,7 @@ const PregnancyTracking: React.FC = () => {
 
         {/* Lista de embarazos - Responsive */}
         <motion.div variants={itemVariants}>
-          <Card className="bg-white/95 backdrop-blur-sm border border-white/20">
+          <Card>
             <CardHeader>
               <CardTitle className="flex items-center justify-between">
                 <span className="flex items-center gap-2">
@@ -1340,7 +1340,7 @@ const PregnancyTracking: React.FC = () => {
                 // Vista de tabla para desktop
                 <div className="overflow-x-auto">
                   <table className="w-full min-w-[800px]">
-                    <thead className="bg-gray-50 border-b">
+                    <thead className="bg-gray-50/90 backdrop-blur-sm border-b">
                       <tr>
                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                           Vaca
@@ -1371,7 +1371,7 @@ const PregnancyTracking: React.FC = () => {
                         </th>
                       </tr>
                     </thead>
-                    <tbody className="bg-white divide-y divide-gray-200">
+                    <tbody className="bg-white/70 backdrop-blur-sm divide-y divide-gray-200">
                       {isLoading ? (
                         <tr>
                           <td colSpan={9} className="px-6 py-12 text-center">
@@ -1389,7 +1389,7 @@ const PregnancyTracking: React.FC = () => {
                         </tr>
                       ) : (
                         filteredPregnancies.map((pregnancy) => (
-                          <tr key={pregnancy.id} className="hover:bg-gray-50 transition-colors">
+                          <tr key={pregnancy.id} className="hover:bg-white/90 backdrop-blur-sm transition-colors">
                             <td className="px-4 py-4 whitespace-nowrap">
                               <div className="flex items-center">
                                 <div>
@@ -1982,7 +1982,7 @@ const PregnancyTracking: React.FC = () => {
 
                     {/* Complicaciones */}
                     {selectedPregnancy.complications.hasComplications && (
-                      <Card className="border-yellow-200 bg-yellow-50">
+                      <Card className="border-yellow-200 bg-yellow-50/90 backdrop-blur-sm">
                         <CardHeader>
                           <CardTitle className="flex items-center gap-2 text-yellow-800">
                             <AlertTriangle className="h-5 w-5" />

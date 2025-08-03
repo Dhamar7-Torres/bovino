@@ -144,7 +144,7 @@ interface EventFormData {
     section: string;
   };
   notes: string;
-  cost: string; // Cambiado a string para mejor manejo
+  cost: string;
   currency: string;
   veterinarian: string;
   // Datos específicos según el tipo
@@ -187,7 +187,7 @@ const EventBreeding: React.FC = () => {
       section: "",
     },
     notes: "",
-    cost: "", // Inicializado como string vacío
+    cost: "",
     currency: "MXN",
     veterinarian: "",
   });
@@ -531,7 +531,7 @@ const EventBreeding: React.FC = () => {
         section: event.location.section || "",
       },
       notes: event.notes || "",
-      cost: event.cost ? event.cost.toString() : "", // Convertir a string
+      cost: event.cost ? event.cost.toString() : "",
       currency: event.currency || "MXN",
       veterinarian: event.veterinarian || "",
       breedingMethod: event.breedingData?.method,
@@ -1042,7 +1042,7 @@ const EventBreeding: React.FC = () => {
           />
         </div>
 
-        {/* Costo - CORREGIDO */}
+        {/* Costo */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
             Costo
@@ -1141,7 +1141,7 @@ const EventBreeding: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-[#3d8b40] via-[#f2e9d8] to-[#f4ac3a] flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-br from-[#519a7c] via-[#f2e9d8] to-[#f4ac3a] p-6 flex items-center justify-center">
         <motion.div
           initial={{ opacity: 0, scale: 0.8 }}
           animate={{ opacity: 1, scale: 1 }}
@@ -1157,12 +1157,12 @@ const EventBreeding: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#3d8b40] via-[#f2e9d8] to-[#f4ac3a]">
+    <div className="min-h-screen bg-gradient-to-br from-[#519a7c] via-[#f2e9d8] to-[#f4ac3a] p-6">
       {/* Header */}
       <motion.div
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="bg-white/80 backdrop-blur-sm border-b border-gray-200 sticky top-0 z-40"
+        className="bg-white/80 backdrop-blur-sm border-b border-gray-200 sticky top-0 z-40 rounded-2xl mb-6"
       >
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between">

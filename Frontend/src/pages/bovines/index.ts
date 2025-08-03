@@ -20,9 +20,6 @@ export { default as BovineAdd } from "./BovineAdd";
 // Gestión de documentos y archivos
 export { default as BovineDocuments } from "./BovineDocuments";
 
-// Seguimiento y geolocalización
-export { default as BovineLocation } from "./BovineLocation";
-
 // =================================================================
 // EXPORTACIONES ADICIONALES
 // =================================================================

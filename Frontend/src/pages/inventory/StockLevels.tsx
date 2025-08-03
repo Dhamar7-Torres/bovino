@@ -18,6 +18,9 @@ import {
   XCircle,
   AlertCircle,
   Plus,
+  Edit,
+  Save,
+  Trash2,
 } from "lucide-react";
 import { getMainBackgroundClasses, CSS_CLASSES } from "../../components/layout";
 
@@ -183,8 +186,10 @@ const StockLevels: React.FC = () => {
 
   // Estados de UI
   const [showNewModal, setShowNewModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editingItem, setEditingItem] = useState<StockLevel | null>(null);
 
-  // Estados de filtros
+  // Estado de búsqueda
   const [searchTerm, setSearchTerm] = useState("");
 
   // Estados para formularios
@@ -204,6 +209,8 @@ const StockLevels: React.FC = () => {
     autoReorder: false,
     preferredSupplier: "",
   });
+
+  const [editFormData, setEditFormData] = useState<StockLevelFormData>({});
 
   // Efecto para cargar datos
   useEffect(() => {
@@ -647,6 +654,28 @@ const StockLevels: React.FC = () => {
     setShowNewModal(true);
   };
 
+  const handleEditItem = (item: StockLevel) => {
+    setEditingItem(item);
+    setEditFormData({
+      itemName: item.itemName,
+      category: item.category,
+      currentStock: item.currentStock,
+      minimumStock: item.minimumStock,
+      maximumStock: item.maximumStock,
+      reorderPoint: item.reorderPoint,
+      unitCost: item.unitCost,
+      location: {
+        warehouse: item.location.warehouse,
+        zone: item.location.zone,
+        shelf: item.location.shelf,
+        position: item.location.position,
+      },
+      autoReorder: item.autoReorder,
+      preferredSupplier: item.preferredSupplier,
+    });
+    setShowEditModal(true);
+  };
+
   const handleSaveNew = async () => {
     try {
       // Validar campos requeridos
@@ -726,6 +755,82 @@ const StockLevels: React.FC = () => {
     }
   };
 
+  const handleDeleteItem = async (itemId: string, itemName: string) => {
+    try {
+      // Confirmación antes de eliminar
+      const confirmDelete = window.confirm(
+        `¿Estás seguro de que deseas eliminar "${itemName}"?\n\nEsta acción no se puede deshacer.`
+      );
+      
+      if (!confirmDelete) return;
+
+      // Aquí iría la llamada a la API para eliminar el item
+      console.log("Eliminando item:", itemId);
+
+      // Simular eliminación en el estado local
+      setStockLevels(prev => prev.filter(item => item.id !== itemId));
+      
+      // Mostrar mensaje de éxito
+      alert("Item eliminado exitosamente");
+    } catch (error) {
+      console.error("Error eliminando item:", error);
+      alert("Error al eliminar el item");
+    }
+  };
+
+  const handleSaveEdit = async () => {
+    try {
+      if (!editingItem) return;
+
+      // Validar campos requeridos
+      if (!editFormData.itemName || !editFormData.category || !editFormData.location?.warehouse) {
+        alert("Por favor completa todos los campos requeridos");
+        return;
+      }
+
+      // Aquí iría la llamada a la API para actualizar el item
+      console.log("Actualizando item:", editFormData);
+
+      // Simular actualización en el estado local
+      setStockLevels(prev => prev.map(item => {
+        if (item.id === editingItem.id) {
+          return {
+            ...item,
+            itemName: editFormData.itemName || item.itemName,
+            category: editFormData.category || item.category,
+            currentStock: editFormData.currentStock ?? item.currentStock,
+            minimumStock: editFormData.minimumStock ?? item.minimumStock,
+            maximumStock: editFormData.maximumStock ?? item.maximumStock,
+            reorderPoint: editFormData.reorderPoint ?? item.reorderPoint,
+            unitCost: editFormData.unitCost ?? item.unitCost,
+            totalValue: (editFormData.currentStock ?? item.currentStock) * (editFormData.unitCost ?? item.unitCost),
+            location: {
+              warehouse: editFormData.location?.warehouse || item.location.warehouse,
+              zone: editFormData.location?.zone || item.location.zone,
+              shelf: editFormData.location?.shelf || item.location.shelf,
+              position: editFormData.location?.position || item.location.position,
+            },
+            autoReorder: editFormData.autoReorder ?? item.autoReorder,
+            preferredSupplier: editFormData.preferredSupplier || item.preferredSupplier,
+            lastUpdated: new Date(),
+            updatedBy: "Usuario Actual",
+          };
+        }
+        return item;
+      }));
+
+      setShowEditModal(false);
+      setEditingItem(null);
+      setEditFormData({});
+      
+      // Mostrar mensaje de éxito
+      alert("Item actualizado exitosamente");
+    } catch (error) {
+      console.error("Error actualizando item:", error);
+      alert("Error al actualizar el item");
+    }
+  };
+
   // Filtrado de items
   const filteredStockLevels = stockLevels.filter((item) => {
     const matchesSearch =
@@ -771,140 +876,6 @@ const StockLevels: React.FC = () => {
             </div>
 
             <div className="flex items-center space-x-4 mt-4 lg:mt-0">
-              <button
-                onClick={handleNewItem}
-                className="bg-gradient-to-r from-[#2d6f51] to-[#4e9c75] text-white hover:from-[#265a44] hover:to-[#3d7a5c] px-4 py-2 rounded-lg transition-all duration-200 flex items-center space-x-2"
-              >
-                <Plus className="w-4 h-4" />
-                <span>Nuevo</span>
-              </button>
-            </div>
-          </div>
-        </motion.div>
-
-        {/* Métricas Principales */}
-        {analytics && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.1 }}
-            className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 mb-8"
-          >
-            {/* Total Items */}
-            <div className={`${CSS_CLASSES.card} p-6`}>
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-gray-600 text-sm font-medium">
-                    Total Items
-                  </p>
-                  <p className="text-3xl font-bold text-gray-900 mt-1">
-                    {analytics.totalItems}
-                  </p>
-                  <p className="text-blue-600 text-sm mt-1">
-                    {formatCurrency(analytics.totalValue)}
-                  </p>
-                </div>
-                <div className="bg-blue-100 p-3 rounded-lg">
-                  <Package className="w-6 h-6 text-blue-600" />
-                </div>
-              </div>
-            </div>
-
-            {/* Rotación Promedio */}
-            <div className={`${CSS_CLASSES.card} p-6`}>
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-gray-600 text-sm font-medium">
-                    Rotación Prom.
-                  </p>
-                  <p className="text-3xl font-bold text-gray-900 mt-1">
-                    {analytics.averageTurnover.toFixed(1)}x
-                  </p>
-                  <p className="text-green-600 text-sm mt-1">
-                    {analytics.daysOfSupply} días suministro
-                  </p>
-                </div>
-                <div className="bg-green-100 p-3 rounded-lg">
-                  <TrendingUp className="w-6 h-6 text-green-600" />
-                </div>
-              </div>
-            </div>
-
-            {/* Items Críticos */}
-            <div className={`${CSS_CLASSES.card} p-6`}>
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-gray-600 text-sm font-medium">Críticos</p>
-                  <p className="text-3xl font-bold text-gray-900 mt-1">
-                    {analytics.statusDistribution.critical +
-                      analytics.statusDistribution.low}
-                  </p>
-                  <p className="text-red-600 text-sm mt-1">
-                    Requieren atención
-                  </p>
-                </div>
-                <div className="bg-red-100 p-3 rounded-lg">
-                  <AlertTriangle className="w-6 h-6 text-red-600" />
-                </div>
-              </div>
-            </div>
-
-            {/* Recomendaciones */}
-            <div className={`${CSS_CLASSES.card} p-6`}>
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-gray-600 text-sm font-medium">
-                    Recomendaciones
-                  </p>
-                  <p className="text-3xl font-bold text-gray-900 mt-1">
-                    {analytics.activeRecommendations}
-                  </p>
-                  <p className="text-purple-600 text-sm mt-1">
-                    {formatCurrency(analytics.potentialSavings)} ahorro
-                  </p>
-                </div>
-                <div className="bg-purple-100 p-3 rounded-lg">
-                  <Target className="w-6 h-6 text-purple-600" />
-                </div>
-              </div>
-            </div>
-
-            {/* Riesgo de Desabasto */}
-            <div className={`${CSS_CLASSES.card} p-6`}>
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-gray-600 text-sm font-medium">
-                    Riesgo Desabasto
-                  </p>
-                  <p className="text-3xl font-bold text-gray-900 mt-1">
-                    {analytics.stockoutRisk.toFixed(1)}%
-                  </p>
-                  <p className="text-orange-600 text-sm mt-1">
-                    {analytics.carryingCost.toFixed(1)}% costo mantenimiento
-                  </p>
-                </div>
-                <div className="bg-orange-100 p-3 rounded-lg">
-                  <Gauge className="w-6 h-6 text-orange-600" />
-                </div>
-              </div>
-            </div>
-          </motion.div>
-        )}
-
-        {/* Controles y Filtros */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, delay: 0.2 }}
-          className={`${CSS_CLASSES.card} p-6 mb-6`}
-        >
-          {/* Barra superior */}
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4">
-            <div className="mb-4 sm:mb-0">
-              {/* Espacio reservado para futuras funcionalidades */}
-            </div>
-
-            <div className="flex items-center space-x-3">
               {/* Búsqueda */}
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
@@ -916,9 +887,19 @@ const StockLevels: React.FC = () => {
                   className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent w-64"
                 />
               </div>
+
+              <button
+                onClick={handleNewItem}
+                className="bg-gradient-to-r from-[#2d6f51] to-[#4e9c75] text-white hover:from-[#265a44] hover:to-[#3d7a5c] px-4 py-2 rounded-lg transition-all duration-200 flex items-center space-x-2"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Nuevo</span>
+              </button>
             </div>
           </div>
         </motion.div>
+
+
 
         {/* Lista de Niveles de Stock */}
         <div className="space-y-4">
@@ -929,7 +910,7 @@ const StockLevels: React.FC = () => {
                 No se encontraron items
               </h3>
               <p className="text-gray-500">
-                Ajusta los filtros para ver más resultados
+                Ajusta la búsqueda para ver más resultados
               </p>
             </div>
           ) : (
@@ -1204,6 +1185,24 @@ const StockLevels: React.FC = () => {
                             </div>
                           </div>
                         </div>
+                      </div>
+
+                      {/* Botones de acción */}
+                      <div className="ml-4 flex space-x-2">
+                        <button
+                          onClick={() => handleEditItem(item)}
+                          className="bg-blue-500 hover:bg-blue-600 text-white p-2 rounded-lg transition-colors duration-200 flex items-center space-x-1"
+                          title="Editar item"
+                        >
+                          <Edit className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => handleDeleteItem(item.id, item.itemName)}
+                          className="bg-red-500 hover:bg-red-600 text-white p-2 rounded-lg transition-colors duration-200 flex items-center space-x-1"
+                          title="Eliminar item"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
                       </div>
                     </div>
                   </div>
@@ -1485,6 +1484,293 @@ const StockLevels: React.FC = () => {
                   >
                     <Plus className="w-4 h-4" />
                     <span>Crear Item</span>
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+
+        {/* Modal de Editar Item */}
+        {showEditModal && editingItem && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-white rounded-lg shadow-xl w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto"
+            >
+              <div className="p-6">
+                <div className="flex items-center justify-between mb-6">
+                  <h2 className="text-2xl font-bold text-gray-900">
+                    Editar Item de Stock
+                  </h2>
+                  <button
+                    onClick={() => {
+                      setShowEditModal(false);
+                      setEditingItem(null);
+                      setEditFormData({});
+                    }}
+                    className="text-gray-400 hover:text-gray-600"
+                  >
+                    <X className="w-6 h-6" />
+                  </button>
+                </div>
+
+                <div className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Nombre del Item *
+                      </label>
+                      <input
+                        type="text"
+                        value={editFormData.itemName || ""}
+                        onChange={(e) =>
+                          setEditFormData((prev) => ({
+                            ...prev,
+                            itemName: e.target.value,
+                          }))
+                        }
+                        className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        required
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Categoría *
+                      </label>
+                      <select
+                        value={editFormData.category || ""}
+                        onChange={(e) =>
+                          setEditFormData((prev) => ({
+                            ...prev,
+                            category: e.target.value,
+                          }))
+                        }
+                        className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        required
+                      >
+                        <option value="">Seleccionar categoría</option>
+                        <option value="Medicamentos">Medicamentos</option>
+                        <option value="Vacunas">Vacunas</option>
+                        <option value="Suplementos">Suplementos</option>
+                        <option value="Equipos">Equipos</option>
+                        <option value="Vitaminas">Vitaminas</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Stock Actual
+                      </label>
+                      <input
+                        type="number"
+                        value={editFormData.currentStock ?? 0}
+                        onChange={(e) =>
+                          setEditFormData((prev) => ({
+                            ...prev,
+                            currentStock: parseInt(e.target.value) || 0,
+                          }))
+                        }
+                        className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Stock Mínimo *
+                      </label>
+                      <input
+                        type="number"
+                        value={editFormData.minimumStock ?? 0}
+                        onChange={(e) =>
+                          setEditFormData((prev) => ({
+                            ...prev,
+                            minimumStock: parseInt(e.target.value) || 0,
+                          }))
+                        }
+                        className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        required
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Stock Máximo *
+                      </label>
+                      <input
+                        type="number"
+                        value={editFormData.maximumStock ?? 0}
+                        onChange={(e) =>
+                          setEditFormData((prev) => ({
+                            ...prev,
+                            maximumStock: parseInt(e.target.value) || 0,
+                          }))
+                        }
+                        className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        required
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Punto de Reorden *
+                      </label>
+                      <input
+                        type="number"
+                        value={editFormData.reorderPoint ?? 0}
+                        onChange={(e) =>
+                          setEditFormData((prev) => ({
+                            ...prev,
+                            reorderPoint: parseInt(e.target.value) || 0,
+                          }))
+                        }
+                        className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        required
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Costo Unitario *
+                      </label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={editFormData.unitCost ?? 0}
+                        onChange={(e) =>
+                          setEditFormData((prev) => ({
+                            ...prev,
+                            unitCost: parseFloat(e.target.value) || 0,
+                          }))
+                        }
+                        className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        required
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Almacén *
+                      </label>
+                      <input
+                        type="text"
+                        value={editFormData.location?.warehouse || ""}
+                        onChange={(e) =>
+                          setEditFormData((prev) => ({
+                            ...prev,
+                            location: {
+                              warehouse: e.target.value,
+                              zone: prev.location?.zone || "",
+                              shelf: prev.location?.shelf || "",
+                              position: prev.location?.position || "",
+                            },
+                          }))
+                        }
+                        className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        required
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Estante
+                      </label>
+                      <input
+                        type="text"
+                        value={editFormData.location?.shelf || ""}
+                        onChange={(e) =>
+                          setEditFormData((prev) => ({
+                            ...prev,
+                            location: {
+                              warehouse: prev.location?.warehouse || "",
+                              zone: prev.location?.zone || "",
+                              shelf: e.target.value,
+                              position: prev.location?.position || "",
+                            },
+                          }))
+                        }
+                        className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Posición
+                      </label>
+                      <input
+                        type="text"
+                        value={editFormData.location?.position || ""}
+                        onChange={(e) =>
+                          setEditFormData((prev) => ({
+                            ...prev,
+                            location: {
+                              warehouse: prev.location?.warehouse || "",
+                              zone: prev.location?.zone || "",
+                              shelf: prev.location?.shelf || "",
+                              position: e.target.value,
+                            },
+                          }))
+                        }
+                        className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Proveedor Preferido
+                      </label>
+                      <input
+                        type="text"
+                        value={editFormData.preferredSupplier || ""}
+                        onChange={(e) =>
+                          setEditFormData((prev) => ({
+                            ...prev,
+                            preferredSupplier: e.target.value,
+                          }))
+                        }
+                        className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                    </div>
+
+                    <div className="flex items-center">
+                      <input
+                        type="checkbox"
+                        checked={editFormData.autoReorder ?? false}
+                        onChange={(e) =>
+                          setEditFormData((prev) => ({
+                            ...prev,
+                            autoReorder: e.target.checked,
+                          }))
+                        }
+                        className="w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
+                      />
+                      <label className="ml-2 text-sm font-medium text-gray-700">
+                        Auto-Reorden Habilitado
+                      </label>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-end space-x-4 mt-8">
+                  <button
+                    onClick={() => {
+                      setShowEditModal(false);
+                      setEditingItem(null);
+                      setEditFormData({});
+                    }}
+                    className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors duration-200"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={handleSaveEdit}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200 flex items-center space-x-2"
+                  >
+                    <Save className="w-4 h-4" />
+                    <span>Guardar Cambios</span>
                   </button>
                 </div>
               </div>

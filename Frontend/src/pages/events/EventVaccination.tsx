@@ -1,11 +1,5 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import {
-  Card,
-  CardContent,
-} from "../../components/ui/Card";
-import { Button } from "../../components/ui/Button";
-import { Input } from "../../components/ui/Input";
 import {
   MapPin,
   Syringe,
@@ -131,6 +125,129 @@ const convertToTimelineEvent = (vacEvent: VaccinationEvent): TimelineEvent => ({
   notes: vacEvent.notes
 });
 
+// Componente de Card personalizado
+const Card: React.FC<{ children: React.ReactNode; className?: string }> = ({ 
+  children, 
+  className = "" 
+}) => (
+  <div className={`bg-white/80 backdrop-blur-sm rounded-xl shadow-md border border-white/20 ${className}`}>
+    {children}
+  </div>
+);
+
+const CardContent: React.FC<{ children: React.ReactNode; className?: string }> = ({ 
+  children, 
+  className = "" 
+}) => (
+  <div className={className}>
+    {children}
+  </div>
+);
+
+// Tipos para el componente Button
+type ButtonVariant = "outline" | "success" | "primary" | "destructive" | "default";
+type ButtonSize = "icon" | "default";
+
+// Componente de Button personalizado
+const Button: React.FC<{
+  children: React.ReactNode;
+  onClick?: () => void;
+  variant?: ButtonVariant;
+  size?: ButtonSize;
+  disabled?: boolean;
+  leftIcon?: React.ReactNode;
+  className?: string;
+  type?: "button" | "submit" | "reset";
+}> = ({ 
+  children, 
+  onClick, 
+  variant = "default", 
+  size = "default", 
+  disabled = false, 
+  leftIcon, 
+  className = "",
+  type = "button"
+}) => {
+  const baseClasses = "inline-flex items-center justify-center rounded-lg font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed";
+  
+  const variantClasses: Record<ButtonVariant, string> = {
+    outline: "border-2 border-gray-300 bg-white/80 text-gray-700 hover:bg-gray-50 focus:ring-gray-500",
+    success: "bg-green-600 text-white hover:bg-green-700 focus:ring-green-500",
+    primary: "bg-blue-600 text-white hover:bg-blue-700 focus:ring-blue-500",
+    destructive: "bg-red-600 text-white hover:bg-red-700 focus:ring-red-500",
+    default: "bg-gray-600 text-white hover:bg-gray-700 focus:ring-gray-500"
+  };
+  
+  const sizeClasses: Record<ButtonSize, string> = {
+    icon: "p-2",
+    default: "px-4 py-2"
+  };
+  
+  return (
+    <button
+      type={type}
+      onClick={onClick}
+      disabled={disabled}
+      className={`${baseClasses} ${variantClasses[variant]} ${sizeClasses[size]} ${className}`}
+    >
+      {leftIcon && <span className="mr-2">{leftIcon}</span>}
+      {children}
+    </button>
+  );
+};
+
+// Componente de Input personalizado
+const Input: React.FC<{
+  label?: string;
+  placeholder?: string;
+  value?: string;
+  onChange?: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  type?: string;
+  required?: boolean;
+  leftIcon?: React.ReactNode;
+  className?: string;
+  step?: string;
+}> = ({ 
+  label, 
+  placeholder, 
+  value, 
+  onChange, 
+  type = "text", 
+  required = false, 
+  leftIcon, 
+  className = "",
+  step
+}) => {
+  const id = useMemo(() => `input-${Math.random().toString(36).substr(2, 9)}`, []);
+  
+  return (
+    <div className="space-y-2">
+      {label && (
+        <label htmlFor={id} className="block text-sm font-medium text-gray-700">
+          {label}
+        </label>
+      )}
+      <div className="relative">
+        {leftIcon && (
+          <div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400">
+            {leftIcon}
+          </div>
+        )}
+        <input
+          id={id}
+          type={type}
+          placeholder={placeholder}
+          value={value}
+          onChange={onChange}
+          required={required}
+          step={step}
+          className={`w-full ${leftIcon ? 'pl-10' : 'pl-3'} pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent bg-white/50 backdrop-blur-sm ${className}`}
+        />
+      </div>
+    </div>
+  );
+};
+
 const EventVaccination: React.FC = () => {
   // Estados principales
   const [events, setEvents] = useState<VaccinationEvent[]>([]);
@@ -211,8 +328,8 @@ const EventVaccination: React.FC = () => {
     setFilteredEvents(filtered);
   }, [events, searchTerm, selectedType, selectedStatus]);
 
-  // Funciones
-  const loadEvents = (): void => {
+  // Funciones optimizadas con useCallback
+  const loadEvents = useCallback((): void => {
     try {
       const stored = localStorage.getItem(VACCINATION_STORAGE_KEY);
       if (stored) {
@@ -223,18 +340,18 @@ const EventVaccination: React.FC = () => {
       console.error("Error cargando eventos:", error);
       setEvents([]);
     }
-  };
+  }, []);
 
-  const saveEvents = (newEvents: VaccinationEvent[]): void => {
+  const saveEvents = useCallback((newEvents: VaccinationEvent[]): void => {
     try {
       localStorage.setItem(VACCINATION_STORAGE_KEY, JSON.stringify(newEvents));
       setEvents(newEvents);
     } catch (error) {
       console.error("Error guardando eventos:", error);
     }
-  };
+  }, []);
 
-  const getCurrentLocation = async (): Promise<void> => {
+  const getCurrentLocation = useCallback(async (): Promise<void> => {
     if (!navigator.geolocation) {
       alert("La geolocalización no está soportada");
       return;
@@ -281,15 +398,59 @@ const EventVaccination: React.FC = () => {
       }
     } catch (error) {
       console.error("Error obteniendo ubicación:", error);
-      alert("❌ No se pudo obtener la ubicación");
+      let errorMessage = "❌ No se pudo obtener la ubicación";
+      
+      if (error instanceof GeolocationPositionError) {
+        switch(error.code) {
+          case error.PERMISSION_DENIED:
+            errorMessage = "❌ Permiso de ubicación denegado";
+            break;
+          case error.POSITION_UNAVAILABLE:
+            errorMessage = "❌ Ubicación no disponible";
+            break;
+          case error.TIMEOUT:
+            errorMessage = "❌ Tiempo de espera agotado";
+            break;
+        }
+      }
+      
+      alert(errorMessage);
     } finally {
       setGettingLocation(false);
     }
-  };
+  }, []);
 
-  const handleSaveEvent = async (): Promise<void> => {
-    if (!formData.vaccineName || !formData.veterinarianName) {
-      alert("Por favor completa los campos requeridos");
+  const validateForm = useCallback((): boolean => {
+    if (!formData.vaccineName.trim()) {
+      alert("El nombre de la vacuna es requerido");
+      return false;
+    }
+    
+    if (!formData.veterinarianName.trim()) {
+      alert("El nombre del veterinario es requerido");
+      return false;
+    }
+    
+    if (!formData.applicationDate) {
+      alert("La fecha de aplicación es requerida");
+      return false;
+    }
+    
+    if (new Date(formData.applicationDate) > new Date()) {
+      alert("La fecha de aplicación no puede ser en el futuro");
+      return false;
+    }
+    
+    if (formData.cost < 0) {
+      alert("El costo no puede ser negativo");
+      return false;
+    }
+    
+    return true;
+  }, [formData]);
+
+  const handleSaveEvent = useCallback(async (): Promise<void> => {
+    if (!validateForm()) {
       return;
     }
 
@@ -319,31 +480,31 @@ const EventVaccination: React.FC = () => {
       setShowForm(false);
       setEditingEvent(null);
       resetForm();
-      alert(editingEvent ? "Evento actualizado" : "Evento guardado exitosamente");
+      alert(editingEvent ? "✅ Evento actualizado exitosamente" : "✅ Evento guardado exitosamente");
       
     } catch (error) {
       console.error("Error al guardar:", error);
-      alert("Error al guardar el evento");
+      alert("❌ Error al guardar el evento");
     } finally {
       setLoading(false);
     }
-  };
+  }, [formData, editingEvent, events, saveEvents, validateForm]);
 
-  const handleEdit = (event: VaccinationEvent): void => {
+  const handleEdit = useCallback((event: VaccinationEvent): void => {
     setFormData(event);
     setEditingEvent(event);
     setShowForm(true);
-  };
+  }, []);
 
-  const handleView = (event: VaccinationEvent): void => {
+  const handleView = useCallback((event: VaccinationEvent): void => {
     setViewingEvent(event);
-  };
+  }, []);
 
-  const closeViewModal = (): void => {
+  const closeViewModal = useCallback((): void => {
     setViewingEvent(null);
-  };
+  }, []);
 
-  const handleDelete = async (eventId: string): Promise<void> => {
+  const handleDelete = useCallback(async (eventId: string): Promise<void> => {
     const eventToDelete = events.find(e => e.id === eventId);
     if (!eventToDelete) return;
 
@@ -381,9 +542,9 @@ const EventVaccination: React.FC = () => {
     } finally {
       setDeleteLoading(null);
     }
-  };
+  }, [events, editingEvent, viewingEvent]);
 
-  const resetForm = (): void => {
+  const resetForm = useCallback((): void => {
     setFormData({
       id: "",
       bovineIds: [""],
@@ -412,10 +573,10 @@ const EventVaccination: React.FC = () => {
       status: "scheduled",
       createdAt: new Date().toISOString(),
     });
-  };
+  }, []);
 
-  // Funciones auxiliares de UI
-  const getStatusColor = (status: string): string => {
+  // Funciones auxiliares de UI optimizadas
+  const getStatusColor = useCallback((status: string): string => {
     switch (status) {
       case "completed": return "bg-green-100 text-green-800";
       case "pending": return "bg-yellow-100 text-yellow-800";
@@ -423,9 +584,9 @@ const EventVaccination: React.FC = () => {
       case "cancelled": return "bg-red-100 text-red-800";
       default: return "bg-gray-100 text-gray-800";
     }
-  };
+  }, []);
 
-  const getStatusText = (status: string): string => {
+  const getStatusText = useCallback((status: string): string => {
     switch (status) {
       case "completed": return "Completado";
       case "pending": return "Pendiente";
@@ -433,9 +594,9 @@ const EventVaccination: React.FC = () => {
       case "cancelled": return "Cancelado";
       default: return "Desconocido";
     }
-  };
+  }, []);
 
-  const getVaccineTypeIcon = (type: string): string => {
+  const getVaccineTypeIcon = useCallback((type: string): string => {
     switch (type) {
       case "viral": return "🦠";
       case "bacterial": return "🔬";
@@ -444,29 +605,40 @@ const EventVaccination: React.FC = () => {
       case "toxoid": return "🧪";
       default: return "💉";
     }
-  };
+  }, []);
 
-  const formatDate = (dateString: string): string => {
+  const formatDate = useCallback((dateString: string): string => {
     const date = new Date(dateString);
     return date.toLocaleDateString("es-ES", {
       day: "numeric",
       month: "short",
       year: "numeric"
     });
-  };
+  }, []);
 
-  // Calcular estadísticas
-  const stats = {
+  // Calcular estadísticas con useMemo
+  const stats = useMemo(() => ({
     total: events.length,
     completed: events.filter(e => e.status === "completed").length,
     pending: events.filter(e => e.status === "pending" || e.status === "scheduled").length,
     nextDue: events.filter(e => e.nextDueDate && new Date(e.nextDueDate) <= new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)).length,
-  };
+  }), [events]);
+
+  // Manejadores de cambio del formulario
+  const handleFormChange = useCallback((field: keyof VaccinationEvent, value: any) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
+  }, []);
+
+  const handleCancelForm = useCallback(() => {
+    setShowForm(false);
+    setEditingEvent(null);
+    resetForm();
+  }, [resetForm]);
 
   // Renderizado del formulario
   if (showForm) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-green-50 via-emerald-50 to-teal-50 p-6">
+      <div className="min-h-screen bg-gradient-to-br from-[#519a7c] via-[#f2e9d8] to-[#f4ac3a] p-6">
         <motion.div
           className="max-w-4xl mx-auto"
           initial={{ opacity: 0, y: 20 }}
@@ -478,11 +650,8 @@ const EventVaccination: React.FC = () => {
               <Button
                 variant="outline"
                 size="icon"
-                onClick={() => {
-                  setShowForm(false);
-                  setEditingEvent(null);
-                  resetForm();
-                }}
+                onClick={handleCancelForm}
+                aria-label="Volver atrás"
               >
                 <ArrowLeft className="h-4 w-4" />
               </Button>
@@ -499,32 +668,33 @@ const EventVaccination: React.FC = () => {
 
           <Card>
             <CardContent className="p-6">
-              <div className="space-y-6">
+              <form onSubmit={(e) => { e.preventDefault(); handleSaveEvent(); }} className="space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <Input
                     label="Nombre de la Vacuna *"
                     placeholder="Ej: Triple Viral Bovina"
                     value={formData.vaccineName}
-                    onChange={(e) => setFormData({...formData, vaccineName: e.target.value})}
+                    onChange={(e) => handleFormChange('vaccineName', e.target.value)}
                     required
                   />
                   <Input
                     label="Nombre del Animal"
                     placeholder="Ej: Esperanza"
                     value={formData.bovineName || ""}
-                    onChange={(e) => setFormData({...formData, bovineName: e.target.value})}
+                    onChange={(e) => handleFormChange('bovineName', e.target.value)}
                   />
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                   <div className="space-y-2">
-                    <label className="block text-sm font-medium text-gray-700">
+                    <label htmlFor="vaccineType" className="block text-sm font-medium text-gray-700">
                       Tipo de Vacuna
                     </label>
                     <select
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500"
+                      id="vaccineType"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent bg-white/50 backdrop-blur-sm"
                       value={formData.vaccineType}
-                      onChange={(e) => setFormData({...formData, vaccineType: e.target.value})}
+                      onChange={(e) => handleFormChange('vaccineType', e.target.value)}
                     >
                       <option value="">Selecciona tipo</option>
                       <option value="viral">Viral</option>
@@ -538,14 +708,14 @@ const EventVaccination: React.FC = () => {
                     label="Fecha de Aplicación *"
                     type="date"
                     value={formData.applicationDate}
-                    onChange={(e) => setFormData({...formData, applicationDate: e.target.value})}
+                    onChange={(e) => handleFormChange('applicationDate', e.target.value)}
                     required
                   />
                   <Input
                     label="Hora"
                     type="time"
                     value={formData.applicationTime}
-                    onChange={(e) => setFormData({...formData, applicationTime: e.target.value})}
+                    onChange={(e) => handleFormChange('applicationTime', e.target.value)}
                     required
                   />
                 </div>
@@ -555,23 +725,25 @@ const EventVaccination: React.FC = () => {
                     label="Veterinario *"
                     placeholder="Dr. María González"
                     value={formData.veterinarianName}
-                    onChange={(e) => setFormData({...formData, veterinarianName: e.target.value})}
+                    onChange={(e) => handleFormChange('veterinarianName', e.target.value)}
                     required
                   />
                   <div className="space-y-2">
-                    <label className="block text-sm font-medium text-gray-700">
+                    <label htmlFor="location" className="block text-sm font-medium text-gray-700">
                       Ubicación *
                     </label>
                     <div className="flex space-x-2">
-                      <Input
+                      <input
+                        id="location"
+                        type="text"
                         placeholder="Corral A - Sector Norte"
                         value={formData.location.address}
-                        onChange={(e) => setFormData({
-                          ...formData, 
-                          location: {...formData.location, address: e.target.value}
+                        onChange={(e) => handleFormChange('location', {
+                          ...formData.location, 
+                          address: e.target.value
                         })}
                         required
-                        className="flex-1"
+                        className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent bg-white/50 backdrop-blur-sm"
                       />
                       <Button
                         type="button"
@@ -580,6 +752,7 @@ const EventVaccination: React.FC = () => {
                         variant="outline"
                         size="icon"
                         className="shrink-0"
+                        aria-label="Obtener ubicación actual"
                       >
                         {gettingLocation ? (
                           <RefreshCw className="h-4 w-4 animate-spin" />
@@ -601,17 +774,18 @@ const EventVaccination: React.FC = () => {
                     step="0.01"
                     placeholder="0.00"
                     value={formData.cost.toString()}
-                    onChange={(e) => setFormData({...formData, cost: parseFloat(e.target.value) || 0})}
+                    onChange={(e) => handleFormChange('cost', parseFloat(e.target.value) || 0)}
                     leftIcon={<DollarSign className="h-4 w-4" />}
                   />
                   <div className="space-y-2">
-                    <label className="block text-sm font-medium text-gray-700">
+                    <label htmlFor="status" className="block text-sm font-medium text-gray-700">
                       Estado
                     </label>
                     <select
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500"
+                      id="status"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent bg-white/50 backdrop-blur-sm"
                       value={formData.status}
-                      onChange={(e) => setFormData({...formData, status: e.target.value as VaccinationEvent['status']})}
+                      onChange={(e) => handleFormChange('status', e.target.value as VaccinationEvent['status'])}
                     >
                       <option value="scheduled">Programado</option>
                       <option value="completed">Completado</option>
@@ -621,27 +795,30 @@ const EventVaccination: React.FC = () => {
                   </div>
                 </div>
 
-                <textarea
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 min-h-[100px]"
-                  placeholder="Notas adicionales..."
-                  value={formData.notes}
-                  onChange={(e) => setFormData({...formData, notes: e.target.value})}
-                />
+                <div className="space-y-2">
+                  <label htmlFor="notes" className="block text-sm font-medium text-gray-700">
+                    Notas adicionales
+                  </label>
+                  <textarea
+                    id="notes"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent min-h-[100px] bg-white/50 backdrop-blur-sm"
+                    placeholder="Notas adicionales..."
+                    value={formData.notes}
+                    onChange={(e) => handleFormChange('notes', e.target.value)}
+                  />
+                </div>
 
                 <div className="flex space-x-4">
                   <Button
-                    onClick={() => {
-                      setShowForm(false);
-                      setEditingEvent(null);
-                      resetForm();
-                    }}
+                    type="button"
+                    onClick={handleCancelForm}
                     variant="outline"
                     className="flex-1"
                   >
                     Cancelar
                   </Button>
                   <Button
-                    onClick={handleSaveEvent}
+                    type="submit"
                     disabled={loading || !formData.vaccineName || !formData.veterinarianName}
                     variant="success"
                     className="flex-1 bg-green-600 hover:bg-green-700"
@@ -650,7 +827,7 @@ const EventVaccination: React.FC = () => {
                     {loading ? "Guardando..." : editingEvent ? "Actualizar" : "Guardar"}
                   </Button>
                 </div>
-              </div>
+              </form>
             </CardContent>
           </Card>
         </motion.div>
@@ -660,7 +837,7 @@ const EventVaccination: React.FC = () => {
 
   // Renderizado principal
   return (
-    <div className="min-h-screen bg-gradient-to-br from-green-50 via-emerald-50 to-teal-50 p-6">
+    <div className="min-h-screen bg-gradient-to-br from-[#519a7c] via-[#f2e9d8] to-[#f4ac3a] p-6">
       <motion.div
         className="max-w-7xl mx-auto"
         initial={{ opacity: 0, y: 20 }}
@@ -763,16 +940,18 @@ const EventVaccination: React.FC = () => {
               <input
                 type="text"
                 placeholder="Buscar por vaca o evento..."
-                className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white/50 backdrop-blur-sm"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
+                aria-label="Buscar eventos de vacunación"
               />
             </div>
 
             <select
-              className="w-full px-4 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500"
+              className="w-full px-4 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 bg-white/50 backdrop-blur-sm"
               value={selectedType}
               onChange={(e) => setSelectedType(e.target.value)}
+              aria-label="Filtrar por tipo de vacuna"
             >
               <option value="all">Todos los tipos</option>
               <option value="viral">Viral</option>
@@ -783,9 +962,10 @@ const EventVaccination: React.FC = () => {
             </select>
 
             <select
-              className="w-full px-4 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500"
+              className="w-full px-4 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 bg-white/50 backdrop-blur-sm"
               value={selectedStatus}
               onChange={(e) => setSelectedStatus(e.target.value)}
+              aria-label="Filtrar por estado del evento"
             >
               <option value="all">Todos los estados</option>
               <option value="completed">Completado</option>
@@ -812,7 +992,9 @@ const EventVaccination: React.FC = () => {
                   <div className="flex items-start justify-between mb-4">
                     <div className="flex items-center space-x-3">
                       <div className="bg-blue-100 p-2 rounded-xl">
-                        <span className="text-2xl">{getVaccineTypeIcon(event.vaccineType)}</span>
+                        <span className="text-2xl" role="img" aria-label={`Icono de vacuna ${event.vaccineType}`}>
+                          {getVaccineTypeIcon(event.vaccineType)}
+                        </span>
                       </div>
                       <div>
                         <h3 className="font-semibold text-gray-900">{event.vaccineName}</h3>
@@ -863,6 +1045,7 @@ const EventVaccination: React.FC = () => {
                         onClick={() => handleView(event)}
                         className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
                         title="Ver detalles"
+                        aria-label={`Ver detalles de ${event.vaccineName}`}
                       >
                         <Eye className="h-4 w-4" />
                       </button>
@@ -870,6 +1053,7 @@ const EventVaccination: React.FC = () => {
                         onClick={() => handleEdit(event)}
                         className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
                         title="Editar evento"
+                        aria-label={`Editar ${event.vaccineName}`}
                       >
                         <Edit className="h-4 w-4" />
                       </button>
@@ -878,6 +1062,7 @@ const EventVaccination: React.FC = () => {
                         disabled={deleteLoading === event.id}
                         className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
                         title="Eliminar evento"
+                        aria-label={`Eliminar ${event.vaccineName}`}
                       >
                         {deleteLoading === event.id ? (
                           <RefreshCw className="h-4 w-4 animate-spin" />
@@ -949,7 +1134,9 @@ const EventVaccination: React.FC = () => {
                 <div className="flex items-center justify-between">
                   <div className="flex items-center space-x-3">
                     <div className="bg-blue-100 p-3 rounded-xl">
-                      <span className="text-3xl">{getVaccineTypeIcon(viewingEvent.vaccineType)}</span>
+                      <span className="text-3xl" role="img" aria-label={`Icono de vacuna ${viewingEvent.vaccineType}`}>
+                        {getVaccineTypeIcon(viewingEvent.vaccineType)}
+                      </span>
                     </div>
                     <div>
                       <h2 className="text-2xl font-bold text-gray-900">{viewingEvent.vaccineName}</h2>
@@ -962,6 +1149,7 @@ const EventVaccination: React.FC = () => {
                     onClick={closeViewModal}
                     variant="outline"
                     size="icon"
+                    aria-label="Cerrar modal"
                   >
                     <X className="h-4 w-4" />
                   </Button>
