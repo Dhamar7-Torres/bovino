@@ -1,333 +1,309 @@
-// Frontend/src/context/AuthContext.tsx
-// ✅ VERSIÓN CORREGIDA - Errores de tipos e imports solucionados
+// Frontend/src/contexts/AuthContext.tsx
+import React, { createContext, useContext, useReducer, useEffect } from 'react';
+import { User, AuthCredentials, RegisterData } from '../types/auth';
+import { authService } from '../services/authService';
 
-import React, { createContext, useContext, useReducer, useEffect, ReactNode } from "react";
-// ❌ REMOVIDO: import { useNavigate } from "react-router-dom"; - No se usa
-import { authService } from "../services/authService"; // ✅ Importar authService real
-import {
-  User,
-  AuthCredentials, // ✅ CORREGIDO: usar AuthCredentials en lugar de LoginCredentials
-  RegisterData,
-} from "../types/auth";
-
-// Estado de autenticación
+// Tipos para el estado de autenticación
 interface AuthState {
-  isAuthenticated: boolean;
   user: User | null;
-  token: string | null;
-  refreshToken: string | null;
-  sessionExpiry: Date | null;
   isLoading: boolean;
+  isAuthenticated: boolean;
   error: string | null;
+}
+
+// Tipos para las acciones del reducer
+type AuthAction =
+  | { type: 'AUTH_START' }
+  | { type: 'AUTH_SUCCESS'; payload: User }
+  | { type: 'AUTH_FAILURE'; payload: string }
+  | { type: 'AUTH_LOGOUT' }
+  | { type: 'CLEAR_ERROR' };
+
+// Interface para el contexto
+interface AuthContextType {
+  // Estado
+  user: User | null;
+  isLoading: boolean;
+  isAuthenticated: boolean;
+  error: string | null;
+  
+  // Acciones
+  login: (credentials: AuthCredentials) => Promise<void>;
+  register: (data: RegisterData) => Promise<void>;
+  logout: () => Promise<void>;
+  clearError: () => void;
+  refreshToken: () => Promise<void>;
+  updateProfile: (updates: Partial<User>) => Promise<void>;
+  changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
 }
 
 // Estado inicial
 const initialState: AuthState = {
-  isAuthenticated: false,
   user: null,
-  token: null,
-  refreshToken: null,
-  sessionExpiry: null,
   isLoading: false,
+  isAuthenticated: false,
   error: null,
 };
 
-// Tipos de acciones
-type AuthAction =
-  | { type: "AUTH_START" }
-  | { type: "AUTH_SUCCESS"; payload: { user: User; token: string; refreshToken: string } }
-  | { type: "AUTH_ERROR"; payload: string }
-  | { type: "LOGOUT" }
-  | { type: "UPDATE_USER"; payload: Partial<User> }
-  | { type: "CLEAR_ERROR" }
-  | { type: "REFRESH_TOKEN_SUCCESS"; payload: { token: string; refreshToken: string } }
-  | { type: "SESSION_EXPIRED" };
-
-// Reducer de autenticación
+// Reducer para manejar las acciones de autenticación
 const authReducer = (state: AuthState, action: AuthAction): AuthState => {
   switch (action.type) {
-    case "AUTH_START":
+    case 'AUTH_START':
       return {
         ...state,
         isLoading: true,
         error: null,
       };
-
-    case "AUTH_SUCCESS":
+    
+    case 'AUTH_SUCCESS':
       return {
         ...state,
-        isAuthenticated: true,
-        user: action.payload.user,
-        token: action.payload.token,
-        refreshToken: action.payload.refreshToken,
-        sessionExpiry: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24 horas
         isLoading: false,
+        isAuthenticated: true,
+        user: action.payload,
         error: null,
       };
-
-    case "AUTH_ERROR":
+    
+    case 'AUTH_FAILURE':
       return {
         ...state,
+        isLoading: false,
         isAuthenticated: false,
         user: null,
-        token: null,
-        refreshToken: null,
-        sessionExpiry: null,
-        isLoading: false,
         error: action.payload,
       };
-
-    case "LOGOUT":
-      return {
-        ...initialState,
-      };
-
-    case "UPDATE_USER":
+    
+    case 'AUTH_LOGOUT':
       return {
         ...state,
-        user: state.user ? { ...state.user, ...action.payload } : null,
+        isLoading: false,
+        isAuthenticated: false,
+        user: null,
+        error: null,
       };
-
-    case "CLEAR_ERROR":
+    
+    case 'CLEAR_ERROR':
       return {
         ...state,
         error: null,
       };
-
-    case "REFRESH_TOKEN_SUCCESS":
-      return {
-        ...state,
-        token: action.payload.token,
-        refreshToken: action.payload.refreshToken,
-        sessionExpiry: new Date(Date.now() + 24 * 60 * 60 * 1000),
-      };
-
-    case "SESSION_EXPIRED":
-      return {
-        ...initialState,
-        error: "Sesión expirada. Por favor, inicia sesión nuevamente.",
-      };
-
+    
     default:
       return state;
   }
 };
 
-// Contexto de autenticación
-interface AuthContextType {
-  state: AuthState;
-  dispatch: React.Dispatch<AuthAction>;
-  login: (credentials: AuthCredentials) => Promise<void>; // ✅ CORREGIDO: usar AuthCredentials
-  register: (userData: RegisterData) => Promise<void>;
-  logout: () => Promise<void>;
-  refreshToken: () => Promise<void>;
-  updateProfile: (userData: Partial<User>) => Promise<void>;
-  checkPermission: (resource: string, action: string) => boolean;
-  hasRole: (role: User["role"]) => boolean;
-  clearError: () => void;
-}
-
+// Crear el contexto
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// Proveedor del contexto de autenticación
+// Props para el AuthProvider
 interface AuthProviderProps {
-  children: ReactNode;
+  children: React.ReactNode;
 }
 
+// AuthProvider component
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [state, dispatch] = useReducer(authReducer, initialState);
 
-  // ✅ Función de login REAL usando authService
-  const login = async (credentials: AuthCredentials): Promise<void> => { // ✅ CORREGIDO: usar AuthCredentials
-    dispatch({ type: "AUTH_START" });
-
+  // Función de login usando el authService real
+  const login = async (credentials: AuthCredentials): Promise<void> => {
+    dispatch({ type: 'AUTH_START' });
+    
     try {
-      console.log("🔐 Iniciando login a través de AuthContext...");
-      
-      // ✅ Usar authService REAL para hacer petición HTTP
+      console.log('🔐 Iniciando login con backend...');
       const response = await authService.login(credentials);
       
-      console.log("✅ Login exitoso, datos recibidos:", response);
-
-      // ✅ Despachar éxito con datos reales del backend
-      dispatch({
-        type: "AUTH_SUCCESS",
-        payload: {
-          user: response.user,
-          token: response.tokens.accessToken,
-          refreshToken: response.tokens.refreshToken,
-        },
-      });
-
-      console.log("✅ Estado de autenticación actualizado, usuario logueado");
-
+      dispatch({ type: 'AUTH_SUCCESS', payload: response.user });
+      console.log('✅ Login exitoso con backend');
     } catch (error: any) {
-      console.error("❌ Error en login:", error);
+      console.error('❌ Error en login:', error);
       
-      dispatch({
-        type: "AUTH_ERROR",
-        payload: error.message || "Error al iniciar sesión",
-      });
+      // Extraer mensaje de error más específico
+      let errorMessage = 'Error en el login';
       
+      if (error?.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      } else if (error?.message) {
+        errorMessage = error.message;
+      }
+      
+      dispatch({ type: 'AUTH_FAILURE', payload: errorMessage });
       throw error;
     }
   };
 
-  // ✅ Función de registro REAL usando authService
-  const register = async (userData: RegisterData): Promise<void> => {
-    dispatch({ type: "AUTH_START" });
-
+  // Función de registro usando el authService real
+  const register = async (data: RegisterData): Promise<void> => {
+    dispatch({ type: 'AUTH_START' });
+    
     try {
-      console.log("📝 Iniciando registro a través de AuthContext...");
+      console.log('📝 Iniciando registro con backend...');
+      const response = await authService.register(data);
       
-      // ✅ Usar authService REAL para hacer petición HTTP
-      const response = await authService.register(userData);
-      
-      console.log("✅ Registro exitoso, datos recibidos:", response);
-
-      // ✅ Despachar éxito con datos reales del backend
-      dispatch({
-        type: "AUTH_SUCCESS",
-        payload: {
-          user: response.user,
-          token: response.tokens.accessToken,
-          refreshToken: response.tokens.refreshToken,
-        },
-      });
-
-      console.log("✅ Estado de autenticación actualizado después del registro");
-
+      dispatch({ type: 'AUTH_SUCCESS', payload: response.user });
+      console.log('✅ Registro exitoso con backend');
     } catch (error: any) {
-      console.error("❌ Error en registro:", error);
+      console.error('❌ Error en registro:', error);
       
-      dispatch({
-        type: "AUTH_ERROR",
-        payload: error.message || "Error al registrarse",
-      });
+      // Extraer mensaje de error más específico
+      let errorMessage = 'Error en el registro';
       
+      if (error?.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      } else if (error?.message) {
+        errorMessage = error.message;
+      }
+      
+      dispatch({ type: 'AUTH_FAILURE', payload: errorMessage });
       throw error;
     }
   };
 
-  // ✅ Función de logout REAL
+  // Función de logout usando el authService real
   const logout = async (): Promise<void> => {
+    dispatch({ type: 'AUTH_START' });
+    
     try {
-      console.log("🚪 Cerrando sesión...");
-      
-      // ✅ Usar authService REAL para notificar al backend
+      console.log('🚪 Cerrando sesión...');
       await authService.logout();
       
-      // ✅ Limpiar estado local
-      dispatch({ type: "LOGOUT" });
-      
-      console.log("✅ Sesión cerrada correctamente");
-      
+      dispatch({ type: 'AUTH_LOGOUT' });
+      console.log('✅ Logout exitoso');
     } catch (error: any) {
-      console.error("❌ Error cerrando sesión:", error);
-      // Limpiar estado local aunque haya error
-      dispatch({ type: "LOGOUT" });
+      console.error('❌ Error en logout:', error);
+      // Aun si hay error, limpiar estado local
+      dispatch({ type: 'AUTH_LOGOUT' });
     }
   };
 
-  // ✅ Función para refrescar token
+  // Función para refrescar token usando el authService real
   const refreshToken = async (): Promise<void> => {
     try {
-      const tokens = await authService.refreshTokens();
-      
-      dispatch({
-        type: "REFRESH_TOKEN_SUCCESS",
-        payload: {
-          token: tokens.accessToken,
-          refreshToken: tokens.refreshToken,
-        },
-      });
+      console.log('🔄 Refrescando token...');
+      await authService.refreshTokens();
+      console.log('✅ Token refrescado exitosamente');
     } catch (error: any) {
-      console.error("❌ Error renovando token:", error);
-      dispatch({ type: "SESSION_EXPIRED" });
-    }
-  };
-
-  // ✅ Función para actualizar perfil
-  const updateProfile = async (userData: Partial<User>): Promise<void> => {
-    try {
-      const updatedUser = await authService.updateProfile(userData);
-      
-      dispatch({
-        type: "UPDATE_USER",
-        payload: updatedUser,
-      });
-    } catch (error: any) {
-      console.error("❌ Error actualizando perfil:", error);
+      console.error('❌ Error refrescando token:', error);
+      // Si no se puede refrescar, hacer logout
+      dispatch({ type: 'AUTH_LOGOUT' });
       throw error;
     }
   };
 
-  // ✅ Función para verificar permisos
-  const checkPermission = (resource: string, action: string): boolean => {
-    return authService.hasPermission(resource, action);
+  // Función para actualizar perfil usando el authService real
+  const updateProfile = async (updates: Partial<User>): Promise<void> => {
+    try {
+      console.log('👤 Actualizando perfil...');
+      const updatedUser = await authService.updateProfile(updates);
+      
+      dispatch({ type: 'AUTH_SUCCESS', payload: updatedUser });
+      console.log('✅ Perfil actualizado exitosamente');
+    } catch (error: any) {
+      console.error('❌ Error actualizando perfil:', error);
+      throw error;
+    }
   };
 
-  // ✅ Función para verificar roles
-  const hasRole = (role: User["role"]): boolean => {
-    return authService.hasRole(role as any);
+  // Función para cambiar contraseña usando el authService real
+  const changePassword = async (currentPassword: string, newPassword: string): Promise<void> => {
+    try {
+      console.log('🔑 Cambiando contraseña...');
+      await authService.changePassword({
+        currentPassword,
+        newPassword,
+        confirmNewPassword: newPassword,
+      });
+      console.log('✅ Contraseña cambiada exitosamente');
+    } catch (error: any) {
+      console.error('❌ Error cambiando contraseña:', error);
+      throw error;
+    }
   };
 
   // Función para limpiar errores
   const clearError = (): void => {
-    dispatch({ type: "CLEAR_ERROR" });
+    dispatch({ type: 'CLEAR_ERROR' });
   };
 
-  // ✅ Efecto para inicializar desde localStorage (usando authService)
+  // Inicializar autenticación desde el authService al cargar
   useEffect(() => {
-    const initializeAuth = () => {
-      // Verificar si authService ya tiene una sesión activa
-      if (authService.isAuthenticated && authService.currentUser) {
-        console.log("✅ Sesión existente encontrada, restaurando estado...");
-        
-        dispatch({
-          type: "AUTH_SUCCESS",
-          payload: {
-            user: authService.currentUser,
-            token: authService.currentToken || "",
-            refreshToken: "", // authService maneja esto internamente
-          },
-        });
+    const initializeAuth = async () => {
+      try {
+        // Verificar si hay una sesión activa
+        if (authService.isAuthenticated && authService.currentUser) {
+          console.log('🔄 Restaurando sesión existente...');
+          dispatch({ type: 'AUTH_SUCCESS', payload: authService.currentUser });
+          console.log('✅ Sesión restaurada desde authService');
+        } else {
+          // Intentar validar token si existe
+          const isValid = await authService.validateToken();
+          if (isValid && authService.currentUser) {
+            dispatch({ type: 'AUTH_SUCCESS', payload: authService.currentUser });
+            console.log('✅ Token validado, sesión restaurada');
+          }
+        }
+      } catch (error) {
+        console.warn('⚠️ No se pudo restaurar la sesión:', error);
+        // No mostrar error al usuario, simplemente mantener estado no autenticado
       }
     };
 
     initializeAuth();
   }, []);
 
-  // Efecto para verificar expiración de sesión
+  // Escuchar cambios en el authService
   useEffect(() => {
-    if (state.sessionExpiry && new Date() > state.sessionExpiry) {
-      dispatch({ type: "SESSION_EXPIRED" });
-    }
-  }, [state.sessionExpiry]);
+    const checkAuthStatus = () => {
+      if (!authService.isAuthenticated && state.isAuthenticated) {
+        // El authService perdió la autenticación, actualizar contexto
+        dispatch({ type: 'AUTH_LOGOUT' });
+      } else if (authService.isAuthenticated && authService.currentUser && !state.isAuthenticated) {
+        // El authService ganó autenticación, actualizar contexto
+        dispatch({ type: 'AUTH_SUCCESS', payload: authService.currentUser });
+      }
+    };
 
-  const value: AuthContextType = {
-    state,
-    dispatch,
+    // Verificar estado cada 30 segundos
+    const interval = setInterval(checkAuthStatus, 30000);
+
+    return () => clearInterval(interval);
+  }, [state.isAuthenticated]);
+
+  // Valor del contexto
+  const contextValue: AuthContextType = {
+    // Estado
+    user: state.user,
+    isLoading: state.isLoading,
+    isAuthenticated: state.isAuthenticated,
+    error: state.error,
+    
+    // Acciones
     login,
     register,
     logout,
+    clearError,
     refreshToken,
     updateProfile,
-    checkPermission,
-    hasRole,
-    clearError,
+    changePassword,
   };
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  return (
+    <AuthContext.Provider value={contextValue}>
+      {children}
+    </AuthContext.Provider>
+  );
 };
 
-// Hook personalizado para usar el contexto de autenticación
+// Hook personalizado para usar el contexto
 export const useAuth = (): AuthContextType => {
   const context = useContext(AuthContext);
+  
   if (context === undefined) {
-    throw new Error("useAuth must be used within an AuthProvider");
+    throw new Error('useAuth must be used within an AuthProvider');
   }
+  
   return context;
 };
 
+// Export por defecto
 export default AuthContext;
