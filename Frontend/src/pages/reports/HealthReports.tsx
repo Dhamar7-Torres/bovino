@@ -1610,113 +1610,47 @@ export const HealthReports: React.FC<HealthReportsProps> = ({ className }) => {
   return (
     <div
       className={cn(
-        "min-h-screen",
-        // Fondo degradado principal del layout
-        "bg-gradient-to-br from-[#519a7c] via-[#f2e9d8] to-[#f4ac3a]",
+        "min-h-screen bg-gradient-to-br from-[#519a7c] via-[#f2e9d8] to-[#f4ac3a] p-6",
         className
       )}
     >
-      <div className="p-2 sm:p-4 lg:p-6">
-        <div className="max-w-7xl mx-auto">
-          {/* Header */}
-          <motion.div
-            initial={{ opacity: 0, y: -20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-4 lg:mb-6"
+      <div className="max-w-7xl mx-auto">
+        {/* Header */}
+        <motion.div
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-4 lg:mb-6"
+        >
+          <div>
+            <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-white drop-shadow-sm mb-1">
+              Reportes de Salud Ganadera
+            </h1>
+            <p className="text-white/90 text-xs sm:text-sm lg:text-base">
+              Gestiona y analiza los reportes veterinarios y de salud animal
+            </p>
+          </div>
+
+          <button
+            onClick={handleCreateReport}
+            className="w-full sm:w-auto flex items-center justify-center gap-2 px-3 sm:px-4 lg:px-6 py-2 lg:py-3 bg-gradient-to-r from-[#2d6f51] to-[#4e9c75] text-white rounded-lg hover:from-[#265a44] hover:to-[#3d7a5c] transition-all duration-200 shadow-lg text-xs sm:text-sm lg:text-base"
           >
-            <div>
-              <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-white drop-shadow-sm mb-1">
-                Reportes de Salud Ganadera
-              </h1>
-              <p className="text-white/90 text-xs sm:text-sm lg:text-base">
-                Gestiona y analiza los reportes veterinarios y de salud animal
-              </p>
-            </div>
+            <Plus className="w-4 h-4" />
+            <span className="hidden sm:inline">Nuevo Reporte de Salud</span>
+            <span className="sm:hidden">Nuevo Reporte</span>
+          </button>
+        </motion.div>
 
-            <button
-              onClick={handleCreateReport}
-              className="w-full sm:w-auto flex items-center justify-center gap-2 px-3 sm:px-4 lg:px-6 py-2 lg:py-3 bg-gradient-to-r from-[#2d6f51] to-[#4e9c75] text-white rounded-lg hover:from-[#265a44] hover:to-[#3d7a5c] transition-all duration-200 shadow-lg text-xs sm:text-sm lg:text-base"
-            >
-              <Plus className="w-4 h-4" />
-              <span className="hidden sm:inline">Nuevo Reporte de Salud</span>
-              <span className="sm:hidden">Nuevo Reporte</span>
-            </button>
-          </motion.div>
-
-          {/* Filtros y búsqueda */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 }}
-            className="bg-white/95 backdrop-blur-sm rounded-xl p-3 sm:p-4 lg:p-6 shadow-lg border border-white/20 mb-3 sm:mb-4 lg:mb-6"
-          >
-            {/* Versión móvil */}
-            <div className="lg:hidden">
-              <div className="flex items-center gap-2 mb-3">
-                <div className="relative flex-1">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-                  <input
-                    type="text"
-                    placeholder="Buscar reportes..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2d6f51] focus:border-transparent transition-colors"
-                  />
-                </div>
-                <button
-                  onClick={() => setIsMobileFiltersOpen(!isMobileFiltersOpen)}
-                  className="px-3 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-                >
-                  <Filter className="w-4 h-4" />
-                </button>
-              </div>
-              
-              <AnimatePresence>
-                {isMobileFiltersOpen && (
-                  <motion.div
-                    initial={{ height: 0, opacity: 0 }}
-                    animate={{ height: 'auto', opacity: 1 }}
-                    exit={{ height: 0, opacity: 0 }}
-                    className="overflow-hidden"
-                  >
-                    <div className="space-y-2 pt-2 border-t">
-                      <select
-                        value={filterType}
-                        onChange={(e) => setFilterType(e.target.value)}
-                        className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2d6f51] focus:border-transparent transition-colors"
-                      >
-                        <option value="all">Todos los tipos</option>
-                        {Object.entries(REPORT_TYPE_CONFIG).map(([key, config]) => (
-                          <option key={key} value={key}>
-                            {config.label}
-                          </option>
-                        ))}
-                      </select>
-                      
-                      <select
-                        value={filterStatus}
-                        onChange={(e) => setFilterStatus(e.target.value)}
-                        className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2d6f51] focus:border-transparent transition-colors"
-                      >
-                        <option value="all">Todos los estados</option>
-                        <option value="active">Activo</option>
-                        <option value="draft">Borrador</option>
-                        <option value="archived">Archivado</option>
-                        <option value="processing">Procesando</option>
-                      </select>
-                      
-                      <div className="flex items-center justify-center text-gray-600 text-xs py-1">
-                        <span>{filteredReports.length} de {reports.length} reportes</span>
-                      </div>
-                    </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
-
-            {/* Versión desktop */}
-            <div className="hidden lg:grid lg:grid-cols-4 gap-3">
-              <div className="relative">
+        {/* Filtros y búsqueda */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1 }}
+          className="bg-white/95 backdrop-blur-sm rounded-xl p-3 sm:p-4 lg:p-6 shadow-lg border border-white/20 mb-3 sm:mb-4 lg:mb-6"
+        >
+          {/* Versión móvil */}
+          <div className="lg:hidden">
+            <div className="flex items-center gap-2 mb-3">
+              <div className="relative flex-1">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
                 <input
                   type="text"
@@ -1726,333 +1660,395 @@ export const HealthReports: React.FC<HealthReportsProps> = ({ className }) => {
                   className="w-full pl-10 pr-4 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2d6f51] focus:border-transparent transition-colors"
                 />
               </div>
-
-              <select
-                value={filterType}
-                onChange={(e) => setFilterType(e.target.value)}
-                className="w-full px-4 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2d6f51] focus:border-transparent transition-colors"
+              <button
+                onClick={() => setIsMobileFiltersOpen(!isMobileFiltersOpen)}
+                className="px-3 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
               >
-                <option value="all">Todos los tipos</option>
-                {Object.entries(REPORT_TYPE_CONFIG).map(([key, config]) => (
-                  <option key={key} value={key}>
-                    {config.label}
-                  </option>
-                ))}
-              </select>
-
-              <select
-                value={filterStatus}
-                onChange={(e) => setFilterStatus(e.target.value)}
-                className="w-full px-4 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2d6f51] focus:border-transparent transition-colors"
-              >
-                <option value="all">Todos los estados</option>
-                <option value="active">Activo</option>
-                <option value="draft">Borrador</option>
-                <option value="archived">Archivado</option>
-                <option value="processing">Procesando</option>
-              </select>
-
-              <div className="flex items-center text-gray-600">
-                <Filter className="w-4 h-4 mr-2" />
-                <span className="text-sm">
-                  {filteredReports.length} de {reports.length} reportes
-                </span>
-              </div>
+                <Filter className="w-4 h-4" />
+              </button>
             </div>
-          </motion.div>
+            
+            <AnimatePresence>
+              {isMobileFiltersOpen && (
+                <motion.div
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: 'auto', opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  className="overflow-hidden"
+                >
+                  <div className="space-y-2 pt-2 border-t">
+                    <select
+                      value={filterType}
+                      onChange={(e) => setFilterType(e.target.value)}
+                      className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2d6f51] focus:border-transparent transition-colors"
+                    >
+                      <option value="all">Todos los tipos</option>
+                      {Object.entries(REPORT_TYPE_CONFIG).map(([key, config]) => (
+                        <option key={key} value={key}>
+                          {config.label}
+                        </option>
+                      ))}
+                    </select>
+                    
+                    <select
+                      value={filterStatus}
+                      onChange={(e) => setFilterStatus(e.target.value)}
+                      className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2d6f51] focus:border-transparent transition-colors"
+                    >
+                      <option value="all">Todos los estados</option>
+                      <option value="active">Activo</option>
+                      <option value="draft">Borrador</option>
+                      <option value="archived">Archivado</option>
+                      <option value="processing">Procesando</option>
+                    </select>
+                    
+                    <div className="flex items-center justify-center text-gray-600 text-xs py-1">
+                      <span>{filteredReports.length} de {reports.length} reportes</span>
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
 
-          {/* Lista de reportes */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2 }}
-            className="bg-white/95 backdrop-blur-sm rounded-xl shadow-lg border border-white/20 overflow-hidden"
-          >
-            {filteredReports.length === 0 ? (
-              <div className="p-6 lg:p-12 text-center">
-                <Activity className="w-10 h-10 lg:w-16 lg:h-16 text-gray-400 mx-auto mb-3" />
-                <h3 className="text-base lg:text-lg font-medium text-gray-800 mb-2">
-                  No se encontraron reportes de salud
-                </h3>
-                <p className="text-sm text-gray-600 mb-4 lg:mb-6">
-                  {reports.length === 0 
-                    ? 'Crea tu primer reporte de salud ganadera'
-                    : 'Ajusta los filtros o términos de búsqueda'
-                  }
-                </p>
-                {reports.length === 0 && (
-                  <button
-                    onClick={handleCreateReport}
-                    className="inline-flex items-center gap-2 px-4 lg:px-6 py-2 lg:py-3 bg-gradient-to-r from-[#2d6f51] to-[#4e9c75] text-white rounded-lg hover:from-[#265a44] hover:to-[#3d7a5c] transition-all duration-200 text-sm lg:text-base"
-                  >
-                    <Plus className="w-4 h-4 lg:w-5 lg:h-5" />
-                    Crear Primer Reporte
-                  </button>
-                )}
+          {/* Versión desktop */}
+          <div className="hidden lg:grid lg:grid-cols-4 gap-3">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+              <input
+                type="text"
+                placeholder="Buscar reportes..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-10 pr-4 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2d6f51] focus:border-transparent transition-colors"
+              />
+            </div>
+
+            <select
+              value={filterType}
+              onChange={(e) => setFilterType(e.target.value)}
+              className="w-full px-4 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2d6f51] focus:border-transparent transition-colors"
+            >
+              <option value="all">Todos los tipos</option>
+              {Object.entries(REPORT_TYPE_CONFIG).map(([key, config]) => (
+                <option key={key} value={key}>
+                  {config.label}
+                </option>
+              ))}
+            </select>
+
+            <select
+              value={filterStatus}
+              onChange={(e) => setFilterStatus(e.target.value)}
+              className="w-full px-4 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2d6f51] focus:border-transparent transition-colors"
+            >
+              <option value="all">Todos los estados</option>
+              <option value="active">Activo</option>
+              <option value="draft">Borrador</option>
+              <option value="archived">Archivado</option>
+              <option value="processing">Procesando</option>
+            </select>
+
+            <div className="flex items-center text-gray-600">
+              <Filter className="w-4 h-4 mr-2" />
+              <span className="text-sm">
+                {filteredReports.length} de {reports.length} reportes
+              </span>
+            </div>
+          </div>
+        </motion.div>
+
+        {/* Lista de reportes */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2 }}
+          className="bg-white/95 backdrop-blur-sm rounded-xl shadow-lg border border-white/20 overflow-hidden"
+        >
+          {filteredReports.length === 0 ? (
+            <div className="p-6 lg:p-12 text-center">
+              <Activity className="w-10 h-10 lg:w-16 lg:h-16 text-gray-400 mx-auto mb-3" />
+              <h3 className="text-base lg:text-lg font-medium text-gray-800 mb-2">
+                No se encontraron reportes de salud
+              </h3>
+              <p className="text-sm text-gray-600 mb-4 lg:mb-6">
+                {reports.length === 0 
+                  ? 'Crea tu primer reporte de salud ganadera'
+                  : 'Ajusta los filtros o términos de búsqueda'
+                }
+              </p>
+              {reports.length === 0 && (
+                <button
+                  onClick={handleCreateReport}
+                  className="inline-flex items-center gap-2 px-4 lg:px-6 py-2 lg:py-3 bg-gradient-to-r from-[#2d6f51] to-[#4e9c75] text-white rounded-lg hover:from-[#265a44] hover:to-[#3d7a5c] transition-all duration-200 text-sm lg:text-base"
+                >
+                  <Plus className="w-4 h-4 lg:w-5 lg:h-5" />
+                  Crear Primer Reporte
+                </button>
+              )}
+            </div>
+          ) : (
+            <>
+              {/* Vista móvil - Cards */}
+              <div className="lg:hidden">
+                <div className="divide-y divide-gray-200">
+                  {filteredReports.map((report, index) => (
+                    <motion.div
+                      key={report.id}
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: index * 0.05 }}
+                      className="p-3 hover:bg-gray-50/50 transition-colors"
+                    >
+                      <div className="space-y-2">
+                        {/* Header */}
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1 min-w-0">
+                            <h4 className="font-medium text-gray-800 truncate text-sm">{report.title}</h4>
+                            <p className="text-xs text-gray-600 line-clamp-2 mt-1">
+                              {report.description}
+                            </p>
+                          </div>
+                          <span className={cn(
+                            "inline-flex px-2 py-1 text-xs font-medium rounded-full ml-2 whitespace-nowrap",
+                            getStatusColor(report.status)
+                          )}>
+                            {getStatusLabel(report.status)}
+                          </span>
+                        </div>
+
+                        {/* Info */}
+                        <div className="grid grid-cols-2 gap-2 text-xs">
+                          <div className="flex items-center gap-1">
+                            <div 
+                              className="p-1 rounded"
+                              style={{ 
+                                backgroundColor: `${REPORT_TYPE_CONFIG[report.reportType].color}20`,
+                                color: REPORT_TYPE_CONFIG[report.reportType].color
+                              }}
+                            >
+                              <div className="w-3 h-3">
+                                {REPORT_TYPE_CONFIG[report.reportType].icon}
+                              </div>
+                            </div>
+                            <span className="text-gray-700 truncate">{REPORT_TYPE_CONFIG[report.reportType].label}</span>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <MapPin className="w-3 h-3 text-gray-400 flex-shrink-0" />
+                            <span className="text-gray-700 truncate">{report.location}</span>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <Stethoscope className="w-3 h-3 text-gray-400 flex-shrink-0" />
+                            <span className="text-gray-700 truncate">{report.veterinarian}</span>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <Calendar className="w-3 h-3 text-gray-400 flex-shrink-0" />
+                            <span className="text-gray-700 truncate capitalize">{report.period.type}</span>
+                          </div>
+                        </div>
+
+                        {/* Métricas */}
+                        <div className="bg-gray-50 rounded-lg p-2">
+                          <div className="grid grid-cols-3 gap-2 text-center text-xs">
+                            <div>
+                              <p className="font-medium text-gray-800">{report.healthMetrics.totalAnimalsEvaluated}</p>
+                              <p className="text-xs text-gray-600">Evaluados</p>
+                            </div>
+                            <div>
+                              <p className="font-medium text-green-600">{report.healthMetrics.healthyAnimals}</p>
+                              <p className="text-xs text-gray-600">Sanos</p>
+                            </div>
+                            <div>
+                              <p className="font-medium text-red-600">{report.healthMetrics.sickAnimals}</p>
+                              <p className="text-xs text-gray-600">Enfermos</p>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Acciones */}
+                        <div className="flex items-center justify-between pt-2 border-t border-gray-100">
+                          <div className="text-xs text-gray-500">
+                            Por {report.createdBy} • {new Date(report.createdAt).toLocaleDateString()}
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <button
+                              onClick={() => handleEditReport(report)}
+                              className="p-1.5 text-blue-600 hover:bg-blue-100 rounded-lg transition-colors"
+                              title="Editar reporte"
+                            >
+                              <Edit2 className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={() => handleViewReport(report)}
+                              className="p-1.5 text-green-600 hover:bg-green-100 rounded-lg transition-colors"
+                              title="Ver reporte"
+                            >
+                              <Eye className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={() => handleDownloadReport(report)}
+                              className="p-1.5 text-[#2d6f51] hover:bg-green-100 rounded-lg transition-colors"
+                              title="Descargar reporte"
+                            >
+                              <Download className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={() => setDeleteConfirm(report.id)}
+                              className="p-1.5 text-red-600 hover:bg-red-100 rounded-lg transition-colors"
+                              title="Eliminar reporte"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </motion.div>
+                  ))}
+                </div>
               </div>
-            ) : (
-              <>
-                {/* Vista móvil - Cards */}
-                <div className="lg:hidden">
-                  <div className="divide-y divide-gray-200">
+
+              {/* Vista desktop - Tabla */}
+              <div className="hidden lg:block overflow-x-auto">
+                <table className="w-full">
+                  <thead className="bg-gradient-to-r from-[#2d6f51] to-[#4e9c75] text-white">
+                    <tr>
+                      <th className="px-4 py-3 text-left text-sm font-medium">Reporte</th>
+                      <th className="px-4 py-3 text-left text-sm font-medium">Tipo</th>
+                      <th className="px-4 py-3 text-left text-sm font-medium">Ubicación</th>
+                      <th className="px-4 py-3 text-left text-sm font-medium">Veterinario</th>
+                      <th className="px-4 py-3 text-left text-sm font-medium">Período</th>
+                      <th className="px-4 py-3 text-left text-sm font-medium">Estado</th>
+                      <th className="px-4 py-3 text-left text-sm font-medium">Métricas Clave</th>
+                      <th className="px-4 py-3 text-left text-sm font-medium">Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200">
                     {filteredReports.map((report, index) => (
-                      <motion.div
+                      <motion.tr
                         key={report.id}
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: index * 0.05 }}
-                        className="p-3 hover:bg-gray-50/50 transition-colors"
+                        className="hover:bg-gray-50/50 transition-colors"
                       >
-                        <div className="space-y-2">
-                          {/* Header */}
-                          <div className="flex items-start justify-between">
-                            <div className="flex-1 min-w-0">
-                              <h4 className="font-medium text-gray-800 truncate text-sm">{report.title}</h4>
-                              <p className="text-xs text-gray-600 line-clamp-2 mt-1">
-                                {report.description}
-                              </p>
-                            </div>
-                            <span className={cn(
-                              "inline-flex px-2 py-1 text-xs font-medium rounded-full ml-2 whitespace-nowrap",
-                              getStatusColor(report.status)
-                            )}>
-                              {getStatusLabel(report.status)}
-                            </span>
-                          </div>
-
-                          {/* Info */}
-                          <div className="grid grid-cols-2 gap-2 text-xs">
-                            <div className="flex items-center gap-1">
-                              <div 
-                                className="p-1 rounded"
-                                style={{ 
-                                  backgroundColor: `${REPORT_TYPE_CONFIG[report.reportType].color}20`,
-                                  color: REPORT_TYPE_CONFIG[report.reportType].color
-                                }}
-                              >
-                                <div className="w-3 h-3">
-                                  {REPORT_TYPE_CONFIG[report.reportType].icon}
-                                </div>
-                              </div>
-                              <span className="text-gray-700 truncate">{REPORT_TYPE_CONFIG[report.reportType].label}</span>
-                            </div>
-                            <div className="flex items-center gap-1">
-                              <MapPin className="w-3 h-3 text-gray-400 flex-shrink-0" />
-                              <span className="text-gray-700 truncate">{report.location}</span>
-                            </div>
-                            <div className="flex items-center gap-1">
-                              <Stethoscope className="w-3 h-3 text-gray-400 flex-shrink-0" />
-                              <span className="text-gray-700 truncate">{report.veterinarian}</span>
-                            </div>
-                            <div className="flex items-center gap-1">
-                              <Calendar className="w-3 h-3 text-gray-400 flex-shrink-0" />
-                              <span className="text-gray-700 truncate capitalize">{report.period.type}</span>
-                            </div>
-                          </div>
-
-                          {/* Métricas */}
-                          <div className="bg-gray-50 rounded-lg p-2">
-                            <div className="grid grid-cols-3 gap-2 text-center text-xs">
-                              <div>
-                                <p className="font-medium text-gray-800">{report.healthMetrics.totalAnimalsEvaluated}</p>
-                                <p className="text-xs text-gray-600">Evaluados</p>
-                              </div>
-                              <div>
-                                <p className="font-medium text-green-600">{report.healthMetrics.healthyAnimals}</p>
-                                <p className="text-xs text-gray-600">Sanos</p>
-                              </div>
-                              <div>
-                                <p className="font-medium text-red-600">{report.healthMetrics.sickAnimals}</p>
-                                <p className="text-xs text-gray-600">Enfermos</p>
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* Acciones */}
-                          <div className="flex items-center justify-between pt-2 border-t border-gray-100">
-                            <div className="text-xs text-gray-500">
+                        <td className="px-4 py-3">
+                          <div>
+                            <h4 className="font-medium text-gray-800 text-sm">{report.title}</h4>
+                            <p className="text-xs text-gray-600 mt-1 line-clamp-2">
+                              {report.description}
+                            </p>
+                            <p className="text-xs text-gray-400 mt-1">
                               Por {report.createdBy} • {new Date(report.createdAt).toLocaleDateString()}
+                            </p>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-2">
+                            <div 
+                              className="p-1.5 rounded-lg"
+                              style={{ 
+                                backgroundColor: `${REPORT_TYPE_CONFIG[report.reportType].color}20`,
+                                color: REPORT_TYPE_CONFIG[report.reportType].color
+                              }}
+                            >
+                              {REPORT_TYPE_CONFIG[report.reportType].icon}
                             </div>
-                            <div className="flex items-center gap-1">
-                              <button
-                                onClick={() => handleEditReport(report)}
-                                className="p-1.5 text-blue-600 hover:bg-blue-100 rounded-lg transition-colors"
-                                title="Editar reporte"
-                              >
-                                <Edit2 className="w-3.5 h-3.5" />
-                              </button>
-                              <button
-                                onClick={() => handleViewReport(report)}
-                                className="p-1.5 text-green-600 hover:bg-green-100 rounded-lg transition-colors"
-                                title="Ver reporte"
-                              >
-                                <Eye className="w-3.5 h-3.5" />
-                              </button>
-                              <button
-                                onClick={() => handleDownloadReport(report)}
-                                className="p-1.5 text-[#2d6f51] hover:bg-green-100 rounded-lg transition-colors"
-                                title="Descargar reporte"
-                              >
-                                <Download className="w-3.5 h-3.5" />
-                              </button>
-                              <button
-                                onClick={() => setDeleteConfirm(report.id)}
-                                className="p-1.5 text-red-600 hover:bg-red-100 rounded-lg transition-colors"
-                                title="Eliminar reporte"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
+                            <span className="text-xs font-medium">
+                              {REPORT_TYPE_CONFIG[report.reportType].label}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-2 text-gray-700">
+                            <MapPin className="w-3 h-3 text-gray-400" />
+                            <span className="text-xs">{report.location}</span>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-2 text-gray-700">
+                            <Stethoscope className="w-3 h-3 text-gray-400" />
+                            <span className="text-xs">{report.veterinarian}</span>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="text-xs text-gray-700">
+                            <div className="flex items-center gap-1 mb-1">
+                              <Calendar className="w-3 h-3 text-gray-400" />
+                              <span className="capitalize">{report.period.type}</span>
+                            </div>
+                            <div className="text-xs text-gray-500">
+                              {new Date(report.period.startDate).toLocaleDateString()} - {new Date(report.period.endDate).toLocaleDateString()}
                             </div>
                           </div>
-                        </div>
-                      </motion.div>
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className={cn(
+                            "inline-flex px-2 py-1 text-xs font-medium rounded-full",
+                            getStatusColor(report.status)
+                          )}>
+                            {getStatusLabel(report.status)}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="text-xs space-y-1">
+                            <div className="flex justify-between">
+                              <span className="text-gray-600">Evaluados:</span>
+                              <span className="font-medium">{report.healthMetrics.totalAnimalsEvaluated}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-gray-600">Sanos:</span>
+                              <span className="font-medium text-green-600">{report.healthMetrics.healthyAnimals}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-gray-600">Enfermos:</span>
+                              <span className="font-medium text-red-600">{report.healthMetrics.sickAnimals}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-gray-600">Éxito trat.:</span>
+                              <span className="font-medium">{report.healthMetrics.treatmentSuccessRate.toFixed(1)}%</span>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-1">
+                            <button
+                              onClick={() => handleEditReport(report)}
+                              className="p-1.5 text-blue-600 hover:bg-blue-100 rounded-lg transition-colors"
+                              title="Editar reporte"
+                            >
+                              <Edit2 className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={() => handleViewReport(report)}
+                              className="p-1.5 text-green-600 hover:bg-green-100 rounded-lg transition-colors"
+                              title="Ver reporte"
+                            >
+                              <Eye className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={() => handleDownloadReport(report)}
+                              className="p-1.5 text-[#2d6f51] hover:bg-green-100 rounded-lg transition-colors"
+                              title="Descargar reporte"
+                            >
+                              <Download className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={() => setDeleteConfirm(report.id)}
+                              className="p-1.5 text-red-600 hover:bg-red-100 rounded-lg transition-colors"
+                              title="Eliminar reporte"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </td>
+                      </motion.tr>
                     ))}
-                  </div>
-                </div>
-
-                {/* Vista desktop - Tabla */}
-                <div className="hidden lg:block overflow-x-auto">
-                  <table className="w-full">
-                    <thead className="bg-gradient-to-r from-[#2d6f51] to-[#4e9c75] text-white">
-                      <tr>
-                        <th className="px-4 py-3 text-left text-sm font-medium">Reporte</th>
-                        <th className="px-4 py-3 text-left text-sm font-medium">Tipo</th>
-                        <th className="px-4 py-3 text-left text-sm font-medium">Ubicación</th>
-                        <th className="px-4 py-3 text-left text-sm font-medium">Veterinario</th>
-                        <th className="px-4 py-3 text-left text-sm font-medium">Período</th>
-                        <th className="px-4 py-3 text-left text-sm font-medium">Estado</th>
-                        <th className="px-4 py-3 text-left text-sm font-medium">Métricas Clave</th>
-                        <th className="px-4 py-3 text-left text-sm font-medium">Acciones</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-200">
-                      {filteredReports.map((report, index) => (
-                        <motion.tr
-                          key={report.id}
-                          initial={{ opacity: 0, y: 20 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          transition={{ delay: index * 0.05 }}
-                          className="hover:bg-gray-50/50 transition-colors"
-                        >
-                          <td className="px-4 py-3">
-                            <div>
-                              <h4 className="font-medium text-gray-800 text-sm">{report.title}</h4>
-                              <p className="text-xs text-gray-600 mt-1 line-clamp-2">
-                                {report.description}
-                              </p>
-                              <p className="text-xs text-gray-400 mt-1">
-                                Por {report.createdBy} • {new Date(report.createdAt).toLocaleDateString()}
-                              </p>
-                            </div>
-                          </td>
-                          <td className="px-4 py-3">
-                            <div className="flex items-center gap-2">
-                              <div 
-                                className="p-1.5 rounded-lg"
-                                style={{ 
-                                  backgroundColor: `${REPORT_TYPE_CONFIG[report.reportType].color}20`,
-                                  color: REPORT_TYPE_CONFIG[report.reportType].color
-                                }}
-                              >
-                                {REPORT_TYPE_CONFIG[report.reportType].icon}
-                              </div>
-                              <span className="text-xs font-medium">
-                                {REPORT_TYPE_CONFIG[report.reportType].label}
-                              </span>
-                            </div>
-                          </td>
-                          <td className="px-4 py-3">
-                            <div className="flex items-center gap-2 text-gray-700">
-                              <MapPin className="w-3 h-3 text-gray-400" />
-                              <span className="text-xs">{report.location}</span>
-                            </div>
-                          </td>
-                          <td className="px-4 py-3">
-                            <div className="flex items-center gap-2 text-gray-700">
-                              <Stethoscope className="w-3 h-3 text-gray-400" />
-                              <span className="text-xs">{report.veterinarian}</span>
-                            </div>
-                          </td>
-                          <td className="px-4 py-3">
-                            <div className="text-xs text-gray-700">
-                              <div className="flex items-center gap-1 mb-1">
-                                <Calendar className="w-3 h-3 text-gray-400" />
-                                <span className="capitalize">{report.period.type}</span>
-                              </div>
-                              <div className="text-xs text-gray-500">
-                                {new Date(report.period.startDate).toLocaleDateString()} - {new Date(report.period.endDate).toLocaleDateString()}
-                              </div>
-                            </div>
-                          </td>
-                          <td className="px-4 py-3">
-                            <span className={cn(
-                              "inline-flex px-2 py-1 text-xs font-medium rounded-full",
-                              getStatusColor(report.status)
-                            )}>
-                              {getStatusLabel(report.status)}
-                            </span>
-                          </td>
-                          <td className="px-4 py-3">
-                            <div className="text-xs space-y-1">
-                              <div className="flex justify-between">
-                                <span className="text-gray-600">Evaluados:</span>
-                                <span className="font-medium">{report.healthMetrics.totalAnimalsEvaluated}</span>
-                              </div>
-                              <div className="flex justify-between">
-                                <span className="text-gray-600">Sanos:</span>
-                                <span className="font-medium text-green-600">{report.healthMetrics.healthyAnimals}</span>
-                              </div>
-                              <div className="flex justify-between">
-                                <span className="text-gray-600">Enfermos:</span>
-                                <span className="font-medium text-red-600">{report.healthMetrics.sickAnimals}</span>
-                              </div>
-                              <div className="flex justify-between">
-                                <span className="text-gray-600">Éxito trat.:</span>
-                                <span className="font-medium">{report.healthMetrics.treatmentSuccessRate.toFixed(1)}%</span>
-                              </div>
-                            </div>
-                          </td>
-                          <td className="px-4 py-3">
-                            <div className="flex items-center gap-1">
-                              <button
-                                onClick={() => handleEditReport(report)}
-                                className="p-1.5 text-blue-600 hover:bg-blue-100 rounded-lg transition-colors"
-                                title="Editar reporte"
-                              >
-                                <Edit2 className="w-3.5 h-3.5" />
-                              </button>
-                              <button
-                                onClick={() => handleViewReport(report)}
-                                className="p-1.5 text-green-600 hover:bg-green-100 rounded-lg transition-colors"
-                                title="Ver reporte"
-                              >
-                                <Eye className="w-3.5 h-3.5" />
-                              </button>
-                              <button
-                                onClick={() => handleDownloadReport(report)}
-                                className="p-1.5 text-[#2d6f51] hover:bg-green-100 rounded-lg transition-colors"
-                                title="Descargar reporte"
-                              >
-                                <Download className="w-3.5 h-3.5" />
-                              </button>
-                              <button
-                                onClick={() => setDeleteConfirm(report.id)}
-                                className="p-1.5 text-red-600 hover:bg-red-100 rounded-lg transition-colors"
-                                title="Eliminar reporte"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
-                            </div>
-                          </td>
-                        </motion.tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </>
-            )}
-          </motion.div>
-        </div>
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
+        </motion.div>
       </div>
 
       {/* Modal de formulario */}

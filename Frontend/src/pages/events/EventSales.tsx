@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Card,
@@ -32,7 +32,14 @@ import {
   Loader2,
 } from "lucide-react";
 
-// Interfaz para el evento de venta
+// Tipos y enums mejorados
+type PaymentStatus = "pending" | "paid" | "overdue";
+type DeliveryMethod = "pickup" | "delivery" | "transport";
+type PaymentMethod = "cash" | "transfer" | "check" | "credit";
+type ContractType = "direct" | "auction" | "contract";
+type ViewMode = "list" | "create" | "edit" | "detail";
+
+// Interfaz optimizada para el evento de venta
 interface SalesEvent {
   id: string;
   bovineId: string;
@@ -49,21 +56,21 @@ interface SalesEvent {
     lng: number;
     address: string;
   };
-  deliveryMethod: string;
+  deliveryMethod: DeliveryMethod;
   healthCertificate: boolean;
   qualityGrade: string;
   documents: string[];
   notes: string;
-  paymentMethod: string;
-  paymentStatus: "pending" | "paid" | "overdue";
+  paymentMethod: PaymentMethod;
+  paymentStatus: PaymentStatus;
   commission: number;
   deliveryDate: string;
-  contractType: "direct" | "auction" | "contract";
+  contractType: ContractType;
   createdAt: string;
   updatedAt: string;
 }
 
-// Datos simulados (en una app real esto vendría de tu API)
+// Datos iniciales
 const initialSalesEvents: SalesEvent[] = [
   {
     id: "1",
@@ -96,7 +103,38 @@ const initialSalesEvents: SalesEvent[] = [
   },
 ];
 
-type ViewMode = "list" | "create" | "edit" | "detail";
+// Constantes para mejorar rendimiento
+const COMMISSION_RATE = 0.05;
+const DEFAULT_LOCATION = {
+  lat: 17.9995,
+  lng: -92.9476,
+  address: "Villahermosa, Tabasco, México",
+};
+
+const PAYMENT_STATUS_LABELS: Record<PaymentStatus, string> = {
+  paid: "Pagado",
+  pending: "Pendiente",
+  overdue: "Vencido",
+};
+
+const DELIVERY_METHOD_LABELS: Record<DeliveryMethod, string> = {
+  pickup: "Recolección en granja",
+  delivery: "Entrega a domicilio",
+  transport: "Transporte especializado",
+};
+
+const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
+  cash: "Efectivo",
+  transfer: "Transferencia",
+  check: "Cheque",
+  credit: "Crédito",
+};
+
+const CONTRACT_TYPE_LABELS: Record<ContractType, string> = {
+  direct: "Venta Directa",
+  auction: "Subasta",
+  contract: "Contrato a Futuro",
+};
 
 const EventSales: React.FC = () => {
   // Estados principales
@@ -107,8 +145,8 @@ const EventSales: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [filterStatus, setFilterStatus] = useState<string>("all");
 
-  // Estado del formulario
-  const [formData, setFormData] = useState<Partial<SalesEvent>>({
+  // Estado del formulario con valores iniciales
+  const initialFormData: Partial<SalesEvent> = {
     bovineId: "",
     bovineName: "",
     buyerId: "",
@@ -118,11 +156,7 @@ const EventSales: React.FC = () => {
     salePrice: 0,
     weight: 0,
     pricePerKg: 0,
-    location: {
-      lat: 17.9995,
-      lng: -92.9476,
-      address: "Villahermosa, Tabasco, México",
-    },
+    location: DEFAULT_LOCATION,
     deliveryMethod: "pickup",
     healthCertificate: false,
     qualityGrade: "",
@@ -133,10 +167,41 @@ const EventSales: React.FC = () => {
     commission: 0,
     deliveryDate: "",
     contractType: "direct",
-  });
+  };
 
-  // Errores de validación
+  const [formData, setFormData] = useState<Partial<SalesEvent>>(initialFormData);
   const [errors, setErrors] = useState<Record<string, string>>({});
+
+  // Memoizar cálculos costosos
+  const filteredEvents = useMemo(() => {
+    return salesEvents.filter(event => {
+      const matchesSearch = 
+        event.bovineName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        event.buyerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        event.bovineId.toLowerCase().includes(searchTerm.toLowerCase());
+      
+      const matchesFilter = filterStatus === "all" || event.paymentStatus === filterStatus;
+      
+      return matchesSearch && matchesFilter;
+    });
+  }, [salesEvents, searchTerm, filterStatus]);
+
+  // Estadísticas memoizadas
+  const statistics = useMemo(() => {
+    const totalSales = salesEvents.length;
+    const totalRevenue = salesEvents.reduce((sum, event) => sum + event.salePrice, 0);
+    const pendingCount = salesEvents.filter(e => e.paymentStatus === "pending").length;
+    const averagePricePerKg = totalSales > 0 
+      ? salesEvents.reduce((sum, event) => sum + event.pricePerKg, 0) / totalSales 
+      : 0;
+
+    return {
+      totalSales,
+      totalRevenue,
+      pendingCount,
+      averagePricePerKg,
+    };
+  }, [salesEvents]);
 
   // Calcular precio por kg automáticamente
   useEffect(() => {
@@ -149,10 +214,10 @@ const EventSales: React.FC = () => {
     }
   }, [formData.salePrice, formData.weight]);
 
-  // Calcular comisión automáticamente (5% del precio de venta)
+  // Calcular comisión automáticamente
   useEffect(() => {
     if (formData.salePrice) {
-      const commission = formData.salePrice * 0.05;
+      const commission = formData.salePrice * COMMISSION_RATE;
       setFormData(prev => ({
         ...prev,
         commission: Math.round(commission * 100) / 100
@@ -160,20 +225,41 @@ const EventSales: React.FC = () => {
     }
   }, [formData.salePrice]);
 
-  // Filtrar eventos
-  const filteredEvents = salesEvents.filter(event => {
-    const matchesSearch = 
-      event.bovineName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      event.buyerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      event.bovineId.toLowerCase().includes(searchTerm.toLowerCase());
-    
-    const matchesFilter = filterStatus === "all" || event.paymentStatus === filterStatus;
-    
-    return matchesSearch && matchesFilter;
-  });
+  // Validación del formulario optimizada
+  const validateForm = useCallback((): boolean => {
+    const newErrors: Record<string, string> = {};
 
-  // Funciones CRUD
-  const handleCreate = async () => {
+    if (!formData.bovineName?.trim()) {
+      newErrors.bovineName = "El nombre del bovino es requerido";
+    }
+    if (!formData.buyerName?.trim()) {
+      newErrors.buyerName = "El nombre del comprador es requerido";
+    }
+    if (!formData.buyerContact?.trim()) {
+      newErrors.buyerContact = "El contacto del comprador es requerido";
+    }
+    if (!formData.saleDate) {
+      newErrors.saleDate = "La fecha de venta es requerida";
+    }
+    if (!formData.salePrice || formData.salePrice <= 0) {
+      newErrors.salePrice = "El precio de venta debe ser mayor a 0";
+    }
+    if (!formData.weight || formData.weight <= 0) {
+      newErrors.weight = "El peso debe ser mayor a 0";
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  }, [formData]);
+
+  // Resetear formulario
+  const resetForm = useCallback(() => {
+    setFormData(initialFormData);
+    setErrors({});
+  }, []);
+
+  // CRUD Operations optimizadas
+  const handleCreate = useCallback(async () => {
     if (!validateForm()) return;
 
     setLoading(true);
@@ -197,9 +283,9 @@ const EventSales: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [formData, validateForm, resetForm]);
 
-  const handleUpdate = async () => {
+  const handleUpdate = useCallback(async () => {
     if (!selectedEvent || !validateForm()) return;
 
     setLoading(true);
@@ -226,9 +312,9 @@ const EventSales: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [selectedEvent, formData, validateForm]);
 
-  const handleDelete = async (eventId: string) => {
+  const handleDelete = useCallback(async (eventId: string) => {
     if (!window.confirm("¿Estás seguro de que quieres eliminar este evento de venta?")) {
       return;
     }
@@ -245,68 +331,10 @@ const EventSales: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
-
-  // Validación del formulario
-  const validateForm = (): boolean => {
-    const newErrors: Record<string, string> = {};
-
-    if (!formData.bovineName?.trim()) {
-      newErrors.bovineName = "El nombre del bovino es requerido";
-    }
-    if (!formData.buyerName?.trim()) {
-      newErrors.buyerName = "El nombre del comprador es requerido";
-    }
-    if (!formData.buyerContact?.trim()) {
-      newErrors.buyerContact = "El contacto del comprador es requerido";
-    }
-    if (!formData.saleDate) {
-      newErrors.saleDate = "La fecha de venta es requerida";
-    }
-    if (!formData.salePrice || formData.salePrice <= 0) {
-      newErrors.salePrice = "El precio de venta debe ser mayor a 0";
-    }
-    if (!formData.weight || formData.weight <= 0) {
-      newErrors.weight = "El peso debe ser mayor a 0";
-    }
-
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
-
-  // Resetear formulario
-  const resetForm = () => {
-    setFormData({
-      bovineId: "",
-      bovineName: "",
-      buyerId: "",
-      buyerName: "",
-      buyerContact: "",
-      saleDate: new Date().toISOString().split("T")[0],
-      salePrice: 0,
-      weight: 0,
-      pricePerKg: 0,
-      location: {
-        lat: 17.9995,
-        lng: -92.9476,
-        address: "Villahermosa, Tabasco, México",
-      },
-      deliveryMethod: "pickup",
-      healthCertificate: false,
-      qualityGrade: "",
-      documents: [],
-      notes: "",
-      paymentMethod: "cash",
-      paymentStatus: "pending",
-      commission: 0,
-      deliveryDate: "",
-      contractType: "direct",
-    });
-    setErrors({});
-  };
+  }, []);
 
   // Manejar cambios en el formulario
-  const handleInputChange = (field: string, value: any) => {
+  const handleInputChange = useCallback((field: string, value: any) => {
     setFormData(prev => ({
       ...prev,
       [field]: value,
@@ -319,20 +347,25 @@ const EventSales: React.FC = () => {
         [field]: "",
       }));
     }
-  };
+  }, [errors]);
 
-  // Abrir formulario de edición
-  const openEditForm = (event: SalesEvent) => {
+  // Funciones de navegación optimizadas
+  const openEditForm = useCallback((event: SalesEvent) => {
     setSelectedEvent(event);
     setFormData(event);
     setViewMode("edit");
-  };
+  }, []);
 
-  // Ver detalles del evento
-  const viewEventDetail = (event: SalesEvent) => {
+  const viewEventDetail = useCallback((event: SalesEvent) => {
     setSelectedEvent(event);
     setViewMode("detail");
-  };
+  }, []);
+
+  const goBackToList = useCallback(() => {
+    setViewMode("list");
+    setSelectedEvent(null);
+    resetForm();
+  }, [resetForm]);
 
   // Animaciones
   const containerVariants = {
@@ -361,7 +394,7 @@ const EventSales: React.FC = () => {
       className="space-y-6"
     >
       {/* Header con búsqueda y filtros */}
-      <motion.div variants={itemVariants} className="bg-white/80 backdrop-blur-sm rounded-2xl p-6 border border-white/20">
+      <motion.div variants={itemVariants} className="bg-white/80 backdrop-blur-sm rounded-2xl p-6 border border-white/20 shadow-lg">
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
           <div>
             <h1 className="text-3xl font-bold text-gray-900 mb-2">Eventos de Ventas</h1>
@@ -373,7 +406,7 @@ const EventSales: React.FC = () => {
               resetForm();
               setViewMode("create");
             }}
-            className="bg-green-600 hover:bg-green-700 text-white"
+            className="bg-green-600 hover:bg-green-700 text-white transition-colors duration-200"
           >
             <Plus size={20} className="mr-2" />
             Nueva Venta
@@ -389,13 +422,15 @@ const EventSales: React.FC = () => {
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="pl-10"
+              aria-label="Buscar eventos"
             />
           </div>
           
           <select
             value={filterStatus}
             onChange={(e) => setFilterStatus(e.target.value)}
-            className="px-4 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-transparent bg-white"
+            className="px-4 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-transparent bg-white transition-all duration-200"
+            aria-label="Filtrar por estado"
           >
             <option value="all">Todos los estados</option>
             <option value="pending">Pendiente</option>
@@ -407,25 +442,25 @@ const EventSales: React.FC = () => {
 
       {/* Stats Cards */}
       <motion.div variants={itemVariants} className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        <Card className="bg-gradient-to-r from-green-500 to-green-600 text-white">
+        <Card className="bg-gradient-to-r from-green-500 to-green-600 text-white shadow-lg">
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-green-100">Total Ventas</p>
-                <p className="text-2xl font-bold">{salesEvents.length}</p>
+                <p className="text-2xl font-bold">{statistics.totalSales}</p>
               </div>
               <ShoppingBag size={32} className="text-green-200" />
             </div>
           </CardContent>
         </Card>
 
-        <Card className="bg-gradient-to-r from-blue-500 to-blue-600 text-white">
+        <Card className="bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg">
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-blue-100">Ingresos Totales</p>
                 <p className="text-2xl font-bold">
-                  ${salesEvents.reduce((sum, event) => sum + event.salePrice, 0).toLocaleString()}
+                  ${statistics.totalRevenue.toLocaleString()}
                 </p>
               </div>
               <DollarSign size={32} className="text-blue-200" />
@@ -433,27 +468,25 @@ const EventSales: React.FC = () => {
           </CardContent>
         </Card>
 
-        <Card className="bg-gradient-to-r from-yellow-500 to-yellow-600 text-white">
+        <Card className="bg-gradient-to-r from-yellow-500 to-yellow-600 text-white shadow-lg">
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-yellow-100">Pendientes</p>
-                <p className="text-2xl font-bold">
-                  {salesEvents.filter(e => e.paymentStatus === "pending").length}
-                </p>
+                <p className="text-2xl font-bold">{statistics.pendingCount}</p>
               </div>
               <AlertCircle size={32} className="text-yellow-200" />
             </div>
           </CardContent>
         </Card>
 
-        <Card className="bg-gradient-to-r from-purple-500 to-purple-600 text-white">
+        <Card className="bg-gradient-to-r from-purple-500 to-purple-600 text-white shadow-lg">
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-purple-100">Precio Promedio/Kg</p>
                 <p className="text-2xl font-bold">
-                  ${(salesEvents.reduce((sum, event) => sum + event.pricePerKg, 0) / salesEvents.length || 0).toFixed(2)}
+                  ${statistics.averagePricePerKg.toFixed(2)}
                 </p>
               </div>
               <TrendingUp size={32} className="text-purple-200" />
@@ -465,7 +498,7 @@ const EventSales: React.FC = () => {
       {/* Lista de eventos */}
       <motion.div variants={itemVariants} className="space-y-4">
         {filteredEvents.length === 0 ? (
-          <Card className="bg-white/80 backdrop-blur-sm border border-white/20">
+          <Card className="bg-white/80 backdrop-blur-sm border border-white/20 shadow-lg">
             <CardContent className="p-8 text-center">
               <ShoppingBag size={48} className="mx-auto text-gray-400 mb-4" />
               <h3 className="text-lg font-medium text-gray-900 mb-2">No hay eventos de venta</h3>
@@ -491,7 +524,7 @@ const EventSales: React.FC = () => {
         ) : (
           filteredEvents.map((event) => (
             <motion.div key={event.id} layout>
-              <Card className="bg-white/80 backdrop-blur-sm hover:bg-white/90 transition-all duration-200 border border-white/20">
+              <Card className="bg-white/80 backdrop-blur-sm hover:bg-white/90 transition-all duration-200 border border-white/20 shadow-lg hover:shadow-xl">
                 <CardContent className="p-6">
                   <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
                     <div className="flex-1">
@@ -507,8 +540,7 @@ const EventSales: React.FC = () => {
                             ? "bg-yellow-100 text-yellow-800"
                             : "bg-red-100 text-red-800"
                         }`}>
-                          {event.paymentStatus === "paid" ? "Pagado" :
-                           event.paymentStatus === "pending" ? "Pendiente" : "Vencido"}
+                          {PAYMENT_STATUS_LABELS[event.paymentStatus]}
                         </span>
                       </div>
                       
@@ -538,6 +570,7 @@ const EventSales: React.FC = () => {
                         variant="outline"
                         size="sm"
                         className="border-gray-300 text-gray-700 hover:bg-gray-50 hover:border-gray-400"
+                        aria-label={`Ver detalles de ${event.bovineName}`}
                       >
                         <Eye size={16} />
                         Ver
@@ -547,6 +580,7 @@ const EventSales: React.FC = () => {
                         variant="outline"
                         size="sm"
                         className="border-blue-300 text-blue-700 hover:bg-blue-50 hover:border-blue-400"
+                        aria-label={`Editar ${event.bovineName}`}
                       >
                         <Edit size={16} />
                         Editar
@@ -556,6 +590,7 @@ const EventSales: React.FC = () => {
                         variant="outline"
                         size="sm"
                         className="border-red-300 text-red-700 hover:bg-red-50 hover:border-red-400"
+                        aria-label={`Eliminar ${event.bovineName}`}
                       >
                         <Trash2 size={16} />
                         Eliminar
@@ -580,7 +615,7 @@ const EventSales: React.FC = () => {
       className="max-w-4xl mx-auto"
     >
       <motion.div variants={itemVariants}>
-        <Card className="bg-white/80 backdrop-blur-sm border border-white/20">
+        <Card className="bg-white/80 backdrop-blur-sm border border-white/20 shadow-lg">
           <CardHeader className="pb-6">
             <div className="flex items-center justify-between">
               <div>
@@ -594,11 +629,7 @@ const EventSales: React.FC = () => {
                 </CardDescription>
               </div>
               <Button
-                onClick={() => {
-                  setViewMode("list");
-                  setSelectedEvent(null);
-                  resetForm();
-                }}
+                onClick={goBackToList}
                 variant="outline"
                 className="flex items-center gap-2"
               >
@@ -616,57 +647,64 @@ const EventSales: React.FC = () => {
               </h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-2">
-                  <label className="block text-sm font-medium text-gray-700">
+                  <label className="block text-sm font-medium text-gray-700" htmlFor="bovineId">
                     ID del Bovino <span className="text-red-500">*</span>
                   </label>
                   <Input
+                    id="bovineId"
                     value={formData.bovineId || ""}
                     onChange={(e) => handleInputChange("bovineId", e.target.value)}
                     placeholder="Ej: BOV001"
                     className={errors.bovineId ? "border-red-500" : ""}
+                    aria-describedby={errors.bovineId ? "bovineId-error" : undefined}
                   />
                   {errors.bovineId && (
-                    <p className="text-red-500 text-sm">{errors.bovineId}</p>
+                    <p id="bovineId-error" className="text-red-500 text-sm">{errors.bovineId}</p>
                   )}
                 </div>
 
                 <div className="space-y-2">
-                  <label className="block text-sm font-medium text-gray-700">
+                  <label className="block text-sm font-medium text-gray-700" htmlFor="bovineName">
                     Nombre del Bovino <span className="text-red-500">*</span>
                   </label>
                   <Input
+                    id="bovineName"
                     value={formData.bovineName || ""}
                     onChange={(e) => handleInputChange("bovineName", e.target.value)}
                     placeholder="Ej: Toro Premium 001"
                     className={`bg-white/60 backdrop-blur-sm border-white/30 focus:bg-white ${errors.bovineName ? "border-red-500" : ""}`}
+                    aria-describedby={errors.bovineName ? "bovineName-error" : undefined}
                   />
                   {errors.bovineName && (
-                    <p className="text-red-500 text-sm">{errors.bovineName}</p>
+                    <p id="bovineName-error" className="text-red-500 text-sm">{errors.bovineName}</p>
                   )}
                 </div>
 
                 <div className="space-y-2">
-                  <label className="block text-sm font-medium text-gray-700">
+                  <label className="block text-sm font-medium text-gray-700" htmlFor="weight">
                     Peso (kg) <span className="text-red-500">*</span>
                   </label>
                   <Input
+                    id="weight"
                     type="number"
                     value={formData.weight || ""}
                     onChange={(e) => handleInputChange("weight", Number(e.target.value))}
                     placeholder="Ej: 500"
                     min="0"
                     className={`bg-white/60 backdrop-blur-sm border-white/30 focus:bg-white ${errors.weight ? "border-red-500" : ""}`}
+                    aria-describedby={errors.weight ? "weight-error" : undefined}
                   />
                   {errors.weight && (
-                    <p className="text-red-500 text-sm">{errors.weight}</p>
+                    <p id="weight-error" className="text-red-500 text-sm">{errors.weight}</p>
                   )}
                 </div>
 
                 <div className="space-y-2">
-                  <label className="block text-sm font-medium text-gray-700">
+                  <label className="block text-sm font-medium text-gray-700" htmlFor="qualityGrade">
                     Grado de Calidad
                   </label>
                   <Input
+                    id="qualityGrade"
                     value={formData.qualityGrade || ""}
                     onChange={(e) => handleInputChange("qualityGrade", e.target.value)}
                     placeholder="Ej: Premium, Standard, Select, Choice, Prime..."
@@ -684,10 +722,11 @@ const EventSales: React.FC = () => {
               </h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-2">
-                  <label className="block text-sm font-medium text-gray-700">
+                  <label className="block text-sm font-medium text-gray-700" htmlFor="buyerId">
                     ID del Comprador
                   </label>
                   <Input
+                    id="buyerId"
                     value={formData.buyerId || ""}
                     onChange={(e) => handleInputChange("buyerId", e.target.value)}
                     placeholder="Ej: BUY001"
@@ -696,32 +735,36 @@ const EventSales: React.FC = () => {
                 </div>
 
                 <div className="space-y-2">
-                  <label className="block text-sm font-medium text-gray-700">
+                  <label className="block text-sm font-medium text-gray-700" htmlFor="buyerName">
                     Nombre del Comprador <span className="text-red-500">*</span>
                   </label>
                   <Input
+                    id="buyerName"
                     value={formData.buyerName || ""}
                     onChange={(e) => handleInputChange("buyerName", e.target.value)}
                     placeholder="Ej: Juan Pérez"
                     className={`bg-white/60 backdrop-blur-sm border-white/30 focus:bg-white ${errors.buyerName ? "border-red-500" : ""}`}
+                    aria-describedby={errors.buyerName ? "buyerName-error" : undefined}
                   />
                   {errors.buyerName && (
-                    <p className="text-red-500 text-sm">{errors.buyerName}</p>
+                    <p id="buyerName-error" className="text-red-500 text-sm">{errors.buyerName}</p>
                   )}
                 </div>
 
                 <div className="space-y-2 md:col-span-2">
-                  <label className="block text-sm font-medium text-gray-700">
+                  <label className="block text-sm font-medium text-gray-700" htmlFor="buyerContact">
                     Contacto del Comprador <span className="text-red-500">*</span>
                   </label>
                   <Input
+                    id="buyerContact"
                     value={formData.buyerContact || ""}
                     onChange={(e) => handleInputChange("buyerContact", e.target.value)}
                     placeholder="Ej: +52 993 123 4567"
                     className={`bg-white/60 backdrop-blur-sm border-white/30 focus:bg-white ${errors.buyerContact ? "border-red-500" : ""}`}
+                    aria-describedby={errors.buyerContact ? "buyerContact-error" : undefined}
                   />
                   {errors.buyerContact && (
-                    <p className="text-red-500 text-sm">{errors.buyerContact}</p>
+                    <p id="buyerContact-error" className="text-red-500 text-sm">{errors.buyerContact}</p>
                   )}
                 </div>
               </div>
@@ -734,25 +777,28 @@ const EventSales: React.FC = () => {
               </h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-2">
-                  <label className="block text-sm font-medium text-gray-700">
+                  <label className="block text-sm font-medium text-gray-700" htmlFor="saleDate">
                     Fecha de Venta <span className="text-red-500">*</span>
                   </label>
                   <Input
+                    id="saleDate"
                     type="date"
                     value={formData.saleDate || ""}
                     onChange={(e) => handleInputChange("saleDate", e.target.value)}
                     className={`bg-white/60 backdrop-blur-sm border-white/30 focus:bg-white ${errors.saleDate ? "border-red-500" : ""}`}
+                    aria-describedby={errors.saleDate ? "saleDate-error" : undefined}
                   />
                   {errors.saleDate && (
-                    <p className="text-red-500 text-sm">{errors.saleDate}</p>
+                    <p id="saleDate-error" className="text-red-500 text-sm">{errors.saleDate}</p>
                   )}
                 </div>
 
                 <div className="space-y-2">
-                  <label className="block text-sm font-medium text-gray-700">
+                  <label className="block text-sm font-medium text-gray-700" htmlFor="deliveryDate">
                     Fecha de Entrega
                   </label>
                   <Input
+                    id="deliveryDate"
                     type="date"
                     value={formData.deliveryDate || ""}
                     onChange={(e) => handleInputChange("deliveryDate", e.target.value)}
@@ -761,10 +807,11 @@ const EventSales: React.FC = () => {
                 </div>
 
                 <div className="space-y-2">
-                  <label className="block text-sm font-medium text-gray-700">
+                  <label className="block text-sm font-medium text-gray-700" htmlFor="salePrice">
                     Precio de Venta ($) <span className="text-red-500">*</span>
                   </label>
                   <Input
+                    id="salePrice"
                     type="number"
                     value={formData.salePrice || ""}
                     onChange={(e) => handleInputChange("salePrice", Number(e.target.value))}
@@ -772,17 +819,19 @@ const EventSales: React.FC = () => {
                     min="0"
                     step="0.01"
                     className={`bg-white/60 backdrop-blur-sm border-white/30 focus:bg-white ${errors.salePrice ? "border-red-500" : ""}`}
+                    aria-describedby={errors.salePrice ? "salePrice-error" : undefined}
                   />
                   {errors.salePrice && (
-                    <p className="text-red-500 text-sm">{errors.salePrice}</p>
+                    <p id="salePrice-error" className="text-red-500 text-sm">{errors.salePrice}</p>
                   )}
                 </div>
 
                 <div className="space-y-2">
-                  <label className="block text-sm font-medium text-gray-700">
+                  <label className="block text-sm font-medium text-gray-700" htmlFor="pricePerKg">
                     Precio por Kg ($)
                   </label>
                   <Input
+                    id="pricePerKg"
                     type="number"
                     value={formData.pricePerKg || ""}
                     readOnly
@@ -792,10 +841,11 @@ const EventSales: React.FC = () => {
                 </div>
 
                 <div className="space-y-2">
-                  <label className="block text-sm font-medium text-gray-700">
+                  <label className="block text-sm font-medium text-gray-700" htmlFor="commission">
                     Comisión ($)
                   </label>
                   <Input
+                    id="commission"
                     type="number"
                     value={formData.commission || ""}
                     readOnly
@@ -805,48 +855,50 @@ const EventSales: React.FC = () => {
                 </div>
 
                 <div className="space-y-2">
-                  <label className="block text-sm font-medium text-gray-700">
+                  <label className="block text-sm font-medium text-gray-700" htmlFor="paymentMethod">
                     Método de Pago
                   </label>
                   <select
+                    id="paymentMethod"
                     value={formData.paymentMethod || ""}
-                    onChange={(e) => handleInputChange("paymentMethod", e.target.value)}
+                    onChange={(e) => handleInputChange("paymentMethod", e.target.value as PaymentMethod)}
                     className="w-full px-4 py-2 border border-white/30 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-transparent bg-white/60 backdrop-blur-sm hover:bg-white transition-all duration-200"
                   >
-                    <option value="cash">Efectivo</option>
-                    <option value="transfer">Transferencia</option>
-                    <option value="check">Cheque</option>
-                    <option value="credit">Crédito</option>
+                    {Object.entries(PAYMENT_METHOD_LABELS).map(([value, label]) => (
+                      <option key={value} value={value}>{label}</option>
+                    ))}
                   </select>
                 </div>
 
                 <div className="space-y-2">
-                  <label className="block text-sm font-medium text-gray-700">
+                  <label className="block text-sm font-medium text-gray-700" htmlFor="paymentStatus">
                     Estado del Pago
                   </label>
                   <select
+                    id="paymentStatus"
                     value={formData.paymentStatus || ""}
-                    onChange={(e) => handleInputChange("paymentStatus", e.target.value)}
+                    onChange={(e) => handleInputChange("paymentStatus", e.target.value as PaymentStatus)}
                     className="w-full px-4 py-2 border border-white/30 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-transparent bg-white/60 backdrop-blur-sm hover:bg-white transition-all duration-200"
                   >
-                    <option value="pending">Pendiente</option>
-                    <option value="paid">Pagado</option>
-                    <option value="overdue">Vencido</option>
+                    {Object.entries(PAYMENT_STATUS_LABELS).map(([value, label]) => (
+                      <option key={value} value={value}>{label}</option>
+                    ))}
                   </select>
                 </div>
 
                 <div className="space-y-2">
-                  <label className="block text-sm font-medium text-gray-700">
+                  <label className="block text-sm font-medium text-gray-700" htmlFor="deliveryMethod">
                     Método de Entrega
                   </label>
                   <select
+                    id="deliveryMethod"
                     value={formData.deliveryMethod || ""}
-                    onChange={(e) => handleInputChange("deliveryMethod", e.target.value)}
+                    onChange={(e) => handleInputChange("deliveryMethod", e.target.value as DeliveryMethod)}
                     className="w-full px-4 py-2 border border-white/30 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-transparent bg-white/60 backdrop-blur-sm hover:bg-white transition-all duration-200"
                   >
-                    <option value="pickup">Recolección en granja</option>
-                    <option value="delivery">Entrega a domicilio</option>
-                    <option value="transport">Transporte especializado</option>
+                    {Object.entries(DELIVERY_METHOD_LABELS).map(([value, label]) => (
+                      <option key={value} value={value}>{label}</option>
+                    ))}
                   </select>
                 </div>
               </div>
@@ -872,25 +924,27 @@ const EventSales: React.FC = () => {
               </div>
 
               <div className="space-y-2">
-                <label className="block text-sm font-medium text-gray-700">
+                <label className="block text-sm font-medium text-gray-700" htmlFor="contractType">
                   Tipo de Contrato
                 </label>
                 <select
+                  id="contractType"
                   value={formData.contractType || ""}
-                  onChange={(e) => handleInputChange("contractType", e.target.value)}
+                  onChange={(e) => handleInputChange("contractType", e.target.value as ContractType)}
                   className="w-full px-4 py-2 border border-white/30 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-transparent bg-white/60 backdrop-blur-sm hover:bg-white transition-all duration-200"
                 >
-                  <option value="direct">Venta Directa</option>
-                  <option value="auction">Subasta</option>
-                  <option value="contract">Contrato a Futuro</option>
+                  {Object.entries(CONTRACT_TYPE_LABELS).map(([value, label]) => (
+                    <option key={value} value={value}>{label}</option>
+                  ))}
                 </select>
               </div>
 
               <div className="space-y-2">
-                <label className="block text-sm font-medium text-gray-700">
+                <label className="block text-sm font-medium text-gray-700" htmlFor="notes">
                   Notas Adicionales
                 </label>
                 <textarea
+                  id="notes"
                   value={formData.notes || ""}
                   onChange={(e) => handleInputChange("notes", e.target.value)}
                   placeholder="Información adicional sobre la venta..."
@@ -903,12 +957,9 @@ const EventSales: React.FC = () => {
             {/* Botones de acción */}
             <div className="flex justify-end gap-4 pt-6 border-t border-gray-200">
               <Button
-                onClick={() => {
-                  setViewMode("list");
-                  setSelectedEvent(null);
-                  resetForm();
-                }}
+                onClick={goBackToList}
                 variant="outline"
+                disabled={loading}
               >
                 Cancelar
               </Button>
@@ -943,7 +994,7 @@ const EventSales: React.FC = () => {
         className="max-w-4xl mx-auto"
       >
         <motion.div variants={itemVariants}>
-          <Card className="bg-white/80 backdrop-blur-sm border border-white/20">
+          <Card className="bg-white/80 backdrop-blur-sm border border-white/20 shadow-lg">
             <CardHeader className="pb-6">
               <div className="flex items-center justify-between">
                 <div>
@@ -963,10 +1014,7 @@ const EventSales: React.FC = () => {
                     Editar
                   </Button>
                   <Button
-                    onClick={() => {
-                      setViewMode("list");
-                      setSelectedEvent(null);
-                    }}
+                    onClick={goBackToList}
                     variant="outline"
                     className="flex items-center gap-2"
                   >
@@ -1055,8 +1103,7 @@ const EventSales: React.FC = () => {
                           ? "bg-yellow-100 text-yellow-800"
                           : "bg-red-100 text-red-800"
                       }`}>
-                        {selectedEvent.paymentStatus === "paid" ? "Pagado" :
-                         selectedEvent.paymentStatus === "pending" ? "Pendiente" : "Vencido"}
+                        {PAYMENT_STATUS_LABELS[selectedEvent.paymentStatus]}
                       </span>
                     </div>
                   </div>
@@ -1088,17 +1135,13 @@ const EventSales: React.FC = () => {
                   <div className="bg-gray-50 p-4 rounded-xl">
                     <p className="text-sm text-gray-500">Método de Entrega</p>
                     <p className="font-semibold text-gray-900">
-                      {selectedEvent.deliveryMethod === "pickup" ? "Recolección en granja" :
-                       selectedEvent.deliveryMethod === "delivery" ? "Entrega a domicilio" :
-                       "Transporte especializado"}
+                      {DELIVERY_METHOD_LABELS[selectedEvent.deliveryMethod]}
                     </p>
                   </div>
                   <div className="bg-gray-50 p-4 rounded-xl">
                     <p className="text-sm text-gray-500">Método de Pago</p>
                     <p className="font-semibold text-gray-900">
-                      {selectedEvent.paymentMethod === "cash" ? "Efectivo" :
-                       selectedEvent.paymentMethod === "transfer" ? "Transferencia" :
-                       selectedEvent.paymentMethod === "check" ? "Cheque" : "Crédito"}
+                      {PAYMENT_METHOD_LABELS[selectedEvent.paymentMethod]}
                     </p>
                   </div>
                 </div>
@@ -1127,8 +1170,7 @@ const EventSales: React.FC = () => {
                   <div className="bg-gradient-to-br from-gray-50 to-gray-100 p-4 rounded-xl border border-gray-200">
                     <p className="text-sm text-gray-500">Tipo de Contrato</p>
                     <p className="font-semibold text-gray-900">
-                      {selectedEvent.contractType === "direct" ? "Venta Directa" :
-                       selectedEvent.contractType === "auction" ? "Subasta" : "Contrato a Futuro"}
+                      {CONTRACT_TYPE_LABELS[selectedEvent.contractType]}
                     </p>
                   </div>
                 </div>
@@ -1184,9 +1226,9 @@ const EventSales: React.FC = () => {
     );
   };
 
-  // Renderizar vista principal
+  // Renderizar vista principal con el color de fondo actualizado
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#3d8b40] via-[#f2e9d8] to-[#f4ac3a] p-6">
+    <div className="min-h-screen bg-gradient-to-br from-[#519a7c] via-[#f2e9d8] to-[#f4ac3a] p-6">
       <AnimatePresence mode="wait">
         {viewMode === "list" && renderEventsList()}
         {(viewMode === "create" || viewMode === "edit") && renderForm()}

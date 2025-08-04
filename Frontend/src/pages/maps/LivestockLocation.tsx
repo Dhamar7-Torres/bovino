@@ -632,21 +632,6 @@ export const LivestockLocation: React.FC<LivestockLocationProps> = ({
     }
   };
 
-  // Actualizar todos los pins en el mapa
-  const updateMapPins = () => {
-    if (!mapInstance.current || !window.L) return;
-
-    // Limpiar marcadores existentes
-    mapInstance.current.eachLayer((layer: any) => {
-      if (layer instanceof window.L.Marker) {
-        mapInstance.current.removeLayer(layer);
-      }
-    });
-
-    // Agregar pins actuales
-    animalPins.forEach(pin => addPinToMap(mapInstance.current, pin));
-  };
-
   // Filtrar pins según búsqueda
   const filteredPins = animalPins.filter(
     (pin) =>
@@ -657,532 +642,534 @@ export const LivestockLocation: React.FC<LivestockLocationProps> = ({
   );
 
   return (
-    <div
-      className={cn(
-        "relative w-full h-screen overflow-hidden",
-        "bg-gradient-to-br from-[#F5F5DC] via-[#E8E8C8] to-[#D3D3B8]",
-        isFullscreen ? "fixed inset-0 z-50" : "h-[600px]",
-        className
-      )}
-    >
-      {/* Panel de control principal */}
-      <motion.div
-        initial={{ opacity: 0, x: -20 }}
-        animate={{ opacity: 1, x: 0 }}
-        className="absolute top-4 left-4 z-[1000] bg-white/95 backdrop-blur-sm rounded-lg shadow-lg p-4 min-w-[320px] max-h-[calc(100vh-2rem)] overflow-y-auto"
+    // CONTENEDOR PRINCIPAL CON DEGRADADO IMPLEMENTADO
+    <div className="min-h-screen bg-gradient-to-br from-[#519a7c] via-[#f2e9d8] to-[#f4ac3a] p-6">
+      <div
+        className={cn(
+          "relative w-full h-full overflow-hidden rounded-xl shadow-2xl",
+          isFullscreen ? "fixed inset-6 z-50" : "h-[calc(100vh-3rem)]",
+          className
+        )}
       >
-        {/* Header */}
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold text-[#2d5a45] flex items-center gap-2">
-            <Navigation className="w-5 h-5" />
-            Registro de Ganado
-          </h2>
-          <button
-            onClick={() => setIsFullscreen(!isFullscreen)}
-            className="p-2 hover:bg-gray-100 rounded-md transition-colors"
-          >
-            {isFullscreen ? (
-              <Minimize2 className="w-4 h-4" />
-            ) : (
-              <Maximize2 className="w-4 h-4" />
-            )}
-          </button>
-        </div>
-
-        {/* Botón principal para agregar animal */}
-        <div className="mb-4">
-          <button
-            onClick={() => setShowAddAnimalDialog(true)}
-            disabled={isGettingLocation}
-            className={cn(
-              "w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg font-medium transition-colors",
-              isGettingLocation
-                ? "bg-gray-100 text-gray-400 cursor-not-allowed"
-                : "bg-[#519a7c] text-white hover:bg-[#457e68] shadow-md"
-            )}
-          >
-            {isGettingLocation ? (
-              <RefreshCw className="w-5 h-5 animate-spin" />
-            ) : (
-              <Plus className="w-5 h-5" />
-            )}
-            {isGettingLocation ? "Obteniendo ubicación..." : "Agregar Animal"}
-          </button>
-        </div>
-
-        {/* Error de ubicación */}
-        {locationError && (
-          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
-            <div className="flex items-center gap-2 text-red-700">
-              <AlertTriangle className="w-4 h-4" />
-              <span className="font-medium">Error</span>
-            </div>
-            <p className="text-sm text-red-600 mt-1">{locationError}</p>
+        {/* Panel de control principal */}
+        <motion.div
+          initial={{ opacity: 0, x: -20 }}
+          animate={{ opacity: 1, x: 0 }}
+          className="absolute top-4 left-4 z-[1000] bg-white/95 backdrop-blur-sm rounded-lg shadow-lg p-4 min-w-[320px] max-h-[calc(100vh-2rem)] overflow-y-auto"
+        >
+          {/* Header */}
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold text-[#2d5a45] flex items-center gap-2">
+              <Navigation className="w-5 h-5" />
+              Registro de Ganado
+            </h2>
+            <button
+              onClick={() => setIsFullscreen(!isFullscreen)}
+              className="p-2 hover:bg-gray-100 rounded-md transition-colors"
+            >
+              {isFullscreen ? (
+                <Minimize2 className="w-4 h-4" />
+              ) : (
+                <Maximize2 className="w-4 h-4" />
+              )}
+            </button>
           </div>
-        )}
 
-        {/* Mensaje de éxito */}
-        {successMessage && (
-          <motion.div
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
-            className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg"
-          >
-            <div className="flex items-center gap-2 text-green-700">
-              <Target className="w-4 h-4" />
-              <span className="font-medium">¡Éxito!</span>
-            </div>
-            <p className="text-sm text-green-600 mt-1">{successMessage}</p>
-          </motion.div>
-        )}
-
-        {/* Barra de búsqueda */}
-        {animalPins.length > 0 && (
-          <div className="relative mb-4">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
-            <input
-              type="text"
-              placeholder="Buscar por arete, nombre o raza..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
-            />
+          {/* Botón principal para agregar animal */}
+          <div className="mb-4">
+            <button
+              onClick={() => setShowAddAnimalDialog(true)}
+              disabled={isGettingLocation}
+              className={cn(
+                "w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg font-medium transition-colors",
+                isGettingLocation
+                  ? "bg-gray-100 text-gray-400 cursor-not-allowed"
+                  : "bg-[#519a7c] text-white hover:bg-[#457e68] shadow-md"
+              )}
+            >
+              {isGettingLocation ? (
+                <RefreshCw className="w-5 h-5 animate-spin" />
+              ) : (
+                <Plus className="w-5 h-5" />
+              )}
+              {isGettingLocation ? "Obteniendo ubicación..." : "Agregar Animal"}
+            </button>
           </div>
-        )}
 
-        {/* Lista de animales registrados */}
-        {animalPins.length > 0 && (
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <h3 className="text-sm font-medium text-gray-700 flex items-center gap-2">
-                <Users className="w-4 h-4" />
-                Animales Registrados ({filteredPins.length})
-              </h3>
+          {/* Error de ubicación */}
+          {locationError && (
+            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+              <div className="flex items-center gap-2 text-red-700">
+                <AlertTriangle className="w-4 h-4" />
+                <span className="font-medium">Error</span>
+              </div>
+              <p className="text-sm text-red-600 mt-1">{locationError}</p>
             </div>
-            
-            <div className="space-y-2 max-h-64 overflow-y-auto">
-              {filteredPins
-                .sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime())
-                .map((pin) => (
-                <div key={pin.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                  <div className="flex-1 cursor-pointer" onClick={() => handlePinClick(pin)}>
-                    <div className="font-medium text-sm">
-                      {pin.animal.name || pin.animal.earTag}
-                    </div>
-                    <div className="text-xs text-gray-500">
-                      {pin.animal.breed} • {pin.animal.age} años
-                    </div>
-                    <div className="text-xs text-blue-600 capitalize">
-                      {pin.activity} • {pin.timestamp.toLocaleString()}
-                    </div>
-                    {pin.notes && (
-                      <div className="text-xs text-gray-600 italic mt-1">
-                        "{pin.notes}"
+          )}
+
+          {/* Mensaje de éxito */}
+          {successMessage && (
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg"
+            >
+              <div className="flex items-center gap-2 text-green-700">
+                <Target className="w-4 h-4" />
+                <span className="font-medium">¡Éxito!</span>
+              </div>
+              <p className="text-sm text-green-600 mt-1">{successMessage}</p>
+            </motion.div>
+          )}
+
+          {/* Barra de búsqueda */}
+          {animalPins.length > 0 && (
+            <div className="relative mb-4">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <input
+                type="text"
+                placeholder="Buscar por arete, nombre o raza..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
+              />
+            </div>
+          )}
+
+          {/* Lista de animales registrados */}
+          {animalPins.length > 0 && (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-medium text-gray-700 flex items-center gap-2">
+                  <Users className="w-4 h-4" />
+                  Animales Registrados ({filteredPins.length})
+                </h3>
+              </div>
+              
+              <div className="space-y-2 max-h-64 overflow-y-auto">
+                {filteredPins
+                  .sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime())
+                  .map((pin) => (
+                  <div key={pin.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                    <div className="flex-1 cursor-pointer" onClick={() => handlePinClick(pin)}>
+                      <div className="font-medium text-sm">
+                        {pin.animal.name || pin.animal.earTag}
                       </div>
-                    )}
+                      <div className="text-xs text-gray-500">
+                        {pin.animal.breed} • {pin.animal.age} años
+                      </div>
+                      <div className="text-xs text-blue-600 capitalize">
+                        {pin.activity} • {pin.timestamp.toLocaleString()}
+                      </div>
+                      {pin.notes && (
+                        <div className="text-xs text-gray-600 italic mt-1">
+                          "{pin.notes}"
+                        </div>
+                      )}
+                    </div>
+                    <button
+                      onClick={() => removePin(pin.id)}
+                      className="text-red-500 hover:text-red-700 p-1 ml-2"
+                      title="Eliminar registro"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
                   </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Mensaje si no hay animales */}
+          {animalPins.length === 0 && (
+            <div className="text-center py-8 text-gray-500">
+              <Users className="w-12 h-12 mx-auto mb-3 text-gray-300" />
+              <p className="text-sm">No hay animales registrados</p>
+              <p className="text-xs">Haz clic en "Agregar Animal" para comenzar</p>
+            </div>
+          )}
+
+          {/* Resumen */}
+          {animalPins.length > 0 && (
+            <div className="border-t pt-3 mt-4">
+              <h3 className="text-sm font-medium text-gray-700 mb-2">Resumen</h3>
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                <div className="bg-green-50 p-2 rounded">
+                  <div className="text-green-700 font-medium">Total</div>
+                  <div className="text-green-900 font-bold">{animalPins.length}</div>
+                </div>
+                <div className="bg-blue-50 p-2 rounded">
+                  <div className="text-blue-700 font-medium">Última Hora</div>
+                  <div className="text-blue-900 font-bold">
+                    {animalPins.filter(p => 
+                      (Date.now() - p.timestamp.getTime()) < 60 * 60 * 1000
+                    ).length}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </motion.div>
+
+        {/* Dialog para agregar animal */}
+        <AnimatePresence>
+          {showAddAnimalDialog && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-black/50 z-[2000] flex items-center justify-center p-4"
+              onClick={() => setShowAddAnimalDialog(false)}
+            >
+              <motion.div
+                initial={{ scale: 0.9, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.9, opacity: 0 }}
+                className="bg-white rounded-lg p-6 w-full max-w-md max-h-[90vh] overflow-y-auto"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <h3 className="text-lg font-semibold text-[#2d5a45] mb-4">
+                  Agregar Nuevo Animal
+                </h3>
+                
+                <div className="space-y-4">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Arete * 
+                      </label>
+                      <input
+                        type="text"
+                        value={animalForm.earTag}
+                        onChange={(e) => setAnimalForm(prev => ({ ...prev, earTag: e.target.value }))}
+                        placeholder="Ej: COW-001"
+                        className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Nombre
+                      </label>
+                      <input
+                        type="text"
+                        value={animalForm.name || ""}
+                        onChange={(e) => setAnimalForm(prev => ({ ...prev, name: e.target.value || undefined }))}
+                        placeholder="Ej: Luna"
+                        className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Raza *
+                      </label>
+                      <input
+                        type="text"
+                        value={animalForm.breed}
+                        onChange={(e) => setAnimalForm(prev => ({ ...prev, breed: e.target.value }))}
+                        placeholder="Ej: Holstein"
+                        className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Sexo *
+                      </label>
+                      <select
+                        value={animalForm.sex}
+                        onChange={(e) => setAnimalForm(prev => ({ 
+                          ...prev, 
+                          sex: e.target.value as "male" | "female" 
+                        }))}
+                        className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
+                      >
+                        <option value="female">Hembra</option>
+                        <option value="male">Macho</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Edad (años) *
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        max="20"
+                        value={animalForm.age || ""}
+                        onChange={(e) => setAnimalForm(prev => ({ 
+                          ...prev, 
+                          age: parseInt(e.target.value) || 0 
+                        }))}
+                        placeholder="Ej: 3"
+                        className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Peso (kg)
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        max="2000"
+                        value={animalForm.weight || ""}
+                        onChange={(e) => setAnimalForm(prev => ({ 
+                          ...prev, 
+                          weight: parseInt(e.target.value) || 0 
+                        }))}
+                        placeholder="Ej: 450"
+                        className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Color
+                    </label>
+                    <input
+                      type="text"
+                      value={animalForm.color || ""}
+                      onChange={(e) => setAnimalForm(prev => ({ ...prev, color: e.target.value || undefined }))}
+                      placeholder="Ej: Negro con blanco"
+                      className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Notas adicionales
+                    </label>
+                    <textarea
+                      value={animalForm.notes || ""}
+                      onChange={(e) => setAnimalForm(prev => ({ ...prev, notes: e.target.value || undefined }))}
+                      placeholder="Observaciones sobre el animal..."
+                      rows={3}
+                      className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#519a7c] focus:border-transparent resize-none"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex gap-3 mt-6">
                   <button
-                    onClick={() => removePin(pin.id)}
-                    className="text-red-500 hover:text-red-700 p-1 ml-2"
-                    title="Eliminar registro"
+                    onClick={() => setShowAddAnimalDialog(false)}
+                    className="flex-1 px-4 py-2 text-gray-600 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
                   >
-                    <Trash2 className="w-4 h-4" />
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={handleAddAnimal}
+                    className="flex-1 px-4 py-2 bg-[#519a7c] text-white rounded-md hover:bg-[#457e68] transition-colors flex items-center justify-center gap-2"
+                  >
+                    <Target className="w-4 h-4" />
+                    Continuar
                   </button>
                 </div>
-              ))}
-            </div>
-          </div>
-        )}
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
-        {/* Mensaje si no hay animales */}
-        {animalPins.length === 0 && (
-          <div className="text-center py-8 text-gray-500">
-            <Users className="w-12 h-12 mx-auto mb-3 text-gray-300" />
-            <p className="text-sm">No hay animales registrados</p>
-            <p className="text-xs">Haz clic en "Agregar Animal" para comenzar</p>
-          </div>
-        )}
-
-        {/* Resumen */}
-        {animalPins.length > 0 && (
-          <div className="border-t pt-3 mt-4">
-            <h3 className="text-sm font-medium text-gray-700 mb-2">Resumen</h3>
-            <div className="grid grid-cols-2 gap-2 text-xs">
-              <div className="bg-green-50 p-2 rounded">
-                <div className="text-green-700 font-medium">Total</div>
-                <div className="text-green-900 font-bold">{animalPins.length}</div>
-              </div>
-              <div className="bg-blue-50 p-2 rounded">
-                <div className="text-blue-700 font-medium">Última Hora</div>
-                <div className="text-blue-900 font-bold">
-                  {animalPins.filter(p => 
-                    (Date.now() - p.timestamp.getTime()) < 60 * 60 * 1000
-                  ).length}
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-      </motion.div>
-
-      {/* Dialog para agregar animal */}
-      <AnimatePresence>
-        {showAddAnimalDialog && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/50 z-[2000] flex items-center justify-center p-4"
-            onClick={() => setShowAddAnimalDialog(false)}
-          >
+        {/* Dialog para registrar ubicación */}
+        <AnimatePresence>
+          {showLocationDialog && currentAnimal && userLocation && (
             <motion.div
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.9, opacity: 0 }}
-              className="bg-white rounded-lg p-6 w-full max-w-md max-h-[90vh] overflow-y-auto"
-              onClick={(e) => e.stopPropagation()}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-black/50 z-[2000] flex items-center justify-center p-4"
+              onClick={() => setShowLocationDialog(false)}
             >
-              <h3 className="text-lg font-semibold text-[#2d5a45] mb-4">
-                Agregar Nuevo Animal
-              </h3>
-              
-              <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Arete * 
-                    </label>
-                    <input
-                      type="text"
-                      value={animalForm.earTag}
-                      onChange={(e) => setAnimalForm(prev => ({ ...prev, earTag: e.target.value }))}
-                      placeholder="Ej: COW-001"
-                      className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Nombre
-                    </label>
-                    <input
-                      type="text"
-                      value={animalForm.name || ""}
-                      onChange={(e) => setAnimalForm(prev => ({ ...prev, name: e.target.value || undefined }))}
-                      placeholder="Ej: Luna"
-                      className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
-                    />
-                  </div>
+              <motion.div
+                initial={{ scale: 0.9, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.9, opacity: 0 }}
+                className="bg-white rounded-lg p-6 w-full max-w-md"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <h3 className="text-lg font-semibold text-[#2d5a45] mb-4">
+                  Registrar Ubicación
+                </h3>
+
+                <div className="mb-4 p-3 bg-green-50 rounded text-sm">
+                  <div className="font-medium">Animal: {currentAnimal.name || currentAnimal.earTag}</div>
+                  <div className="text-gray-600">{currentAnimal.breed} • {currentAnimal.age} años</div>
+                </div>
+                
+                <div className="mb-4 p-3 bg-blue-50 rounded text-sm">
+                  <div className="font-medium">📍 Ubicación GPS obtenida:</div>
+                  <div>Lat: {userLocation.latitude.toFixed(6)}</div>
+                  <div>Lng: {userLocation.longitude.toFixed(6)}</div>
+                  <div>Precisión: ±{userLocation.accuracy.toFixed(1)}m</div>
+                  <div>Hora: {userLocation.timestamp.toLocaleString()}</div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Raza *
-                    </label>
-                    <input
-                      type="text"
-                      value={animalForm.breed}
-                      onChange={(e) => setAnimalForm(prev => ({ ...prev, breed: e.target.value }))}
-                      placeholder="Ej: Holstein"
-                      className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Sexo *
+                      ¿Qué está haciendo el animal?
                     </label>
                     <select
-                      value={animalForm.sex}
-                      onChange={(e) => setAnimalForm(prev => ({ 
+                      value={locationForm.activity}
+                      onChange={(e) => setLocationForm(prev => ({ 
                         ...prev, 
-                        sex: e.target.value as "male" | "female" 
+                        activity: e.target.value as typeof prev.activity 
                       }))}
                       className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
                     >
-                      <option value="female">Hembra</option>
-                      <option value="male">Macho</option>
+                      <option value="grazing">🌱 Pastoreando</option>
+                      <option value="walking">🚶 Caminando</option>
+                      <option value="running">🏃 Corriendo</option>
+                      <option value="resting">😴 Descansando</option>
+                      <option value="drinking">💧 Bebiendo agua</option>
+                      <option value="other">❓ Otra actividad</option>
                     </select>
                   </div>
-                </div>
 
-                <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Edad (años) *
+                      Observaciones (opcional)
                     </label>
-                    <input
-                      type="number"
-                      min="0"
-                      max="20"
-                      value={animalForm.age || ""}
-                      onChange={(e) => setAnimalForm(prev => ({ 
-                        ...prev, 
-                        age: parseInt(e.target.value) || 0 
-                      }))}
-                      placeholder="Ej: 3"
-                      className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Peso (kg)
-                    </label>
-                    <input
-                      type="number"
-                      min="0"
-                      max="2000"
-                      value={animalForm.weight || ""}
-                      onChange={(e) => setAnimalForm(prev => ({ 
-                        ...prev, 
-                        weight: parseInt(e.target.value) || 0 
-                      }))}
-                      placeholder="Ej: 450"
-                      className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
+                    <textarea
+                      value={locationForm.notes}
+                      onChange={(e) => setLocationForm(prev => ({ ...prev, notes: e.target.value }))}
+                      placeholder="Notas sobre el comportamiento, estado de salud, etc..."
+                      rows={3}
+                      className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#519a7c] focus:border-transparent resize-none"
                     />
                   </div>
                 </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Color
-                  </label>
-                  <input
-                    type="text"
-                    value={animalForm.color || ""}
-                    onChange={(e) => setAnimalForm(prev => ({ ...prev, color: e.target.value || undefined }))}
-                    placeholder="Ej: Negro con blanco"
-                    className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
-                  />
+                <div className="flex gap-3 mt-6">
+                  <button
+                    onClick={() => setShowLocationDialog(false)}
+                    className="flex-1 px-4 py-2 text-gray-600 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={registerAnimalLocation}
+                    className="flex-1 px-4 py-2 bg-[#519a7c] text-white rounded-md hover:bg-[#457e68] transition-colors flex items-center justify-center gap-2"
+                  >
+                    <Save className="w-4 h-4" />
+                    Registrar en Mapa
+                  </button>
                 </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Notas adicionales
-                  </label>
-                  <textarea
-                    value={animalForm.notes || ""}
-                    onChange={(e) => setAnimalForm(prev => ({ ...prev, notes: e.target.value || undefined }))}
-                    placeholder="Observaciones sobre el animal..."
-                    rows={3}
-                    className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#519a7c] focus:border-transparent resize-none"
-                  />
-                </div>
-              </div>
-
-              <div className="flex gap-3 mt-6">
-                <button
-                  onClick={() => setShowAddAnimalDialog(false)}
-                  className="flex-1 px-4 py-2 text-gray-600 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
-                >
-                  Cancelar
-                </button>
-                <button
-                  onClick={handleAddAnimal}
-                  className="flex-1 px-4 py-2 bg-[#519a7c] text-white rounded-md hover:bg-[#457e68] transition-colors flex items-center justify-center gap-2"
-                >
-                  <Target className="w-4 h-4" />
-                  Continuar
-                </button>
-              </div>
+              </motion.div>
             </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+          )}
+        </AnimatePresence>
 
-      {/* Dialog para registrar ubicación */}
-      <AnimatePresence>
-        {showLocationDialog && currentAnimal && userLocation && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/50 z-[2000] flex items-center justify-center p-4"
-            onClick={() => setShowLocationDialog(false)}
-          >
+        {/* Panel de información del pin seleccionado */}
+        <AnimatePresence>
+          {selectedPin && (
             <motion.div
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.9, opacity: 0 }}
-              className="bg-white rounded-lg p-6 w-full max-w-md"
-              onClick={(e) => e.stopPropagation()}
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="absolute top-4 right-4 z-[1000] bg-white/95 backdrop-blur-sm rounded-lg shadow-lg p-4 min-w-[350px] max-w-[400px]"
             >
-              <h3 className="text-lg font-semibold text-[#2d5a45] mb-4">
-                Registrar Ubicación
-              </h3>
-
-              <div className="mb-4 p-3 bg-green-50 rounded text-sm">
-                <div className="font-medium">Animal: {currentAnimal.name || currentAnimal.earTag}</div>
-                <div className="text-gray-600">{currentAnimal.breed} • {currentAnimal.age} años</div>
-              </div>
-              
-              <div className="mb-4 p-3 bg-blue-50 rounded text-sm">
-                <div className="font-medium">📍 Ubicación GPS obtenida:</div>
-                <div>Lat: {userLocation.latitude.toFixed(6)}</div>
-                <div>Lng: {userLocation.longitude.toFixed(6)}</div>
-                <div>Precisión: ±{userLocation.accuracy.toFixed(1)}m</div>
-                <div>Hora: {userLocation.timestamp.toLocaleString()}</div>
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-lg font-semibold text-[#2d5a45] flex items-center gap-2">
+                  <Info className="w-5 h-5" />
+                  Información del Animal
+                </h3>
+                <button
+                  onClick={() => setSelectedPin(null)}
+                  className="p-1 hover:bg-gray-100 rounded-md transition-colors"
+                >
+                  <X className="w-4 h-4" />
+                </button>
               </div>
 
               <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    ¿Qué está haciendo el animal?
-                  </label>
-                  <select
-                    value={locationForm.activity}
-                    onChange={(e) => setLocationForm(prev => ({ 
-                      ...prev, 
-                      activity: e.target.value as typeof prev.activity 
-                    }))}
-                    className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
-                  >
-                    <option value="grazing">🌱 Pastoreando</option>
-                    <option value="walking">🚶 Caminando</option>
-                    <option value="running">🏃 Corriendo</option>
-                    <option value="resting">😴 Descansando</option>
-                    <option value="drinking">💧 Bebiendo agua</option>
-                    <option value="other">❓ Otra actividad</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Observaciones (opcional)
-                  </label>
-                  <textarea
-                    value={locationForm.notes}
-                    onChange={(e) => setLocationForm(prev => ({ ...prev, notes: e.target.value }))}
-                    placeholder="Notas sobre el comportamiento, estado de salud, etc..."
-                    rows={3}
-                    className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#519a7c] focus:border-transparent resize-none"
-                  />
-                </div>
-              </div>
-
-              <div className="flex gap-3 mt-6">
-                <button
-                  onClick={() => setShowLocationDialog(false)}
-                  className="flex-1 px-4 py-2 text-gray-600 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
-                >
-                  Cancelar
-                </button>
-                <button
-                  onClick={registerAnimalLocation}
-                  className="flex-1 px-4 py-2 bg-[#519a7c] text-white rounded-md hover:bg-[#457e68] transition-colors flex items-center justify-center gap-2"
-                >
-                  <Save className="w-4 h-4" />
-                  Registrar en Mapa
-                </button>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Panel de información del pin seleccionado */}
-      <AnimatePresence>
-        {selectedPin && (
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.95 }}
-            className="absolute top-4 right-4 z-[1000] bg-white/95 backdrop-blur-sm rounded-lg shadow-lg p-4 min-w-[350px] max-w-[400px]"
-          >
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-lg font-semibold text-[#2d5a45] flex items-center gap-2">
-                <Info className="w-5 h-5" />
-                Información del Animal
-              </h3>
-              <button
-                onClick={() => setSelectedPin(null)}
-                className="p-1 hover:bg-gray-100 rounded-md transition-colors"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <div className="space-y-4">
-              {/* Información del animal */}
-              <div className="p-3 bg-blue-50 rounded-lg">
-                <h4 className="font-medium text-blue-900 mb-2">
-                  {selectedPin.animal.name || selectedPin.animal.earTag}
-                </h4>
-                <div className="grid grid-cols-2 gap-2 text-sm text-blue-800">
-                  <div>Arete: {selectedPin.animal.earTag}</div>
-                  <div>Raza: {selectedPin.animal.breed}</div>
-                  <div>Edad: {selectedPin.animal.age} años</div>
-                  <div>Peso: {selectedPin.animal.weight} kg</div>
-                  <div>Sexo: {selectedPin.animal.sex === "male" ? "Macho" : "Hembra"}</div>
-                  {selectedPin.animal.color && <div>Color: {selectedPin.animal.color}</div>}
-                </div>
-                {selectedPin.animal.notes && (
-                  <div className="mt-2 text-sm text-blue-700 italic">
-                    Notas: {selectedPin.animal.notes}
+                {/* Información del animal */}
+                <div className="p-3 bg-blue-50 rounded-lg">
+                  <h4 className="font-medium text-blue-900 mb-2">
+                    {selectedPin.animal.name || selectedPin.animal.earTag}
+                  </h4>
+                  <div className="grid grid-cols-2 gap-2 text-sm text-blue-800">
+                    <div>Arete: {selectedPin.animal.earTag}</div>
+                    <div>Raza: {selectedPin.animal.breed}</div>
+                    <div>Edad: {selectedPin.animal.age} años</div>
+                    <div>Peso: {selectedPin.animal.weight} kg</div>
+                    <div>Sexo: {selectedPin.animal.sex === "male" ? "Macho" : "Hembra"}</div>
+                    {selectedPin.animal.color && <div>Color: {selectedPin.animal.color}</div>}
                   </div>
-                )}
-              </div>
-
-              {/* Información de la ubicación */}
-              <div className="p-3 bg-green-50 rounded-lg">
-                <h4 className="font-medium text-green-900 mb-2">Registro de Ubicación</h4>
-                <div className="space-y-2 text-sm text-green-800">
-                  <div>📅 Fecha: {selectedPin.timestamp.toLocaleDateString()}</div>
-                  <div>🕐 Hora: {selectedPin.timestamp.toLocaleTimeString()}</div>
-                  <div>🎯 Actividad: {selectedPin.activity}</div>
-                  <div>📍 Coordenadas: {selectedPin.latitude.toFixed(6)}, {selectedPin.longitude.toFixed(6)}</div>
-                  <div>📊 Precisión: ±{selectedPin.accuracy}m</div>
-                  {selectedPin.notes && (
-                    <div className="mt-2 p-2 bg-green-100 rounded">
-                      <div className="font-medium">Observaciones:</div>
-                      <div className="italic">"{selectedPin.notes}"</div>
+                  {selectedPin.animal.notes && (
+                    <div className="mt-2 text-sm text-blue-700 italic">
+                      Notas: {selectedPin.animal.notes}
                     </div>
                   )}
                 </div>
-              </div>
 
-              {/* Botones de acción */}
-              <div className="flex gap-2">
-                <button 
-                  onClick={() => removePin(selectedPin.id)}
-                  className="flex-1 px-3 py-2 text-red-600 border border-red-300 rounded-md hover:bg-red-50 transition-colors text-sm flex items-center justify-center gap-2"
-                >
-                  <Trash2 className="w-4 h-4" />
-                  Eliminar
-                </button>
-                <button 
-                  onClick={() => setSelectedPin(null)}
-                  className="flex-1 px-3 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 transition-colors text-sm"
-                >
-                  Cerrar
-                </button>
-              </div>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+                {/* Información de la ubicación */}
+                <div className="p-3 bg-green-50 rounded-lg">
+                  <h4 className="font-medium text-green-900 mb-2">Registro de Ubicación</h4>
+                  <div className="space-y-2 text-sm text-green-800">
+                    <div>📅 Fecha: {selectedPin.timestamp.toLocaleDateString()}</div>
+                    <div>🕐 Hora: {selectedPin.timestamp.toLocaleTimeString()}</div>
+                    <div>🎯 Actividad: {selectedPin.activity}</div>
+                    <div>📍 Coordenadas: {selectedPin.latitude.toFixed(6)}, {selectedPin.longitude.toFixed(6)}</div>
+                    <div>📊 Precisión: ±{selectedPin.accuracy}m</div>
+                    {selectedPin.notes && (
+                      <div className="mt-2 p-2 bg-green-100 rounded">
+                        <div className="font-medium">Observaciones:</div>
+                        <div className="italic">"{selectedPin.notes}"</div>
+                      </div>
+                    )}
+                  </div>
+                </div>
 
-      {/* Contenedor del mapa */}
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ duration: 0.5 }}
-        className="w-full h-full"
-      >
-        {isLeafletLoaded ? (
-          <div
-            ref={mapRef}
-            className="w-full h-full rounded-lg overflow-hidden"
-            style={{ height: "100%", width: "100%" }}
-          />
-        ) : (
-          <LivestockSimulatedMap
-            animalPins={filteredPins}
-            userLocation={userLocation}
-            onPinClick={handlePinClick}
-          />
-        )}
-      </motion.div>
+                {/* Botones de acción */}
+                <div className="flex gap-2">
+                  <button 
+                    onClick={() => removePin(selectedPin.id)}
+                    className="flex-1 px-3 py-2 text-red-600 border border-red-300 rounded-md hover:bg-red-50 transition-colors text-sm flex items-center justify-center gap-2"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    Eliminar
+                  </button>
+                  <button 
+                    onClick={() => setSelectedPin(null)}
+                    className="flex-1 px-3 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 transition-colors text-sm"
+                  >
+                    Cerrar
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Contenedor del mapa */}
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.5 }}
+          className="w-full h-full"
+        >
+          {isLeafletLoaded ? (
+            <div
+              ref={mapRef}
+              className="w-full h-full rounded-lg overflow-hidden"
+              style={{ height: "100%", width: "100%" }}
+            />
+          ) : (
+            <LivestockSimulatedMap
+              animalPins={filteredPins}
+              userLocation={userLocation}
+              onPinClick={handlePinClick}
+            />
+          )}
+        </motion.div>
+      </div>
     </div>
   );
 };

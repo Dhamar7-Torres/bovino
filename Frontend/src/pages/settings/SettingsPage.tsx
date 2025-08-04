@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Settings,
@@ -8,19 +8,45 @@ import {
   ChevronRight,
   Clock
 } from 'lucide-react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { CSS_CLASSES } from '../../components/layout';
 import ProfileSettings from './ProfileSettings';
 import NotificationSettings from './NotificationSettings';
 
 const SettingsPage: React.FC = () => {
+  const location = useLocation();
+  const navigate = useNavigate();
   const [activeView, setActiveView] = useState('main');
 
+  // Efecto para sincronizar activeView con la URL
+  useEffect(() => {
+    const pathname = location.pathname;
+    
+    if (pathname === '/settings/profile') {
+      setActiveView('profile');
+    } else if (pathname === '/settings/notifications') {
+      setActiveView('notifications');
+    } else if (pathname === '/settings') {
+      setActiveView('main');
+    } else {
+      // Si hay otros paths como /settings/security, etc.
+      const lastSegment = pathname.split('/').pop();
+      if (lastSegment && lastSegment !== 'settings') {
+        setActiveView(lastSegment);
+      } else {
+        setActiveView('main');
+      }
+    }
+  }, [location.pathname]);
+
   const handleNavigateToSection = (section: string) => {
-    setActiveView(section);
+    // Navegar usando React Router en lugar de solo cambiar estado
+    navigate(`/settings/${section}`);
   };
 
   const handleBackToMain = () => {
-    setActiveView('main');
+    // Navegar de vuelta a la página principal de settings
+    navigate('/settings');
   };
 
   const settingsOptions = [
@@ -44,10 +70,17 @@ const SettingsPage: React.FC = () => {
     <div className={CSS_CLASSES.backgroundMain + ' min-h-screen'}>
       <AnimatePresence mode="wait">
         {activeView === 'main' && (
-          <div key="main" className="p-6">
+          <motion.div 
+            key="main" 
+            className="p-6"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            transition={{ duration: 0.3 }}
+          >
             <div className="max-w-6xl mx-auto">
               {/* Encabezado Principal */}
-              <div className="mb-10">
+              <div className="mb-16">
                 <div className="text-center">
                   <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-white/20 backdrop-blur-sm mb-6">
                     <Settings size={40} className="text-white" />
@@ -63,7 +96,7 @@ const SettingsPage: React.FC = () => {
               </div>
 
               {/* Grid de Opciones de Configuración */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+              <div className="flex flex-wrap justify-center gap-8 max-w-4xl mx-auto">
                 {settingsOptions.map((option) => {
                   const IconComponent = option.icon;
                   return (
@@ -71,7 +104,7 @@ const SettingsPage: React.FC = () => {
                       key={option.id}
                       whileHover={{ scale: 1.02 }}
                       whileTap={{ scale: 0.98 }}
-                      className="group cursor-pointer"
+                      className="group cursor-pointer w-80"
                       onClick={() => handleNavigateToSection(option.id)}
                     >
                       <div className={CSS_CLASSES.card + ' h-full p-6 relative overflow-hidden transition-all duration-300 hover:shadow-2xl'}>
@@ -124,7 +157,7 @@ const SettingsPage: React.FC = () => {
               </div>
 
               {/* Información adicional */}
-              <div className="mt-12 text-center">
+              <div className="mt-16 text-center">
                 <div className={CSS_CLASSES.card + ' p-6 max-w-2xl mx-auto'}>
                   <div className="flex items-center justify-center gap-3 mb-4">
                     <Clock size={24} className="text-[#519a7c]" />
@@ -143,12 +176,18 @@ const SettingsPage: React.FC = () => {
                 </div>
               </div>
             </div>
-          </div>
+          </motion.div>
         )}
 
         {/* Vista de Configuración de Perfil */}
         {activeView === 'profile' && (
-          <div key="profile">
+          <motion.div 
+            key="profile"
+            initial={{ opacity: 0, x: 50 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -50 }}
+            transition={{ duration: 0.3 }}
+          >
             {/* Botón de regreso */}
             <div className="p-6 pb-0">
               <button
@@ -160,12 +199,18 @@ const SettingsPage: React.FC = () => {
               </button>
             </div>
             <ProfileSettings />
-          </div>
+          </motion.div>
         )}
 
         {/* Vista de Configuración de Notificaciones */}
         {activeView === 'notifications' && (
-          <div key="notifications">
+          <motion.div 
+            key="notifications"
+            initial={{ opacity: 0, x: 50 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -50 }}
+            transition={{ duration: 0.3 }}
+          >
             {/* Botón de regreso */}
             <div className="p-6 pb-0">
               <button
@@ -177,12 +222,19 @@ const SettingsPage: React.FC = () => {
               </button>
             </div>
             <NotificationSettings />
-          </div>
+          </motion.div>
         )}
 
         {/* Vistas para otras secciones (placeholder) */}
         {activeView !== 'main' && activeView !== 'profile' && activeView !== 'notifications' && (
-          <div key={activeView} className="p-6">
+          <motion.div 
+            key={activeView} 
+            className="p-6"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            transition={{ duration: 0.3 }}
+          >
             <div className="max-w-4xl mx-auto">
               {/* Botón de regreso */}
               <button
@@ -227,7 +279,7 @@ const SettingsPage: React.FC = () => {
                 </div>
               </div>
             </div>
-          </div>
+          </motion.div>
         )}
       </AnimatePresence>
     </div>

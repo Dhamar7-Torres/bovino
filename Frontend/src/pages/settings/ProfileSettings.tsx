@@ -16,7 +16,6 @@ import {
   CheckCircle,
   AlertCircle
 } from 'lucide-react';
-import { CSS_CLASSES } from '../../components/layout';
 
 // Interfaces para TypeScript
 interface UserProfile {
@@ -166,7 +165,7 @@ const ProfileSettings: React.FC = () => {
   };
 
   return (
-    <div className={`min-h-screen ${CSS_CLASSES.backgroundMain} p-6`}>
+    <div className="min-h-screen bg-gradient-to-br from-[#519a7c] via-[#f2e9d8] to-[#f4ac3a] p-6">
       <div className="max-w-6xl mx-auto">
         {/* Encabezado de la página */}
         <motion.div 
@@ -175,7 +174,7 @@ const ProfileSettings: React.FC = () => {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5 }}
         >
-          <h1 className={`text-4xl font-bold text-white drop-shadow-lg mb-2`}>
+          <h1 className="text-4xl font-bold text-white drop-shadow-lg mb-2">
             Configuración de Perfil
           </h1>
           <p className="text-white/80 text-lg">
@@ -199,7 +198,7 @@ const ProfileSettings: React.FC = () => {
         </AnimatePresence>
 
         <motion.div 
-          className={`${CSS_CLASSES.card} overflow-hidden`}
+          className="bg-white/95 backdrop-blur-sm rounded-xl shadow-xl border border-white/20 overflow-hidden"
           variants={containerVariants}
           initial="hidden"
           animate="visible"
@@ -494,7 +493,7 @@ const ProfileSettings: React.FC = () => {
                       <motion.button
                         onClick={handlePasswordChange}
                         disabled={!passwordData.currentPassword || !passwordData.newPassword || !passwordData.confirmPassword || isSaving}
-                        className={`${CSS_CLASSES.buttonPrimary} px-6 py-2 rounded-lg font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2`}
+                        className="bg-gradient-to-r from-[#519a7c] to-[#4e9c75] text-white px-6 py-2 rounded-lg font-medium hover:from-[#4a8b70] hover:to-[#45896a] transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 shadow-lg"
                         whileHover={{ scale: 1.02 }}
                         whileTap={{ scale: 0.98 }}
                       >
@@ -612,12 +611,12 @@ const ProfileSettings: React.FC = () => {
 
           {/* Botones de acción */}
           {activeTab === 'profile' && (
-            <div className="px-8 py-6 bg-gray-50 border-t border-gray-200 flex items-center justify-between">
+            <div className="px-8 py-6 bg-gray-50/80 backdrop-blur-sm border-t border-gray-200 flex items-center justify-between">
               <div className="flex items-center gap-4">
                 {!isEditing ? (
                   <motion.button
                     onClick={() => setIsEditing(true)}
-                    className="px-6 py-2 bg-[#519a7c] text-white rounded-lg font-medium hover:bg-[#4a8b70] transition-colors flex items-center gap-2"
+                    className="px-6 py-2 bg-[#519a7c] text-white rounded-lg font-medium hover:bg-[#4a8b70] transition-colors flex items-center gap-2 shadow-lg"
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
                   >
@@ -629,7 +628,7 @@ const ProfileSettings: React.FC = () => {
                     <motion.button
                       onClick={handleSaveChanges}
                       disabled={isSaving}
-                      className={`${CSS_CLASSES.buttonPrimary} px-6 py-2 rounded-lg font-medium disabled:opacity-50 flex items-center gap-2`}
+                      className="bg-gradient-to-r from-[#519a7c] to-[#4e9c75] text-white px-6 py-2 rounded-lg font-medium hover:from-[#4a8b70] hover:to-[#45896a] transition-all duration-200 disabled:opacity-50 flex items-center gap-2 shadow-lg"
                       whileHover={{ scale: 1.02 }}
                       whileTap={{ scale: 0.98 }}
                     >
@@ -651,7 +650,7 @@ const ProfileSettings: React.FC = () => {
                         setIsEditing(false);
                         setPreviewImage(null);
                       }}
-                      className="px-6 py-2 bg-gray-500 text-white rounded-lg font-medium hover:bg-gray-600 transition-colors flex items-center gap-2"
+                      className="px-6 py-2 bg-gray-500 text-white rounded-lg font-medium hover:bg-gray-600 transition-colors flex items-center gap-2 shadow-lg"
                       whileHover={{ scale: 1.02 }}
                       whileTap={{ scale: 0.98 }}
                     >
@@ -666,7 +665,7 @@ const ProfileSettings: React.FC = () => {
 
           {/* Botón de guardar para notificaciones */}
           {activeTab === 'notifications' && (
-            <div className="px-8 py-6 bg-gray-50 border-t border-gray-200">
+            <div className="px-8 py-6 bg-gray-50/80 backdrop-blur-sm border-t border-gray-200">
               <motion.button
                 onClick={() => {
                   setSaving(true);
@@ -677,7 +676,7 @@ const ProfileSettings: React.FC = () => {
                   }, 1000);
                 }}
                 disabled={isSaving}
-                className={`${CSS_CLASSES.buttonPrimary} px-6 py-2 rounded-lg font-medium disabled:opacity-50 flex items-center gap-2`}
+                className="bg-gradient-to-r from-[#519a7c] to-[#4e9c75] text-white px-6 py-2 rounded-lg font-medium hover:from-[#4a8b70] hover:to-[#45896a] transition-all duration-200 disabled:opacity-50 flex items-center gap-2 shadow-lg"
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
               >

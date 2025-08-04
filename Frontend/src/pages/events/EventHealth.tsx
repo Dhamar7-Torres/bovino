@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from "react";
-import { motion, AnimatePresence } from "framer-motion";
 import {
   Heart,
   Calendar,
@@ -10,20 +9,14 @@ import {
   Trash2,
   Eye,
   X,
-  Bell,
-  FileText,
   AlertTriangle,
   Stethoscope,
   Save,
   ArrowLeft,
-  CheckCircle,
-  XCircle,
   Thermometer,
   Pill,
   Bandage,
   Shield,
-  Clock,
-  UserCheck,
   Loader2,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
@@ -375,7 +368,7 @@ const EventHealth: React.FC = () => {
   // ==================== RENDER ====================
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-[#519a7c] via-[#f2e9d8] to-[#f4ac3a] flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-br from-[#519a7c] via-[#f2e9d8] to-[#f4ac3a] p-6 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-[#519a7c] mx-auto mb-4"></div>
           <p className="text-gray-800 text-lg font-medium">Cargando...</p>
@@ -385,7 +378,7 @@ const EventHealth: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#519a7c] via-[#f2e9d8] to-[#f4ac3a]">
+    <div className="min-h-screen bg-gradient-to-br from-[#519a7c] via-[#f2e9d8] to-[#f4ac3a] p-6">
       {/* Header */}
       <div className="bg-white/80 backdrop-blur-sm border-b border-gray-200 sticky top-0 z-10">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">

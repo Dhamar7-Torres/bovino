@@ -396,7 +396,7 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, children, title, size = 
           exit={{ scale: 0.9, opacity: 0 }}
           onClick={(e) => e.stopPropagation()}
           className={cn(
-            "bg-white rounded-xl shadow-2xl w-full max-h-[90vh] overflow-hidden",
+            "bg-white/95 backdrop-blur-sm rounded-xl shadow-2xl w-full max-h-[90vh] overflow-hidden",
             sizeClasses[size]
           )}
         >
@@ -1377,7 +1377,7 @@ const ReportForm: React.FC<ReportFormProps> = ({ report, onSave, onCancel, isEdi
 };
 
 // Componente principal
-export const ProductionReports: React.FC<ProductionReportsProps> = ({ className }) => {
+export const ProductionReports: React.FC<ProductionReportsProps> = ({ }) => {
   const [reports, setReports] = useState<ProductionReport[]>(SAMPLE_REPORTS);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isViewerOpen, setIsViewerOpen] = useState(false);
@@ -1523,271 +1523,262 @@ export const ProductionReports: React.FC<ProductionReportsProps> = ({ className 
   };
 
   return (
-    <div
-      className={cn(
-        "min-h-screen",
-        // Fondo degradado principal del layout
-        "bg-gradient-to-br from-[#519a7c] via-[#f2e9d8] to-[#f4ac3a]",
-        className
-      )}
-    >
-      <div className="p-6">
-        <div className="max-w-7xl mx-auto">
-          {/* Header */}
-          <motion.div
-            initial={{ opacity: 0, y: -20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="flex items-center justify-between mb-8"
+    <div className="min-h-screen bg-gradient-to-br from-[#519a7c] via-[#f2e9d8] to-[#f4ac3a] p-6">
+      <div className="max-w-7xl mx-auto">
+        {/* Header */}
+        <motion.div
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="flex items-center justify-between mb-8"
+        >
+          <div>
+            <h1 className="text-3xl font-bold text-white drop-shadow-sm mb-2">
+              Reportes de Producción
+            </h1>
+            <p className="text-white/90">
+              Gestiona y analiza los reportes de productividad ganadera
+            </p>
+          </div>
+
+          <button
+            onClick={handleCreateReport}
+            className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-[#2d6f51] to-[#4e9c75] text-white rounded-lg hover:from-[#265a44] hover:to-[#3d7a5c] transition-all duration-200 shadow-lg"
           >
+            <Plus className="w-5 h-5" />
+            Nuevo Reporte
+          </button>
+        </motion.div>
+
+        {/* Filtros y búsqueda */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1 }}
+          className="bg-white/95 backdrop-blur-sm rounded-xl p-6 shadow-lg border border-white/20 mb-6"
+        >
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            {/* Búsqueda */}
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+              <input
+                type="text"
+                placeholder="Buscar reportes..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2d6f51] focus:border-transparent transition-colors"
+              />
+            </div>
+
+            {/* Filtro por tipo */}
             <div>
-              <h1 className="text-3xl font-bold text-white drop-shadow-sm mb-2">
-                Reportes de Producción
-              </h1>
-              <p className="text-white/90">
-                Gestiona y analiza los reportes de productividad ganadera
+              <select
+                value={filterType}
+                onChange={(e) => setFilterType(e.target.value)}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2d6f51] focus:border-transparent transition-colors"
+              >
+                <option value="all">Todos los tipos</option>
+                {Object.entries(REPORT_TYPE_CONFIG).map(([key, config]) => (
+                  <option key={key} value={key}>
+                    {config.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Filtro por estado */}
+            <div>
+              <select
+                value={filterStatus}
+                onChange={(e) => setFilterStatus(e.target.value)}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2d6f51] focus:border-transparent transition-colors"
+              >
+                <option value="all">Todos los estados</option>
+                <option value="active">Activo</option>
+                <option value="draft">Borrador</option>
+                <option value="archived">Archivado</option>
+                <option value="processing">Procesando</option>
+              </select>
+            </div>
+
+            {/* Contador de resultados */}
+            <div className="flex items-center text-gray-600">
+              <Filter className="w-4 h-4 mr-2" />
+              <span className="text-sm">
+                {filteredReports.length} de {reports.length} reportes
+              </span>
+            </div>
+          </div>
+        </motion.div>
+
+        {/* Lista de reportes */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2 }}
+          className="bg-white/95 backdrop-blur-sm rounded-xl shadow-lg border border-white/20 overflow-hidden"
+        >
+          {filteredReports.length === 0 ? (
+            <div className="p-12 text-center">
+              <BarChart3 className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-gray-800 mb-2">
+                No se encontraron reportes
+              </h3>
+              <p className="text-gray-600 mb-6">
+                {reports.length === 0 
+                  ? 'Crea tu primer reporte de producción'
+                  : 'Ajusta los filtros o términos de búsqueda'
+                }
               </p>
-            </div>
-
-            <button
-              onClick={handleCreateReport}
-              className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-[#2d6f51] to-[#4e9c75] text-white rounded-lg hover:from-[#265a44] hover:to-[#3d7a5c] transition-all duration-200 shadow-lg"
-            >
-              <Plus className="w-5 h-5" />
-              Nuevo Reporte
-            </button>
-          </motion.div>
-
-          {/* Filtros y búsqueda */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 }}
-            className="bg-white/95 backdrop-blur-sm rounded-xl p-6 shadow-lg border border-white/20 mb-6"
-          >
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              {/* Búsqueda */}
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-                <input
-                  type="text"
-                  placeholder="Buscar reportes..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2d6f51] focus:border-transparent transition-colors"
-                />
-              </div>
-
-              {/* Filtro por tipo */}
-              <div>
-                <select
-                  value={filterType}
-                  onChange={(e) => setFilterType(e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2d6f51] focus:border-transparent transition-colors"
+              {reports.length === 0 && (
+                <button
+                  onClick={handleCreateReport}
+                  className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-[#2d6f51] to-[#4e9c75] text-white rounded-lg hover:from-[#265a44] hover:to-[#3d7a5c] transition-all duration-200"
                 >
-                  <option value="all">Todos los tipos</option>
-                  {Object.entries(REPORT_TYPE_CONFIG).map(([key, config]) => (
-                    <option key={key} value={key}>
-                      {config.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Filtro por estado */}
-              <div>
-                <select
-                  value={filterStatus}
-                  onChange={(e) => setFilterStatus(e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2d6f51] focus:border-transparent transition-colors"
-                >
-                  <option value="all">Todos los estados</option>
-                  <option value="active">Activo</option>
-                  <option value="draft">Borrador</option>
-                  <option value="archived">Archivado</option>
-                  <option value="processing">Procesando</option>
-                </select>
-              </div>
-
-              {/* Contador de resultados */}
-              <div className="flex items-center text-gray-600">
-                <Filter className="w-4 h-4 mr-2" />
-                <span className="text-sm">
-                  {filteredReports.length} de {reports.length} reportes
-                </span>
-              </div>
+                  <Plus className="w-5 h-5" />
+                  Crear Primer Reporte
+                </button>
+              )}
             </div>
-          </motion.div>
-
-          {/* Lista de reportes */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2 }}
-            className="bg-white/95 backdrop-blur-sm rounded-xl shadow-lg border border-white/20 overflow-hidden"
-          >
-            {filteredReports.length === 0 ? (
-              <div className="p-12 text-center">
-                <BarChart3 className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-                <h3 className="text-lg font-medium text-gray-800 mb-2">
-                  No se encontraron reportes
-                </h3>
-                <p className="text-gray-600 mb-6">
-                  {reports.length === 0 
-                    ? 'Crea tu primer reporte de producción'
-                    : 'Ajusta los filtros o términos de búsqueda'
-                  }
-                </p>
-                {reports.length === 0 && (
-                  <button
-                    onClick={handleCreateReport}
-                    className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-[#2d6f51] to-[#4e9c75] text-white rounded-lg hover:from-[#265a44] hover:to-[#3d7a5c] transition-all duration-200"
-                  >
-                    <Plus className="w-5 h-5" />
-                    Crear Primer Reporte
-                  </button>
-                )}
-              </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead className="bg-gradient-to-r from-[#2d6f51] to-[#4e9c75] text-white">
-                    <tr>
-                      <th className="px-6 py-4 text-left text-sm font-medium">Título</th>
-                      <th className="px-6 py-4 text-left text-sm font-medium">Tipo</th>
-                      <th className="px-6 py-4 text-left text-sm font-medium">Ubicación</th>
-                      <th className="px-6 py-4 text-left text-sm font-medium">Período</th>
-                      <th className="px-6 py-4 text-left text-sm font-medium">Estado</th>
-                      <th className="px-6 py-4 text-left text-sm font-medium">Métricas Clave</th>
-                      <th className="px-6 py-4 text-left text-sm font-medium">Acciones</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-200">
-                    {filteredReports.map((report, index) => (
-                      <motion.tr
-                        key={report.id}
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: index * 0.05 }}
-                        className="hover:bg-gray-50/50 transition-colors"
-                      >
-                        <td className="px-6 py-4">
-                          <div>
-                            <h4 className="font-medium text-gray-800">{report.title}</h4>
-                            <p className="text-sm text-gray-600 mt-1 line-clamp-2">
-                              {report.description}
-                            </p>
-                            <p className="text-xs text-gray-400 mt-1">
-                              Por {report.createdBy} • {new Date(report.createdAt).toLocaleDateString()}
-                            </p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-gradient-to-r from-[#2d6f51] to-[#4e9c75] text-white">
+                  <tr>
+                    <th className="px-6 py-4 text-left text-sm font-medium">Título</th>
+                    <th className="px-6 py-4 text-left text-sm font-medium">Tipo</th>
+                    <th className="px-6 py-4 text-left text-sm font-medium">Ubicación</th>
+                    <th className="px-6 py-4 text-left text-sm font-medium">Período</th>
+                    <th className="px-6 py-4 text-left text-sm font-medium">Estado</th>
+                    <th className="px-6 py-4 text-left text-sm font-medium">Métricas Clave</th>
+                    <th className="px-6 py-4 text-left text-sm font-medium">Acciones</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200">
+                  {filteredReports.map((report, index) => (
+                    <motion.tr
+                      key={report.id}
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: index * 0.05 }}
+                      className="hover:bg-gray-50/50 transition-colors"
+                    >
+                      <td className="px-6 py-4">
+                        <div>
+                          <h4 className="font-medium text-gray-800">{report.title}</h4>
+                          <p className="text-sm text-gray-600 mt-1 line-clamp-2">
+                            {report.description}
+                          </p>
+                          <p className="text-xs text-gray-400 mt-1">
+                            Por {report.createdBy} • {new Date(report.createdAt).toLocaleDateString()}
+                          </p>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-2">
+                          <div 
+                            className="p-2 rounded-lg"
+                            style={{ 
+                              backgroundColor: `${REPORT_TYPE_CONFIG[report.reportType].color}20`,
+                              color: REPORT_TYPE_CONFIG[report.reportType].color
+                            }}
+                          >
+                            {REPORT_TYPE_CONFIG[report.reportType].icon}
                           </div>
-                        </td>
-                        <td className="px-6 py-4">
-                          <div className="flex items-center gap-2">
-                            <div 
-                              className="p-2 rounded-lg"
-                              style={{ 
-                                backgroundColor: `${REPORT_TYPE_CONFIG[report.reportType].color}20`,
-                                color: REPORT_TYPE_CONFIG[report.reportType].color
-                              }}
-                            >
-                              {REPORT_TYPE_CONFIG[report.reportType].icon}
-                            </div>
-                            <span className="text-sm font-medium">
-                              {REPORT_TYPE_CONFIG[report.reportType].label}
-                            </span>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4">
-                          <div className="flex items-center gap-2 text-gray-700">
-                            <MapPin className="w-4 h-4 text-gray-400" />
-                            <span className="text-sm">{report.location}</span>
-                          </div>
-                          {report.coordinates && (
-                            <p className="text-xs text-gray-400 mt-1">
-                              {report.coordinates.latitude.toFixed(4)}, {report.coordinates.longitude.toFixed(4)}
-                            </p>
-                          )}
-                        </td>
-                        <td className="px-6 py-4">
-                          <div className="text-sm text-gray-700">
-                            <div className="flex items-center gap-1 mb-1">
-                              <Calendar className="w-3 h-3 text-gray-400" />
-                              <span className="capitalize">{report.period.type}</span>
-                            </div>
-                            <div className="text-xs text-gray-500">
-                              {new Date(report.period.startDate).toLocaleDateString()} - {new Date(report.period.endDate).toLocaleDateString()}
-                            </div>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4">
-                          <span className={cn(
-                            "inline-flex px-2 py-1 text-xs font-medium rounded-full",
-                            getStatusColor(report.status)
-                          )}>
-                            {getStatusLabel(report.status)}
+                          <span className="text-sm font-medium">
+                            {REPORT_TYPE_CONFIG[report.reportType].label}
                           </span>
-                        </td>
-                        <td className="px-6 py-4">
-                          <div className="text-sm space-y-1">
-                            <div className="flex justify-between">
-                              <span className="text-gray-600">Animales:</span>
-                              <span className="font-medium">{report.metrics.totalAnimals}</span>
-                            </div>
-                            <div className="flex justify-between">
-                              <span className="text-gray-600">Peso prom:</span>
-                              <span className="font-medium">{report.metrics.averageWeight} kg</span>
-                            </div>
-                            <div className="flex justify-between">
-                              <span className="text-gray-600">Eficiencia:</span>
-                              <span className="font-medium">{report.metrics.feedEfficiency}%</span>
-                            </div>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-2 text-gray-700">
+                          <MapPin className="w-4 h-4 text-gray-400" />
+                          <span className="text-sm">{report.location}</span>
+                        </div>
+                        {report.coordinates && (
+                          <p className="text-xs text-gray-400 mt-1">
+                            {report.coordinates.latitude.toFixed(4)}, {report.coordinates.longitude.toFixed(4)}
+                          </p>
+                        )}
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="text-sm text-gray-700">
+                          <div className="flex items-center gap-1 mb-1">
+                            <Calendar className="w-3 h-3 text-gray-400" />
+                            <span className="capitalize">{report.period.type}</span>
                           </div>
-                        </td>
-                        <td className="px-6 py-4">
-                          <div className="flex items-center gap-2">
-                            <button
-                              onClick={() => handleEditReport(report)}
-                              className="p-2 text-blue-600 hover:bg-blue-100 rounded-lg transition-colors"
-                              title="Editar reporte"
-                            >
-                              <Edit2 className="w-4 h-4" />
-                            </button>
-                            <button
-                              onClick={() => handleViewReport(report)}
-                              className="p-2 text-green-600 hover:bg-green-100 rounded-lg transition-colors"
-                              title="Ver reporte completo"
-                            >
-                              <Eye className="w-4 h-4" />
-                            </button>
-                            <button
-                              onClick={() => handleDownloadReport(report)}
-                              disabled={downloadLoading === report.id}
-                              className="p-2 text-[#2d6f51] hover:bg-green-100 rounded-lg transition-colors disabled:opacity-50"
-                              title="Descargar reporte"
-                            >
-                              {downloadLoading === report.id ? (
-                                <Loader2 className="w-4 h-4 animate-spin" />
-                              ) : (
-                                <Download className="w-4 h-4" />
-                              )}
-                            </button>
-                            <button
-                              onClick={() => setDeleteConfirm(report.id)}
-                              className="p-2 text-red-600 hover:bg-red-100 rounded-lg transition-colors"
-                              title="Eliminar reporte"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
+                          <div className="text-xs text-gray-500">
+                            {new Date(report.period.startDate).toLocaleDateString()} - {new Date(report.period.endDate).toLocaleDateString()}
                           </div>
-                        </td>
-                      </motion.tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </motion.div>
-        </div>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className={cn(
+                          "inline-flex px-2 py-1 text-xs font-medium rounded-full",
+                          getStatusColor(report.status)
+                        )}>
+                          {getStatusLabel(report.status)}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="text-sm space-y-1">
+                          <div className="flex justify-between">
+                            <span className="text-gray-600">Animales:</span>
+                            <span className="font-medium">{report.metrics.totalAnimals}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-gray-600">Peso prom:</span>
+                            <span className="font-medium">{report.metrics.averageWeight} kg</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-gray-600">Eficiencia:</span>
+                            <span className="font-medium">{report.metrics.feedEfficiency}%</span>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => handleEditReport(report)}
+                            className="p-2 text-blue-600 hover:bg-blue-100 rounded-lg transition-colors"
+                            title="Editar reporte"
+                          >
+                            <Edit2 className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => handleViewReport(report)}
+                            className="p-2 text-green-600 hover:bg-green-100 rounded-lg transition-colors"
+                            title="Ver reporte completo"
+                          >
+                            <Eye className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => handleDownloadReport(report)}
+                            disabled={downloadLoading === report.id}
+                            className="p-2 text-[#2d6f51] hover:bg-green-100 rounded-lg transition-colors disabled:opacity-50"
+                            title="Descargar reporte"
+                          >
+                            {downloadLoading === report.id ? (
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : (
+                              <Download className="w-4 h-4" />
+                            )}
+                          </button>
+                          <button
+                            onClick={() => setDeleteConfirm(report.id)}
+                            className="p-2 text-red-600 hover:bg-red-100 rounded-lg transition-colors"
+                            title="Eliminar reporte"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </td>
+                    </motion.tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </motion.div>
       </div>
 
       {/* Modal de formulario */}

@@ -570,7 +570,7 @@ const EventTransport: React.FC = () => {
   // VISTA LISTA (siguiendo el diseño de referencia)
   if (currentView === 'list') {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-green-400 via-green-500 to-yellow-400">
+      <div className="min-h-screen bg-gradient-to-br from-green-400 via-green-500 to-yellow-400 p-6">
         {/* Header Verde - Siguiendo el diseño de referencia */}
         <div className="bg-green-500 px-6 py-8">
           <div className="max-w-7xl mx-auto">

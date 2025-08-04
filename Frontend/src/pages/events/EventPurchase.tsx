@@ -912,10 +912,10 @@ const EventPurchase: React.FC = () => {
   };
 
   const renderTable = () => (
-    <div className="bg-white rounded-lg shadow-sm overflow-hidden">
+    <div className="bg-white/90 backdrop-blur-sm rounded-lg shadow-sm overflow-hidden">
       <div className="overflow-x-auto">
         <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
+          <thead className="bg-gray-50/80">
             <tr>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Código
@@ -940,9 +940,9 @@ const EventPurchase: React.FC = () => {
               </th>
             </tr>
           </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
+          <tbody className="bg-white/80 divide-y divide-gray-200">
             {purchases.map((purchase) => (
-              <tr key={purchase.id} className="hover:bg-gray-50">
+              <tr key={purchase.id} className="hover:bg-gray-50/60">
                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                   {purchase.purchaseCode}
                 </td>
@@ -997,7 +997,7 @@ const EventPurchase: React.FC = () => {
   );
 
   const renderPagination = () => (
-    <div className="bg-white px-4 py-3 flex items-center justify-between border-t border-gray-200 sm:px-6 rounded-b-lg">
+    <div className="bg-white/90 backdrop-blur-sm px-4 py-3 flex items-center justify-between border-t border-gray-200 sm:px-6 rounded-b-lg">
       <div className="flex-1 flex justify-between sm:hidden">
         <button
           onClick={() => setPagination(prev => ({ ...prev, page: Math.max(1, prev.page - 1) }))}
@@ -1056,151 +1056,153 @@ const EventPurchase: React.FC = () => {
   // ============================================================================
 
   return (
-    <div className="p-6 max-w-7xl mx-auto">
-      {/* Header */}
-      <div className="mb-6">
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">
-          Gestión de Compras
-        </h1>
-        <p className="text-gray-600">
-          Registra, edita y gestiona todas las compras de tu rancho
-        </p>
-      </div>
-
-      {/* Mensajes de error */}
-      {error && (
-        <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-md">
-          <p className="text-red-800">{error}</p>
-        </div>
-      )}
-
-      {/* Barra de herramientas */}
-      <div className="mb-6 flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center">
-        <div className="relative flex-1 max-w-md">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
-          <input
-            type="text"
-            placeholder="Buscar compras..."
-            value={filters.search || ''}
-            onChange={(e) => handleFilterChange('search', e.target.value)}
-            className="pl-10 w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-          />
-        </div>
-        
-        <div className="flex gap-2">
-          <button
-            onClick={handleCreate}
-            className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors"
-          >
-            <Plus size={20} />
-            Nueva Compra
-          </button>
-          <button 
-            onClick={exportToCSV}
-            className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 transition-colors"
-          >
-            <Download size={20} />
-            Exportar
-          </button>
-        </div>
-      </div>
-
-      {/* Loading */}
-      {loading && (
-        <div className="flex justify-center py-8">
-          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600"></div>
-        </div>
-      )}
-
-      {/* Tabla */}
-      {!loading && purchases.length > 0 && renderTable()}
-
-      {/* Estado vacío */}
-      {!loading && purchases.length === 0 && (
-        <div className="bg-white rounded-lg shadow-sm p-8 text-center">
-          <Package className="mx-auto h-12 w-12 text-gray-400 mb-4" />
-          <h3 className="text-lg font-medium text-gray-900 mb-2">
-            No hay compras registradas
-          </h3>
-          <p className="text-gray-500 mb-4">
-            Comienza registrando tu primera compra
+    <div className="min-h-screen bg-gradient-to-br from-[#519a7c] via-[#f2e9d8] to-[#f4ac3a] p-6">
+      <div className="max-w-7xl mx-auto">
+        {/* Header */}
+        <div className="mb-6">
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">
+            Gestión de Compras
+          </h1>
+          <p className="text-gray-600">
+            Registra, edita y gestiona todas las compras de tu rancho
           </p>
-          <button
-            onClick={handleCreate}
-            className="inline-flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors"
-          >
-            <Plus size={20} />
-            Registrar Compra
-          </button>
         </div>
-      )}
 
-      {/* Paginación */}
-      {!loading && purchases.length > 0 && renderPagination()}
+        {/* Mensajes de error */}
+        {error && (
+          <div className="mb-4 p-4 bg-red-50/90 backdrop-blur-sm border border-red-200 rounded-md">
+            <p className="text-red-800">{error}</p>
+          </div>
+        )}
 
-      {/* Modal */}
-      {showModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="flex justify-between items-center p-6 border-b border-gray-200">
-              <h3 className="text-xl font-semibold text-gray-900">
-                {modalMode === 'create' && 'Nueva Compra'}
-                {modalMode === 'edit' && 'Editar Compra'}
-                {modalMode === 'view' && 'Detalles de Compra'}
-              </h3>
-              <button
-                onClick={() => {
-                  setShowModal(false);
-                  setGettingLocation(false);
-                  setFormData({});
-                  setFormErrors({});
-                }}
-                className="text-gray-400 hover:text-gray-600 transition-colors"
-              >
-                <X size={24} />
-              </button>
-            </div>
-            
-            <div className="p-6">
-              {modalMode === 'view' ? renderViewDetails() : renderPurchaseForm()}
-            </div>
-            
-            <div className="flex justify-end gap-3 p-6 border-t border-gray-200">
-              <button
-                onClick={() => {
-                  setShowModal(false);
-                  setGettingLocation(false);
-                  setFormData({});
-                  setFormErrors({});
-                }}
-                className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 transition-colors"
-                disabled={loading}
-              >
-                {modalMode === 'view' ? 'Cerrar' : 'Cancelar'}
-              </button>
-              {modalMode !== 'view' && (
-                <button
-                  onClick={handleSubmit}
-                  disabled={loading}
-                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50"
-                >
-                  {loading ? (
-                    <>
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                      Guardando...
-                    </>
-                  ) : (
-                    <>
-                      <Save size={16} />
-                      {modalMode === 'create' ? 'Crear Compra' : 'Guardar Cambios'}
-                    </>
-                  )}
-                </button>
-              )}
-            </div>
+        {/* Barra de herramientas */}
+        <div className="mb-6 flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center">
+          <div className="relative flex-1 max-w-md">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
+            <input
+              type="text"
+              placeholder="Buscar compras..."
+              value={filters.search || ''}
+              onChange={(e) => handleFilterChange('search', e.target.value)}
+              className="pl-10 w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white/90 backdrop-blur-sm"
+            />
+          </div>
+          
+          <div className="flex gap-2">
+            <button
+              onClick={handleCreate}
+              className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors shadow-lg"
+            >
+              <Plus size={20} />
+              Nueva Compra
+            </button>
+            <button 
+              onClick={exportToCSV}
+              className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 transition-colors shadow-lg"
+            >
+              <Download size={20} />
+              Exportar
+            </button>
           </div>
         </div>
-      )}
+
+        {/* Loading */}
+        {loading && (
+          <div className="flex justify-center py-8">
+            <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600"></div>
+          </div>
+        )}
+
+        {/* Tabla */}
+        {!loading && purchases.length > 0 && renderTable()}
+
+        {/* Estado vacío */}
+        {!loading && purchases.length === 0 && (
+          <div className="bg-white/90 backdrop-blur-sm rounded-lg shadow-sm p-8 text-center">
+            <Package className="mx-auto h-12 w-12 text-gray-400 mb-4" />
+            <h3 className="text-lg font-medium text-gray-900 mb-2">
+              No hay compras registradas
+            </h3>
+            <p className="text-gray-500 mb-4">
+              Comienza registrando tu primera compra
+            </p>
+            <button
+              onClick={handleCreate}
+              className="inline-flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors shadow-lg"
+            >
+              <Plus size={20} />
+              Registrar Compra
+            </button>
+          </div>
+        )}
+
+        {/* Paginación */}
+        {!loading && purchases.length > 0 && renderPagination()}
+
+        {/* Modal */}
+        {showModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white/95 backdrop-blur-sm rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto shadow-2xl">
+              <div className="flex justify-between items-center p-6 border-b border-gray-200">
+                <h3 className="text-xl font-semibold text-gray-900">
+                  {modalMode === 'create' && 'Nueva Compra'}
+                  {modalMode === 'edit' && 'Editar Compra'}
+                  {modalMode === 'view' && 'Detalles de Compra'}
+                </h3>
+                <button
+                  onClick={() => {
+                    setShowModal(false);
+                    setGettingLocation(false);
+                    setFormData({});
+                    setFormErrors({});
+                  }}
+                  className="text-gray-400 hover:text-gray-600 transition-colors"
+                >
+                  <X size={24} />
+                </button>
+              </div>
+              
+              <div className="p-6">
+                {modalMode === 'view' ? renderViewDetails() : renderPurchaseForm()}
+              </div>
+              
+              <div className="flex justify-end gap-3 p-6 border-t border-gray-200">
+                <button
+                  onClick={() => {
+                    setShowModal(false);
+                    setGettingLocation(false);
+                    setFormData({});
+                    setFormErrors({});
+                  }}
+                  className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 transition-colors"
+                  disabled={loading}
+                >
+                  {modalMode === 'view' ? 'Cerrar' : 'Cancelar'}
+                </button>
+                {modalMode !== 'view' && (
+                  <button
+                    onClick={handleSubmit}
+                    disabled={loading}
+                    className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50"
+                  >
+                    {loading ? (
+                      <>
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                        Guardando...
+                      </>
+                    ) : (
+                      <>
+                        <Save size={16} />
+                        {modalMode === 'create' ? 'Crear Compra' : 'Guardar Cambios'}
+                      </>
+                    )}
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 };

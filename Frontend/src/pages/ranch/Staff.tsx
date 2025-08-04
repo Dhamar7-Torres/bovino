@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useCallback, useMemo } from "react";
 import { motion, Variants, AnimatePresence } from "framer-motion";
 import {
   Users,
@@ -24,6 +24,14 @@ import {
 } from "lucide-react";
 
 // ============================================================================
+// TIPOS Y ENUMS
+// ============================================================================
+
+type ContractType = "Permanente" | "Temporal" | "Por Proyecto";
+type EmploymentStatus = "Activo" | "Inactivo" | "Vacaciones" | "Suspendido";
+type Department = "Administración" | "Veterinaria" | "Ganadería" | "Mantenimiento" | "Seguridad";
+
+// ============================================================================
 // INTERFACES Y TIPOS
 // ============================================================================
 
@@ -46,11 +54,11 @@ interface StaffMember {
   employment: {
     employeeId: string;
     position: string;
-    department: string;
+    department: Department;
     hireDate: string;
     salary: number;
-    contractType: "Permanente" | "Temporal" | "Por Proyecto";
-    status: "Activo" | "Inactivo" | "Vacaciones" | "Suspendido";
+    contractType: ContractType;
+    status: EmploymentStatus;
   };
   skills: string[];
   photo?: string;
@@ -59,6 +67,29 @@ interface StaffMember {
 interface FormErrors {
   [key: string]: string;
 }
+
+// ============================================================================
+// CONSTANTES
+// ============================================================================
+
+const STATUS_COLORS: Record<EmploymentStatus, string> = {
+  "Activo": "bg-green-100 text-green-800",
+  "Inactivo": "bg-gray-100 text-gray-800",
+  "Vacaciones": "bg-blue-100 text-blue-800",
+  "Suspendido": "bg-red-100 text-red-800",
+};
+
+const DEPARTMENT_ICONS: Record<Department, any> = {
+  "Administración": Building,
+  "Veterinaria": Shield,
+  "Ganadería": Users,
+  "Mantenimiento": Award,
+  "Seguridad": Shield,
+};
+
+const DEPARTMENTS: Department[] = ["Administración", "Veterinaria", "Ganadería", "Mantenimiento", "Seguridad"];
+const STATUS_OPTIONS: EmploymentStatus[] = ["Activo", "Inactivo", "Vacaciones", "Suspendido"];
+const CONTRACT_TYPES: ContractType[] = ["Permanente", "Temporal", "Por Proyecto"];
 
 // ============================================================================
 // DATOS SIMULADOS INICIALES
@@ -269,7 +300,6 @@ const validateCURP = (curp: string): boolean => {
 const Staff: React.FC = () => {
   // Estados principales
   const [staffMembers, setStaffMembers] = useState<StaffMember[]>(initialStaffData);
-  const [filteredStaff, setFilteredStaff] = useState<StaffMember[]>(initialStaffData);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedDepartment, setSelectedDepartment] = useState("Todos");
   const [selectedStatus, setSelectedStatus] = useState("Todos");
@@ -290,12 +320,12 @@ const Staff: React.FC = () => {
   const [showSuccessMessage, setShowSuccessMessage] = useState(false);
   const [successMessage, setSuccessMessage] = useState("");
 
-  // Departamentos únicos para filtro
-  const departments = ["Todos", ...Array.from(new Set(staffMembers.map(member => member.employment.department)))];
-  const statusOptions = ["Todos", "Activo", "Inactivo", "Vacaciones", "Suspendido"];
+  // Listas memoizadas para filtros
+  const departments = useMemo(() => ["Todos", ...DEPARTMENTS], []);
+  const statusOptions = useMemo(() => ["Todos", ...STATUS_OPTIONS], []);
 
-  // Efecto para filtrar personal
-  useEffect(() => {
+  // Personal filtrado memoizado
+  const filteredStaff = useMemo(() => {
     let filtered = staffMembers;
 
     if (searchTerm) {
@@ -315,24 +345,41 @@ const Staff: React.FC = () => {
       filtered = filtered.filter(member => member.employment.status === selectedStatus);
     }
 
-    setFilteredStaff(filtered);
+    return filtered;
   }, [staffMembers, searchTerm, selectedDepartment, selectedStatus]);
 
+  // Estadísticas memoizadas
+  const statistics = useMemo(() => {
+    const totalStaff = staffMembers.length;
+    const activeStaff = staffMembers.filter(m => m.employment.status === "Activo").length;
+    const totalDepartments = new Set(staffMembers.map(m => m.employment.department)).size;
+    const averageSalary = totalStaff > 0 
+      ? Math.round(staffMembers.reduce((sum, m) => sum + m.employment.salary, 0) / totalStaff)
+      : 0;
+
+    return {
+      totalStaff,
+      activeStaff,
+      totalDepartments,
+      averageSalary,
+    };
+  }, [staffMembers]);
+
   // Función para generar ID único
-  const generateId = () => {
+  const generateId = useCallback(() => {
     return Date.now().toString();
-  };
+  }, []);
 
   // Función para generar ID de empleado
-  const generateEmployeeId = () => {
+  const generateEmployeeId = useCallback(() => {
     const maxId = Math.max(...staffMembers.map(member => 
       parseInt(member.employment.employeeId.replace('EMP-', '')) || 0
     ));
     return `EMP-${String(maxId + 1).padStart(3, '0')}`;
-  };
+  }, [staffMembers]);
 
   // Función para validar formulario
-  const validateForm = (): boolean => {
+  const validateForm = useCallback((): boolean => {
     const errors: FormErrors = {};
 
     // Validaciones de información personal
@@ -394,10 +441,17 @@ const Staff: React.FC = () => {
 
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
-  };
+  }, [formData]);
+
+  // Función para mostrar notificación de éxito
+  const showSuccessNotification = useCallback((message: string) => {
+    setSuccessMessage(message);
+    setShowSuccessMessage(true);
+    setTimeout(() => setShowSuccessMessage(false), 3000);
+  }, []);
 
   // Función para agregar personal
-  const handleAddStaff = () => {
+  const handleAddStaff = useCallback(() => {
     setFormData({
       personalInfo: {
         firstName: "",
@@ -416,7 +470,7 @@ const Staff: React.FC = () => {
       employment: {
         employeeId: generateEmployeeId(),
         position: "",
-        department: "",
+        department: "Administración",
         hireDate: new Date().toISOString().split('T')[0],
         salary: 0,
         contractType: "Permanente",
@@ -427,35 +481,33 @@ const Staff: React.FC = () => {
     setFormErrors({});
     setSkillInput("");
     setShowAddModal(true);
-  };
+  }, [generateEmployeeId]);
 
   // Función para editar personal
-  const handleEditStaff = (member: StaffMember) => {
+  const handleEditStaff = useCallback((member: StaffMember) => {
     setFormData(member);
     setSelectedMember(member);
     setFormErrors({});
     setSkillInput("");
     setShowEditModal(true);
-  };
+  }, []);
 
   // Función para ver detalles
-  const handleViewStaff = (member: StaffMember) => {
+  const handleViewStaff = useCallback((member: StaffMember) => {
     setSelectedMember(member);
     setShowViewModal(true);
-  };
+  }, []);
 
   // Función para eliminar personal
-  const handleDeleteStaff = (member: StaffMember) => {
+  const handleDeleteStaff = useCallback((member: StaffMember) => {
     if (confirm(`¿Estás seguro de que quieres eliminar a ${member.personalInfo.firstName} ${member.personalInfo.lastName}?`)) {
       setStaffMembers(prev => prev.filter(m => m.id !== member.id));
-      setSuccessMessage("Personal eliminado exitosamente");
-      setShowSuccessMessage(true);
-      setTimeout(() => setShowSuccessMessage(false), 3000);
+      showSuccessNotification("Personal eliminado exitosamente");
     }
-  };
+  }, [showSuccessNotification]);
 
   // Función para agregar habilidad
-  const handleAddSkill = () => {
+  const handleAddSkill = useCallback(() => {
     if (skillInput.trim() && formData.skills && !formData.skills.includes(skillInput.trim())) {
       setFormData(prev => ({
         ...prev,
@@ -463,18 +515,18 @@ const Staff: React.FC = () => {
       }));
       setSkillInput("");
     }
-  };
+  }, [skillInput, formData.skills]);
 
   // Función para eliminar habilidad
-  const handleRemoveSkill = (skillToRemove: string) => {
+  const handleRemoveSkill = useCallback((skillToRemove: string) => {
     setFormData(prev => ({
       ...prev,
       skills: prev.skills?.filter(skill => skill !== skillToRemove) || []
     }));
-  };
+  }, []);
 
   // Función para guardar (agregar o editar)
-  const handleSaveStaff = async () => {
+  const handleSaveStaff = useCallback(async () => {
     if (!validateForm()) {
       return;
     }
@@ -496,11 +548,11 @@ const Staff: React.FC = () => {
       if (selectedMember) {
         // Editar
         setStaffMembers(prev => prev.map(m => m.id === selectedMember.id ? newMember : m));
-        setSuccessMessage("Personal actualizado exitosamente");
+        showSuccessNotification("Personal actualizado exitosamente");
       } else {
         // Agregar
         setStaffMembers(prev => [...prev, newMember]);
-        setSuccessMessage("Personal agregado exitosamente");
+        showSuccessNotification("Personal agregado exitosamente");
       }
 
       setShowAddModal(false);
@@ -508,9 +560,6 @@ const Staff: React.FC = () => {
       setFormData({});
       setSelectedMember(null);
       setFormErrors({});
-      
-      setShowSuccessMessage(true);
-      setTimeout(() => setShowSuccessMessage(false), 3000);
 
     } catch (error) {
       console.error("Error al guardar:", error);
@@ -518,42 +567,36 @@ const Staff: React.FC = () => {
     } finally {
       setSaveLoading(false);
     }
-  };
+  }, [validateForm, selectedMember, formData, generateId, showSuccessNotification]);
 
   // Función para cancelar
-  const handleCancel = () => {
+  const handleCancel = useCallback(() => {
     setShowAddModal(false);
     setShowEditModal(false);
     setFormData({});
     setSelectedMember(null);
     setFormErrors({});
     setSkillInput("");
-  };
+  }, []);
 
   // Función para obtener color del estado
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "Activo": return "bg-green-100 text-green-800";
-      case "Inactivo": return "bg-gray-100 text-gray-800";
-      case "Vacaciones": return "bg-blue-100 text-blue-800";
-      case "Suspendido": return "bg-red-100 text-red-800";
-      default: return "bg-gray-100 text-gray-800";
-    }
-  };
+  const getStatusColor = useCallback((status: EmploymentStatus) => {
+    return STATUS_COLORS[status] || "bg-gray-100 text-gray-800";
+  }, []);
 
   // Función para obtener icono del departamento
-  const getDepartmentIcon = (department: string) => {
-    switch (department) {
-      case "Administración": return Building;
-      case "Veterinaria": return Shield;
-      case "Ganadería": return Users;
-      case "Mantenimiento": return Award;
-      default: return Briefcase;
-    }
-  };
+  const getDepartmentIcon = useCallback((department: Department) => {
+    return DEPARTMENT_ICONS[department] || Briefcase;
+  }, []);
+
+  // Función para cerrar modal de vista
+  const closeViewModal = useCallback(() => {
+    setShowViewModal(false);
+    setSelectedMember(null);
+  }, []);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#F5F5DC] via-[#E8E8C8] to-[#D3D3B8] p-6">
+    <div className="min-h-screen bg-gradient-to-br from-[#519a7c] via-[#f2e9d8] to-[#f4ac3a] p-6">
       <motion.div
         variants={containerVariants}
         initial="hidden"
@@ -610,7 +653,7 @@ const Staff: React.FC = () => {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-gray-600 text-sm">Total Personal</p>
-                <p className="text-3xl font-bold text-[#2d5a45]">{staffMembers.length}</p>
+                <p className="text-3xl font-bold text-[#2d5a45]">{statistics.totalStaff}</p>
               </div>
               <Users className="w-8 h-8 text-[#519a7c]" />
             </div>
@@ -623,9 +666,7 @@ const Staff: React.FC = () => {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-gray-600 text-sm">Personal Activo</p>
-                <p className="text-3xl font-bold text-green-600">
-                  {staffMembers.filter(m => m.employment.status === "Activo").length}
-                </p>
+                <p className="text-3xl font-bold text-green-600">{statistics.activeStaff}</p>
               </div>
               <UserCheck className="w-8 h-8 text-green-500" />
             </div>
@@ -638,7 +679,7 @@ const Staff: React.FC = () => {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-gray-600 text-sm">Departamentos</p>
-                <p className="text-3xl font-bold text-[#2d5a45]">{departments.length - 1}</p>
+                <p className="text-3xl font-bold text-[#2d5a45]">{statistics.totalDepartments}</p>
               </div>
               <Building className="w-8 h-8 text-[#519a7c]" />
             </div>
@@ -652,7 +693,7 @@ const Staff: React.FC = () => {
               <div>
                 <p className="text-gray-600 text-sm">Salario Promedio</p>
                 <p className="text-3xl font-bold text-[#2d5a45]">
-                  ${Math.round(staffMembers.reduce((sum, m) => sum + m.employment.salary, 0) / staffMembers.length).toLocaleString()}
+                  ${statistics.averageSalary.toLocaleString()}
                 </p>
               </div>
               <Award className="w-8 h-8 text-[#519a7c]" />
@@ -672,6 +713,7 @@ const Staff: React.FC = () => {
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
+                  aria-label="Buscar personal"
                 />
               </div>
 
@@ -679,6 +721,7 @@ const Staff: React.FC = () => {
                 value={selectedDepartment}
                 onChange={(e) => setSelectedDepartment(e.target.value)}
                 className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
+                aria-label="Filtrar por departamento"
               >
                 {departments.map(dept => (
                   <option key={dept} value={dept}>{dept}</option>
@@ -689,6 +732,7 @@ const Staff: React.FC = () => {
                 value={selectedStatus}
                 onChange={(e) => setSelectedStatus(e.target.value)}
                 className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
+                aria-label="Filtrar por estado"
               >
                 {statusOptions.map(status => (
                   <option key={status} value={status}>{status}</option>
@@ -741,7 +785,7 @@ const Staff: React.FC = () => {
                     key={member.id}
                     variants={cardVariants}
                     whileHover="hover"
-                    className="bg-white/90 backdrop-blur-sm rounded-xl p-6 shadow-lg border border-white/20"
+                    className="bg-white/90 backdrop-blur-sm rounded-xl p-6 shadow-lg border border-white/20 hover:shadow-xl transition-shadow duration-200"
                   >
                     {/* Header de la tarjeta */}
                     <div className="flex items-start justify-between mb-4">
@@ -829,6 +873,7 @@ const Staff: React.FC = () => {
                         whileTap={{ scale: 0.95 }}
                         onClick={() => handleViewStaff(member)}
                         className="flex-1 px-3 py-2 bg-[#519a7c] text-white text-sm rounded-lg hover:bg-[#2d5a45] transition-colors flex items-center justify-center"
+                        aria-label={`Ver detalles de ${member.personalInfo.firstName}`}
                       >
                         <Eye className="w-4 h-4 mr-1" />
                         Ver
@@ -838,6 +883,7 @@ const Staff: React.FC = () => {
                         whileTap={{ scale: 0.95 }}
                         onClick={() => handleEditStaff(member)}
                         className="px-3 py-2 border border-gray-300 text-gray-700 text-sm rounded-lg hover:bg-gray-50 transition-colors"
+                        aria-label={`Editar ${member.personalInfo.firstName}`}
                       >
                         <Edit3 className="w-4 h-4" />
                       </motion.button>
@@ -846,6 +892,7 @@ const Staff: React.FC = () => {
                         whileTap={{ scale: 0.95 }}
                         onClick={() => handleDeleteStaff(member)}
                         className="px-3 py-2 border border-red-300 text-red-700 text-sm rounded-lg hover:bg-red-50 transition-colors"
+                        aria-label={`Eliminar ${member.personalInfo.firstName}`}
                       >
                         <Trash2 className="w-4 h-4" />
                       </motion.button>
@@ -885,6 +932,7 @@ const Staff: React.FC = () => {
                   <button
                     onClick={handleCancel}
                     className="text-white hover:bg-white/20 p-2 rounded-lg transition-colors"
+                    aria-label="Cerrar modal"
                   >
                     <X className="w-6 h-6" />
                   </button>
@@ -917,10 +965,11 @@ const Staff: React.FC = () => {
                     </h3>
 
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                      <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="firstName">
                         Nombre *
                       </label>
                       <input
+                        id="firstName"
                         type="text"
                         value={formData.personalInfo?.firstName || ""}
                         onChange={(e) => setFormData(prev => ({
@@ -934,17 +983,19 @@ const Staff: React.FC = () => {
                           formErrors.firstName ? 'border-red-300' : 'border-gray-300'
                         }`}
                         placeholder="Ingresa el nombre"
+                        aria-describedby={formErrors.firstName ? "firstName-error" : undefined}
                       />
                       {formErrors.firstName && (
-                        <p className="text-red-500 text-sm mt-1">{formErrors.firstName}</p>
+                        <p id="firstName-error" className="text-red-500 text-sm mt-1">{formErrors.firstName}</p>
                       )}
                     </div>
 
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                      <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="lastName">
                         Apellidos *
                       </label>
                       <input
+                        id="lastName"
                         type="text"
                         value={formData.personalInfo?.lastName || ""}
                         onChange={(e) => setFormData(prev => ({
@@ -958,17 +1009,19 @@ const Staff: React.FC = () => {
                           formErrors.lastName ? 'border-red-300' : 'border-gray-300'
                         }`}
                         placeholder="Ingresa los apellidos"
+                        aria-describedby={formErrors.lastName ? "lastName-error" : undefined}
                       />
                       {formErrors.lastName && (
-                        <p className="text-red-500 text-sm mt-1">{formErrors.lastName}</p>
+                        <p id="lastName-error" className="text-red-500 text-sm mt-1">{formErrors.lastName}</p>
                       )}
                     </div>
 
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                      <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="dateOfBirth">
                         Fecha de Nacimiento
                       </label>
                       <input
+                        id="dateOfBirth"
                         type="date"
                         value={formData.personalInfo?.dateOfBirth || ""}
                         onChange={(e) => setFormData(prev => ({
@@ -981,17 +1034,19 @@ const Staff: React.FC = () => {
                         className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent ${
                           formErrors.dateOfBirth ? 'border-red-300' : 'border-gray-300'
                         }`}
+                        aria-describedby={formErrors.dateOfBirth ? "dateOfBirth-error" : undefined}
                       />
                       {formErrors.dateOfBirth && (
-                        <p className="text-red-500 text-sm mt-1">{formErrors.dateOfBirth}</p>
+                        <p id="dateOfBirth-error" className="text-red-500 text-sm mt-1">{formErrors.dateOfBirth}</p>
                       )}
                     </div>
 
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                      <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="nationalId">
                         CURP
                       </label>
                       <input
+                        id="nationalId"
                         type="text"
                         value={formData.personalInfo?.nationalId || ""}
                         onChange={(e) => setFormData(prev => ({
@@ -1006,17 +1061,19 @@ const Staff: React.FC = () => {
                         }`}
                         placeholder="CURP de 18 caracteres"
                         maxLength={18}
+                        aria-describedby={formErrors.nationalId ? "nationalId-error" : undefined}
                       />
                       {formErrors.nationalId && (
-                        <p className="text-red-500 text-sm mt-1">{formErrors.nationalId}</p>
+                        <p id="nationalId-error" className="text-red-500 text-sm mt-1">{formErrors.nationalId}</p>
                       )}
                     </div>
 
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                      <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="phone">
                         Teléfono
                       </label>
                       <input
+                        id="phone"
                         type="tel"
                         value={formData.personalInfo?.phone || ""}
                         onChange={(e) => setFormData(prev => ({
@@ -1030,17 +1087,19 @@ const Staff: React.FC = () => {
                           formErrors.phone ? 'border-red-300' : 'border-gray-300'
                         }`}
                         placeholder="+52 993 123 4567"
+                        aria-describedby={formErrors.phone ? "phone-error" : undefined}
                       />
                       {formErrors.phone && (
-                        <p className="text-red-500 text-sm mt-1">{formErrors.phone}</p>
+                        <p id="phone-error" className="text-red-500 text-sm mt-1">{formErrors.phone}</p>
                       )}
                     </div>
 
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                      <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="email">
                         Email
                       </label>
                       <input
+                        id="email"
                         type="email"
                         value={formData.personalInfo?.email || ""}
                         onChange={(e) => setFormData(prev => ({
@@ -1054,17 +1113,19 @@ const Staff: React.FC = () => {
                           formErrors.email ? 'border-red-300' : 'border-gray-300'
                         }`}
                         placeholder="ejemplo@rancho.com"
+                        aria-describedby={formErrors.email ? "email-error" : undefined}
                       />
                       {formErrors.email && (
-                        <p className="text-red-500 text-sm mt-1">{formErrors.email}</p>
+                        <p id="email-error" className="text-red-500 text-sm mt-1">{formErrors.email}</p>
                       )}
                     </div>
 
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                      <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="address">
                         Dirección
                       </label>
                       <textarea
+                        id="address"
                         value={formData.personalInfo?.address || ""}
                         onChange={(e) => setFormData(prev => ({
                           ...prev,
@@ -1088,10 +1149,11 @@ const Staff: React.FC = () => {
                     </h3>
 
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                      <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="employeeId">
                         ID de Empleado
                       </label>
                       <input
+                        id="employeeId"
                         type="text"
                         value={formData.employment?.employeeId || ""}
                         readOnly
@@ -1100,10 +1162,11 @@ const Staff: React.FC = () => {
                     </div>
 
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                      <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="position">
                         Puesto *
                       </label>
                       <input
+                        id="position"
                         type="text"
                         value={formData.employment?.position || ""}
                         onChange={(e) => setFormData(prev => ({
@@ -1117,46 +1180,48 @@ const Staff: React.FC = () => {
                           formErrors.position ? 'border-red-300' : 'border-gray-300'
                         }`}
                         placeholder="Ej: Veterinario, Vaquero, Administrador"
+                        aria-describedby={formErrors.position ? "position-error" : undefined}
                       />
                       {formErrors.position && (
-                        <p className="text-red-500 text-sm mt-1">{formErrors.position}</p>
+                        <p id="position-error" className="text-red-500 text-sm mt-1">{formErrors.position}</p>
                       )}
                     </div>
 
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                      <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="department">
                         Departamento *
                       </label>
                       <select
+                        id="department"
                         value={formData.employment?.department || ""}
                         onChange={(e) => setFormData(prev => ({
                           ...prev,
                           employment: {
                             ...prev.employment!,
-                            department: e.target.value
+                            department: e.target.value as Department
                           }
                         }))}
                         className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent ${
                           formErrors.department ? 'border-red-300' : 'border-gray-300'
                         }`}
+                        aria-describedby={formErrors.department ? "department-error" : undefined}
                       >
                         <option value="">Selecciona un departamento</option>
-                        <option value="Administración">Administración</option>
-                        <option value="Veterinaria">Veterinaria</option>
-                        <option value="Ganadería">Ganadería</option>
-                        <option value="Mantenimiento">Mantenimiento</option>
-                        <option value="Seguridad">Seguridad</option>
+                        {DEPARTMENTS.map(dept => (
+                          <option key={dept} value={dept}>{dept}</option>
+                        ))}
                       </select>
                       {formErrors.department && (
-                        <p className="text-red-500 text-sm mt-1">{formErrors.department}</p>
+                        <p id="department-error" className="text-red-500 text-sm mt-1">{formErrors.department}</p>
                       )}
                     </div>
 
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                      <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="hireDate">
                         Fecha de Contratación
                       </label>
                       <input
+                        id="hireDate"
                         type="date"
                         value={formData.employment?.hireDate || ""}
                         onChange={(e) => setFormData(prev => ({
@@ -1169,17 +1234,19 @@ const Staff: React.FC = () => {
                         className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent ${
                           formErrors.hireDate ? 'border-red-300' : 'border-gray-300'
                         }`}
+                        aria-describedby={formErrors.hireDate ? "hireDate-error" : undefined}
                       />
                       {formErrors.hireDate && (
-                        <p className="text-red-500 text-sm mt-1">{formErrors.hireDate}</p>
+                        <p id="hireDate-error" className="text-red-500 text-sm mt-1">{formErrors.hireDate}</p>
                       )}
                     </div>
 
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                      <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="salary">
                         Salario (MXN)
                       </label>
                       <input
+                        id="salary"
                         type="number"
                         value={formData.employment?.salary || ""}
                         onChange={(e) => setFormData(prev => ({
@@ -1194,52 +1261,54 @@ const Staff: React.FC = () => {
                         }`}
                         placeholder="15000"
                         min="0"
+                        aria-describedby={formErrors.salary ? "salary-error" : undefined}
                       />
                       {formErrors.salary && (
-                        <p className="text-red-500 text-sm mt-1">{formErrors.salary}</p>
+                        <p id="salary-error" className="text-red-500 text-sm mt-1">{formErrors.salary}</p>
                       )}
                     </div>
 
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                      <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="contractType">
                         Tipo de Contrato
                       </label>
                       <select
+                        id="contractType"
                         value={formData.employment?.contractType || "Permanente"}
                         onChange={(e) => setFormData(prev => ({
                           ...prev,
                           employment: {
                             ...prev.employment!,
-                            contractType: e.target.value as any
+                            contractType: e.target.value as ContractType
                           }
                         }))}
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
                       >
-                        <option value="Permanente">Permanente</option>
-                        <option value="Temporal">Temporal</option>
-                        <option value="Por Proyecto">Por Proyecto</option>
+                        {CONTRACT_TYPES.map(type => (
+                          <option key={type} value={type}>{type}</option>
+                        ))}
                       </select>
                     </div>
 
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                      <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="status">
                         Estado
                       </label>
                       <select
+                        id="status"
                         value={formData.employment?.status || "Activo"}
                         onChange={(e) => setFormData(prev => ({
                           ...prev,
                           employment: {
                             ...prev.employment!,
-                            status: e.target.value as any
+                            status: e.target.value as EmploymentStatus
                           }
                         }))}
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
                       >
-                        <option value="Activo">Activo</option>
-                        <option value="Inactivo">Inactivo</option>
-                        <option value="Vacaciones">Vacaciones</option>
-                        <option value="Suspendido">Suspendido</option>
+                        {STATUS_OPTIONS.map(status => (
+                          <option key={status} value={status}>{status}</option>
+                        ))}
                       </select>
                     </div>
 
@@ -1265,6 +1334,7 @@ const Staff: React.FC = () => {
                           type="button"
                           onClick={handleAddSkill}
                           className="px-4 py-2 bg-[#519a7c] text-white rounded-lg hover:bg-[#2d5a45] transition-colors"
+                          aria-label="Agregar habilidad"
                         >
                           <Plus className="w-4 h-4" />
                         </button>
@@ -1282,6 +1352,7 @@ const Staff: React.FC = () => {
                                 type="button"
                                 onClick={() => handleRemoveSkill(skill)}
                                 className="ml-2 text-[#519a7c] hover:text-red-500"
+                                aria-label={`Eliminar habilidad ${skill}`}
                               >
                                 <X className="w-3 h-3" />
                               </button>
@@ -1395,7 +1466,7 @@ const Staff: React.FC = () => {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
-            onClick={() => setShowViewModal(false)}
+            onClick={closeViewModal}
           >
             <motion.div
               variants={modalVariants}
@@ -1426,8 +1497,9 @@ const Staff: React.FC = () => {
                     </div>
                   </div>
                   <button
-                    onClick={() => setShowViewModal(false)}
+                    onClick={closeViewModal}
                     className="text-white hover:bg-white/20 p-2 rounded-lg transition-colors"
+                    aria-label="Cerrar modal"
                   >
                     <X className="w-6 h-6" />
                   </button>
@@ -1541,7 +1613,7 @@ const Staff: React.FC = () => {
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
                     onClick={() => {
-                      setShowViewModal(false);
+                      closeViewModal();
                       handleEditStaff(selectedMember);
                     }}
                     className="px-4 py-2 bg-[#519a7c] text-white rounded-lg hover:bg-[#2d5a45] transition-colors flex items-center"

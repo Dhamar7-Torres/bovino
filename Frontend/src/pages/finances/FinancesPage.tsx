@@ -5,9 +5,6 @@ import {
   BarChart3,
   TrendingUp,
   TrendingDown,
-  PieChart,
-  DollarSign,
-  Calculator,
   ArrowLeft,
   HelpCircle,
 } from "lucide-react";
@@ -25,15 +22,6 @@ interface NavigationItem {
   color: string;
 }
 
-interface QuickStat {
-  title: string;
-  value: string;
-  change: string;
-  changeType: "positive" | "negative";
-  icon: React.ReactNode;
-  color: string;
-}
-
 const FinancesPage: React.FC = () => {
   // Hooks de navegación
   const location = useLocation();
@@ -42,7 +30,6 @@ const FinancesPage: React.FC = () => {
   // Estados del componente
   const [activeTab, setActiveTab] = useState<string>("dashboard");
   const [isLoading, setIsLoading] = useState(true);
-  const [showQuickStats, setShowQuickStats] = useState(true);
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
 
   // Efecto para detectar la ruta actual y establecer el tab correcto
@@ -55,8 +42,6 @@ const FinancesPage: React.FC = () => {
       setActiveTab("income-tracker");
     } else if (currentPath.includes("/finances/expense-tracker")) {
       setActiveTab("expense-tracker");
-    } else if (currentPath.includes("/finances/profit-loss")) {
-      setActiveTab("profit-loss");
     } else if (currentPath === "/finances" || currentPath === "/finances/") {
       // Si está en la ruta base, establecer dashboard pero NO navegar automáticamente
       setActiveTab("dashboard");
@@ -69,7 +54,7 @@ const FinancesPage: React.FC = () => {
     navigate(`/finances/${tabId}`);
   };
 
-  // Definición de navegación del módulo con colores verdes
+  // Definición de navegación del módulo con colores verdes (SIN P&L)
   const navigationItems: NavigationItem[] = [
     {
       id: "dashboard",
@@ -91,41 +76,6 @@ const FinancesPage: React.FC = () => {
       icon: <TrendingDown className="w-5 h-5" />,
       description: "Control de gastos operativos",
       color: "from-teal-400 to-teal-600",
-    },
-    {
-      id: "profit-loss",
-      label: "P&L",
-      icon: <PieChart className="w-5 h-5" />,
-      description: "Estado de ganancias y pérdidas",
-      color: "from-lime-400 to-lime-600",
-    },
-  ];
-
-  // Estadísticas rápidas para mostrar en el header con colores verdes
-  const quickStats: QuickStat[] = [
-    {
-      title: "Ingresos del Mes",
-      value: "$212,000",
-      change: "+12.5%",
-      changeType: "positive",
-      icon: <DollarSign className="w-4 h-4" />,
-      color: "text-green-600",
-    },
-    {
-      title: "Gastos del Mes",
-      value: "$157,000",
-      change: "+8.2%",
-      changeType: "negative",
-      icon: <TrendingDown className="w-4 h-4" />,
-      color: "text-red-500",
-    },
-    {
-      title: "Ganancia Neta",
-      value: "$55,000",
-      change: "+23.6%",
-      changeType: "positive",
-      icon: <Calculator className="w-4 h-4" />,
-      color: "text-emerald-600",
     },
   ];
 
@@ -240,38 +190,6 @@ const FinancesPage: React.FC = () => {
                   </p>
                 </div>
               </div>
-
-              {/* Estadísticas rápidas */}
-              {showQuickStats && (
-                <div className="flex flex-wrap gap-4">
-                  {quickStats.map((stat) => (
-                    <motion.div
-                      key={stat.title}
-                      variants={itemVariants}
-                      className="bg-white/95 backdrop-blur-sm rounded-lg p-3 min-w-[140px] border border-white/20 shadow-lg"
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className={stat.color}>{stat.icon}</div>
-                        <span
-                          className={`text-xs font-medium ${
-                            stat.changeType === "positive"
-                              ? "text-green-600"
-                              : "text-red-600"
-                          }`}
-                        >
-                          {stat.change}
-                        </span>
-                      </div>
-                      <div className="mt-1">
-                        <p className="text-gray-800 font-semibold text-sm">
-                          {stat.value}
-                        </p>
-                        <p className="text-gray-600 text-xs">{stat.title}</p>
-                      </div>
-                    </motion.div>
-                  ))}
-                </div>
-              )}
             </div>
 
             {/* Navegación de pestañas con colores verdes */}
@@ -308,12 +226,6 @@ const FinancesPage: React.FC = () => {
             <div className="mt-4 flex justify-between items-center text-xs text-white/70">
               <div>Última actualización: {formatLastUpdated(lastUpdated)}</div>
               <div className="flex items-center space-x-4">
-                <button
-                  onClick={() => setShowQuickStats(!showQuickStats)}
-                  className="hover:text-white transition-colors duration-200"
-                >
-                  {showQuickStats ? "Ocultar" : "Mostrar"} estadísticas
-                </button>
                 <button className="hover:text-white transition-colors duration-200">
                   <HelpCircle className="w-4 h-4" />
                 </button>
@@ -325,36 +237,12 @@ const FinancesPage: React.FC = () => {
         {/* Contenido principal - Sistema de rutas */}
         <div className="flex-1 overflow-auto">
           <Routes>
-
             {/* Rutas específicas para cada componente */}
             <Route path="income-tracker" element={<IncomeTracker />} />
             <Route path="expense-tracker" element={<ExpenseTracker />} />
-
             {/* Ruta 404 para rutas no encontradas dentro del módulo */}
           </Routes>
         </div>
-
-        {/* Footer del módulo actualizado a 2025 */}
-        <motion.div
-          variants={itemVariants}
-          className="bg-green-700/90 backdrop-blur-sm border-t border-green-400 px-6 py-3"
-        >
-          <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center text-sm text-white/80">
-            <div className="flex items-center space-x-4">
-              <span>© 2025 Sistema de Gestión Ganadera</span>
-              <span>•</span>
-              <span>Módulo de Finanzas v2.1.0</span>
-            </div>
-            <div className="flex items-center space-x-4 mt-2 md:mt-0">
-              <span>Estado: Operativo</span>
-              <span>•</span>
-              <span className="flex items-center">
-                <div className="w-2 h-2 bg-white rounded-full mr-2 animate-pulse"></div>
-                Conectado
-              </span>
-            </div>
-          </div>
-        </motion.div>
       </motion.div>
     </div>
   );
