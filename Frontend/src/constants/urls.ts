@@ -2,14 +2,8 @@
 
 // Configuración base de la API
 export const API_CONFIG = {
-  // URL base del servidor backend
-  BASE_URL:
-    import.meta.env?.MODE === "production"
-      ? "https://api.bovinecare.com"
-      : "http://localhost:3001",
-
-  // Versión de la API
-  VERSION: "v1",
+  BASE_URL: import.meta.env.VITE_API_URL || "http://localhost:5000",
+  VERSION: import.meta.env.VITE_API_VERSION || "v1",
 
   // Timeout para peticiones HTTP
   TIMEOUT: 30000, // 30 segundos

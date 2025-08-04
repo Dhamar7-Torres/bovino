@@ -155,7 +155,7 @@ class AuthService {
       }
 
       return null;
-    } catch (error) {
+    } catch (error: unknown) {
       console.warn("⚠️ No se pudo obtener geolocalización:", error);
       return null;
     }
@@ -185,7 +185,7 @@ class AuthService {
     if (this.authState.isAuthenticated && this.authState.token) {
       try {
         await this.validateToken();
-      } catch (error) {
+      } catch (error: unknown) {
         console.warn("⚠️ Token inválido al recuperar conexión");
         await this.logout();
       }
@@ -248,7 +248,7 @@ class AuthService {
 
         console.log("✅ Sesión restaurada desde almacenamiento");
       }
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("❌ Error restaurando sesión:", error);
       this.clearStoredAuth();
     }
@@ -259,7 +259,7 @@ class AuthService {
     try {
       const payload = JSON.parse(atob(token.split(".")[1]));
       return payload.exp ? new Date(payload.exp * 1000) : null;
-    } catch (error) {
+    } catch (error: unknown) {
       return null;
     }
   }
@@ -279,11 +279,11 @@ class AuthService {
       this.refreshTimer = setTimeout(async () => {
         try {
           await this.refreshTokens();
-        } catch (error) {
+        } catch (error: unknown) {
           console.error("❌ Error renovando token:", error);
           await this.logout();
         }
-      }, refreshTime);
+      }, refreshTime) as unknown as number;
     }
   }
 
@@ -335,7 +335,7 @@ class AuthService {
       .patch(`/auth/sessions/${this.authState.sessionId}/activity`, {
         lastActivity: new Date().toISOString(),
       })
-      .catch((error) => {
+      .catch((error: unknown) => {
         console.warn("⚠️ Error actualizando actividad:", error);
       });
   }
@@ -399,7 +399,7 @@ class AuthService {
       console.log(`✅ Login exitoso para: ${getFullName(user)}`);
 
       return response.data;
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("❌ Error en login:", error);
       throw error;
     }
@@ -450,7 +450,7 @@ class AuthService {
         password: userData.password,
         rememberMe: false,
       });
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("❌ Error en registro:", error);
       throw error;
     }
@@ -468,7 +468,7 @@ class AuthService {
             sessionId: this.authState.sessionId,
             logoutReason: "user_initiated",
           })
-          .catch((error) => {
+          .catch((error: unknown) => {
             console.warn("⚠️ Error notificando logout al servidor:", error);
           });
       }
@@ -499,7 +499,7 @@ class AuthService {
       this.sessionStartTime = null;
 
       console.log("✅ Sesión cerrada exitosamente");
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("❌ Error cerrando sesión:", error);
       // Aun si hay error, limpiar estado local
       this.clearStoredAuth();
@@ -549,7 +549,7 @@ class AuthService {
       console.log("✅ Tokens renovados exitosamente");
 
       return tokens;
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("❌ Error renovando tokens:", error);
       throw error;
     }
@@ -562,7 +562,7 @@ class AuthService {
 
       const response = await api.get("/auth/validate");
       return response.success;
-    } catch (error) {
+    } catch (error: unknown) {
       return false;
     }
   }
@@ -580,7 +580,7 @@ class AuthService {
       });
 
       console.log("✅ Contraseña cambiada exitosamente");
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("❌ Error cambiando contraseña:", error);
       throw error;
     }
@@ -591,7 +591,7 @@ class AuthService {
     try {
       await api.post(AUTH_ENDPOINTS.FORGOT_PASSWORD, { email });
       console.log("✅ Email de recuperación enviado");
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("❌ Error solicitando recuperación:", error);
       throw error;
     }
@@ -610,7 +610,7 @@ class AuthService {
       });
 
       console.log("✅ Contraseña restablecida exitosamente");
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("❌ Error restableciendo contraseña:", error);
       throw error;
     }
@@ -621,7 +621,7 @@ class AuthService {
     try {
       await api.post(AUTH_ENDPOINTS.VERIFY_EMAIL, { token });
       console.log("✅ Email verificado exitosamente");
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("❌ Error verificando email:", error);
       throw error;
     }
@@ -647,7 +647,7 @@ class AuthService {
       console.log("✅ Perfil actualizado exitosamente");
 
       return response.data;
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("❌ Error actualizando perfil:", error);
       throw error;
     }
@@ -658,7 +658,7 @@ class AuthService {
     try {
       const response = await api.get<UserSession[]>("/auth/sessions");
       return response.data || [];
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("❌ Error obteniendo sesiones:", error);
       return [];
     }
@@ -669,7 +669,7 @@ class AuthService {
     try {
       await api.delete(`/auth/sessions/${sessionId}`);
       console.log("✅ Sesión terminada exitosamente");
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("❌ Error terminando sesión:", error);
       throw error;
     }
