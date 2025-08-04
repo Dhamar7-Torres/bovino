@@ -75,6 +75,17 @@ export enum CattleErrorCodes {
 }
 
 /**
+ * Función para obtener IP del cliente de forma segura
+ */
+const getClientIP = (req: Request): string => {
+  return req.ip || 
+         req.socket?.remoteAddress || 
+         (req.connection as any)?.remoteAddress || 
+         (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() ||
+         'unknown';
+};
+
+/**
  * Función para crear logs estructurados de errores
  */
 const createErrorLog = (error: Error, req: Request): ErrorLog => {
@@ -87,11 +98,11 @@ const createErrorLog = (error: Error, req: Request): ErrorLog => {
     userEmail: req.user?.email,
     path: req.originalUrl || req.url,
     method: req.method,
-    ip: req.ip || req.connection.remoteAddress || 'unknown',
+    ip: getClientIP(req),
     userAgent: req.get('User-Agent'),
     body: req.method !== 'GET' ? req.body : undefined,
-    params: Object.keys(req.params).length > 0 ? req.params : undefined,
-    query: Object.keys(req.query).length > 0 ? req.query : undefined
+    params: Object.keys(req.params || {}).length > 0 ? req.params : undefined,
+    query: Object.keys(req.query || {}).length > 0 ? req.query : undefined
   };
 };
 
@@ -182,10 +193,18 @@ export const errorHandler = async (
       statusCode = 503;
       errorCode = 'SERVICE_UNAVAILABLE';
       message = 'Servicio temporalmente no disponible';
+    } else if (error.name === 'JsonWebTokenError') {
+      statusCode = 401;
+      errorCode = 'INVALID_TOKEN';
+      message = 'Token de autenticación inválido';
+    } else if (error.name === 'TokenExpiredError') {
+      statusCode = 401;
+      errorCode = 'EXPIRED_TOKEN';
+      message = 'Token de autenticación expirado';
     }
 
     // Generar ID único para el request (para tracking)
-    const requestId = req.headers['x-request-id'] as string || 
+    const requestId = (req.headers['x-request-id'] as string) || 
                      `cattle-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
     // Crear respuesta de error estandarizada
@@ -341,3 +360,7 @@ export const asyncErrorHandler = (fn: Function) => {
     Promise.resolve(fn(req, res, next)).catch(next);
   };
 };
+
+// Exportaciones adicionales para compatibilidad
+export default errorHandler;
+export { ApiError } from './auth';

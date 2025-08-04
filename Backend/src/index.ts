@@ -11,7 +11,7 @@ import morgan from 'morgan';
 import compression from 'compression';
 
 // Importar middleware personalizado
-import { errorHandler } from './src/middleware/error';
+import { errorHandler } from './middleware/error';
 
 // ============================================================================
 // CONFIGURACIÓN INICIAL

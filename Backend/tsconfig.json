@@ -26,7 +26,15 @@
     
     "strict": true,
     "skipLibCheck": true,
-    "forceConsistentCasingInFileNames": true
+    "forceConsistentCasingInFileNames": true,
+    
+    // Configuraciones adicionales para compatibilidad
+    "declaration": false,
+    "declarationMap": false,
+    "allowJs": false,
+    "checkJs": false,
+    "incremental": true,
+    "noEmitOnError": false
   },
   "include": [
     "src/**/*",
@@ -36,6 +44,13 @@
     "node_modules",
     "dist",
     "uploads",
-    "logs"
-  ]
+    "logs",
+    "test",
+    "**/*.spec.ts",
+    "**/*.test.ts"
+  ],
+  "ts-node": {
+    "esm": false,
+    "experimentalSpecifierResolution": "node"
+  }
 }
