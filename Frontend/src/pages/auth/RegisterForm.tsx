@@ -1,6 +1,8 @@
 import React, { useState } from "react";
 import { motion } from "framer-motion";
 import { Eye, EyeOff, Mail, Lock, User, ArrowRight, Check } from "lucide-react";
+import { authService } from "../../services/authService";
+import { RegisterData } from "../../types/auth";
 
 // Tipos para las props del componente
 interface RegisterFormProps {
@@ -37,12 +39,24 @@ interface PasswordRequirement {
   test: (password: string) => boolean;
 }
 
+// Interfaz para manejar errores del servidor
+interface ServerError {
+  message?: string;
+  code?: string;
+  field?: string;
+  response?: {
+    data?: {
+      message?: string;
+      code?: string;
+      field?: string;
+    };
+  };
+}
+
 const RegisterForm: React.FC<RegisterFormProps> = ({
   onSwitchToLogin,
   onAuthSuccess,
 }) => {
-  // Hook para navegación
-
   // Estado para los datos del formulario
   const [formData, setFormData] = useState<RegisterFormData>({
     firstName: "",
@@ -57,8 +71,7 @@ const RegisterForm: React.FC<RegisterFormProps> = ({
 
   // Estado para mostrar/ocultar contraseñas
   const [showPassword, setShowPassword] = useState<boolean>(false);
-  const [showConfirmPassword, setShowConfirmPassword] =
-    useState<boolean>(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState<boolean>(false);
 
   // Estado para el estado de carga
   const [isLoading, setIsLoading] = useState<boolean>(false);
@@ -67,8 +80,7 @@ const RegisterForm: React.FC<RegisterFormProps> = ({
   const [acceptTerms, setAcceptTerms] = useState<boolean>(false);
 
   // Estado para mostrar requisitos de contraseña
-  const [showPasswordRequirements, setShowPasswordRequirements] =
-    useState<boolean>(false);
+  const [showPasswordRequirements, setShowPasswordRequirements] = useState<boolean>(false);
 
   // Requisitos de contraseña
   const passwordRequirements: PasswordRequirement[] = [
@@ -96,6 +108,14 @@ const RegisterForm: React.FC<RegisterFormProps> = ({
         [field]: undefined,
       }));
     }
+
+    // Limpiar error general
+    if (errors.general) {
+      setErrors((prev) => ({
+        ...prev,
+        general: undefined,
+      }));
+    }
   };
 
   // Función para validar email
@@ -118,6 +138,8 @@ const RegisterForm: React.FC<RegisterFormProps> = ({
       newErrors.firstName = "El nombre es requerido";
     } else if (formData.firstName.trim().length < 2) {
       newErrors.firstName = "El nombre debe tener al menos 2 caracteres";
+    } else if (formData.firstName.trim().length > 50) {
+      newErrors.firstName = "El nombre no puede tener más de 50 caracteres";
     }
 
     // Validar apellido
@@ -125,6 +147,8 @@ const RegisterForm: React.FC<RegisterFormProps> = ({
       newErrors.lastName = "El apellido es requerido";
     } else if (formData.lastName.trim().length < 2) {
       newErrors.lastName = "El apellido debe tener al menos 2 caracteres";
+    } else if (formData.lastName.trim().length > 50) {
+      newErrors.lastName = "El apellido no puede tener más de 50 caracteres";
     }
 
     // Validar email
@@ -138,8 +162,7 @@ const RegisterForm: React.FC<RegisterFormProps> = ({
     if (!formData.password) {
       newErrors.password = "La contraseña es requerida";
     } else if (!validatePassword(formData.password)) {
-      newErrors.password =
-        "La contraseña no cumple con los requisitos de seguridad";
+      newErrors.password = "La contraseña no cumple con los requisitos de seguridad";
     }
 
     // Validar confirmación de contraseña
@@ -153,18 +176,97 @@ const RegisterForm: React.FC<RegisterFormProps> = ({
     return Object.keys(newErrors).length === 0;
   };
 
+  // Función para procesar errores del servidor
+  const processBackendError = (error: any): void => {
+    console.error("Error del servidor:", error);
+
+    // Resetear errores
+    const newErrors: FormErrors = {};
+
+    // Manejar estructura de error de respuesta de la API
+    let errorData: Partial<ServerError> = {};
+    
+    if (error?.response?.data) {
+      errorData = error.response.data;
+    } else if (error?.message || error?.code || error?.field) {
+      errorData = {
+        message: error.message,
+        code: error.code,
+        field: error.field
+      };
+    }
+
+    // Manejar errores específicos por campo
+    if (errorData?.field) {
+      switch (errorData.field) {
+        case "email":
+          newErrors.email = errorData.message || "Error con el correo electrónico";
+          break;
+        case "password":
+          newErrors.password = errorData.message || "Error con la contraseña";
+          break;
+        case "firstName":
+          newErrors.firstName = errorData.message || "Error con el nombre";
+          break;
+        case "lastName":
+          newErrors.lastName = errorData.message || "Error con el apellido";
+          break;
+        default:
+          newErrors.general = errorData.message || "Error en el registro";
+      }
+    } else {
+      // Errores generales basados en código
+      const errorCode = errorData?.code || '';
+      const errorMessage = errorData?.message || '';
+
+      switch (errorCode) {
+        case "EMAIL_ALREADY_EXISTS":
+          newErrors.email = "Este correo electrónico ya está registrado";
+          break;
+        case "INVALID_EMAIL":
+          newErrors.email = "El formato del correo electrónico no es válido";
+          break;
+        case "WEAK_PASSWORD":
+          newErrors.password = "La contraseña no cumple con los requisitos de seguridad";
+          break;
+        case "VALIDATION_ERROR":
+          newErrors.general = "Algunos datos del formulario no son válidos";
+          break;
+        case "SERVER_ERROR":
+          newErrors.general = "Error del servidor. Por favor intenta más tarde";
+          break;
+        default:
+          // Manejar errores basados en mensaje
+          if (errorMessage.toLowerCase().includes("email")) {
+            newErrors.email = errorMessage;
+          } else if (errorMessage.toLowerCase().includes("password")) {
+            newErrors.password = errorMessage;
+          } else if (errorMessage.toLowerCase().includes("network") || errorMessage.toLowerCase().includes("fetch")) {
+            newErrors.general = "Error de conexión. Verifica tu conexión a internet";
+          } else if (errorMessage.toLowerCase().includes("timeout")) {
+            newErrors.general = "La solicitud ha tardado demasiado. Intenta nuevamente";
+          } else {
+            newErrors.general = errorMessage || "Ha ocurrido un error inesperado. Por favor intenta más tarde";
+          }
+      }
+    }
+
+    setErrors(newErrors);
+  };
+
   // Función para manejar el envío del formulario
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    // Validar formulario
     if (!validateForm()) {
       return;
     }
 
+    // Validar términos y condiciones
     if (!acceptTerms) {
       setErrors({
-        general:
-          "Por favor acepta los Términos de Servicio y la Política de Privacidad",
+        general: "Por favor acepta los Términos de Servicio y la Política de Privacidad",
       });
       return;
     }
@@ -172,41 +274,38 @@ const RegisterForm: React.FC<RegisterFormProps> = ({
     setIsLoading(true);
 
     try {
-      // Simular petición de registro
-      await new Promise((resolve) => setTimeout(resolve, 2000));
-
-      // Simular registro exitoso
-      const userData = {
-        id: "temp-user-" + Date.now(),
-        firstName: formData.firstName,
-        lastName: formData.lastName,
-        email: formData.email,
-        role: "ganadero",
+      // Preparar datos para el backend
+      const registerData: RegisterData = {
+        firstName: formData.firstName.trim(),
+        lastName: formData.lastName.trim(),
+        email: formData.email.trim().toLowerCase(),
+        password: formData.password,
+        confirmPassword: formData.confirmPassword,
+        acceptTerms: true,
+        acceptPrivacy: true,
+        farmName: `Rancho de ${formData.firstName} ${formData.lastName}`, // Generar nombre del rancho
       };
 
-      console.log("Registration successful:", userData);
+      console.log("📝 Enviando datos de registro al backend...");
 
-      // Notificar éxito
+      // Llamar al servicio de autenticación
+      const response = await authService.register(registerData);
+
+      console.log("✅ Registro exitoso:", response);
+
+      // Mostrar mensaje de éxito
       setTimeout(() => {
         alert(
-          `¡Cuenta creada exitosamente para ${formData.firstName}! Ahora puedes iniciar sesión.`
+          `¡Cuenta creada exitosamente para ${formData.firstName}! Ya has sido conectado automáticamente.`
         );
-        onSwitchToLogin(); // Cambiar al formulario de login
       }, 500);
 
-      onAuthSuccess(userData);
-    } catch (error) {
-      if (error instanceof Error && error.message.includes("email")) {
-        setErrors({
-          general:
-            "Este correo electrónico ya está registrado. " +
-            "Por favor intenta con una dirección diferente.",
-        });
-      } else {
-        setErrors({
-          general: "Algo salió mal. Por favor intenta más tarde.",
-        });
-      }
+      // Notificar éxito al componente padre
+      onAuthSuccess(response);
+
+    } catch (error: any) {
+      console.error("❌ Error en el registro:", error);
+      processBackendError(error);
     } finally {
       setIsLoading(false);
     }
@@ -215,9 +314,7 @@ const RegisterForm: React.FC<RegisterFormProps> = ({
   // Función para obtener el color del requisito de contraseña
   const getRequirementColor = (requirement: PasswordRequirement): string => {
     if (!formData.password) return "text-gray-400";
-    return requirement.test(formData.password)
-      ? "text-emerald-600"
-      : "text-red-500";
+    return requirement.test(formData.password) ? "text-emerald-600" : "text-red-500";
   };
 
   // Variantes de animación para los elementos del formulario
@@ -264,7 +361,7 @@ const RegisterForm: React.FC<RegisterFormProps> = ({
             htmlFor="firstName"
             className="block text-sm font-semibold text-gray-700 mb-2"
           >
-            Nombre
+            Nombre *
           </label>
           <div className="relative group">
             <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -287,6 +384,7 @@ const RegisterForm: React.FC<RegisterFormProps> = ({
               `}
               placeholder="Tu nombre"
               disabled={isLoading}
+              maxLength={50}
             />
           </div>
           {errors.firstName && (
@@ -306,7 +404,7 @@ const RegisterForm: React.FC<RegisterFormProps> = ({
             htmlFor="lastName"
             className="block text-sm font-semibold text-gray-700 mb-2"
           >
-            Apellido
+            Apellido *
           </label>
           <div className="relative group">
             <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -329,6 +427,7 @@ const RegisterForm: React.FC<RegisterFormProps> = ({
               `}
               placeholder="Tu apellido"
               disabled={isLoading}
+              maxLength={50}
             />
           </div>
           {errors.lastName && (
@@ -349,7 +448,7 @@ const RegisterForm: React.FC<RegisterFormProps> = ({
           htmlFor="email"
           className="block text-sm font-semibold text-gray-700 mb-2"
         >
-          Correo Electrónico
+          Correo Electrónico *
         </label>
         <div className="relative group">
           <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -372,6 +471,7 @@ const RegisterForm: React.FC<RegisterFormProps> = ({
             `}
             placeholder="tu@email.com"
             disabled={isLoading}
+            autoComplete="email"
           />
         </div>
         {errors.email && (
@@ -391,7 +491,7 @@ const RegisterForm: React.FC<RegisterFormProps> = ({
           htmlFor="password"
           className="block text-sm font-semibold text-gray-700 mb-2"
         >
-          Contraseña
+          Contraseña *
         </label>
         <div className="relative group">
           <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -415,6 +515,7 @@ const RegisterForm: React.FC<RegisterFormProps> = ({
             `}
             placeholder="Crea una contraseña segura"
             disabled={isLoading}
+            autoComplete="new-password"
           />
           <button
             type="button"
@@ -475,7 +576,7 @@ const RegisterForm: React.FC<RegisterFormProps> = ({
           htmlFor="confirmPassword"
           className="block text-sm font-semibold text-gray-700 mb-2"
         >
-          Confirmar Contraseña
+          Confirmar Contraseña *
         </label>
         <div className="relative group">
           <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -485,9 +586,7 @@ const RegisterForm: React.FC<RegisterFormProps> = ({
             id="confirmPassword"
             type={showConfirmPassword ? "text" : "password"}
             value={formData.confirmPassword}
-            onChange={(e) =>
-              handleInputChange("confirmPassword", e.target.value)
-            }
+            onChange={(e) => handleInputChange("confirmPassword", e.target.value)}
             className={`
               w-full pl-10 pr-12 py-3 border rounded-lg text-gray-900 placeholder-gray-500
               focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500
@@ -500,6 +599,7 @@ const RegisterForm: React.FC<RegisterFormProps> = ({
             `}
             placeholder="Confirma tu contraseña"
             disabled={isLoading}
+            autoComplete="new-password"
           />
           <button
             type="button"
@@ -554,7 +654,7 @@ const RegisterForm: React.FC<RegisterFormProps> = ({
         </label>
       </motion.div>
 
-      {/* Botón de envío - Solo con icono derecho */}
+      {/* Botón de envío */}
       <motion.div variants={itemVariants}>
         <motion.button
           type="submit"
@@ -577,7 +677,7 @@ const RegisterForm: React.FC<RegisterFormProps> = ({
               <motion.div
                 className="w-5 h-5 border-2 border-white border-t-transparent rounded-full mr-2"
                 animate={{ rotate: 360 }}
-                transition={{ duration: 1, repeat: Infinity }}
+                transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
               />
               Creando Cuenta...
             </>
@@ -608,22 +708,21 @@ const RegisterForm: React.FC<RegisterFormProps> = ({
       {/* Información adicional */}
       <motion.div variants={itemVariants} className="text-center">
         <p className="text-xs text-gray-500 leading-relaxed">
-          Al crear una cuenta, tendrás acceso a nuestra plataforma de
-          seguimiento ganadero con monitoreo GPS, registros de salud y
-          herramientas de gestión de hatos.
+          Al crear una cuenta, tendrás acceso a nuestra plataforma de seguimiento ganadero
+          con monitoreo GPS, registros de salud y herramientas de gestión de hatos.
         </p>
       </motion.div>
 
-      {/* Información sobre acceso temporal */}
-      <motion.div variants={itemVariants} className="text-center">
-        <div className="bg-green-50 border border-green-200 rounded-lg p-3">
-          <p className="text-xs text-green-700">
-            <strong>💡 Consejo:</strong> Si solo quieres explorar la aplicación,
-            regresa al login y usa las credenciales temporales de administrador
-            o veterinario.
-          </p>
-        </div>
-      </motion.div>
+      {/* Estado de conexión */}
+      {isLoading && (
+        <motion.div variants={itemVariants} className="text-center">
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+            <p className="text-xs text-blue-700">
+              🔄 Conectando con el servidor... Esto puede tomar unos segundos.
+            </p>
+          </div>
+        </motion.div>
+      )}
     </motion.form>
   );
 };

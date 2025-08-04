@@ -1,11 +1,16 @@
-import React, { useState, useEffect } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { ChevronLeft, MapPin, Shield, Users } from "lucide-react";
+// Frontend/src/pages/auth/AuthPage.tsx
+// ✅ VERSIÓN CORREGIDA - Errores de tipos y props solucionados
 
-// Importación de los componentes de autenticación
+import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import { motion, AnimatePresence } from "framer-motion";
+import { MapPin, Shield, Users } from "lucide-react"; // ❌ REMOVIDO: ChevronLeft (no se usa)
+
+// Importaciones
 import LoginForm from "./LoginForm";
 import RegisterForm from "./RegisterForm";
 import ForgotPasswordForm from "./ForgotPasswordForm";
+import { useAuth } from "../../context/AuthContext";
 
 // Tipos para los diferentes modos de autenticación
 type AuthMode = "login" | "register" | "forgot-password";
@@ -17,20 +22,40 @@ interface AuthNavigationProps {
 }
 
 const AuthPage: React.FC = () => {
-  // Estado para controlar el modo actual de autenticación
+  const navigate = useNavigate();
+  const { state } = useAuth();
+  
+  // Estados
   const [authMode, setAuthMode] = useState<AuthMode>("login");
-  // Estado para controlar la carga inicial
   const [isInitialLoad, setIsInitialLoad] = useState(true);
-  // Estado para mostrar indicador de transición
   const [isTransitioning, setIsTransitioning] = useState(false);
 
-  // Efecto para manejar la carga inicial
+  // ✅ Efecto para redirección automática cuando el usuario se autentica
   useEffect(() => {
+    if (state.isAuthenticated && state.user) {
+      console.log("✅ Usuario autenticado detectado, redirigiendo al dashboard...");
+      console.log("👤 Usuario logueado:", state.user);
+      
+      // Redirección inmediata al dashboard
+      navigate("/dashboard", { replace: true });
+    }
+  }, [state.isAuthenticated, state.user, navigate]);
+
+  // ✅ Efecto para verificar si ya hay una sesión activa al cargar la página
+  useEffect(() => {
+    // Si ya está autenticado al cargar la página, redirigir inmediatamente
+    if (state.isAuthenticated) {
+      navigate("/dashboard", { replace: true });
+      return;
+    }
+
+    // Marcar como carga completada después de verificar autenticación
     const timer = setTimeout(() => {
       setIsInitialLoad(false);
     }, 500);
+    
     return () => clearTimeout(timer);
-  }, []);
+  }, [state.isAuthenticated, navigate]);
 
   // Función para cambiar entre diferentes modos de autenticación con transición
   const handleAuthModeChange = (mode: AuthMode) => {
@@ -43,21 +68,10 @@ const AuthPage: React.FC = () => {
     }, 150);
   };
 
-  // Función para volver al modo de login
-  const handleBackToLogin = () => {
-    setAuthMode("login");
-  };
-
-  // Función para manejar éxito de autenticación
+  // ✅ Función para manejar éxito de autenticación (ya no necesaria, se maneja automáticamente)
   const handleAuthSuccess = (data: any) => {
-    console.log("Authentication successful:", data);
-    // Mostrar mensaje de éxito temporal
-    setIsInitialLoad(true);
-    // TODO: Implementar redirección al dashboard
-    setTimeout(() => {
-      console.log("Redirecting to dashboard...");
-      // window.location.href = '/dashboard';
-    }, 1500);
+    console.log("🎉 Autenticación exitosa:", data);
+    // La redirección se maneja automáticamente en el useEffect
   };
 
   // Función para obtener el título según el modo actual
@@ -88,7 +102,23 @@ const AuthPage: React.FC = () => {
     }
   };
 
-  // Función para renderizar el componente correcto según el modo
+  // ✅ Si está autenticado, mostrar loading mientras redirige
+  if (state.isAuthenticated) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-emerald-50 via-white to-blue-50 flex items-center justify-center">
+        <motion.div
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="text-center"
+        >
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Redirigiendo al dashboard...</p>
+        </motion.div>
+      </div>
+    );
+  }
+
+  // ✅ Función para renderizar el componente correcto según el modo
   const renderCurrentForm = () => {
     const navigationProps: AuthNavigationProps = {
       currentMode: authMode,
@@ -100,9 +130,8 @@ const AuthPage: React.FC = () => {
         return (
           <LoginForm
             onSwitchToRegister={() => handleAuthModeChange("register")}
-            onSwitchToForgotPassword={() =>
-              handleAuthModeChange("forgot-password")
-            }
+            onSwitchToForgotPassword={() => handleAuthModeChange("forgot-password")}
+            onAuthSuccess={handleAuthSuccess}
           />
         );
       case "register":
@@ -114,10 +143,10 @@ const AuthPage: React.FC = () => {
           />
         );
       case "forgot-password":
+        // ✅ CORREGIDO: ForgotPasswordForm requiere onBackToLogin y navigation
         return (
           <ForgotPasswordForm
-            onBackToLogin={handleBackToLogin}
-            onSwitchToLogin={() => handleAuthModeChange("login")}
+            onBackToLogin={() => handleAuthModeChange("login")}
             navigation={navigationProps}
           />
         );
@@ -126,399 +155,134 @@ const AuthPage: React.FC = () => {
     }
   };
 
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-[#519a7c] via-[#f2e9d8] to-[#f4ac3a] flex items-center justify-center p-4 relative overflow-hidden">
-      {/* Elementos decorativos de fondo */}
-      <div className="absolute inset-0 overflow-hidden">
+  // ✅ Mostrar loading durante la carga inicial
+  if (isInitialLoad) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-emerald-50 via-white to-blue-50 flex items-center justify-center">
         <motion.div
-          className="absolute -top-40 -right-40 w-80 h-80
-bg-emerald-200 rounded-full mix-blend-multiply filter blur-xl
-opacity-70"
-          animate={{
-            scale: [1, 1.2, 1],
-            rotate: [0, 360],
-          }}
-          transition={{
-            duration: 20,
-            repeat: Infinity,
-          }}
-        />
-        <motion.div
-          className="absolute -bottom-40 -left-40 w-80 h-80 bg-blue-200
-rounded-full mix-blend-multiply filter blur-xl opacity-70"
-          animate={{
-            scale: [1.2, 1, 1.2],
-            rotate: [0, -360],
-          }}
-          transition={{
-            duration: 25,
-            repeat: Infinity,
-          }}
-        />
-        <motion.div
-          className="absolute top-40 left-1/2 w-60 h-60 bg-indigo-200
-rounded-full mix-blend-multiply filter blur-xl opacity-70"
-          animate={{
-            scale: [1, 1.3, 1],
-            x: [-20, 20, -20],
-            y: [-10, 10, -10],
-          }}
-          transition={{
-            duration: 15,
-            repeat: Infinity,
-          }}
-        />
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          className="text-center"
+        >
+          <div className="animate-pulse text-emerald-600 text-xl font-semibold">
+            Cargando...
+          </div>
+        </motion.div>
       </div>
+    );
+  }
 
-      {/* Contenedor principal */}
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-emerald-50 via-white to-blue-50 flex">
+      {/* Panel izquierdo - Información y branding */}
       <motion.div
-        className="w-full max-w-4xl mx-auto relative z-10"
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: isInitialLoad ? 0 : 1, y: isInitialLoad ? 20 : 0 }}
-        transition={{ duration: 0.6 }}
+        className="hidden lg:flex lg:w-1/2 bg-gradient-to-br from-emerald-600 to-emerald-800 relative overflow-hidden"
+        initial={{ x: -100, opacity: 0 }}
+        animate={{ x: 0, opacity: 1 }}
+        transition={{ duration: 0.8, ease: "easeOut" }}
       >
-        <div className="grid lg:grid-cols-2 gap-8 items-center">
-          {/* Panel izquierdo - Información y branding */}
+        {/* Patrón de fondo decorativo */}
+        <div className="absolute inset-0 opacity-10">
+          <div className="absolute top-10 left-10 w-32 h-32 border border-white rounded-full"></div>
+          <div className="absolute top-40 right-20 w-24 h-24 border border-white rounded-full"></div>
+          <div className="absolute bottom-20 left-20 w-40 h-40 border border-white rounded-full"></div>
+        </div>
+
+        {/* Contenido principal */}
+        <div className="relative z-10 flex flex-col justify-center px-12 py-20 text-white">
           <motion.div
-            className="hidden lg:block space-y-8"
-            initial={{ opacity: 0, x: -50 }}
-            animate={{
-              opacity: isInitialLoad ? 0 : 1,
-              x: isInitialLoad ? -50 : 0,
-            }}
-            transition={{ duration: 0.7, delay: 0.2 }}
+            initial={{ y: 20, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            transition={{ delay: 0.3, duration: 0.6 }}
           >
-            {/* Logo y título principal */}
-            <motion.div
-              className="text-center lg:text-left"
-              whileHover={{ scale: 1.02 }}
-              transition={{ duration: 0.3 }}
-            >
-              <motion.div
-                className="inline-flex items-center justify-center w-16
-h-16 bg-emerald-500 rounded-2xl mb-6 shadow-lg"
-                whileHover={{ scale: 1.1 }}
-                transition={{ duration: 0.3 }}
-              >
-                <span className="text-white text-2xl font-bold">🐄</span>
-              </motion.div>
-              <h1 className="text-4xl font-bold text-gray-900 mb-3">
-                Bovino UJAT
-              </h1>
-              <p className="text-xl text-gray-600">
-                Sistema Avanzado de Gestión Ganadera
-              </p>
-            </motion.div>
+            <h1 className="text-4xl font-bold mb-6">
+              Sistema de Gestión Ganadera
+            </h1>
+            <p className="text-xl mb-8 text-emerald-100">
+              Controla y monitorea tu ganado de manera inteligente con
+              tecnología de vanguardia
+            </p>
+          </motion.div>
 
-            {/* Características del sistema */}
-            <div className="space-y-6">
-              <motion.div
-                className="flex items-center space-x-4 group"
-                whileHover={{ x: 10 }}
-                transition={{ duration: 0.2 }}
-              >
-                <div
-                  className="flex-shrink-0 w-12 h-12 bg-blue-100
-rounded-xl flex items-center justify-center group-hover:bg-blue-200
-transition-colors"
-                >
-                  <MapPin className="w-6 h-6 text-blue-600" />
-                </div>
-                <div>
-                  <h3
-                    className="font-semibold
-text-gray-900"
-                  >
-                    Rastreo GPS
-                  </h3>
-                  <p className="text-gray-600">
-                    Monitoreo de ubicación en tiempo real
-                  </p>
-                </div>
-              </motion.div>
-
-              <motion.div
-                className="flex items-center space-x-4 group"
-                whileHover={{ x: 10 }}
-                transition={{ duration: 0.2 }}
-              >
-                <div
-                  className="flex-shrink-0 w-12 h-12 bg-emerald-100
-rounded-xl flex items-center justify-center group-hover:bg-emerald-200
-transition-colors"
-                >
-                  <Shield className="w-6 h-6 text-emerald-600" />
-                </div>
-                <div>
-                  <h3 className="font-semibold text-gray-900">
-                    Registros de Salud
-                  </h3>
-                  <p className="text-gray-600">Vacunación e historial médico</p>
-                </div>
-              </motion.div>
-
-              <motion.div
-                className="flex items-center space-x-4 group"
-                whileHover={{ x: 10 }}
-                transition={{ duration: 0.2 }}
-              >
-                <div
-                  className="flex-shrink-0 w-12 h-12 bg-indigo-100
-rounded-xl flex items-center justify-center group-hover:bg-indigo-200
-transition-colors"
-                >
-                  <Users className="w-6 h-6 text-indigo-600" />
-                </div>
-                <div>
-                  <h3 className="font-semibold text-gray-900">
-                    Gestión de Datos
-                  </h3>
-                  <p className="text-gray-600">
-                    Supervisión completa del ganado
-                  </p>
-                </div>
-              </motion.div>
+          {/* Características destacadas */}
+          <motion.div
+            className="space-y-6"
+            initial={{ y: 20, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            transition={{ delay: 0.6, duration: 0.6 }}
+          >
+            <div className="flex items-center space-x-3">
+              <MapPin className="w-6 h-6 text-emerald-200" />
+              <span className="text-emerald-100">
+                Geolocalización en tiempo real
+              </span>
+            </div>
+            <div className="flex items-center space-x-3">
+              <Shield className="w-6 h-6 text-emerald-200" />
+              <span className="text-emerald-100">
+                Control sanitario avanzado
+              </span>
+            </div>
+            <div className="flex items-center space-x-3">
+              <Users className="w-6 h-6 text-emerald-200" />
+              <span className="text-emerald-100">
+                Gestión colaborativa
+              </span>
             </div>
           </motion.div>
+        </div>
+      </motion.div>
 
-          {/* Panel derecho - Formularios de autenticación */}
+      {/* Panel derecho - Formularios de autenticación */}
+      <div className="w-full lg:w-1/2 flex items-center justify-center px-8 py-12">
+        <motion.div
+          className="w-full max-w-md"
+          initial={{ x: 100, opacity: 0 }}
+          animate={{ x: 0, opacity: 1 }}
+          transition={{ duration: 0.8, ease: "easeOut" }}
+        >
+          {/* Header del formulario */}
           <motion.div
-            className="w-full"
-            initial={{ opacity: 0, x: 50 }}
-            animate={{
-              opacity: isInitialLoad ? 0 : 1,
-              x: isInitialLoad ? 50 : 0,
-            }}
-            transition={{ duration: 0.7, delay: 0.3 }}
+            className="text-center mb-8"
+            initial={{ y: -20, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            transition={{ delay: 0.2, duration: 0.6 }}
           >
-            <motion.div
-              className="bg-white/80 backdrop-blur-lg rounded-3xl
-shadow-2xl p-8 border border-white/20 relative"
-              whileHover={{ scale: 1.01 }}
-              transition={{ duration: 0.3 }}
-            >
-              {/* Indicador de transición */}
-              <AnimatePresence>
-                {isTransitioning && (
-                  <motion.div
-                    className="absolute inset-0 bg-white/50
-backdrop-blur-sm rounded-3xl flex items-center justify-center z-10"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    transition={{ duration: 0.2 }}
-                  >
-                    <motion.div
-                      className="w-8 h-8 border-2 border-emerald-500
-border-t-transparent rounded-full"
-                      animate={{ rotate: 360 }}
-                      transition={{ duration: 1, repeat: Infinity }}
-                    />
-                  </motion.div>
-                )}
-              </AnimatePresence>
-
-              {/* Indicador de navegación mejorado */}
-              <div className="flex justify-center mb-8">
-                <div className="flex items-center space-x-3">
-                  {(["login", "register", "forgot-password"] as AuthMode[]).map(
-                    (mode, index) => {
-                      const isActive = mode === authMode;
-                      return (
-                        <div
-                          key={mode}
-                          className="flex
-items-center"
-                        >
-                          <motion.div
-                            className={`
-                            relative h-3 w-3 rounded-full transition-all
-duration-300
-                            ${
-                              isActive
-                                ? "bg-emerald-500 scale-125"
-                                : "bg-gray-200"
-                            }
-                          `}
-                            animate={{
-                              scale: isActive ? 1.25 : 1,
-                            }}
-                          >
-                            {isActive && (
-                              <motion.div
-                                className="absolute inset-0
-bg-emerald-500 rounded-full"
-                                animate={{
-                                  scale: [1, 1.5, 1],
-                                  opacity: [0.7, 0, 0.7],
-                                }}
-                                transition={{
-                                  duration: 2,
-                                  repeat: Infinity,
-                                }}
-                              />
-                            )}
-                          </motion.div>
-                          {index < 2 && (
-                            <div
-                              className="w-8 h-0.5 bg-gray-200
-mx-2"
-                            />
-                          )}
-                        </div>
-                      );
-                    }
-                  )}
-                </div>
-              </div>
-
-              {/* Etiquetas de navegación */}
-              <div className="flex justify-center mb-6">
-                <div
-                  className="flex items-center space-x-8
-text-xs"
-                >
-                  {[
-                    { mode: "login", label: "Iniciar Sesión" },
-                    { mode: "register", label: "Registrarse" },
-                    { mode: "forgot-password", label: "Recuperar" },
-                  ].map(({ mode, label }) => (
-                    <span
-                      key={mode}
-                      className={`
-                        transition-colors duration-300 font-medium
-                        ${
-                          mode === authMode
-                            ? "text-emerald-600"
-                            : "text-gray-400"
-                        }
-                      `}
-                    >
-                      {label}
-                    </span>
-                  ))}
-                </div>
-              </div>
-
-              {/* Botón de retroceso para modos que no sean login */}
-              {authMode !== "login" && (
-                <motion.button
-                  onClick={handleBackToLogin}
-                  className="flex items-center text-gray-600
-hover:text-gray-900 mb-6 group"
-                  whileHover={{ x: -5 }}
-                  transition={{ duration: 0.2 }}
-                >
-                  <ChevronLeft
-                    className="w-5 h-5 mr-1
-group-hover:text-emerald-600 transition-colors"
-                  />
-                  <span className="text-sm font-medium">
-                    Volver al Inicio de Sesión
-                  </span>
-                </motion.button>
-              )}
-
-              {/* Encabezado del formulario */}
-              <motion.div
-                className="text-center mb-8"
-                key={authMode}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5 }}
-              >
-                <h2
-                  className="text-3xl font-bold text-gray-900
-mb-2"
-                >
-                  {getTitle()}
-                </h2>
-                <p className="text-gray-600">{getSubtitle()}</p>
-              </motion.div>
-
-              {/* Contenedor de formularios con animaciones */}
-              <AnimatePresence mode="wait">
-                <motion.div
-                  key={authMode}
-                  initial={{ opacity: 0, x: 300 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: -300 }}
-                  transition={{ duration: 0.4 }}
-                  className="space-y-6"
-                >
-                  {renderCurrentForm()}
-                </motion.div>
-              </AnimatePresence>
-            </motion.div>
-
-            {/* Logo móvil - solo visible en pantallas pequeñas */}
-            <motion.div
-              className="lg:hidden text-center mt-8"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{
-                opacity: isInitialLoad ? 0 : 1,
-                y: isInitialLoad ? 20 : 0,
-              }}
-              transition={{ duration: 0.5, delay: 0.4 }}
-            >
-              <motion.div
-                className="inline-flex items-center justify-center w-12
-h-12 bg-emerald-500 rounded-xl mb-4"
-                whileHover={{ scale: 1.1 }}
-                transition={{ duration: 0.3 }}
-              >
-                <span className="text-white text-lg font-bold">🐄</span>
-              </motion.div>
-              <h3 className="text-xl font-bold text-gray-900">Bovino UJAT</h3>
-              <p className="text-gray-600">Sistema de Gestión Ganadera</p>
-            </motion.div>
+            <h2 className="text-3xl font-bold text-gray-900 mb-2">
+              {getTitle()}
+            </h2>
+            <p className="text-gray-600">{getSubtitle()}</p>
           </motion.div>
-        </div>
-      </motion.div>
 
-      {/* Información de estado en desarrollo */}
-      <motion.div
-        className="absolute bottom-4 right-4 bg-black/10
-backdrop-blur-sm rounded-lg px-3 py-2 text-xs text-gray-600 max-w-xs"
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 1, duration: 0.5 }}
-      >
-        <div className="space-y-1">
-          <div className="flex justify-between">
-            <span>Modo:</span>
-            <span
-              className="font-mono
-text-emerald-600"
+          {/* ✅ Mostrar errores del estado global */}
+          {state.error && (
+            <motion.div
+              className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg"
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
             >
-              {authMode}
-            </span>
-          </div>
-          <div className="flex justify-between">
-            <span>Entorno:</span>
-            <span className="font-mono">Desarrollo</span>
-          </div>
-          <div className="flex justify-between">
-            <span>Módulo:</span>
-            <span className="font-mono">Autenticación</span>
-          </div>
-        </div>
-      </motion.div>
+              <p className="text-sm text-red-600">{state.error}</p>
+            </motion.div>
+          )}
 
-      {/* Información de ayuda - solo visible en hover */}
-      <motion.div
-        className="absolute bottom-4 left-4 bg-white/90
-backdrop-blur-sm rounded-lg px-3 py-2 text-xs text-gray-600 opacity-0
-hover:opacity-100 transition-opacity duration-300 max-w-sm"
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 0, y: 0 }}
-        whileHover={{ opacity: 1 }}
-        transition={{ delay: 1, duration: 0.5 }}
-      >
-        <div className="space-y-1">
-          <p className="font-semibold text-gray-900">Ayuda Rápida:</p>
-        </div>
-      </motion.div>
+          {/* Contenedor del formulario con transiciones */}
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={authMode}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ 
+                opacity: isTransitioning ? 0.5 : 1, 
+                y: isTransitioning ? 10 : 0 
+              }}
+              exit={{ opacity: 0, y: -20 }}
+              transition={{ duration: 0.3 }}
+              className={isTransitioning ? "pointer-events-none" : ""}
+            >
+              {renderCurrentForm()}
+            </motion.div>
+          </AnimatePresence>
+        </motion.div>
+      </div>
     </div>
   );
 };

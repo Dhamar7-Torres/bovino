@@ -8,11 +8,11 @@ import {
   AlertCircle,
   RefreshCw,
 } from "lucide-react";
+import { authService } from "../../services/authService"; // ✅ Importar authService real
 
-// Tipos para las props del componente
+// Props del componente
 interface ForgotPasswordFormProps {
   onBackToLogin: () => void;
-  onSwitchToLogin: () => void;
   navigation: {
     currentMode: string;
     onModeChange: (mode: any) => void;
@@ -35,23 +35,16 @@ type RecoveryState = "initial" | "sending" | "sent" | "error";
 
 const ForgotPasswordForm: React.FC<ForgotPasswordFormProps> = ({
   onBackToLogin,
-  onSwitchToLogin,
+  navigation,
 }) => {
-  // Estado para los datos del formulario
+  // Estados del componente
   const [formData, setFormData] = useState<ForgotPasswordFormData>({
     email: "",
   });
-
-  // Estado para los errores de validación
+  
   const [errors, setErrors] = useState<FormErrors>({});
-
-  // Estado del proceso de recuperación
   const [recoveryState, setRecoveryState] = useState<RecoveryState>("initial");
-
-  // Estado para el contador de reenvío
   const [resendCountdown, setResendCountdown] = useState<number>(0);
-
-  // Estado para el email enviado (para mostrar confirmación)
   const [sentToEmail, setSentToEmail] = useState<string>("");
 
   // Función para manejar cambios en el input
@@ -80,8 +73,7 @@ const ForgotPasswordForm: React.FC<ForgotPasswordFormProps> = ({
     if (!formData.email.trim()) {
       newErrors.email = "La dirección de correo electrónico es requerida";
     } else if (!validateEmail(formData.email)) {
-      newErrors.email =
-        "Por favor ingresa una dirección de correo electrónico válida";
+      newErrors.email = "Por favor ingresa una dirección de correo electrónico válida";
     }
 
     setErrors(newErrors);
@@ -102,7 +94,7 @@ const ForgotPasswordForm: React.FC<ForgotPasswordFormProps> = ({
     }, 1000);
   };
 
-  // Función para manejar el envío del formulario
+  // ✅ FUNCIÓN REAL - Conectada al backend
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -114,50 +106,63 @@ const ForgotPasswordForm: React.FC<ForgotPasswordFormProps> = ({
     setErrors({});
 
     try {
-      // Simular llamada a la API
-      await new Promise((resolve) => setTimeout(resolve, 2000));
+      console.log("🔄 Enviando solicitud de restablecimiento para:", formData.email);
 
-      // TODO: Implementar lógica de recuperación real
-      console.log("Password recovery attempt for:", formData.email);
+      // ✅ PETICIÓN REAL AL BACKEND usando authService
+      await authService.forgotPassword(formData.email);
 
-      // Simular éxito o error
-      const simulateSuccess = Math.random() > 0.1;
+      // Si llegamos aquí, la petición fue exitosa
+      setSentToEmail(formData.email);
+      setRecoveryState("sent");
+      startResendCountdown();
+      
+      console.log("✅ Email de restablecimiento enviado exitosamente al backend");
 
-      if (simulateSuccess) {
-        setSentToEmail(formData.email);
-        setRecoveryState("sent");
-        startResendCountdown();
-      } else {
-        setRecoveryState("error");
-        setErrors({
-          general:
-            "Dirección de correo electrónico no encontrada. Por favor verifica tu correo o crea una nueva cuenta.",
-        });
-      }
-    } catch (error) {
+    } catch (error: any) {
+      console.error("❌ Error enviando email de restablecimiento:", error);
+      
       setRecoveryState("error");
-      setErrors({
-        general: "Algo salió mal. Por favor intenta más tarde.",
-      });
+      
+      // Manejar diferentes tipos de errores del backend
+      let errorMessage = "Error al enviar el correo de restablecimiento. Por favor intenta más tarde.";
+      
+      if (error.message) {
+        if (error.message.includes("not found") || error.message.includes("no encontrado")) {
+          errorMessage = "Dirección de correo electrónico no encontrada. Por favor verifica tu correo o crea una nueva cuenta.";
+        } else if (error.message.includes("rate limit") || error.message.includes("too many")) {
+          errorMessage = "Demasiados intentos. Por favor espera unos minutos antes de intentar de nuevo.";
+        } else {
+          errorMessage = error.message;
+        }
+      }
+      
+      setErrors({ general: errorMessage });
     }
   };
 
-  // Función para reenviar el email
+  // ✅ FUNCIÓN REAL - Reenvío conectado al backend
   const handleResendEmail = async () => {
     if (resendCountdown > 0) return;
 
     setRecoveryState("sending");
 
     try {
-      // Simular reenvío
-      await new Promise((resolve) => setTimeout(resolve, 1500));
+      console.log("🔄 Reenviando email de restablecimiento para:", sentToEmail);
+
+      // ✅ PETICIÓN REAL AL BACKEND
+      await authService.forgotPassword(sentToEmail);
 
       setRecoveryState("sent");
       startResendCountdown();
-    } catch (error) {
+      
+      console.log("✅ Email de restablecimiento reenviado exitosamente");
+
+    } catch (error: any) {
+      console.error("❌ Error reenviando email:", error);
+      
       setRecoveryState("error");
       setErrors({
-        general: "No se pudo reenviar el correo. Por favor intenta de nuevo.",
+        general: error.message || "No se pudo reenviar el correo. Por favor intenta de nuevo.",
       });
     }
   };
@@ -171,21 +176,20 @@ const ForgotPasswordForm: React.FC<ForgotPasswordFormProps> = ({
     setResendCountdown(0);
   };
 
+  // Función para ir al registro
+  const handleGoToRegister = () => {
+    navigation.onModeChange("register");
+  };
+
   // Variantes de animación
   const formVariants = {
     hidden: { opacity: 0, y: 20 },
-    visible: {
-      opacity: 1,
-      y: 0,
-    },
+    visible: { opacity: 1, y: 0 },
   };
 
   const itemVariants = {
     hidden: { opacity: 0, y: 10 },
-    visible: {
-      opacity: 1,
-      y: 0,
-    },
+    visible: { opacity: 1, y: 0 },
   };
 
   // Función para renderizar el contenido según el estado
@@ -194,11 +198,7 @@ const ForgotPasswordForm: React.FC<ForgotPasswordFormProps> = ({
       case "initial":
       case "sending":
         return (
-          <motion.div
-            variants={formVariants}
-            initial="hidden"
-            animate="visible"
-          >
+          <motion.div variants={formVariants} initial="hidden" animate="visible">
             {/* Descripción */}
             <motion.div variants={itemVariants} className="text-center mb-6">
               <p className="text-gray-600 leading-relaxed">
@@ -322,7 +322,7 @@ const ForgotPasswordForm: React.FC<ForgotPasswordFormProps> = ({
             {/* Mensaje de éxito */}
             <div>
               <h3 className="text-xl font-bold text-gray-900 mb-2">
-                Revisa tu Correo Electrónico
+                ✅ Correo Enviado
               </h3>
               <p className="text-gray-600 leading-relaxed">
                 Hemos enviado un enlace de restablecimiento de contraseña a{" "}
@@ -342,9 +342,7 @@ const ForgotPasswordForm: React.FC<ForgotPasswordFormProps> = ({
                   </h4>
                   <ul className="text-sm text-blue-700 space-y-1">
                     <li>• Revisa tu bandeja de entrada (y carpeta de spam)</li>
-                    <li>
-                      • Haz clic en el enlace de restablecimiento en el correo
-                    </li>
+                    <li>• Haz clic en el enlace de restablecimiento en el correo</li>
                     <li>• Crea una nueva contraseña</li>
                     <li>• Inicia sesión con tus nuevas credenciales</li>
                   </ul>
@@ -396,11 +394,10 @@ const ForgotPasswordForm: React.FC<ForgotPasswordFormProps> = ({
             {/* Mensaje de error */}
             <div>
               <h3 className="text-xl font-bold text-gray-900 mb-2">
-                Algo salió mal
+                ❌ Error en el Envío
               </h3>
               <p className="text-gray-600 leading-relaxed">
-                {errors.general ||
-                  "Encontramos un error al procesar tu solicitud."}
+                {errors.general || "Encontramos un error al procesar tu solicitud."}
               </p>
             </div>
 
@@ -447,7 +444,7 @@ const ForgotPasswordForm: React.FC<ForgotPasswordFormProps> = ({
           ¿Recuerdas tu contraseña?{" "}
           <button
             type="button"
-            onClick={onSwitchToLogin}
+            onClick={onBackToLogin}
             className="text-emerald-600 hover:text-emerald-700 font-semibold hover:underline transition-colors"
             disabled={recoveryState === "sending"}
           >
@@ -460,7 +457,7 @@ const ForgotPasswordForm: React.FC<ForgotPasswordFormProps> = ({
             ¿No tienes una cuenta?{" "}
             <button
               type="button"
-              onClick={() => onBackToLogin()}
+              onClick={handleGoToRegister}
               className="text-emerald-600 hover:text-emerald-700 hover:underline transition-colors"
             >
               Crear una aquí
@@ -469,17 +466,22 @@ const ForgotPasswordForm: React.FC<ForgotPasswordFormProps> = ({
         )}
       </motion.div>
 
-      {/* Información de desarrollo */}
+      {/* ✅ Información de conexión real */}
       <motion.div
         className="text-center"
         variants={itemVariants}
         initial="hidden"
         animate="visible"
       >
-        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
-          <p className="text-xs text-yellow-700">
-            <strong>Modo de Desarrollo:</strong> Los correos de restablecimiento
-            son simulados. Estado: {recoveryState}
+        <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+          <p className="text-xs text-green-700">
+            <strong>🟢 Conectado al Backend:</strong> Las peticiones se envían a 
+            <code className="mx-1 px-1 bg-green-100 rounded">
+              http://localhost:5000/api/v1/auth/forgot-password
+            </code>
+          </p>
+          <p className="text-xs text-green-600 mt-1">
+            Estado actual: {recoveryState} | Email: {formData.email || 'No ingresado'}
           </p>
         </div>
       </motion.div>
