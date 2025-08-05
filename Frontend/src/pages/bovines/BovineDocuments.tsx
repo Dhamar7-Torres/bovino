@@ -1,5 +1,4 @@
-import React, { useState, useRef, useCallback } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import React, { useState, useRef, useCallback, useEffect } from "react";
 import {
   Trash2,
   Search,
@@ -21,8 +20,14 @@ import {
   File,
   Plus,
   MoreVertical,
+  Wifi,
+  WifiOff,
+  RefreshCw,
+  Loader2,
 } from "lucide-react";
-import { useNavigate, useParams } from "react-router-dom";
+
+// Configuración de la API - Puerto 5000
+const API_BASE_URL = 'http://localhost:5000/api';
 
 // Interfaces para los documentos
 interface DocumentFile {
@@ -61,6 +66,110 @@ interface UploadProgress {
   status: "uploading" | "completed" | "error";
   error?: string;
 }
+
+// Servicio API para documentos
+class DocumentApiService {
+  private baseUrl: string;
+
+  constructor(baseUrl: string) {
+    this.baseUrl = baseUrl;
+  }
+
+  // Obtener documentos de un bovino
+  async getDocumentsByBovine(bovineId: string) {
+    try {
+      const response = await fetch(`${this.baseUrl}/bovines/${bovineId}/documents`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      console.error('Error fetching documents:', error);
+      throw error;
+    }
+  }
+
+  // Subir documento
+  async uploadDocument(bovineId: string, file: File, metadata: any) {
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('metadata', JSON.stringify(metadata));
+
+      const response = await fetch(`${this.baseUrl}/bovines/${bovineId}/documents`, {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      console.error('Error uploading document:', error);
+      throw error;
+    }
+  }
+
+  // Eliminar documento
+  async deleteDocument(documentId: string) {
+    try {
+      const response = await fetch(`${this.baseUrl}/documents/${documentId}`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      console.error('Error deleting document:', error);
+      throw error;
+    }
+  }
+
+  // Probar conexión
+  async testConnection() {
+    try {
+      const response = await fetch(`${this.baseUrl}/ping`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      console.error('Error testing connection:', error);
+      throw error;
+    }
+  }
+}
+
+// Instancia del servicio API
+const documentApi = new DocumentApiService(API_BASE_URL);
 
 // Configuración de categorías de documentos
 const documentCategories = {
@@ -130,6 +239,71 @@ const FileTypeIcon: React.FC<{ fileType: string; className?: string }> = ({
   }
 };
 
+// Componente para probar conexión con el backend
+const ConnectionTest: React.FC<{ onConnectionStatus: (status: boolean) => void }> = ({ onConnectionStatus }) => {
+  const [isConnected, setIsConnected] = useState<boolean | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [lastTest, setLastTest] = useState<Date | null>(null);
+
+  const testConnection = async () => {
+    setIsLoading(true);
+    try {
+      await documentApi.testConnection();
+      setIsConnected(true);
+      onConnectionStatus(true);
+      setLastTest(new Date());
+    } catch (error) {
+      setIsConnected(false);
+      onConnectionStatus(false);
+      console.error('Connection test failed:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    testConnection();
+  }, []);
+
+  return (
+    <div className="flex items-center gap-3 p-3 bg-white rounded-lg shadow-sm border border-gray-200">
+      <div className="flex items-center gap-2">
+        {isLoading ? (
+          <Loader2 className="w-4 h-4 animate-spin text-blue-600" />
+        ) : isConnected === true ? (
+          <Wifi className="w-4 h-4 text-green-600" />
+        ) : isConnected === false ? (
+          <WifiOff className="w-4 h-4 text-red-600" />
+        ) : (
+          <Wifi className="w-4 h-4 text-gray-400" />
+        )}
+        
+        <span className="text-sm font-medium">
+          {isLoading ? 'Probando conexión...' :
+           isConnected === true ? 'Conectado al backend (Puerto 5000)' :
+           isConnected === false ? 'Sin conexión al backend' :
+           'Estado desconocido'}
+        </span>
+      </div>
+
+      <button
+        onClick={testConnection}
+        disabled={isLoading}
+        className="ml-auto flex items-center gap-1 px-3 py-1 text-sm border border-gray-300 bg-white text-gray-700 rounded hover:bg-gray-50 transition-colors disabled:opacity-50"
+      >
+        <RefreshCw className={`w-3 h-3 ${isLoading ? 'animate-spin' : ''}`} />
+        Probar
+      </button>
+
+      {lastTest && (
+        <span className="text-xs text-gray-500">
+          {lastTest.toLocaleTimeString()}
+        </span>
+      )}
+    </div>
+  );
+};
+
 // Componente para la tarjeta de documento
 const DocumentCard: React.FC<{
   document: DocumentFile;
@@ -148,11 +322,9 @@ const DocumentCard: React.FC<{
   };
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: index * 0.1 }}
-      className="bg-white rounded-lg shadow-md border border-gray-200 hover:shadow-lg transition-all duration-300 overflow-hidden group"
+    <div
+      className="bg-white rounded-lg shadow-md border border-gray-200 hover:shadow-lg transition-all duration-300 overflow-hidden group animate-slideUp"
+      style={{ animationDelay: `${index * 0.1}s` }}
     >
       {/* Preview/Thumbnail */}
       <div className="h-32 bg-gray-50 relative overflow-hidden">
@@ -167,6 +339,18 @@ const DocumentCard: React.FC<{
             <FileTypeIcon fileType={document.type} className="w-12 h-12" />
           </div>
         )}
+        
+        {/* Overlay con botón de descarga */}
+        <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-20 transition-all duration-300 flex items-center justify-center">
+          <a
+            href={document.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="opacity-0 group-hover:opacity-100 transition-opacity duration-300 bg-white bg-opacity-90 rounded-full p-2 hover:bg-opacity-100"
+          >
+            <FileText className="w-5 h-5 text-gray-700" />
+          </a>
+        </div>
       </div>
 
       {/* Información del documento */}
@@ -183,31 +367,34 @@ const DocumentCard: React.FC<{
               <MoreVertical className="w-4 h-4" />
             </button>
 
-            <AnimatePresence>
-              {showMenu && (
-                <motion.div
-                  initial={{ opacity: 0, scale: 0.95, y: -10 }}
-                  animate={{ opacity: 1, scale: 1, y: 0 }}
-                  exit={{ opacity: 0, scale: 0.95, y: -10 }}
-                  className="absolute right-0 top-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-10 min-w-[120px]"
+            {showMenu && (
+              <div className="absolute right-0 top-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-10 min-w-[120px]">
+                <a
+                  href={document.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 w-full text-left"
+                  onClick={() => setShowMenu(false)}
                 >
-                  <button
-                    onClick={() => {
-                      onDelete(document);
-                      setShowMenu(false);
-                    }}
-                    className="flex items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50 w-full text-left"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                    Eliminar
-                  </button>
-                </motion.div>
-              )}
-            </AnimatePresence>
+                  <FileText className="w-4 h-4" />
+                  Ver/Descargar
+                </a>
+                <button
+                  onClick={() => {
+                    onDelete(document);
+                    setShowMenu(false);
+                  }}
+                  className="flex items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50 w-full text-left"
+                >
+                  <Trash2 className="w-4 h-4" />
+                  Eliminar
+                </button>
+              </div>
+            )}
           </div>
         </div>
 
-        {/* Categoría y tags */}
+        {/* Categoría */}
         <div className="flex items-center gap-2 mb-2">
           <span
             className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${category.color}`}
@@ -260,7 +447,7 @@ const DocumentCard: React.FC<{
           </p>
         )}
       </div>
-    </motion.div>
+    </div>
   );
 };
 
@@ -309,7 +496,7 @@ const FileUploader: React.FC<{
       onDragLeave={handleDragLeave}
       className={`border-2 border-dashed rounded-lg p-8 text-center transition-all duration-300 ${
         isDragOver
-          ? "border-[#3d8b40] bg-green-50"
+          ? "border-blue-500 bg-blue-50 scale-105"
           : "border-gray-300 hover:border-gray-400"
       } ${isUploading ? "opacity-50 pointer-events-none" : ""}`}
     >
@@ -322,10 +509,7 @@ const FileUploader: React.FC<{
         accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.gif,.mp4,.mov,.avi"
       />
 
-      <motion.div
-        animate={{ scale: isDragOver ? 1.05 : 1 }}
-        transition={{ duration: 0.2 }}
-      >
+      <div className="transition-transform duration-200">
         <CloudUpload className="w-16 h-16 text-gray-400 mx-auto mb-4" />
         <h3 className="text-lg font-semibold text-gray-900 mb-2">
           {isDragOver ? "Suelta los archivos aquí" : "Subir documentos"}
@@ -334,7 +518,7 @@ const FileUploader: React.FC<{
           Arrastra y suelta archivos aquí o{" "}
           <button
             onClick={() => fileInputRef.current?.click()}
-            className="text-[#3d8b40] hover:text-[#2d6e30] font-medium"
+            className="text-blue-600 hover:text-blue-700 font-medium underline"
             disabled={isUploading}
           >
             selecciona archivos
@@ -344,33 +528,30 @@ const FileUploader: React.FC<{
           Formatos soportados: PDF, DOC, DOCX, JPG, PNG, GIF, MP4, MOV, AVI
         </p>
         <p className="text-sm text-gray-500">Tamaño máximo: 50MB por archivo</p>
-      </motion.div>
+      </div>
     </div>
   );
 };
 
 // Componente principal de documentos del bovino
 const BovineDocuments: React.FC = () => {
-  const navigate = useNavigate();
-  const { id } = useParams<{ id: string }>();
+  // Simular params de navegación
+  const bovineId = "1"; // En una app real vendría de useParams()
 
   // Estados
   const [documents, setDocuments] = useState<DocumentFile[]>([]);
-  const [filteredDocuments, setFilteredDocuments] = useState<DocumentFile[]>(
-    []
-  );
-  const [selectedCategory, setSelectedCategory] = useState<
-    DocumentCategory | "ALL"
-  >("ALL");
+  const [filteredDocuments, setFilteredDocuments] = useState<DocumentFile[]>([]);
+  const [selectedCategory, setSelectedCategory] = useState<DocumentCategory | "ALL">("ALL");
   const [searchTerm, setSearchTerm] = useState("");
   const [showFilters, setShowFilters] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<UploadProgress[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [documentToDelete, setDocumentToDelete] = useState<DocumentFile | null>(
-    null
-  );
+  const [documentToDelete, setDocumentToDelete] = useState<DocumentFile | null>(null);
   const [showNewDocumentModal, setShowNewDocumentModal] = useState(false);
+  const [isConnected, setIsConnected] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [sortBy, setSortBy] = useState("date");
   const [newDocumentForm, setNewDocumentForm] = useState({
     name: "",
     description: "",
@@ -380,8 +561,31 @@ const BovineDocuments: React.FC = () => {
     file: null as File | null,
   });
 
-  // Cargar documentos simulados al montar el componente
-  React.useEffect(() => {
+  // Cargar documentos del servidor
+  const loadDocumentsFromServer = async () => {
+    setIsLoading(true);
+    try {
+      const response = await documentApi.getDocumentsByBovine(bovineId);
+      if (response.success && response.data) {
+        const adaptedDocuments = (response.data.documents || []).map((doc: any) => ({
+          ...doc,
+          uploadDate: new Date(doc.uploadDate),
+          lastModified: new Date(doc.lastModified),
+        }));
+        
+        setDocuments(adaptedDocuments);
+      }
+    } catch (error) {
+      console.error('Error loading documents from server:', error);
+      // Cargar datos mock si no hay conexión
+      loadMockData();
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Cargar datos mock como fallback
+  const loadMockData = () => {
     const mockDocuments: DocumentFile[] = [
       {
         id: "1",
@@ -391,12 +595,11 @@ const BovineDocuments: React.FC = () => {
         category: "VACCINATION",
         uploadDate: new Date("2024-06-15"),
         lastModified: new Date("2024-06-15"),
-        description:
-          "Certificado de vacunación contra IBR aplicada el 15/06/2024",
+        description: "Certificado de vacunación contra IBR aplicada el 15/06/2024",
         tags: ["IBR", "vacuna", "certificado"],
         uploadedBy: "Dr. Carlos Mendoza",
-        bovineId: id || "1",
-        url: "/documents/cert-vacuna-ibr.pdf",
+        bovineId: bovineId,
+        url: "#",
         isPublic: false,
         version: 1,
       },
@@ -411,10 +614,9 @@ const BovineDocuments: React.FC = () => {
         description: "Foto reciente del bovino mostrando buen estado de salud",
         tags: ["foto", "salud", "estado"],
         uploadedBy: "Juan Pérez",
-        bovineId: id || "1",
+        bovineId: bovineId,
         url: "https://images.unsplash.com/photo-1516467508483-a7212febe31a?w=400",
-        thumbnailUrl:
-          "https://images.unsplash.com/photo-1516467508483-a7212febe31a?w=200",
+        thumbnailUrl: "https://images.unsplash.com/photo-1516467508483-a7212febe31a?w=200",
         isPublic: true,
         version: 1,
       },
@@ -426,12 +628,11 @@ const BovineDocuments: React.FC = () => {
         category: "MEDICAL",
         uploadDate: new Date("2024-04-20"),
         lastModified: new Date("2024-04-25"),
-        description:
-          "Reporte médico completo del tratamiento de mastitis subclínica",
+        description: "Reporte médico completo del tratamiento de mastitis subclínica",
         tags: ["mastitis", "tratamiento", "reporte médico"],
         uploadedBy: "Dr. Luis Fernández",
-        bovineId: id || "1",
-        url: "/documents/reporte-mastitis.pdf",
+        bovineId: bovineId,
+        url: "#",
         isPublic: false,
         version: 2,
       },
@@ -446,20 +647,45 @@ const BovineDocuments: React.FC = () => {
         description: "Registro genealógico oficial con línea de ascendencia",
         tags: ["genealogía", "registro", "ascendencia"],
         uploadedBy: "Registro Ganadero",
-        bovineId: id || "1",
-        url: "/documents/registro-genealogico.pdf",
+        bovineId: bovineId,
+        url: "#",
         isPublic: false,
+        version: 1,
+      },
+      {
+        id: "5",
+        name: "Video_Comportamiento_Pastoreo.mp4",
+        type: "video/mp4",
+        size: 25600000,
+        category: "VIDEO",
+        uploadDate: new Date("2024-05-10"),
+        lastModified: new Date("2024-05-10"),
+        description: "Video mostrando comportamiento normal durante el pastoreo",
+        tags: ["comportamiento", "pastoreo", "video"],
+        uploadedBy: "María González",
+        bovineId: bovineId,
+        url: "#",
+        isPublic: true,
         version: 1,
       },
     ];
 
     setDocuments(mockDocuments);
-    setFilteredDocuments(mockDocuments);
-  }, [id]);
+  };
 
-  // Filtrar documentos
-  React.useEffect(() => {
-    let filtered = documents;
+  // Cargar datos al iniciar
+  useEffect(() => {
+    if (isConnected) {
+      loadDocumentsFromServer();
+    } else {
+      loadMockData();
+      setIsLoading(false);
+    }
+  }, [isConnected]);
+
+  // Filtrar y ordenar documentos
+  useEffect(() => {
+    let filtered = [...documents];
 
     // Filtro por categoría
     if (selectedCategory !== "ALL") {
@@ -478,8 +704,24 @@ const BovineDocuments: React.FC = () => {
       );
     }
 
+    // Ordenar documentos
+    filtered.sort((a, b) => {
+      switch (sortBy) {
+        case "date":
+          return b.uploadDate.getTime() - a.uploadDate.getTime();
+        case "name":
+          return a.name.localeCompare(b.name);
+        case "size":
+          return b.size - a.size;
+        case "category":
+          return a.category.localeCompare(b.category);
+        default:
+          return 0;
+      }
+    });
+
     setFilteredDocuments(filtered);
-  }, [documents, selectedCategory, searchTerm]);
+  }, [documents, selectedCategory, searchTerm, sortBy]);
 
   // Manejar subida de archivos
   const handleFileUpload = async (files: FileList) => {
@@ -500,12 +742,24 @@ const BovineDocuments: React.FC = () => {
 
     setUploadProgress(newProgress);
 
-    // Simular subida de archivos
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
       const fileId = `upload-${Date.now()}-${i}`;
 
       try {
+        if (isConnected) {
+          // Subir al servidor
+          const metadata = {
+            name: file.name,
+            category: file.type.startsWith("image/") ? "PHOTO" : "OTHER",
+            description: "",
+            tags: [],
+            isPublic: false,
+          };
+
+          await documentApi.uploadDocument(bovineId, file, metadata);
+        }
+
         // Simular progreso de subida
         for (let progress = 0; progress <= 100; progress += 10) {
           await new Promise((resolve) => setTimeout(resolve, 100));
@@ -514,18 +768,19 @@ const BovineDocuments: React.FC = () => {
           );
         }
 
-        // Crear nuevo documento
+        // Crear nuevo documento localmente
         const newDocument: DocumentFile = {
           id: `doc-${Date.now()}-${i}`,
           name: file.name,
           type: file.type,
           size: file.size,
-          category: "OTHER", // Por defecto, se puede cambiar después
+          category: file.type.startsWith("image/") ? "PHOTO" : 
+                   file.type.startsWith("video/") ? "VIDEO" : "OTHER",
           uploadDate: new Date(),
           lastModified: new Date(),
           tags: [],
           uploadedBy: "Usuario Actual",
-          bovineId: id || "1",
+          bovineId: bovineId,
           url: URL.createObjectURL(file),
           isPublic: false,
           version: 1,
@@ -534,7 +789,6 @@ const BovineDocuments: React.FC = () => {
         // Agregar thumbnail para imágenes
         if (file.type.startsWith("image/")) {
           newDocument.thumbnailUrl = URL.createObjectURL(file);
-          newDocument.category = "PHOTO";
         }
 
         setDocuments((prev) => [...prev, newDocument]);
@@ -546,7 +800,7 @@ const BovineDocuments: React.FC = () => {
           )
         );
       } catch (error) {
-        // Marcar como error
+        console.error('Error uploading file:', error);
         setUploadProgress((prev) =>
           prev.map((p) =>
             p.fileId === fileId
@@ -555,6 +809,11 @@ const BovineDocuments: React.FC = () => {
           )
         );
       }
+    }
+
+    // Recargar documentos si está conectado
+    if (isConnected) {
+      setTimeout(() => loadDocumentsFromServer(), 1000);
     }
 
     // Limpiar progreso después de un tiempo
@@ -570,14 +829,31 @@ const BovineDocuments: React.FC = () => {
     setShowDeleteModal(true);
   };
 
-  const confirmDelete = () => {
-    if (documentToDelete) {
+  const confirmDelete = async () => {
+    if (!documentToDelete) return;
+
+    try {
+      if (isConnected) {
+        await documentApi.deleteDocument(documentToDelete.id);
+        alert('Documento eliminado exitosamente del servidor');
+      } else {
+        alert('Documento eliminado localmente (sin conexión al servidor)');
+      }
+
       setDocuments((prev) =>
         prev.filter((doc) => doc.id !== documentToDelete.id)
       );
-      setShowDeleteModal(false);
-      setDocumentToDelete(null);
+
+      if (isConnected) {
+        setTimeout(() => loadDocumentsFromServer(), 1000);
+      }
+    } catch (error) {
+      console.error('Error deleting document:', error);
+      alert(`Error al eliminar el documento: ${error instanceof Error ? error.message : 'Error desconocido'}`);
     }
+
+    setShowDeleteModal(false);
+    setDocumentToDelete(null);
   };
 
   // Manejar nuevo documento
@@ -591,34 +867,60 @@ const BovineDocuments: React.FC = () => {
       return;
     }
 
-    // Crear nuevo documento
-    const newDocument: DocumentFile = {
-      id: `doc-${Date.now()}`,
-      name: newDocumentForm.name.trim(),
-      type: newDocumentForm.file.type,
-      size: newDocumentForm.file.size,
-      category: newDocumentForm.category,
-      uploadDate: new Date(),
-      lastModified: new Date(),
-      description: newDocumentForm.description.trim(),
-      tags: newDocumentForm.tags
-        .split(",")
-        .map((tag) => tag.trim())
-        .filter((tag) => tag.length > 0),
-      uploadedBy: "Usuario Actual",
-      bovineId: id || "1",
-      url: URL.createObjectURL(newDocumentForm.file),
-      isPublic: newDocumentForm.isPublic,
-      version: 1,
-    };
+    try {
+      if (isConnected) {
+        const metadata = {
+          name: newDocumentForm.name.trim(),
+          category: newDocumentForm.category,
+          description: newDocumentForm.description.trim(),
+          tags: newDocumentForm.tags
+            .split(",")
+            .map((tag) => tag.trim())
+            .filter((tag) => tag.length > 0),
+          isPublic: newDocumentForm.isPublic,
+        };
 
-    // Agregar thumbnail para imágenes
-    if (newDocumentForm.file.type.startsWith("image/")) {
-      newDocument.thumbnailUrl = URL.createObjectURL(newDocumentForm.file);
+        await documentApi.uploadDocument(bovineId, newDocumentForm.file, metadata);
+        alert('Documento creado exitosamente en el servidor');
+      } else {
+        alert('Documento creado localmente (sin conexión al servidor)');
+      }
+
+      // Crear documento localmente
+      const newDocument: DocumentFile = {
+        id: `doc-${Date.now()}`,
+        name: newDocumentForm.name.trim(),
+        type: newDocumentForm.file.type,
+        size: newDocumentForm.file.size,
+        category: newDocumentForm.category,
+        uploadDate: new Date(),
+        lastModified: new Date(),
+        description: newDocumentForm.description.trim(),
+        tags: newDocumentForm.tags
+          .split(",")
+          .map((tag) => tag.trim())
+          .filter((tag) => tag.length > 0),
+        uploadedBy: "Usuario Actual",
+        bovineId: bovineId,
+        url: URL.createObjectURL(newDocumentForm.file),
+        isPublic: newDocumentForm.isPublic,
+        version: 1,
+      };
+
+      if (newDocumentForm.file.type.startsWith("image/")) {
+        newDocument.thumbnailUrl = URL.createObjectURL(newDocumentForm.file);
+      }
+
+      setDocuments((prev) => [...prev, newDocument]);
+
+      // Recargar desde servidor si está conectado
+      if (isConnected) {
+        setTimeout(() => loadDocumentsFromServer(), 1000);
+      }
+    } catch (error) {
+      console.error('Error creating document:', error);
+      alert(`Error al crear el documento: ${error instanceof Error ? error.message : 'Error desconocido'}`);
     }
-
-    // Agregar documento a la lista
-    setDocuments((prev) => [...prev, newDocument]);
 
     // Limpiar formulario y cerrar modal
     setNewDocumentForm({
@@ -655,43 +957,18 @@ const BovineDocuments: React.FC = () => {
     return stats.filter((stat) => stat.count > 0);
   };
 
-  // Animaciones
-  const containerVariants = {
-    hidden: { opacity: 0 },
-    visible: {
-      opacity: 1,
-      transition: {
-        duration: 0.6,
-        staggerChildren: 0.1,
-      },
-    },
-  };
-
-  const itemVariants = {
-    hidden: { opacity: 0, y: 20 },
-    visible: {
-      opacity: 1,
-      y: 0,
-      transition: { duration: 0.4 },
-    },
+  const goBack = () => {
+    alert('Navegación simulada - En una app real usarías navigate()');
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#3d8b40] via-[#f2e9d8] to-[#f4ac3a] p-4">
-      <motion.div
-        variants={containerVariants}
-        initial="hidden"
-        animate="visible"
-        className="max-w-7xl mx-auto"
-      >
+    <div className="min-h-screen bg-gray-100 p-4">
+      <div className="max-w-7xl mx-auto">
         {/* Header */}
-        <motion.div
-          variants={itemVariants}
-          className="flex items-center justify-between mb-6"
-        >
+        <div className="flex items-center justify-between mb-6 animate-slideDown">
           <button
-            onClick={() => navigate(`/bovines/detail/${id}`)}
-            className="flex items-center gap-2 px-4 py-2 bg-white/20 backdrop-blur-sm rounded-lg text-white hover:bg-white/30 transition-all duration-300"
+            onClick={goBack}
+            className="flex items-center gap-2 px-4 py-2 bg-white rounded-lg text-gray-700 hover:bg-gray-50 transition-all duration-300 shadow-sm border border-gray-200"
           >
             <ArrowLeft className="w-4 h-4" />
             <span className="font-medium">Regresar al Detalle</span>
@@ -700,37 +977,45 @@ const BovineDocuments: React.FC = () => {
           <div className="flex items-center gap-3">
             <button
               onClick={() => setShowFilters(!showFilters)}
-              className={`flex items-center gap-2 px-4 py-2 backdrop-blur-sm rounded-lg text-white transition-all duration-300 ${
-                showFilters ? "bg-white/30" : "bg-white/20 hover:bg-white/30"
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all duration-300 shadow-sm border ${
+                showFilters 
+                  ? "bg-blue-50 border-blue-200 text-blue-700" 
+                  : "bg-white border-gray-200 text-gray-700 hover:bg-gray-50"
               }`}
             >
               <Filter className="w-4 h-4" />
               <span className="font-medium">Filtros</span>
             </button>
           </div>
-        </motion.div>
+        </div>
+
+        {/* Prueba de conexión */}
+        <div className="mb-6 animate-slideUp">
+          <ConnectionTest onConnectionStatus={setIsConnected} />
+        </div>
 
         {/* Título */}
-        <motion.div variants={itemVariants} className="text-center mb-8">
-          <h1 className="text-4xl md:text-5xl font-bold text-white mb-4">
-            Documentos del Bovino
+        <div className="text-center mb-8 animate-slideUp">
+          <h1 className="text-4xl md:text-5xl font-bold text-gray-900 mb-4">
+            📄 Documentos del Bovino
           </h1>
-          <p className="text-lg text-white/80 max-w-2xl mx-auto">
-            Gestiona todos los documentos, certificados y archivos relacionados
-            con el bovino
+          <p className="text-lg text-gray-600 max-w-2xl mx-auto">
+            Gestiona todos los documentos, certificados y archivos relacionados con el bovino
+            {!isConnected && (
+              <span className="block text-yellow-600 mt-2 font-medium">
+                ⚠️ Modo offline - Sin conexión al servidor puerto 5000
+              </span>
+            )}
           </p>
-        </motion.div>
+        </div>
 
         {/* Estadísticas de documentos */}
-        <motion.div
-          variants={itemVariants}
-          className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4 mb-8"
-        >
+        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4 mb-8 animate-slideLeft">
           <div
-            className={`bg-white/90 backdrop-blur-sm rounded-lg p-4 text-center cursor-pointer transition-all duration-300 ${
+            className={`bg-white rounded-lg p-4 text-center cursor-pointer transition-all duration-300 shadow-sm hover:shadow-md border-2 ${
               selectedCategory === "ALL"
-                ? "ring-2 ring-[#3d8b40]"
-                : "hover:bg-white"
+                ? "border-blue-500 bg-blue-50"
+                : "border-gray-200 hover:border-gray-300"
             }`}
             onClick={() => setSelectedCategory("ALL")}
           >
@@ -745,10 +1030,10 @@ const BovineDocuments: React.FC = () => {
             return (
               <div
                 key={stat.category}
-                className={`bg-white/90 backdrop-blur-sm rounded-lg p-4 text-center cursor-pointer transition-all duration-300 ${
+                className={`bg-white rounded-lg p-4 text-center cursor-pointer transition-all duration-300 shadow-sm hover:shadow-md border-2 ${
                   selectedCategory === stat.category
-                    ? "ring-2 ring-[#3d8b40]"
-                    : "hover:bg-white"
+                    ? "border-blue-500 bg-blue-50"
+                    : "border-gray-200 hover:border-gray-300"
                 }`}
                 onClick={() => setSelectedCategory(stat.category)}
               >
@@ -762,13 +1047,10 @@ const BovineDocuments: React.FC = () => {
               </div>
             );
           })}
-        </motion.div>
+        </div>
 
         {/* Barra de búsqueda y filtros */}
-        <motion.div
-          variants={itemVariants}
-          className="bg-[#fffdf8]/90 backdrop-blur-sm rounded-2xl shadow-xl border border-white/20 p-6 mb-6"
-        >
+        <div className="bg-white rounded-2xl shadow-lg border border-gray-200 p-6 mb-6 animate-slideRight">
           <div className="flex flex-col md:flex-row gap-4">
             {/* Búsqueda */}
             <div className="flex-1 relative">
@@ -778,117 +1060,137 @@ const BovineDocuments: React.FC = () => {
                 placeholder="Buscar documentos por nombre, descripción o tags..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#3d8b40] focus:border-transparent"
+                className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
             </div>
 
             {/* Filtros adicionales */}
-            <AnimatePresence>
-              {showFilters && (
-                <motion.div
-                  initial={{ opacity: 0, width: 0 }}
-                  animate={{ opacity: 1, width: "auto" }}
-                  exit={{ opacity: 0, width: 0 }}
-                  className="flex gap-2"
+            {showFilters && (
+              <div className="flex gap-2 animate-slideDown">
+                <select 
+                  className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.target.value)}
                 >
-                  <select className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#3d8b40] focus:border-transparent">
-                    <option value="">Ordenar por</option>
-                    <option value="date">Fecha</option>
-                    <option value="name">Nombre</option>
-                    <option value="size">Tamaño</option>
-                  </select>
-                </motion.div>
-              )}
-            </AnimatePresence>
+                  <option value="date">Fecha (más reciente)</option>
+                  <option value="name">Nombre (A-Z)</option>
+                  <option value="size">Tamaño (mayor)</option>
+                  <option value="category">Categoría</option>
+                </select>
+                {isConnected && (
+                  <button
+                    onClick={loadDocumentsFromServer}
+                    disabled={isLoading}
+                    className="flex items-center gap-2 px-3 py-2 border border-gray-300 bg-white text-gray-700 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
+                  >
+                    {isLoading ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <RefreshCw className="w-4 h-4" />
+                    )}
+                    {isLoading ? 'Cargando...' : 'Recargar'}
+                  </button>
+                )}
+              </div>
+            )}
           </div>
-        </motion.div>
+        </div>
 
         {/* Área de subida de archivos */}
-        <motion.div
-          variants={itemVariants}
-          className="bg-[#fffdf8]/90 backdrop-blur-sm rounded-2xl shadow-xl border border-white/20 p-6 mb-6"
-        >
+        <div className="bg-white rounded-2xl shadow-lg border border-gray-200 p-6 mb-6 animate-slideUp">
+          {/* Estado de conexión */}
+          <div className={`p-3 rounded-lg border mb-6 ${isConnected ? 'bg-green-50 border-green-200' : 'bg-yellow-50 border-yellow-200'}`}>
+            <div className="flex items-center gap-2">
+              {isConnected ? (
+                <Wifi className="w-4 h-4 text-green-600" />
+              ) : (
+                <WifiOff className="w-4 h-4 text-yellow-600" />
+              )}
+              <span className="text-sm font-medium">
+                {isConnected ? '✅ Conectado al servidor - Los archivos se subirán a la base de datos' : '⚠️ Sin conexión - Los archivos se guardarán localmente'}
+              </span>
+            </div>
+          </div>
+
           <FileUploader
             onFileUpload={handleFileUpload}
             isUploading={isUploading}
           />
 
           {/* Progreso de subida */}
-          <AnimatePresence>
-            {uploadProgress.length > 0 && (
-              <motion.div
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: "auto" }}
-                exit={{ opacity: 0, height: 0 }}
-                className="mt-6 space-y-3"
-              >
-                <h4 className="font-semibold text-gray-900">
-                  Subiendo archivos...
-                </h4>
-                {uploadProgress.map((progress) => (
-                  <div
-                    key={progress.fileId}
-                    className="bg-white rounded-lg p-4 shadow-sm border border-gray-200"
-                  >
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-sm font-medium text-gray-900">
-                        {progress.fileName}
+          {uploadProgress.length > 0 && (
+            <div className="mt-6 space-y-3 animate-slideDown">
+              <h4 className="font-semibold text-gray-900 flex items-center gap-2">
+                <Loader2 className="w-5 h-5 animate-spin text-blue-600" />
+                Subiendo archivos...
+              </h4>
+              {uploadProgress.map((progress) => (
+                <div
+                  key={progress.fileId}
+                  className="bg-gray-50 rounded-lg p-4 shadow-sm border border-gray-200"
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-medium text-gray-900 flex items-center gap-2">
+                      <FileTypeIcon fileType={progress.fileName.split('.').pop() || ''} className="w-4 h-4" />
+                      {progress.fileName}
+                    </span>
+                    <div className="flex items-center gap-2">
+                      {progress.status === "completed" && (
+                        <CheckCircle className="w-5 h-5 text-green-500" />
+                      )}
+                      {progress.status === "error" && (
+                        <AlertTriangle className="w-5 h-5 text-red-500" />
+                      )}
+                      <span className="text-sm text-gray-600">
+                        {progress.progress}%
                       </span>
-                      <div className="flex items-center gap-2">
-                        {progress.status === "completed" && (
-                          <CheckCircle className="w-5 h-5 text-green-500" />
-                        )}
-                        {progress.status === "error" && (
-                          <AlertTriangle className="w-5 h-5 text-red-500" />
-                        )}
-                        <span className="text-sm text-gray-600">
-                          {progress.progress}%
-                        </span>
-                      </div>
                     </div>
-                    <div className="w-full bg-gray-200 rounded-full h-2">
-                      <motion.div
-                        className={`h-2 rounded-full transition-all duration-300 ${
-                          progress.status === "completed"
-                            ? "bg-green-500"
-                            : progress.status === "error"
-                            ? "bg-red-500"
-                            : "bg-[#3d8b40]"
-                        }`}
-                        style={{ width: `${progress.progress}%` }}
-                      />
-                    </div>
-                    {progress.error && (
-                      <p className="text-sm text-red-600 mt-1">
-                        {progress.error}
-                      </p>
-                    )}
                   </div>
-                ))}
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </motion.div>
+                  <div className="w-full bg-gray-200 rounded-full h-2">
+                    <div
+                      className={`h-2 rounded-full transition-all duration-300 ${
+                        progress.status === "completed"
+                          ? "bg-green-500"
+                          : progress.status === "error"
+                          ? "bg-red-500"
+                          : "bg-blue-500"
+                      }`}
+                      style={{ width: `${progress.progress}%` }}
+                    />
+                  </div>
+                  {progress.error && (
+                    <p className="text-sm text-red-600 mt-1 flex items-center gap-1">
+                      <AlertTriangle className="w-3 h-3" />
+                      {progress.error}
+                    </p>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
 
         {/* Lista de documentos */}
-        <motion.div
-          variants={itemVariants}
-          className="bg-[#fffdf8]/90 backdrop-blur-sm rounded-2xl shadow-xl border border-white/20 p-6"
-        >
+        <div className="bg-white rounded-2xl shadow-lg border border-gray-200 p-6 animate-slideUp">
           <div className="flex items-center justify-between mb-6">
-            <h2 className="text-2xl font-bold text-gray-900">
-              Documentos ({filteredDocuments.length})
+            <h2 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
+              📚 Documentos ({filteredDocuments.length})
             </h2>
             <button 
               onClick={handleNewDocument}
-              className="flex items-center gap-2 px-4 py-2 bg-[#3d8b40] text-white rounded-lg hover:bg-[#2d6e30] transition-colors"
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-sm hover:shadow-md"
             >
               <Plus className="w-4 h-4" />
               Nuevo Documento
             </button>
           </div>
 
-          {filteredDocuments.length > 0 ? (
+          {isLoading ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+              <span className="ml-2 text-gray-600">Cargando documentos...</span>
+            </div>
+          ) : filteredDocuments.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
               {filteredDocuments.map((document, index) => (
                 <DocumentCard
@@ -903,7 +1205,7 @@ const BovineDocuments: React.FC = () => {
             <div className="text-center py-12">
               <FileText className="w-16 h-16 text-gray-300 mx-auto mb-4" />
               <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                No se encontraron documentos
+                📭 No se encontraron documentos
               </h3>
               <p className="text-gray-600 mb-4">
                 {searchTerm || selectedCategory !== "ALL"
@@ -916,278 +1218,340 @@ const BovineDocuments: React.FC = () => {
                     setSearchTerm("");
                     setSelectedCategory("ALL");
                   }}
-                  className="text-[#3d8b40] hover:text-[#2d6e30] font-medium"
+                  className="text-blue-600 hover:text-blue-700 font-medium underline"
                 >
-                  Limpiar filtros
+                  🧹 Limpiar filtros
                 </button>
               )}
             </div>
           )}
-        </motion.div>
+        </div>
 
         {/* Modal de confirmación de eliminación */}
-        <AnimatePresence>
-          {showDeleteModal && documentToDelete && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
-            >
-              <motion.div
-                initial={{ scale: 0.9, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                exit={{ scale: 0.9, opacity: 0 }}
-                className="bg-white rounded-2xl p-6 max-w-md w-full"
-              >
-                <div className="text-center">
-                  <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <AlertTriangle className="w-8 h-8 text-red-600" />
-                  </div>
-                  <h3 className="text-xl font-bold text-gray-900 mb-2">
-                    Confirmar Eliminación
-                  </h3>
-                  <p className="text-gray-600 mb-6">
-                    ¿Estás seguro de que deseas eliminar el documento{" "}
-                    <strong>{documentToDelete.name}</strong>? Esta acción no se
-                    puede deshacer.
-                  </p>
-                  <div className="flex gap-3">
-                    <button
-                      onClick={() => setShowDeleteModal(false)}
-                      className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
-                    >
-                      Cancelar
-                    </button>
-                    <button
-                      onClick={confirmDelete}
-                      className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
-                    >
-                      Eliminar
-                    </button>
-                  </div>
+        {showDeleteModal && documentToDelete && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-2xl p-6 max-w-md w-full animate-slideUp shadow-2xl">
+              <div className="text-center">
+                <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <AlertTriangle className="w-8 h-8 text-red-600" />
                 </div>
-              </motion.div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        {/* Modal de nuevo documento */}
-        <AnimatePresence>
-          {showNewDocumentModal && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
-            >
-              <motion.div
-                initial={{ scale: 0.9, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                exit={{ scale: 0.9, opacity: 0 }}
-                className="bg-white rounded-2xl p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto"
-              >
-                <div className="flex items-center justify-between mb-6">
-                  <h3 className="text-2xl font-bold text-gray-900">
-                    Nuevo Documento
-                  </h3>
+                <h3 className="text-xl font-bold text-gray-900 mb-2">
+                  🗑️ Confirmar Eliminación
+                </h3>
+                <p className="text-gray-600 mb-6">
+                  ¿Estás seguro de que deseas eliminar el documento{" "}
+                  <strong className="text-gray-900">"{documentToDelete.name}"</strong>? 
+                  <br />
+                  <span className="text-red-600 text-sm">Esta acción no se puede deshacer.</span>
+                </p>
+                <div className="flex gap-3">
                   <button
-                    onClick={handleCloseNewDocumentModal}
-                    className="p-2 text-gray-400 hover:text-gray-600 transition-colors"
-                  >
-                    <Plus className="w-6 h-6 rotate-45" />
-                  </button>
-                </div>
-
-                <div className="space-y-6">
-                  {/* Selección de archivo */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Archivo *
-                    </label>
-                    <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center hover:border-gray-400 transition-colors">
-                      <input
-                        type="file"
-                        onChange={(e) => {
-                          const file = e.target.files?.[0] || null;
-                          setNewDocumentForm((prev) => ({
-                            ...prev,
-                            file,
-                            name: file ? file.name : prev.name,
-                          }));
-                        }}
-                        className="hidden"
-                        id="document-file-input"
-                        accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.gif,.mp4,.mov,.avi"
-                      />
-                      <label
-                        htmlFor="document-file-input"
-                        className="cursor-pointer"
-                      >
-                        <CloudUpload className="w-8 h-8 text-gray-400 mx-auto mb-2" />
-                        <p className="text-sm text-gray-600">
-                          {newDocumentForm.file
-                            ? newDocumentForm.file.name
-                            : "Haz clic para seleccionar un archivo"}
-                        </p>
-                        <p className="text-xs text-gray-500 mt-1">
-                          PDF, DOC, DOCX, JPG, PNG, GIF, MP4, MOV, AVI (máx. 50MB)
-                        </p>
-                      </label>
-                    </div>
-                  </div>
-
-                  {/* Nombre del documento */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Nombre del documento *
-                    </label>
-                    <input
-                      type="text"
-                      value={newDocumentForm.name}
-                      onChange={(e) =>
-                        setNewDocumentForm((prev) => ({
-                          ...prev,
-                          name: e.target.value,
-                        }))
-                      }
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#3d8b40] focus:border-transparent"
-                      placeholder="Ingresa el nombre del documento"
-                    />
-                  </div>
-
-                  {/* Categoría */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Categoría *
-                    </label>
-                    <select
-                      value={newDocumentForm.category}
-                      onChange={(e) =>
-                        setNewDocumentForm((prev) => ({
-                          ...prev,
-                          category: e.target.value as DocumentCategory,
-                        }))
-                      }
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#3d8b40] focus:border-transparent"
-                    >
-                      {Object.entries(documentCategories).map(([key, config]) => (
-                        <option key={key} value={key}>
-                          {config.label}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  {/* Descripción */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Descripción
-                    </label>
-                    <textarea
-                      value={newDocumentForm.description}
-                      onChange={(e) =>
-                        setNewDocumentForm((prev) => ({
-                          ...prev,
-                          description: e.target.value,
-                        }))
-                      }
-                      rows={3}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#3d8b40] focus:border-transparent"
-                      placeholder="Describe el contenido del documento (opcional)"
-                    />
-                  </div>
-
-                  {/* Tags */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Etiquetas
-                    </label>
-                    <input
-                      type="text"
-                      value={newDocumentForm.tags}
-                      onChange={(e) =>
-                        setNewDocumentForm((prev) => ({
-                          ...prev,
-                          tags: e.target.value,
-                        }))
-                      }
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#3d8b40] focus:border-transparent"
-                      placeholder="Separar con comas: vacuna, certificado, IBR"
-                    />
-                    <p className="text-xs text-gray-500 mt-1">
-                      Separa las etiquetas con comas para facilitar la búsqueda
-                    </p>
-                  </div>
-
-                  {/* Visibilidad */}
-                  <div>
-                    <label className="flex items-center gap-3">
-                      <input
-                        type="checkbox"
-                        checked={newDocumentForm.isPublic}
-                        onChange={(e) =>
-                          setNewDocumentForm((prev) => ({
-                            ...prev,
-                            isPublic: e.target.checked,
-                          }))
-                        }
-                        className="w-4 h-4 text-[#3d8b40] border-2 border-gray-300 rounded focus:ring-[#3d8b40] focus:ring-2"
-                      />
-                      <span className="text-sm font-medium text-gray-700">
-                        Documento público
-                      </span>
-                    </label>
-                    <p className="text-xs text-gray-500 mt-1 ml-7">
-                      Los documentos públicos pueden ser vistos por otros usuarios
-                    </p>
-                  </div>
-
-                  {/* Vista previa del archivo */}
-                  {newDocumentForm.file && (
-                    <div className="bg-gray-50 rounded-lg p-4">
-                      <h4 className="font-medium text-gray-900 mb-2">
-                        Vista previa del archivo
-                      </h4>
-                      <div className="flex items-center gap-3">
-                        <FileTypeIcon 
-                          fileType={newDocumentForm.file.type} 
-                          className="w-8 h-8" 
-                        />
-                        <div>
-                          <p className="text-sm font-medium text-gray-900">
-                            {newDocumentForm.file.name}
-                          </p>
-                          <p className="text-xs text-gray-500">
-                            {(newDocumentForm.file.size / 1024 / 1024).toFixed(2)} MB
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {/* Botones de acción */}
-                <div className="flex gap-3 mt-8">
-                  <button
-                    onClick={handleCloseNewDocumentModal}
+                    onClick={() => setShowDeleteModal(false)}
                     className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
                   >
                     Cancelar
                   </button>
                   <button
-                    onClick={handleNewDocumentSubmit}
-                    disabled={!newDocumentForm.file || !newDocumentForm.name.trim()}
-                    className="flex-1 px-4 py-2 bg-[#3d8b40] text-white rounded-lg hover:bg-[#2d6e30] transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
+                    onClick={confirmDelete}
+                    className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors flex items-center justify-center gap-2"
                   >
-                    Crear Documento
+                    <Trash2 className="w-4 h-4" />
+                    Eliminar
                   </button>
                 </div>
-              </motion.div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </motion.div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Modal de nuevo documento */}
+        {showNewDocumentModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-2xl p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto animate-slideUp shadow-2xl">
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
+                  📄 Nuevo Documento
+                </h3>
+                <button
+                  onClick={handleCloseNewDocumentModal}
+                  className="p-2 text-gray-400 hover:text-gray-600 transition-colors rounded-lg hover:bg-gray-100"
+                >
+                  <Plus className="w-6 h-6 rotate-45" />
+                </button>
+              </div>
+
+              {/* Estado de conexión */}
+              <div className={`p-3 rounded-lg border mb-6 ${isConnected ? 'bg-green-50 border-green-200' : 'bg-yellow-50 border-yellow-200'}`}>
+                <div className="flex items-center gap-2">
+                  {isConnected ? (
+                    <Wifi className="w-4 h-4 text-green-600" />
+                  ) : (
+                    <WifiOff className="w-4 h-4 text-yellow-600" />
+                  )}
+                  <span className="text-sm font-medium">
+                    {isConnected ? '✅ Conectado - El documento se guardará en el servidor' : '⚠️ Sin conexión - El documento se guardará localmente'}
+                  </span>
+                </div>
+              </div>
+
+              <div className="space-y-6">
+                {/* Selección de archivo */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    📎 Archivo *
+                  </label>
+                  <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center hover:border-gray-400 transition-colors">
+                    <input
+                      type="file"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0] || null;
+                        setNewDocumentForm((prev) => ({
+                          ...prev,
+                          file,
+                          name: file ? file.name : prev.name,
+                        }));
+                      }}
+                      className="hidden"
+                      id="document-file-input"
+                      accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.gif,.mp4,.mov,.avi"
+                    />
+                    <label
+                      htmlFor="document-file-input"
+                      className="cursor-pointer"
+                    >
+                      <CloudUpload className="w-8 h-8 text-gray-400 mx-auto mb-2" />
+                      <p className="text-sm text-gray-600">
+                        {newDocumentForm.file
+                          ? `📄 ${newDocumentForm.file.name}`
+                          : "🔍 Haz clic para seleccionar un archivo"}
+                      </p>
+                      <p className="text-xs text-gray-500 mt-1">
+                        PDF, DOC, DOCX, JPG, PNG, GIF, MP4, MOV, AVI (máx. 50MB)
+                      </p>
+                    </label>
+                  </div>
+                </div>
+
+                {/* Nombre del documento */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    🏷️ Nombre del documento *
+                  </label>
+                  <input
+                    type="text"
+                    value={newDocumentForm.name}
+                    onChange={(e) =>
+                      setNewDocumentForm((prev) => ({
+                        ...prev,
+                        name: e.target.value,
+                      }))
+                    }
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="Ingresa el nombre del documento"
+                  />
+                </div>
+
+                {/* Categoría */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    📂 Categoría *
+                  </label>
+                  <select
+                    value={newDocumentForm.category}
+                    onChange={(e) =>
+                      setNewDocumentForm((prev) => ({
+                        ...prev,
+                        category: e.target.value as DocumentCategory,
+                      }))
+                    }
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  >
+                    {Object.entries(documentCategories).map(([key, config]) => (
+                      <option key={key} value={key}>
+                        {config.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Descripción */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    📝 Descripción
+                  </label>
+                  <textarea
+                    value={newDocumentForm.description}
+                    onChange={(e) =>
+                      setNewDocumentForm((prev) => ({
+                        ...prev,
+                        description: e.target.value,
+                      }))
+                    }
+                    rows={3}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="Describe el contenido del documento (opcional)"
+                  />
+                </div>
+
+                {/* Tags */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    🏷️ Etiquetas
+                  </label>
+                  <input
+                    type="text"
+                    value={newDocumentForm.tags}
+                    onChange={(e) =>
+                      setNewDocumentForm((prev) => ({
+                        ...prev,
+                        tags: e.target.value,
+                      }))
+                    }
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="Separar con comas: vacuna, certificado, IBR"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Separa las etiquetas con comas para facilitar la búsqueda
+                  </p>
+                </div>
+
+                {/* Visibilidad */}
+                <div>
+                  <label className="flex items-center gap-3">
+                    <input
+                      type="checkbox"
+                      checked={newDocumentForm.isPublic}
+                      onChange={(e) =>
+                        setNewDocumentForm((prev) => ({
+                          ...prev,
+                          isPublic: e.target.checked,
+                        }))
+                      }
+                      className="w-4 h-4 text-blue-600 border-2 border-gray-300 rounded focus:ring-blue-500 focus:ring-2"
+                    />
+                    <span className="text-sm font-medium text-gray-700">
+                      🌍 Documento público
+                    </span>
+                  </label>
+                  <p className="text-xs text-gray-500 mt-1 ml-7">
+                    Los documentos públicos pueden ser vistos por otros usuarios
+                  </p>
+                </div>
+
+                {/* Vista previa del archivo */}
+                {newDocumentForm.file && (
+                  <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                    <h4 className="font-medium text-gray-900 mb-2 flex items-center gap-2">
+                      👁️ Vista previa del archivo
+                    </h4>
+                    <div className="flex items-center gap-3">
+                      <FileTypeIcon 
+                        fileType={newDocumentForm.file.type} 
+                        className="w-8 h-8" 
+                      />
+                      <div>
+                        <p className="text-sm font-medium text-gray-900">
+                          {newDocumentForm.file.name}
+                        </p>
+                        <p className="text-xs text-gray-500">
+                          📏 {(newDocumentForm.file.size / 1024 / 1024).toFixed(2)} MB
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Botones de acción */}
+              <div className="flex gap-3 mt-8">
+                <button
+                  onClick={handleCloseNewDocumentModal}
+                  className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleNewDocumentSubmit}
+                  disabled={!newDocumentForm.file || !newDocumentForm.name.trim()}
+                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                >
+                  <Plus className="w-4 h-4" />
+                  Crear Documento
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      <style>{`
+        @keyframes slideDown {
+          from {
+            opacity: 0;
+            transform: translateY(-20px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+
+        @keyframes slideUp {
+          from {
+            opacity: 0;
+            transform: translateY(20px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+
+        @keyframes slideLeft {
+          from {
+            opacity: 0;
+            transform: translateX(-20px);
+          }
+          to {
+            opacity: 1;
+            transform: translateX(0);
+          }
+        }
+
+        @keyframes slideRight {
+          from {
+            opacity: 0;
+            transform: translateX(20px);
+          }
+          to {
+            opacity: 1;
+            transform: translateX(0);
+          }
+        }
+
+        .animate-slideDown {
+          animation: slideDown 0.5s ease-out;
+        }
+
+        .animate-slideUp {
+          animation: slideUp 0.5s ease-out 0.1s both;
+        }
+
+        .animate-slideLeft {
+          animation: slideLeft 0.5s ease-out 0.2s both;
+        }
+
+        .animate-slideRight {
+          animation: slideRight 0.5s ease-out 0.3s both;
+        }
+
+        .line-clamp-2 {
+          display: -webkit-box;
+          -webkit-line-clamp: 2;
+          -webkit-box-orient: vertical;
+          overflow: hidden;
+        }
+      `}</style>
     </div>
   );
 };
