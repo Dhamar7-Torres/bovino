@@ -1,13 +1,12 @@
 // Frontend/src/pages/auth/LoginForm.tsx
-// ✅ CORRECCIÓN: Cambiar tipos para consistencia
+// ✅ CORRECCIÓN: Actualizado para usar el nuevo AuthContext
 
 import React, { useState } from "react";
 import { motion } from "framer-motion";
 import { Eye, EyeOff, Mail, Lock, LogIn } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 
-// ✅ CORREGIDO: Usar AuthCredentials en lugar de LoginCredentials
-// O crear una interfaz local que coincida con AuthCredentials
+// ✅ CORREGIDO: Usar AuthCredentials del contexto
 interface LoginFormData {
   email: string;
   password: string;
@@ -30,7 +29,8 @@ const LoginForm: React.FC<LoginFormProps> = ({
   onSwitchToForgotPassword,
   onAuthSuccess,
 }) => {
-  const { login, state } = useAuth();
+  // ✅ CORREGIDO: Usar el nuevo contexto actualizado
+  const { login, isLoading, error } = useAuth();
 
   // Estados del formulario
   const [formData, setFormData] = useState<LoginFormData>({
@@ -42,9 +42,7 @@ const LoginForm: React.FC<LoginFormProps> = ({
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
 
-  const isLoading = state.isLoading;
-
-  // Resto de las funciones igual...
+  // Validación del formulario
   const validateForm = (): boolean => {
     const newErrors: LoginErrors = {};
 
@@ -73,7 +71,7 @@ const LoginForm: React.FC<LoginFormProps> = ({
     }
   };
 
-  // ✅ CORREGIDO: Pasar datos en el formato correcto para AuthCredentials
+  // ✅ CORREGIDO: Usar la función login del contexto actualizado
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -89,11 +87,11 @@ const LoginForm: React.FC<LoginFormProps> = ({
         rememberMe 
       });
 
-      // ✅ CORREGIDO: Crear objeto que coincida con AuthCredentials
+      // ✅ CORREGIDO: Usar la función login del contexto
       await login({
         email: formData.email,
         password: formData.password,
-        rememberMe, // ✅ Este campo debe existir en AuthCredentials
+        rememberMe,
       });
 
       console.log("✅ Login exitoso!");
@@ -114,7 +112,6 @@ const LoginForm: React.FC<LoginFormProps> = ({
     }
   };
 
-  // Resto del JSX permanece igual...
   return (
     <motion.form
       onSubmit={handleSubmit}
@@ -123,7 +120,8 @@ const LoginForm: React.FC<LoginFormProps> = ({
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.6 }}
     >
-      {(errors.general || state.error) && (
+      {/* ✅ CORREGIDO: Usar error del contexto directamente */}
+      {(errors.general || error) && (
         <motion.div
           className="bg-red-50 border border-red-200 rounded-lg p-3"
           initial={{ opacity: 0, scale: 0.95 }}
@@ -131,7 +129,7 @@ const LoginForm: React.FC<LoginFormProps> = ({
           transition={{ duration: 0.3 }}
         >
           <p className="text-sm text-red-600">
-            {errors.general || state.error}
+            {errors.general || error}
           </p>
         </motion.div>
       )}
@@ -270,16 +268,6 @@ const LoginForm: React.FC<LoginFormProps> = ({
           >
             Regístrate aquí
           </button>
-        </p>
-      </div>
-
-      {/* Información de prueba */}
-      <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-        <p className="text-xs text-blue-600 mb-2 font-medium">
-          💡 Para pruebas, puedes usar cualquier email válido y contraseña de 6+ caracteres
-        </p>
-        <p className="text-xs text-blue-500">
-          El sistema ahora hace peticiones reales al backend en puerto 5000
         </p>
       </div>
     </motion.form>

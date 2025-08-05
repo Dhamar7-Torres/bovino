@@ -1,51 +1,68 @@
-// Frontend/src/contexts/AuthContext.tsx
-import React, { createContext, useContext, useReducer, useEffect } from 'react';
-import { User, AuthCredentials, RegisterData } from '../types/auth';
-import { authService } from '../services/authService';
+// Frontend/src/context/AuthContext.tsx
+import React, { createContext, useContext, useReducer, useEffect, ReactNode } from 'react';
 
-// Tipos para el estado de autenticación
+// ✅ TIPOS DE DATOS
+interface User {
+  id: string;
+  email: string;
+  firstName: string;
+  lastName: string;
+  role: string;
+  avatar?: string;
+  phone?: string;
+  farm?: {
+    id: string;
+    name: string;
+    location: string;
+  };
+  permissions: string[];
+  lastLogin?: string;
+  isActive: boolean;
+}
+
+interface AuthCredentials {
+  email: string;
+  password: string;
+  rememberMe?: boolean;
+}
+
+interface RegisterData {
+  firstName: string;
+  lastName: string;
+  email: string;
+  password: string;
+  confirmPassword: string;
+}
+
 interface AuthState {
   user: User | null;
-  isLoading: boolean;
+  token: string | null;
+  refreshToken: string | null;
   isAuthenticated: boolean;
+  isLoading: boolean;
   error: string | null;
 }
 
-// Tipos para las acciones del reducer
+// ✅ ACCIONES DEL REDUCER
 type AuthAction =
   | { type: 'AUTH_START' }
-  | { type: 'AUTH_SUCCESS'; payload: User }
+  | { type: 'AUTH_SUCCESS'; payload: { user: User; token: string; refreshToken: string } }
   | { type: 'AUTH_FAILURE'; payload: string }
-  | { type: 'AUTH_LOGOUT' }
-  | { type: 'CLEAR_ERROR' };
+  | { type: 'LOGOUT' }
+  | { type: 'CLEAR_ERROR' }
+  | { type: 'SET_LOADING'; payload: boolean };
 
-// Interface para el contexto
-interface AuthContextType {
-  // Estado
-  user: User | null;
-  isLoading: boolean;
-  isAuthenticated: boolean;
-  error: string | null;
-  
-  // Acciones
-  login: (credentials: AuthCredentials) => Promise<void>;
-  register: (data: RegisterData) => Promise<void>;
-  logout: () => Promise<void>;
-  clearError: () => void;
-  refreshToken: () => Promise<void>;
-  updateProfile: (updates: Partial<User>) => Promise<void>;
-  changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
-}
-
-// Estado inicial
+// ✅ ESTADO INICIAL
 const initialState: AuthState = {
   user: null,
-  isLoading: false,
+  token: localStorage.getItem('auth_token'),
+  refreshToken: localStorage.getItem('refresh_token'),
   isAuthenticated: false,
+  isLoading: false,
   error: null,
 };
 
-// Reducer para manejar las acciones de autenticación
+// ✅ REDUCER
 const authReducer = (state: AuthState, action: AuthAction): AuthState => {
   switch (action.type) {
     case 'AUTH_START':
@@ -54,237 +71,300 @@ const authReducer = (state: AuthState, action: AuthAction): AuthState => {
         isLoading: true,
         error: null,
       };
-    
+
     case 'AUTH_SUCCESS':
       return {
         ...state,
-        isLoading: false,
+        user: action.payload.user,
+        token: action.payload.token,
+        refreshToken: action.payload.refreshToken,
         isAuthenticated: true,
-        user: action.payload,
+        isLoading: false,
         error: null,
       };
-    
+
     case 'AUTH_FAILURE':
       return {
         ...state,
-        isLoading: false,
-        isAuthenticated: false,
         user: null,
+        token: null,
+        refreshToken: null,
+        isAuthenticated: false,
+        isLoading: false,
         error: action.payload,
       };
-    
-    case 'AUTH_LOGOUT':
+
+    case 'LOGOUT':
       return {
         ...state,
-        isLoading: false,
-        isAuthenticated: false,
         user: null,
+        token: null,
+        refreshToken: null,
+        isAuthenticated: false,
+        isLoading: false,
         error: null,
       };
-    
+
     case 'CLEAR_ERROR':
       return {
         ...state,
         error: null,
       };
-    
+
+    case 'SET_LOADING':
+      return {
+        ...state,
+        isLoading: action.payload,
+      };
+
     default:
       return state;
   }
 };
 
-// Crear el contexto
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
-
-// Props para el AuthProvider
-interface AuthProviderProps {
-  children: React.ReactNode;
+// ✅ CONTEXTO
+interface AuthContextType {
+  user: User | null;
+  isAuthenticated: boolean;
+  isLoading: boolean;
+  error: string | null;
+  state: AuthState;
+  login: (credentials: AuthCredentials) => Promise<void>;
+  register: (data: RegisterData) => Promise<void>;
+  logout: () => Promise<void>; // ✅ Función logout
+  clearError: () => void;
 }
 
-// AuthProvider component
+const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+// ✅ PROVEEDOR DEL CONTEXTO
+interface AuthProviderProps {
+  children: ReactNode;
+}
+
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [state, dispatch] = useReducer(authReducer, initialState);
 
-  // Función de login usando el authService real
+  // ✅ BASE URL DE LA API
+  const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+
+  // ✅ FUNCIÓN DE LOGIN
   const login = async (credentials: AuthCredentials): Promise<void> => {
     dispatch({ type: 'AUTH_START' });
-    
+
     try {
-      console.log('🔐 Iniciando login con backend...');
-      const response = await authService.login(credentials);
+      console.log('🔐 Enviando petición de login a:', `${API_BASE_URL}/auth/login`);
       
-      dispatch({ type: 'AUTH_SUCCESS', payload: response.user });
-      console.log('✅ Login exitoso con backend');
+      const response = await fetch(`${API_BASE_URL}/auth/login`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(credentials),
+      });
+
+      const data = await response.json();
+      console.log('📦 Respuesta del servidor:', data);
+
+      if (!response.ok) {
+        throw new Error(data.message || data.errors?.general || 'Error en el login');
+      }
+
+      if (!data.success || !data.data) {
+        throw new Error('Respuesta inválida del servidor');
+      }
+
+      // Guardar tokens en localStorage
+      localStorage.setItem('auth_token', data.data.token);
+      localStorage.setItem('refresh_token', data.data.refreshToken);
+
+      // Actualizar estado
+      dispatch({
+        type: 'AUTH_SUCCESS',
+        payload: {
+          user: data.data.user,
+          token: data.data.token,
+          refreshToken: data.data.refreshToken,
+        },
+      });
+
+      console.log('✅ Login exitoso');
     } catch (error: any) {
       console.error('❌ Error en login:', error);
-      
-      // Extraer mensaje de error más específico
-      let errorMessage = 'Error en el login';
-      
-      if (error?.response?.data?.message) {
-        errorMessage = error.response.data.message;
-      } else if (error?.message) {
-        errorMessage = error.message;
-      }
-      
-      dispatch({ type: 'AUTH_FAILURE', payload: errorMessage });
+      dispatch({
+        type: 'AUTH_FAILURE',
+        payload: error.message || 'Error al iniciar sesión',
+      });
       throw error;
     }
   };
 
-  // Función de registro usando el authService real
+  // ✅ FUNCIÓN DE REGISTRO
   const register = async (data: RegisterData): Promise<void> => {
     dispatch({ type: 'AUTH_START' });
-    
+
     try {
-      console.log('📝 Iniciando registro con backend...');
-      const response = await authService.register(data);
+      console.log('📝 Enviando petición de registro a:', `${API_BASE_URL}/auth/register`);
       
-      dispatch({ type: 'AUTH_SUCCESS', payload: response.user });
-      console.log('✅ Registro exitoso con backend');
+      const response = await fetch(`${API_BASE_URL}/auth/register`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(data),
+      });
+
+      const responseData = await response.json();
+      console.log('📦 Respuesta del servidor:', responseData);
+
+      if (!response.ok) {
+        throw new Error(responseData.message || responseData.errors?.general || 'Error en el registro');
+      }
+
+      if (!responseData.success || !responseData.data) {
+        throw new Error('Respuesta inválida del servidor');
+      }
+
+      // Guardar tokens en localStorage
+      localStorage.setItem('auth_token', responseData.data.token);
+      localStorage.setItem('refresh_token', responseData.data.refreshToken);
+
+      // Actualizar estado
+      dispatch({
+        type: 'AUTH_SUCCESS',
+        payload: {
+          user: responseData.data.user,
+          token: responseData.data.token,
+          refreshToken: responseData.data.refreshToken,
+        },
+      });
+
+      console.log('✅ Registro exitoso');
     } catch (error: any) {
       console.error('❌ Error en registro:', error);
-      
-      // Extraer mensaje de error más específico
-      let errorMessage = 'Error en el registro';
-      
-      if (error?.response?.data?.message) {
-        errorMessage = error.response.data.message;
-      } else if (error?.message) {
-        errorMessage = error.message;
-      }
-      
-      dispatch({ type: 'AUTH_FAILURE', payload: errorMessage });
+      dispatch({
+        type: 'AUTH_FAILURE',
+        payload: error.message || 'Error al registrarse',
+      });
       throw error;
     }
   };
 
-  // Función de logout usando el authService real
+  // ✅ NUEVA FUNCIÓN DE LOGOUT
   const logout = async (): Promise<void> => {
-    dispatch({ type: 'AUTH_START' });
-    
+    dispatch({ type: 'SET_LOADING', payload: true });
+
     try {
-      console.log('🚪 Cerrando sesión...');
-      await authService.logout();
-      
-      dispatch({ type: 'AUTH_LOGOUT' });
-      console.log('✅ Logout exitoso');
+      // Si hay token, hacer petición al backend para logout
+      if (state.token) {
+        console.log('🔐 Enviando petición de logout a:', `${API_BASE_URL}/auth/logout`);
+        
+        const response = await fetch(`${API_BASE_URL}/auth/logout`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${state.token}`,
+          },
+        });
+
+        const data = await response.json();
+        console.log('📦 Respuesta del logout:', data);
+
+        // No importa si el backend falla, igual limpiamos el frontend
+        if (!response.ok) {
+          console.warn('⚠️ Advertencia en logout del backend:', data.message);
+        }
+      }
+
+      // Limpiar localStorage
+      localStorage.removeItem('auth_token');
+      localStorage.removeItem('refresh_token');
+      localStorage.removeItem('user_data'); // Si guardas datos adicionales del usuario
+
+      // Limpiar estado
+      dispatch({ type: 'LOGOUT' });
+
+      console.log('✅ Logout exitoso - Usuario deslogueado');
     } catch (error: any) {
       console.error('❌ Error en logout:', error);
-      // Aun si hay error, limpiar estado local
-      dispatch({ type: 'AUTH_LOGOUT' });
-    }
-  };
-
-  // Función para refrescar token usando el authService real
-  const refreshToken = async (): Promise<void> => {
-    try {
-      console.log('🔄 Refrescando token...');
-      await authService.refreshTokens();
-      console.log('✅ Token refrescado exitosamente');
-    } catch (error: any) {
-      console.error('❌ Error refrescando token:', error);
-      // Si no se puede refrescar, hacer logout
-      dispatch({ type: 'AUTH_LOGOUT' });
-      throw error;
-    }
-  };
-
-  // Función para actualizar perfil usando el authService real
-  const updateProfile = async (updates: Partial<User>): Promise<void> => {
-    try {
-      console.log('👤 Actualizando perfil...');
-      const updatedUser = await authService.updateProfile(updates);
       
-      dispatch({ type: 'AUTH_SUCCESS', payload: updatedUser });
-      console.log('✅ Perfil actualizado exitosamente');
-    } catch (error: any) {
-      console.error('❌ Error actualizando perfil:', error);
-      throw error;
+      // Aunque haya error en el backend, limpiamos el frontend
+      localStorage.removeItem('auth_token');
+      localStorage.removeItem('refresh_token');
+      localStorage.removeItem('user_data');
+      dispatch({ type: 'LOGOUT' });
+      
+      console.log('✅ Logout forzado - Estado limpiado localmente');
+    } finally {
+      dispatch({ type: 'SET_LOADING', payload: false });
     }
   };
 
-  // Función para cambiar contraseña usando el authService real
-  const changePassword = async (currentPassword: string, newPassword: string): Promise<void> => {
-    try {
-      console.log('🔑 Cambiando contraseña...');
-      await authService.changePassword({
-        currentPassword,
-        newPassword,
-        confirmNewPassword: newPassword,
-      });
-      console.log('✅ Contraseña cambiada exitosamente');
-    } catch (error: any) {
-      console.error('❌ Error cambiando contraseña:', error);
-      throw error;
-    }
-  };
-
-  // Función para limpiar errores
-  const clearError = (): void => {
+  // ✅ FUNCIÓN PARA LIMPIAR ERRORES
+  const clearError = () => {
     dispatch({ type: 'CLEAR_ERROR' });
   };
 
-  // Inicializar autenticación desde el authService al cargar
+  // ✅ VERIFICAR AUTENTICACIÓN AL CARGAR
   useEffect(() => {
-    const initializeAuth = async () => {
+    const checkAuthentication = async () => {
+      const token = localStorage.getItem('auth_token');
+      
+      if (!token) {
+        return;
+      }
+
       try {
-        // Verificar si hay una sesión activa
-        if (authService.isAuthenticated && authService.currentUser) {
-          console.log('🔄 Restaurando sesión existente...');
-          dispatch({ type: 'AUTH_SUCCESS', payload: authService.currentUser });
-          console.log('✅ Sesión restaurada desde authService');
+        dispatch({ type: 'SET_LOADING', payload: true });
+        
+        const response = await fetch(`${API_BASE_URL}/auth/profile`, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+          },
+        });
+
+        if (!response.ok) {
+          throw new Error('Token inválido');
+        }
+
+        const data = await response.json();
+        
+        if (data.success && data.data?.user) {
+          dispatch({
+            type: 'AUTH_SUCCESS',
+            payload: {
+              user: data.data.user,
+              token: token,
+              refreshToken: localStorage.getItem('refresh_token') || '',
+            },
+          });
         } else {
-          // Intentar validar token si existe
-          const isValid = await authService.validateToken();
-          if (isValid && authService.currentUser) {
-            dispatch({ type: 'AUTH_SUCCESS', payload: authService.currentUser });
-            console.log('✅ Token validado, sesión restaurada');
-          }
+          throw new Error('Datos de usuario inválidos');
         }
       } catch (error) {
-        console.warn('⚠️ No se pudo restaurar la sesión:', error);
-        // No mostrar error al usuario, simplemente mantener estado no autenticado
+        console.error('Token inválido o expirado:', error);
+        localStorage.removeItem('auth_token');
+        localStorage.removeItem('refresh_token');
+        dispatch({ type: 'LOGOUT' });
+      } finally {
+        dispatch({ type: 'SET_LOADING', payload: false });
       }
     };
 
-    initializeAuth();
+    checkAuthentication();
   }, []);
 
-  // Escuchar cambios en el authService
-  useEffect(() => {
-    const checkAuthStatus = () => {
-      if (!authService.isAuthenticated && state.isAuthenticated) {
-        // El authService perdió la autenticación, actualizar contexto
-        dispatch({ type: 'AUTH_LOGOUT' });
-      } else if (authService.isAuthenticated && authService.currentUser && !state.isAuthenticated) {
-        // El authService ganó autenticación, actualizar contexto
-        dispatch({ type: 'AUTH_SUCCESS', payload: authService.currentUser });
-      }
-    };
-
-    // Verificar estado cada 30 segundos
-    const interval = setInterval(checkAuthStatus, 30000);
-
-    return () => clearInterval(interval);
-  }, [state.isAuthenticated]);
-
-  // Valor del contexto
+  // ✅ VALOR DEL CONTEXTO
   const contextValue: AuthContextType = {
-    // Estado
     user: state.user,
-    isLoading: state.isLoading,
     isAuthenticated: state.isAuthenticated,
+    isLoading: state.isLoading,
     error: state.error,
-    
-    // Acciones
+    state,
     login,
     register,
-    logout,
+    logout, // ✅ Incluir función logout
     clearError,
-    refreshToken,
-    updateProfile,
-    changePassword,
   };
 
   return (
@@ -294,16 +374,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   );
 };
 
-// Hook personalizado para usar el contexto
+// ✅ HOOK PERSONALIZADO
 export const useAuth = (): AuthContextType => {
   const context = useContext(AuthContext);
-  
   if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
+    throw new Error('useAuth debe usarse dentro de un AuthProvider');
   }
-  
   return context;
 };
 
-// Export por defecto
 export default AuthContext;

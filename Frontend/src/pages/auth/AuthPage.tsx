@@ -1,19 +1,36 @@
 // Frontend/src/pages/AuthPage.tsx
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { LogOut } from 'lucide-react'; // ✅ Importar icono de logout
 import { useAuth } from "../../context/AuthContext";
 import RegisterForm from '../auth/RegisterForm';
 import LoginForm from '../auth/LoginForm';
+import ForgotPasswordForm from '../auth/ForgotPasswordForm'; // ✅ Importar ForgotPasswordForm
 
 // Tipos para los modos de autenticación
-type AuthMode = 'login' | 'register';
+type AuthMode = 'login' | 'register' | 'forgot-password'; // ✅ Agregar forgot-password
 
 const AuthPage: React.FC = () => {
   // Usar el hook de autenticación
-  const { user, isLoading, isAuthenticated, error, clearError } = useAuth();
+  const { user, isLoading, isAuthenticated, error, clearError, logout } = useAuth(); // ✅ Agregar logout
   
   // Estado para el modo actual (login o register)
   const [currentMode, setCurrentMode] = useState<AuthMode>('login');
+  const [isLoggingOut, setIsLoggingOut] = useState(false); // ✅ Estado para logout
+
+  // ✅ NUEVA FUNCIÓN: Manejar cerrar sesión
+  const handleLogout = async () => {
+    setIsLoggingOut(true);
+    try {
+      console.log("🔐 Cerrando sesión...");
+      await logout();
+      console.log("✅ Sesión cerrada exitosamente");
+    } catch (error) {
+      console.error("❌ Error al cerrar sesión:", error);
+    } finally {
+      setIsLoggingOut(false);
+    }
+  };
 
   // Si el usuario está autenticado, mostrar dashboard
   if (isAuthenticated && user) {
@@ -37,12 +54,41 @@ const AuthPage: React.FC = () => {
               <strong>Estado:</strong> {user.isActive ? 'Activo' : 'Inactivo'}
             </p>
           </div>
-          <button
-            onClick={() => window.location.reload()}
-            className="w-full bg-emerald-600 text-white py-2 px-4 rounded-lg hover:bg-emerald-700 transition-colors"
-          >
-            Ir al Dashboard
-          </button>
+          
+          {/* ✅ BOTONES DE ACCIÓN */}
+          <div className="space-y-3">
+            <button
+              onClick={() => window.location.reload()}
+              className="w-full bg-emerald-600 text-white py-2 px-4 rounded-lg hover:bg-emerald-700 transition-colors"
+            >
+              Ir al Dashboard
+            </button>
+            
+            {/* ✅ NUEVO BOTÓN DE CERRAR SESIÓN */}
+            <button
+              onClick={handleLogout}
+              disabled={isLoggingOut}
+              className={`
+                w-full flex items-center justify-center px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium transition-all duration-200
+                ${isLoggingOut
+                  ? "bg-gray-100 text-gray-400 cursor-not-allowed"
+                  : "bg-white text-gray-700 hover:bg-gray-50 hover:border-gray-400"
+                }
+              `}
+            >
+              {isLoggingOut ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-400 mr-2"></div>
+                  Cerrando sesión...
+                </>
+              ) : (
+                <>
+                  <LogOut className="w-4 h-4 mr-2" />
+                  Cerrar Sesión
+                </>
+              )}
+            </button>
+          </div>
         </motion.div>
       </div>
     );
@@ -59,6 +105,18 @@ const AuthPage: React.FC = () => {
     clearError();
   };
 
+  // ✅ NUEVA FUNCIÓN para ir a forgot password
+  const switchToForgotPassword = () => {
+    setCurrentMode('forgot-password');
+    clearError();
+  };
+
+  // ✅ NUEVA FUNCIÓN para volver al login desde forgot password
+  const switchBackToLogin = () => {
+    setCurrentMode('login');
+    clearError();
+  };
+
   // Función para manejar éxito de autenticación
   const handleAuthSuccess = (data: any) => {
     console.log('🎉 Autenticación exitosa:', data);
@@ -67,8 +125,7 @@ const AuthPage: React.FC = () => {
 
   // Función para manejar "olvidé mi contraseña"
   const handleForgotPassword = () => {
-    console.log('Función de recuperación de contraseña');
-    // Aquí implementarías la lógica para recuperar contraseña
+    switchToForgotPassword(); // ✅ Cambiar a modo forgot-password
   };
 
   // Props para navegación
@@ -98,29 +155,31 @@ const AuthPage: React.FC = () => {
           </p>
         </div>
 
-        {/* Pestañas de navegación */}
-        <div className="flex mb-8 bg-gray-100 rounded-lg p-1">
-          <button
-            onClick={switchToLogin}
-            className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-all ${
-              currentMode === 'login'
-                ? 'bg-white text-emerald-600 shadow-sm'
-                : 'text-gray-600 hover:text-gray-800'
-            }`}
-          >
-            Iniciar Sesión
-          </button>
-          <button
-            onClick={switchToRegister}
-            className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-all ${
-              currentMode === 'register'
-                ? 'bg-white text-emerald-600 shadow-sm'
-                : 'text-gray-600 hover:text-gray-800'
-            }`}
-          >
-            Crear Cuenta
-          </button>
-        </div>
+        {/* Pestañas de navegación - Solo mostrar si no estamos en forgot-password */}
+        {currentMode !== 'forgot-password' && (
+          <div className="flex mb-8 bg-gray-100 rounded-lg p-1">
+            <button
+              onClick={switchToLogin}
+              className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-all ${
+                currentMode === 'login'
+                  ? 'bg-white text-emerald-600 shadow-sm'
+                  : 'text-gray-600 hover:text-gray-800'
+              }`}
+            >
+              Iniciar Sesión
+            </button>
+            <button
+              onClick={switchToRegister}
+              className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-all ${
+                currentMode === 'register'
+                  ? 'bg-white text-emerald-600 shadow-sm'
+                  : 'text-gray-600 hover:text-gray-800'
+              }`}
+            >
+              Crear Cuenta
+            </button>
+          </div>
+        )}
 
         {/* Error global */}
         {error && (
@@ -173,6 +232,20 @@ const AuthPage: React.FC = () => {
                 navigation={navigationProps}
               />
             </motion.div>
+          ) : currentMode === 'forgot-password' ? (
+            // ✅ NUEVO: Formulario de forgot password
+            <motion.div
+              key="forgot-password"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              transition={{ duration: 0.3 }}
+            >
+              <ForgotPasswordForm
+                onBackToLogin={switchBackToLogin}
+                navigation={navigationProps}
+              />
+            </motion.div>
           ) : (
             <motion.div
               key="login"
@@ -189,13 +262,6 @@ const AuthPage: React.FC = () => {
             </motion.div>
           )}
         </AnimatePresence>
-
-        {/* Footer */}
-        <div className="mt-8 text-center">
-          <p className="text-xs text-gray-500">
-            © 2024 GanaderoApp. Gestión inteligente de ganado bovino.
-          </p>
-        </div>
       </motion.div>
     </div>
   );

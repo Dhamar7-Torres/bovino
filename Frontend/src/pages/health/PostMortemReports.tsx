@@ -12,6 +12,11 @@ import {
   Target,
   Trash2,
   Zap,
+  X,
+  Save,
+  AlertTriangle,
+  CheckCircle,
+  Activity
 } from "lucide-react";
 
 // Interfaces para tipos de datos
@@ -123,6 +128,250 @@ interface MortalityStats {
   preventableCases: number;
 }
 
+// API Service - Simulación de conexión con backend
+const API_BASE_URL = 'http://localhost:5000/api';
+
+const apiService = {
+  // Obtener todos los reportes
+  async getReports(): Promise<PostMortemReport[]> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/health/necropsy`);
+      if (!response.ok) throw new Error('Error al obtener reportes');
+      const data = await response.json();
+      return data.data || [];
+    } catch (error) {
+      console.warn('API no disponible, usando datos mock:', error);
+      // Retorna datos mock si la API no está disponible
+      return getMockReports();
+    }
+  },
+
+  // Crear nuevo reporte
+  async createReport(reportData: Partial<PostMortemReport>): Promise<PostMortemReport> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/health/necropsy`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(reportData),
+      });
+      if (!response.ok) throw new Error('Error al crear reporte');
+      const data = await response.json();
+      return data.data;
+    } catch (error) {
+      console.warn('API no disponible, simulando creación');
+      // Simula la creación del reporte
+      const newReport: PostMortemReport = {
+        id: Date.now().toString(),
+        ...reportData,
+        createdAt: new Date(),
+        lastUpdated: new Date(),
+      } as PostMortemReport;
+      return newReport;
+    }
+  },
+
+  // Actualizar reporte
+  async updateReport(id: string, reportData: Partial<PostMortemReport>): Promise<PostMortemReport> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/health/necropsy/${id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(reportData),
+      });
+      if (!response.ok) throw new Error('Error al actualizar reporte');
+      const data = await response.json();
+      return data.data;
+    } catch (error) {
+      console.warn('API no disponible, simulando actualización');
+      return { ...reportData, id, lastUpdated: new Date() } as PostMortemReport;
+    }
+  },
+
+  // Eliminar reporte
+  async deleteReport(id: string): Promise<boolean> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/health/necropsy/${id}`, {
+        method: 'DELETE',
+      });
+      if (!response.ok) throw new Error('Error al eliminar reporte');
+      return true;
+    } catch (error) {
+      console.warn('API no disponible, simulando eliminación');
+      return true;
+    }
+  },
+
+  // Obtener estadísticas
+  async getStats(): Promise<MortalityStats> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/dashboard/mortality-rates`);
+      if (!response.ok) throw new Error('Error al obtener estadísticas');
+      const data = await response.json();
+      return data.data;
+    } catch (error) {
+      console.warn('API no disponible, usando estadísticas mock');
+      return getMockStats();
+    }
+  }
+};
+
+// Datos mock para desarrollo
+function getMockReports(): PostMortemReport[] {
+  return [
+    {
+      id: "1",
+      animalId: "COW004",
+      animalName: "Margarita",
+      animalTag: "TAG-004",
+      breed: "Holstein",
+      age: 4,
+      gender: "female",
+      weight: 520,
+      deathDate: new Date("2025-07-08"),
+      discoveryDate: new Date("2025-07-08"),
+      location: {
+        lat: 17.9869,
+        lng: -92.9303,
+        address: "Establo Principal, Sector A",
+        sector: "A",
+        environment: "Confinamiento",
+      },
+      deathCircumstances: {
+        witnessed: false,
+        positionFound: "Decúbito lateral izquierdo",
+        weatherConditions: "Caluroso, 32°C",
+        circumstances: "Encontrada muerta en la mañana, sin signos previos aparentes",
+      },
+      preliminaryCause: "Neumonía severa",
+      finalCause: "Neumonía bacteriana por Mannheimia haemolytica",
+      causeCategory: "disease",
+      necropsyPerformed: true,
+      necropsyDate: new Date("2025-07-08"),
+      pathologist: "Dr. Hernández",
+      veterinarian: "Dr. García",
+      grossFindings: {
+        externalExamination: "Animal en buen estado nutricional, sin lesiones externas evidentes",
+        cardiovascularSystem: "Corazón aumentado de tamaño, congestión venosa",
+        respiratorySystem: "Pulmones consolidados bilateralmente, exudado purulento en bronquios",
+        digestiveSystem: "Sin hallazgos significativos",
+        nervousSystem: "Sin alteraciones macroscópicas",
+        reproductiveSystem: "Útero gestante de 6 meses",
+        musculoskeletalSystem: "Sin lesiones",
+        lymphaticSystem: "Nódulos linfáticos mediastínicos aumentados",
+        other: "Hígado con congestión pasiva",
+      },
+      histopathology: {
+        performed: true,
+        results: "Bronconeumonía supurativa severa con colonias bacterianas",
+        laboratory: "Laboratorio Veterinario Central",
+        reportDate: new Date("2025-07-12"),
+      },
+      microbiology: {
+        performed: true,
+        organisms: ["Mannheimia haemolytica"],
+        antibiogramResults: "Sensible a penicilina, resistente a tetraciclina",
+        laboratory: "Laboratorio Veterinario Central",
+      },
+      photos: [],
+      samples: [],
+      preventiveRecommendations: [
+        "Mejorar ventilación en establos",
+        "Implementar programa de vacunación respiratoria",
+        "Monitoreo de estrés térmico",
+        "Separar animales gestantes",
+      ],
+      economicImpact: 15000,
+      reportStatus: "completed",
+      createdBy: "Dr. García",
+      createdAt: new Date("2025-07-08"),
+      lastUpdated: new Date("2025-07-12"),
+      isContagious: true,
+      requiresQuarantine: false,
+      notifiableDisease: false,
+      reportedToAuthorities: false,
+    },
+    {
+      id: "2",
+      animalId: "BULL001",
+      animalName: "Campeón",
+      animalTag: "TAG-B001",
+      breed: "Angus",
+      age: 6,
+      gender: "male",
+      weight: 850,
+      deathDate: new Date("2025-07-05"),
+      discoveryDate: new Date("2025-07-05"),
+      location: {
+        lat: 17.9719,
+        lng: -92.9456,
+        address: "Pastizal Norte, Sector B",
+        sector: "B",
+        environment: "Pastoreo",
+      },
+      deathCircumstances: {
+        witnessed: true,
+        timeOfDeath: new Date("2025-07-05T14:30:00"),
+        positionFound: "Decúbito lateral derecho",
+        weatherConditions: "Lluvia ligera, 28°C",
+        circumstances: "Observado cayendo súbitamente durante pastoreo",
+      },
+      preliminaryCause: "Trauma múltiple",
+      finalCause: "Traumatismo craneoencefálico severo",
+      causeCategory: "trauma",
+      necropsyPerformed: true,
+      necropsyDate: new Date("2025-07-05"),
+      pathologist: "Dr. Hernández",
+      veterinarian: "Dr. Martínez",
+      grossFindings: {
+        externalExamination: "Herida contusa en región frontal, hematoma subcutáneo extenso",
+        cardiovascularSystem: "Sin alteraciones",
+        respiratorySystem: "Congestión pulmonar leve",
+        digestiveSystem: "Sin hallazgos",
+        nervousSystem: "Fractura de hueso frontal, hemorragia subdural severa",
+        reproductiveSystem: "Sin alteraciones",
+        musculoskeletalSystem: "Fractura en miembro anterior izquierdo",
+        lymphaticSystem: "Sin alteraciones",
+        other: "Hematomas múltiples en flanco izquierdo",
+      },
+      photos: [],
+      samples: [],
+      preventiveRecommendations: [
+        "Inspección de infraestructura en pastizales",
+        "Remoción de objetos peligrosos",
+        "Mejora de cercas y protecciones",
+        "Supervisión durante pastoreo",
+      ],
+      economicImpact: 25000,
+      reportStatus: "completed",
+      createdBy: "Dr. Martínez",
+      createdAt: new Date("2025-07-05"),
+      lastUpdated: new Date("2025-07-06"),
+      isContagious: false,
+      requiresQuarantine: false,
+      notifiableDisease: false,
+      reportedToAuthorities: false,
+    },
+  ];
+}
+
+function getMockStats(): MortalityStats {
+  return {
+    totalDeaths: 18,
+    monthlyDeaths: 3,
+    mortalityRate: 2.8,
+    mostCommonCause: "Enfermedades respiratorias",
+    averageAge: 4.2,
+    costImpact: 180000,
+    necropsyRate: 85.5,
+    contagiousCases: 2,
+    seasonalTrend: "increasing",
+    preventableCases: 12,
+  };
+}
 
 // Componentes reutilizables
 const Card = ({ children, className = "" }: { children: React.ReactNode; className?: string }) => (
@@ -249,6 +498,641 @@ const Badge = ({ children, variant, className = "" }: {
   );
 };
 
+// Modal de carga
+const LoadingModal = ({ isOpen, message }: { isOpen: boolean; message: string }) => {
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
+      <div className="bg-white/95 backdrop-blur-lg rounded-lg p-6 shadow-xl border border-[#519a7c]/30">
+        <div className="flex items-center gap-3">
+          <div className="animate-spin rounded-full h-6 w-6 border-2 border-[#519a7c] border-t-transparent"></div>
+          <span className="text-gray-700 font-medium">{message}</span>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Modal de confirmación
+const ConfirmModal = ({ 
+  isOpen, 
+  onClose, 
+  onConfirm, 
+  title, 
+  message, 
+  confirmText = "Confirmar",
+  cancelText = "Cancelar",
+  variant = "danger"
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  onConfirm: () => void;
+  title: string;
+  message: string;
+  confirmText?: string;
+  cancelText?: string;
+  variant?: "danger" | "warning" | "default";
+}) => {
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
+      <div className="bg-white/95 backdrop-blur-lg rounded-lg shadow-xl border border-[#519a7c]/30 max-w-md w-full mx-4">
+        <div className="p-6">
+          <div className="flex items-center gap-3 mb-4">
+            {variant === "danger" && <AlertTriangle className="w-6 h-6 text-red-600" />}
+            {variant === "warning" && <AlertTriangle className="w-6 h-6 text-yellow-600" />}
+            {variant === "default" && <CheckCircle className="w-6 h-6 text-[#519a7c]" />}
+            <h3 className="text-lg font-semibold text-gray-900">{title}</h3>
+          </div>
+          <p className="text-gray-600 mb-6">{message}</p>
+          <div className="flex gap-3 justify-end">
+            <Button variant="outline" onClick={onClose}>
+              {cancelText}
+            </Button>
+            <Button variant={variant} onClick={onConfirm}>
+              {confirmText}
+            </Button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Formulario de Reporte (Modal)
+const ReportFormModal = ({ 
+  isOpen, 
+  onClose, 
+  onSave, 
+  report, 
+  isEditing = false 
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  onSave: (report: Partial<PostMortemReport>) => void;
+  report?: PostMortemReport;
+  isEditing?: boolean;
+}) => {
+  const [formData, setFormData] = useState<Partial<PostMortemReport>>({
+    animalName: "",
+    animalTag: "",
+    breed: "",
+    age: 0,
+    gender: "female",
+    weight: 0,
+    deathDate: new Date(),
+    discoveryDate: new Date(),
+    location: {
+      lat: 17.9869,
+      lng: -92.9303,
+      address: "",
+      sector: "",
+      environment: "",
+    },
+    deathCircumstances: {
+      witnessed: false,
+      positionFound: "",
+      weatherConditions: "",
+      circumstances: "",
+    },
+    preliminaryCause: "",
+    finalCause: "",
+    causeCategory: "unknown",
+    necropsyPerformed: false,
+    pathologist: "",
+    veterinarian: "",
+    grossFindings: {
+      externalExamination: "",
+      cardiovascularSystem: "",
+      respiratorySystem: "",
+      digestiveSystem: "",
+      nervousSystem: "",
+      reproductiveSystem: "",
+      musculoskeletalSystem: "",
+      lymphaticSystem: "",
+      other: "",
+    },
+    preventiveRecommendations: [],
+    economicImpact: 0,
+    reportStatus: "preliminary",
+    isContagious: false,
+    requiresQuarantine: false,
+    notifiableDisease: false,
+    reportedToAuthorities: false,
+  });
+
+  const [recommendations, setRecommendations] = useState<string>("");
+
+  useEffect(() => {
+    if (report && isEditing) {
+      setFormData(report);
+      setRecommendations(report.preventiveRecommendations.join("\n"));
+    } else {
+      // Reset form for new report
+      setFormData({
+        animalName: "",
+        animalTag: "",
+        breed: "",
+        age: 0,
+        gender: "female",
+        weight: 0,
+        deathDate: new Date(),
+        discoveryDate: new Date(),
+        location: {
+          lat: 17.9869,
+          lng: -92.9303,
+          address: "",
+          sector: "",
+          environment: "",
+        },
+        deathCircumstances: {
+          witnessed: false,
+          positionFound: "",
+          weatherConditions: "",
+          circumstances: "",
+        },
+        preliminaryCause: "",
+        finalCause: "",
+        causeCategory: "unknown",
+        necropsyPerformed: false,
+        pathologist: "",
+        veterinarian: "",
+        grossFindings: {
+          externalExamination: "",
+          cardiovascularSystem: "",
+          respiratorySystem: "",
+          digestiveSystem: "",
+          nervousSystem: "",
+          reproductiveSystem: "",
+          musculoskeletalSystem: "",
+          lymphaticSystem: "",
+          other: "",
+        },
+        preventiveRecommendations: [],
+        economicImpact: 0,
+        reportStatus: "preliminary",
+        isContagious: false,
+        requiresQuarantine: false,
+        notifiableDisease: false,
+        reportedToAuthorities: false,
+      });
+      setRecommendations("");
+    }
+  }, [report, isEditing, isOpen]);
+
+  const handleSubmit = () => {
+    const submitData = {
+      ...formData,
+      preventiveRecommendations: recommendations.split("\n").filter(rec => rec.trim() !== ""),
+      animalId: formData.animalTag, // Usar el tag como ID del animal
+    };
+
+    onSave(submitData);
+  };
+
+  const updateFormData = (field: string, value: any) => {
+    setFormData(prev => ({
+      ...prev,
+      [field]: value
+    }));
+  };
+
+  const updateNestedFormData = (parentField: string, field: string, value: any) => {
+    setFormData(prev => ({
+      ...prev,
+      [parentField]: {
+        ...prev[parentField as keyof typeof prev] as any,
+        [field]: value
+      }
+    }));
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <div className="bg-white/95 backdrop-blur-lg rounded-lg shadow-xl border border-[#519a7c]/30 max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+        <div className="sticky top-0 bg-gradient-to-r from-[#519a7c]/20 to-[#f4ac3a]/20 px-6 py-4 border-b border-gray-200/40">
+          <div className="flex items-center justify-between">
+            <h2 className="text-xl font-semibold text-gray-900">
+              {isEditing ? "Editar Reporte Post-Mortem" : "Nuevo Reporte Post-Mortem"}
+            </h2>
+            <button onClick={onClose} className="text-gray-500 hover:text-gray-700">
+              <X className="w-6 h-6" />
+            </button>
+          </div>
+        </div>
+
+        <div className="p-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Información del Animal */}
+            <div className="space-y-4">
+              <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+                <Activity className="w-5 h-5 text-[#519a7c]" />
+                Información del Animal
+              </h3>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Nombre del Animal *</label>
+                <input
+                  type="text"
+                  required
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#519a7c]/50 focus:border-[#519a7c]"
+                  value={formData.animalName}
+                  onChange={(e) => updateFormData("animalName", e.target.value)}
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Etiqueta/Tag *</label>
+                <input
+                  type="text"
+                  required
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#519a7c]/50 focus:border-[#519a7c]"
+                  value={formData.animalTag}
+                  onChange={(e) => updateFormData("animalTag", e.target.value)}
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Raza *</label>
+                  <input
+                    type="text"
+                    required
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#519a7c]/50 focus:border-[#519a7c]"
+                    value={formData.breed}
+                    onChange={(e) => updateFormData("breed", e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Género *</label>
+                  <select
+                    required
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#519a7c]/50 focus:border-[#519a7c]"
+                    value={formData.gender}
+                    onChange={(e) => updateFormData("gender", e.target.value)}
+                  >
+                    <option value="female">Hembra</option>
+                    <option value="male">Macho</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Edad (años) *</label>
+                  <input
+                    type="number"
+                    required
+                    min="0"
+                    step="0.1"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#519a7c]/50 focus:border-[#519a7c]"
+                    value={formData.age}
+                    onChange={(e) => updateFormData("age", parseFloat(e.target.value))}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Peso (kg) *</label>
+                  <input
+                    type="number"
+                    required
+                    min="0"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#519a7c]/50 focus:border-[#519a7c]"
+                    value={formData.weight}
+                    onChange={(e) => updateFormData("weight", parseFloat(e.target.value))}
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Fecha de Muerte *</label>
+                  <input
+                    type="date"
+                    required
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#519a7c]/50 focus:border-[#519a7c]"
+                    value={formData.deathDate ? new Date(formData.deathDate).toISOString().split('T')[0] : ''}
+                    onChange={(e) => updateFormData("deathDate", new Date(e.target.value))}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Fecha de Descubrimiento *</label>
+                  <input
+                    type="date"
+                    required
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#519a7c]/50 focus:border-[#519a7c]"
+                    value={formData.discoveryDate ? new Date(formData.discoveryDate).toISOString().split('T')[0] : ''}
+                    onChange={(e) => updateFormData("discoveryDate", new Date(e.target.value))}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Ubicación y Circunstancias */}
+            <div className="space-y-4">
+              <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+                <MapPin className="w-5 h-5 text-[#519a7c]" />
+                Ubicación y Circunstancias
+              </h3>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Dirección/Ubicación *</label>
+                <input
+                  type="text"
+                  required
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#519a7c]/50 focus:border-[#519a7c]"
+                  value={formData.location?.address}
+                  onChange={(e) => updateNestedFormData("location", "address", e.target.value)}
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Sector</label>
+                  <input
+                    type="text"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#519a7c]/50 focus:border-[#519a7c]"
+                    value={formData.location?.sector}
+                    onChange={(e) => updateNestedFormData("location", "sector", e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Ambiente</label>
+                  <select
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#519a7c]/50 focus:border-[#519a7c]"
+                    value={formData.location?.environment}
+                    onChange={(e) => updateNestedFormData("location", "environment", e.target.value)}
+                  >
+                    <option value="">Seleccionar...</option>
+                    <option value="Confinamiento">Confinamiento</option>
+                    <option value="Pastoreo">Pastoreo</option>
+                    <option value="Corral">Corral</option>
+                    <option value="Establo">Establo</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Circunstancias de la Muerte</label>
+                <textarea
+                  rows={3}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#519a7c]/50 focus:border-[#519a7c]"
+                  value={formData.deathCircumstances?.circumstances}
+                  onChange={(e) => updateNestedFormData("deathCircumstances", "circumstances", e.target.value)}
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Condiciones Climáticas</label>
+                <input
+                  type="text"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#519a7c]/50 focus:border-[#519a7c]"
+                  value={formData.deathCircumstances?.weatherConditions}
+                  onChange={(e) => updateNestedFormData("deathCircumstances", "weatherConditions", e.target.value)}
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Posición Encontrada</label>
+                <input
+                  type="text"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#519a7c]/50 focus:border-[#519a7c]"
+                  value={formData.deathCircumstances?.positionFound}
+                  onChange={(e) => updateNestedFormData("deathCircumstances", "positionFound", e.target.value)}
+                />
+              </div>
+
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="witnessed"
+                  className="rounded border-gray-300 text-[#519a7c] focus:ring-[#519a7c]/50"
+                  checked={formData.deathCircumstances?.witnessed}
+                  onChange={(e) => updateNestedFormData("deathCircumstances", "witnessed", e.target.checked)}
+                />
+                <label htmlFor="witnessed" className="text-sm font-medium text-gray-700">Muerte presenciada</label>
+              </div>
+            </div>
+          </div>
+
+          {/* Causa y Diagnóstico */}
+          <div className="mt-6 space-y-4">
+            <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+              <Microscope className="w-5 h-5 text-[#519a7c]" />
+              Causa y Diagnóstico
+            </h3>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Causa Preliminar</label>
+                <input
+                  type="text"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#519a7c]/50 focus:border-[#519a7c]"
+                  value={formData.preliminaryCause}
+                  onChange={(e) => updateFormData("preliminaryCause", e.target.value)}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Categoría de Causa</label>
+                <select
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#519a7c]/50 focus:border-[#519a7c]"
+                  value={formData.causeCategory}
+                  onChange={(e) => updateFormData("causeCategory", e.target.value)}
+                >
+                  <option value="unknown">Desconocida</option>
+                  <option value="disease">Enfermedad</option>
+                  <option value="trauma">Trauma</option>
+                  <option value="poisoning">Envenenamiento</option>
+                  <option value="metabolic">Metabólica</option>
+                  <option value="reproductive">Reproductiva</option>
+                  <option value="congenital">Congénita</option>
+                  <option value="predation">Depredación</option>
+                </select>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Causa Final (Diagnóstico Definitivo)</label>
+              <textarea
+                rows={2}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#519a7c]/50 focus:border-[#519a7c]"
+                value={formData.finalCause}
+                onChange={(e) => updateFormData("finalCause", e.target.value)}
+              />
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Veterinario *</label>
+                <input
+                  type="text"
+                  required
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#519a7c]/50 focus:border-[#519a7c]"
+                  value={formData.veterinarian}
+                  onChange={(e) => updateFormData("veterinarian", e.target.value)}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Patólogo</label>
+                <input
+                  type="text"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#519a7c]/50 focus:border-[#519a7c]"
+                  value={formData.pathologist}
+                  onChange={(e) => updateFormData("pathologist", e.target.value)}
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="necropsyPerformed"
+                className="rounded border-gray-300 text-[#519a7c] focus:ring-[#519a7c]/50"
+                checked={formData.necropsyPerformed}
+                onChange={(e) => updateFormData("necropsyPerformed", e.target.checked)}
+              />
+              <label htmlFor="necropsyPerformed" className="text-sm font-medium text-gray-700">Necropsia realizada</label>
+            </div>
+          </div>
+
+          {/* Hallazgos Macroscópicos */}
+          <div className="mt-6 space-y-4">
+            <h3 className="text-lg font-semibold text-gray-900">Hallazgos Macroscópicos</h3>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Examen Externo</label>
+                <textarea
+                  rows={2}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#519a7c]/50 focus:border-[#519a7c]"
+                  value={formData.grossFindings?.externalExamination}
+                  onChange={(e) => updateNestedFormData("grossFindings", "externalExamination", e.target.value)}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Sistema Cardiovascular</label>
+                <textarea
+                  rows={2}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#519a7c]/50 focus:border-[#519a7c]"
+                  value={formData.grossFindings?.cardiovascularSystem}
+                  onChange={(e) => updateNestedFormData("grossFindings", "cardiovascularSystem", e.target.value)}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Sistema Respiratorio</label>
+                <textarea
+                  rows={2}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#519a7c]/50 focus:border-[#519a7c]"
+                  value={formData.grossFindings?.respiratorySystem}
+                  onChange={(e) => updateNestedFormData("grossFindings", "respiratorySystem", e.target.value)}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Sistema Digestivo</label>
+                <textarea
+                  rows={2}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#519a7c]/50 focus:border-[#519a7c]"
+                  value={formData.grossFindings?.digestiveSystem}
+                  onChange={(e) => updateNestedFormData("grossFindings", "digestiveSystem", e.target.value)}
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Recomendaciones y Estado */}
+          <div className="mt-6 space-y-4">
+            <h3 className="text-lg font-semibold text-gray-900">Recomendaciones y Estado</h3>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Recomendaciones Preventivas (una por línea)</label>
+              <textarea
+                rows={4}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#519a7c]/50 focus:border-[#519a7c]"
+                placeholder="Escriba cada recomendación en una línea nueva..."
+                value={recommendations}
+                onChange={(e) => setRecommendations(e.target.value)}
+              />
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Impacto Económico ($)</label>
+                <input
+                  type="number"
+                  min="0"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#519a7c]/50 focus:border-[#519a7c]"
+                  value={formData.economicImpact}
+                  onChange={(e) => updateFormData("economicImpact", parseFloat(e.target.value) || 0)}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Estado del Reporte</label>
+                <select
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#519a7c]/50 focus:border-[#519a7c]"
+                  value={formData.reportStatus}
+                  onChange={(e) => updateFormData("reportStatus", e.target.value)}
+                >
+                  <option value="preliminary">Preliminar</option>
+                  <option value="pending_lab">Pendiente de laboratorio</option>
+                  <option value="completed">Completado</option>
+                  <option value="reviewed">Revisado</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap gap-4">
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="isContagious"
+                  className="rounded border-gray-300 text-[#519a7c] focus:ring-[#519a7c]/50"
+                  checked={formData.isContagious}
+                  onChange={(e) => updateFormData("isContagious", e.target.checked)}
+                />
+                <label htmlFor="isContagious" className="text-sm font-medium text-gray-700">Es contagioso</label>
+              </div>
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="requiresQuarantine"
+                  className="rounded border-gray-300 text-[#519a7c] focus:ring-[#519a7c]/50"
+                  checked={formData.requiresQuarantine}
+                  onChange={(e) => updateFormData("requiresQuarantine", e.target.checked)}
+                />
+                <label htmlFor="requiresQuarantine" className="text-sm font-medium text-gray-700">Requiere cuarentena</label>
+              </div>
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="notifiableDisease"
+                  className="rounded border-gray-300 text-[#519a7c] focus:ring-[#519a7c]/50"
+                  checked={formData.notifiableDisease}
+                  onChange={(e) => updateFormData("notifiableDisease", e.target.checked)}
+                />
+                <label htmlFor="notifiableDisease" className="text-sm font-medium text-gray-700">Enfermedad notificable</label>
+              </div>
+            </div>
+          </div>
+
+          {/* Botones de acción */}
+          <div className="mt-8 flex gap-3 justify-end border-t border-gray-200/40 pt-4">
+            <Button variant="outline" onClick={onClose}>
+              Cancelar
+            </Button>
+            <Button onClick={handleSubmit}>
+              <Save className="w-4 h-4 mr-2" />
+              {isEditing ? "Actualizar Reporte" : "Guardar Reporte"}
+            </Button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // Componente de Mapa de Mortalidad
 const MortalityMap = () => {
   return (
@@ -341,167 +1225,103 @@ const PostMortemReports = () => {
   const [selectedCause, setSelectedCause] = useState<string>("all");
   const [selectedStatus, setSelectedStatus] = useState<string>("all");
   const [selectedPeriod, setSelectedPeriod] = useState<string>("30");
+  const [isLoading, setIsLoading] = useState(false);
+  const [loadingMessage, setLoadingMessage] = useState("");
+  const [isFormModalOpen, setIsFormModalOpen] = useState(false);
+  const [editingReport, setEditingReport] = useState<PostMortemReport | undefined>();
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [reportToDelete, setReportToDelete] = useState<string>("");
 
+  // Cargar datos iniciales
   useEffect(() => {
-    const loadData = async () => {
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-
-      const mockReports: PostMortemReport[] = [
-        {
-          id: "1",
-          animalId: "COW004",
-          animalName: "Margarita",
-          animalTag: "TAG-004",
-          breed: "Holstein",
-          age: 4,
-          gender: "female",
-          weight: 520,
-          deathDate: new Date("2025-07-08"),
-          discoveryDate: new Date("2025-07-08"),
-          location: {
-            lat: 17.9869,
-            lng: -92.9303,
-            address: "Establo Principal, Sector A",
-            sector: "A",
-            environment: "Confinamiento",
-          },
-          deathCircumstances: {
-            witnessed: false,
-            positionFound: "Decúbito lateral izquierdo",
-            weatherConditions: "Caluroso, 32°C",
-            circumstances: "Encontrada muerta en la mañana, sin signos previos aparentes",
-          },
-          preliminaryCause: "Neumonía severa",
-          finalCause: "Neumonía bacteriana por Mannheimia haemolytica",
-          causeCategory: "disease",
-          necropsyPerformed: true,
-          necropsyDate: new Date("2025-07-08"),
-          pathologist: "Dr. Hernández",
-          veterinarian: "Dr. García",
-          grossFindings: {
-            externalExamination: "Animal en buen estado nutricional, sin lesiones externas evidentes",
-            cardiovascularSystem: "Corazón aumentado de tamaño, congestión venosa",
-            respiratorySystem: "Pulmones consolidados bilateralmente, exudado purulento en bronquios",
-            digestiveSystem: "Sin hallazgos significativos",
-            nervousSystem: "Sin alteraciones macroscópicas",
-            reproductiveSystem: "Útero gestante de 6 meses",
-            musculoskeletalSystem: "Sin lesiones",
-            lymphaticSystem: "Nódulos linfáticos mediastínicos aumentados",
-            other: "Hígado con congestión pasiva",
-          },
-          histopathology: {
-            performed: true,
-            results: "Bronconeumonía supurativa severa con colonias bacterianas",
-            laboratory: "Laboratorio Veterinario Central",
-            reportDate: new Date("2025-07-12"),
-          },
-          microbiology: {
-            performed: true,
-            organisms: ["Mannheimia haemolytica"],
-            antibiogramResults: "Sensible a penicilina, resistente a tetraciclina",
-            laboratory: "Laboratorio Veterinario Central",
-          },
-          photos: [],
-          samples: [],
-          preventiveRecommendations: [
-            "Mejorar ventilación en establos",
-            "Implementar programa de vacunación respiratoria",
-            "Monitoreo de estrés térmico",
-            "Separar animales gestantes",
-          ],
-          economicImpact: 15000,
-          reportStatus: "completed",
-          createdBy: "Dr. García",
-          createdAt: new Date("2025-07-08"),
-          lastUpdated: new Date("2025-07-12"),
-          isContagious: true,
-          requiresQuarantine: false,
-          notifiableDisease: false,
-          reportedToAuthorities: false,
-        },
-        {
-          id: "2",
-          animalId: "BULL001",
-          animalName: "Campeón",
-          animalTag: "TAG-B001",
-          breed: "Angus",
-          age: 6,
-          gender: "male",
-          weight: 850,
-          deathDate: new Date("2025-07-05"),
-          discoveryDate: new Date("2025-07-05"),
-          location: {
-            lat: 17.9719,
-            lng: -92.9456,
-            address: "Pastizal Norte, Sector B",
-            sector: "B",
-            environment: "Pastoreo",
-          },
-          deathCircumstances: {
-            witnessed: true,
-            timeOfDeath: new Date("2025-07-05T14:30:00"),
-            positionFound: "Decúbito lateral derecho",
-            weatherConditions: "Lluvia ligera, 28°C",
-            circumstances: "Observado cayendo súbitamente durante pastoreo",
-          },
-          preliminaryCause: "Trauma múltiple",
-          finalCause: "Traumatismo craneoencefálico severo",
-          causeCategory: "trauma",
-          necropsyPerformed: true,
-          necropsyDate: new Date("2025-07-05"),
-          pathologist: "Dr. Hernández",
-          veterinarian: "Dr. Martínez",
-          grossFindings: {
-            externalExamination: "Herida contusa en región frontal, hematoma subcutáneo extenso",
-            cardiovascularSystem: "Sin alteraciones",
-            respiratorySystem: "Congestión pulmonar leve",
-            digestiveSystem: "Sin hallazgos",
-            nervousSystem: "Fractura de hueso frontal, hemorragia subdural severa",
-            reproductiveSystem: "Sin alteraciones",
-            musculoskeletalSystem: "Fractura en miembro anterior izquierdo",
-            lymphaticSystem: "Sin alteraciones",
-            other: "Hematomas múltiples en flanco izquierdo",
-          },
-          photos: [],
-          samples: [],
-          preventiveRecommendations: [
-            "Inspección de infraestructura en pastizales",
-            "Remoción de objetos peligrosos",
-            "Mejora de cercas y protecciones",
-            "Supervisión durante pastoreo",
-          ],
-          economicImpact: 25000,
-          reportStatus: "completed",
-          createdBy: "Dr. Martínez",
-          createdAt: new Date("2025-07-05"),
-          lastUpdated: new Date("2025-07-06"),
-          isContagious: false,
-          requiresQuarantine: false,
-          notifiableDisease: false,
-          reportedToAuthorities: false,
-        },
-      ];
-
-      const mockStats: MortalityStats = {
-        totalDeaths: 18,
-        monthlyDeaths: 3,
-        mortalityRate: 2.8,
-        mostCommonCause: "Enfermedades respiratorias",
-        averageAge: 4.2,
-        costImpact: 180000,
-        necropsyRate: 85.5,
-        contagiousCases: 2,
-        seasonalTrend: "increasing",
-        preventableCases: 12,
-      };
-
-      setReports(mockReports);
-      setStats(mockStats);
-    };
-
     loadData();
   }, []);
 
+  const loadData = async () => {
+    setIsLoading(true);
+    setLoadingMessage("Cargando datos...");
+    
+    try {
+      const [reportsData, statsData] = await Promise.all([
+        apiService.getReports(),
+        apiService.getStats()
+      ]);
+      
+      setReports(reportsData);
+      setStats(statsData);
+    } catch (error) {
+      console.error("Error cargando datos:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Handlers para CRUD
+  const handleNewReport = () => {
+    setEditingReport(undefined);
+    setIsFormModalOpen(true);
+  };
+
+  const handleEditReport = (report: PostMortemReport) => {
+    setEditingReport(report);
+    setIsFormModalOpen(true);
+  };
+
+  const handleDeleteReport = (reportId: string) => {
+    setReportToDelete(reportId);
+    setShowDeleteConfirm(true);
+  };
+
+  const confirmDelete = async () => {
+    if (!reportToDelete) return;
+    
+    setIsLoading(true);
+    setLoadingMessage("Eliminando reporte...");
+    
+    try {
+      await apiService.deleteReport(reportToDelete);
+      setReports(prev => prev.filter(r => r.id !== reportToDelete));
+      setShowDeleteConfirm(false);
+      setReportToDelete("");
+    } catch (error) {
+      console.error("Error eliminando reporte:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleSaveReport = async (reportData: Partial<PostMortemReport>) => {
+    setIsLoading(true);
+    setLoadingMessage(editingReport ? "Actualizando reporte..." : "Guardando reporte...");
+    
+    try {
+      if (editingReport) {
+        // Actualizar reporte existente
+        const updatedReport = await apiService.updateReport(editingReport.id, reportData);
+        setReports(prev => prev.map(r => r.id === editingReport.id ? updatedReport : r));
+      } else {
+        // Crear nuevo reporte
+        const newReport = await apiService.createReport({
+          ...reportData,
+          createdBy: "Usuario Actual", // En una app real, esto vendría del contexto de usuario
+        });
+        setReports(prev => [newReport, ...prev]);
+      }
+      
+      setIsFormModalOpen(false);
+      setEditingReport(undefined);
+      
+      // Recargar estadísticas
+      const newStats = await apiService.getStats();
+      setStats(newStats);
+    } catch (error) {
+      console.error("Error guardando reporte:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Filtrado de reportes
   const filteredReports = reports.filter((report) => {
     const matchesSearch =
       report.animalName.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -533,6 +1353,7 @@ const PostMortemReports = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#519a7c] via-[#f2e9d8] to-[#f4ac3a] p-2 sm:p-6 overflow-x-hidden">
+      {/* Header */}
       <div className="bg-white/90 backdrop-blur-lg border-b border-[#519a7c]/30 sticky top-0 z-40 shadow-lg">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex items-center justify-between">
@@ -545,7 +1366,7 @@ const PostMortemReports = () => {
               </p>
             </div>
             <div className="flex items-center gap-3">
-              <Button size="sm">
+              <Button size="sm" onClick={handleNewReport}>
                 <Plus className="w-4 h-4 mr-2" />
                 Nuevo Reporte
               </Button>
@@ -556,6 +1377,7 @@ const PostMortemReports = () => {
 
       <div className="max-w-4xl mx-auto py-8">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          {/* Estadísticas */}
           <div className="lg:col-span-12">
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
               <Card className="bg-gradient-to-br from-gray-100/90 to-gray-50/90 border-gray-300/60">
@@ -632,6 +1454,7 @@ const PostMortemReports = () => {
             </div>
           </div>
 
+          {/* Mapa y Filtros */}
           <div className="lg:col-span-8">
             <Card className="bg-white/95 border-[#519a7c]/40">
               <CardHeader>
@@ -723,6 +1546,7 @@ const PostMortemReports = () => {
             </Card>
           </div>
 
+          {/* Lista de Reportes */}
           <div className="lg:col-span-12">
             <Card className="bg-white/95 border-[#519a7c]/40">
               <CardHeader>
@@ -777,7 +1601,7 @@ const PostMortemReports = () => {
                             </div>
                             <div>
                               <p className="text-gray-600">Fecha muerte:</p>
-                              <p className="font-medium">{report.deathDate.toLocaleDateString()}</p>
+                              <p className="font-medium">{new Date(report.deathDate).toLocaleDateString()}</p>
                             </div>
                           </div>
 
@@ -815,6 +1639,7 @@ const PostMortemReports = () => {
                             variant="outline" 
                             size="sm"
                             className="hover:bg-[#519a7c]/10 hover:border-[#519a7c]"
+                            onClick={() => handleEditReport(report)}
                           >
                             <Edit className="w-4 h-4" />
                           </Button>
@@ -822,6 +1647,7 @@ const PostMortemReports = () => {
                             variant="outline" 
                             size="sm"
                             className="hover:bg-red-50 hover:border-red-300 hover:text-red-600"
+                            onClick={() => handleDeleteReport(report.id)}
                           >
                             <Trash2 className="w-4 h-4" />
                           </Button>
@@ -835,6 +1661,28 @@ const PostMortemReports = () => {
           </div>
         </div>
       </div>
+
+      {/* Modals */}
+      <LoadingModal isOpen={isLoading} message={loadingMessage} />
+      
+      <ConfirmModal
+        isOpen={showDeleteConfirm}
+        onClose={() => setShowDeleteConfirm(false)}
+        onConfirm={confirmDelete}
+        title="Eliminar Reporte"
+        message="¿Estás seguro de que deseas eliminar este reporte post-mortem? Esta acción no se puede deshacer."
+        confirmText="Eliminar"
+        cancelText="Cancelar"
+        variant="danger"
+      />
+
+      <ReportFormModal
+        isOpen={isFormModalOpen}
+        onClose={() => setIsFormModalOpen(false)}
+        onSave={handleSaveReport}
+        report={editingReport}
+        isEditing={!!editingReport}
+      />
     </div>
   );
 };

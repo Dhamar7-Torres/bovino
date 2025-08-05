@@ -1,8 +1,7 @@
 import React, { useState } from "react";
 import { motion } from "framer-motion";
 import { Eye, EyeOff, Mail, Lock, User, ArrowRight, Check } from "lucide-react";
-import { authService } from "../../services/authService";
-import { RegisterData } from "../../types/auth";
+import { useAuth } from "../../context/AuthContext"; // ✅ Usar AuthContext
 
 // Tipos para las props del componente
 interface RegisterFormProps {
@@ -57,6 +56,9 @@ const RegisterForm: React.FC<RegisterFormProps> = ({
   onSwitchToLogin,
   onAuthSuccess,
 }) => {
+  // ✅ USAR HOOK DE AUTENTICACIÓN EN LUGAR DE authService
+  const { register, isLoading, error, clearError } = useAuth();
+
   // Estado para los datos del formulario
   const [formData, setFormData] = useState<RegisterFormData>({
     firstName: "",
@@ -72,9 +74,6 @@ const RegisterForm: React.FC<RegisterFormProps> = ({
   // Estado para mostrar/ocultar contraseñas
   const [showPassword, setShowPassword] = useState<boolean>(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState<boolean>(false);
-
-  // Estado para el estado de carga
-  const [isLoading, setIsLoading] = useState<boolean>(false);
 
   // Estado para aceptar términos y condiciones
   const [acceptTerms, setAcceptTerms] = useState<boolean>(false);
@@ -115,6 +114,11 @@ const RegisterForm: React.FC<RegisterFormProps> = ({
         ...prev,
         general: undefined,
       }));
+    }
+
+    // ✅ Limpiar error del contexto también
+    if (error) {
+      clearError();
     }
   };
 
@@ -254,7 +258,7 @@ const RegisterForm: React.FC<RegisterFormProps> = ({
     setErrors(newErrors);
   };
 
-  // Función para manejar el envío del formulario
+  // ✅ FUNCIÓN ACTUALIZADA: Usar función register del contexto
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -271,27 +275,22 @@ const RegisterForm: React.FC<RegisterFormProps> = ({
       return;
     }
 
-    setIsLoading(true);
-
     try {
-      // Preparar datos para el backend
-      const registerData: RegisterData = {
+      // ✅ PREPARAR DATOS PARA EL CONTEXTO (estructura simplificada)
+      const registerData = {
         firstName: formData.firstName.trim(),
         lastName: formData.lastName.trim(),
         email: formData.email.trim().toLowerCase(),
         password: formData.password,
         confirmPassword: formData.confirmPassword,
-        acceptTerms: true,
-        acceptPrivacy: true,
-        farmName: `Rancho de ${formData.firstName} ${formData.lastName}`, // Generar nombre del rancho
       };
 
-      console.log("📝 Enviando datos de registro al backend...");
+      console.log("📝 Enviando datos de registro al AuthContext...");
 
-      // Llamar al servicio de autenticación
-      const response = await authService.register(registerData);
+      // ✅ USAR FUNCIÓN DEL CONTEXTO EN LUGAR DE authService
+      await register(registerData);
 
-      console.log("✅ Registro exitoso:", response);
+      console.log("✅ Registro exitoso");
 
       // Mostrar mensaje de éxito
       setTimeout(() => {
@@ -301,13 +300,18 @@ const RegisterForm: React.FC<RegisterFormProps> = ({
       }, 500);
 
       // Notificar éxito al componente padre
-      onAuthSuccess(response);
+      onAuthSuccess({
+        user: {
+          firstName: formData.firstName,
+          lastName: formData.lastName,
+          email: formData.email,
+        },
+        timestamp: new Date().toISOString(),
+      });
 
     } catch (error: any) {
       console.error("❌ Error en el registro:", error);
       processBackendError(error);
-    } finally {
-      setIsLoading(false);
     }
   };
 
@@ -342,14 +346,14 @@ const RegisterForm: React.FC<RegisterFormProps> = ({
       initial="hidden"
       animate="visible"
     >
-      {/* Error general del formulario */}
-      {errors.general && (
+      {/* ✅ Error general del formulario - Combinando errores locales y del contexto */}
+      {(errors.general || error) && (
         <motion.div
           className="bg-red-50 border border-red-200 rounded-lg p-3"
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
         >
-          <p className="text-sm text-red-600 text-center">{errors.general}</p>
+          <p className="text-sm text-red-600 text-center">{errors.general || error}</p>
         </motion.div>
       )}
 
@@ -713,16 +717,28 @@ const RegisterForm: React.FC<RegisterFormProps> = ({
         </p>
       </motion.div>
 
-      {/* Estado de conexión */}
+      {/* ✅ Estado de conexión actualizado */}
       {isLoading && (
         <motion.div variants={itemVariants} className="text-center">
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
             <p className="text-xs text-blue-700">
-              🔄 Conectando con el servidor... Esto puede tomar unos segundos.
+              🔄 Creando cuenta a través del AuthContext... Esto puede tomar unos segundos.
             </p>
           </div>
         </motion.div>
       )}
+
+      {/* ✅ Información de conexión con AuthContext */}
+      <motion.div variants={itemVariants} className="text-center">
+        <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+          <p className="text-xs text-green-700">
+            <strong>🟢 Usando AuthContext:</strong> Registro integrado con gestión de estado unificada
+          </p>
+          <p className="text-xs text-green-600 mt-1">
+            Loading: {isLoading ? 'Sí' : 'No'} | Términos: {acceptTerms ? 'Aceptados' : 'Pendientes'}
+          </p>
+        </div>
+      </motion.div>
     </motion.form>
   );
 };
