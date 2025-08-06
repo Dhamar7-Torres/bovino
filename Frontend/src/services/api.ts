@@ -4,7 +4,39 @@ import axios, {
   AxiosResponse,
   AxiosError,
 } from "axios";
-import { API_CONFIG } from "../constants/urls";
+
+// ========================================
+// CONFIGURACIÓN DE LA API PARA PUERTO 5000
+// ========================================
+
+const API_CONFIG = {
+  BASE_URL: 'http://localhost:5000',
+  VERSION: '', 
+  TIMEOUT: 30000, // 30 segundos
+  DEFAULT_HEADERS: {
+    'Content-Type': 'application/json',
+    'Accept': 'application/json',
+  },
+  ENDPOINTS: {
+    // Endpoints de salud
+    HEALTH: '/api/health',
+    
+    // Endpoints de reproducción
+    PREGNANCY_TRACKING: '/api/reproduction/pregnancy-tracking',
+    PREGNANCY_CHECK: '/api/reproduction/pregnancy-check',
+    
+    // Endpoints de usuarios
+    VETERINARIANS: '/api/users/veterinarians',
+    
+    // Endpoints de inventario
+    INVENTORY_DASHBOARD: '/api/inventory/dashboard',
+    INVENTORY_REPORTS: '/api/inventory/reports',
+    
+    // Endpoints de eventos
+    PREGNANCY_EVENTS: '/api/events/pregnancy-check',
+    BIRTH_EVENTS: '/api/events/birth',
+  }
+};
 
 // Tipos para manejo de respuestas de la API
 export interface ApiResponse<T = any> {
@@ -16,6 +48,7 @@ export interface ApiResponse<T = any> {
     limit: number;
     total: number;
     totalPages: number;
+    currentPage?: number;
   };
 }
 
@@ -25,6 +58,8 @@ export interface ApiError {
   code?: string;
   details?: any;
   field?: string;
+  error?: string;
+  errorCode?: string;
 }
 
 // Tipo para configuración de upload con progreso
@@ -40,21 +75,41 @@ export interface GeoLocationConfig {
   maximumAge?: number;
 }
 
+// Interfaz para datos de ubicación
+export interface LocationData {
+  latitude: number;
+  longitude: number;
+  accuracy?: number;
+  timestamp: string;
+}
+
 // Clase principal para el cliente API
 class ApiClient {
   private instance: AxiosInstance;
   private authToken: string | null = null;
+  private isConnected: boolean = false;
 
   constructor() {
+    // Cargar token desde localStorage al inicializar
+    this.loadAuthToken();
+
     // Crear instancia de axios con configuración base
     this.instance = axios.create({
-      baseURL: `${API_CONFIG.BASE_URL}/api/${API_CONFIG.VERSION}`,
+      baseURL: API_CONFIG.BASE_URL,
       timeout: API_CONFIG.TIMEOUT,
       headers: API_CONFIG.DEFAULT_HEADERS,
     });
 
     // Configurar interceptores
     this.setupInterceptors();
+  }
+
+  // Cargar token de autenticación desde localStorage
+  private loadAuthToken(): void {
+    const token = localStorage.getItem('auth_token') || localStorage.getItem('authToken');
+    if (token) {
+      this.authToken = token;
+    }
   }
 
   // Configuración de interceptores para requests y responses
@@ -73,6 +128,9 @@ class ApiClient {
         // Agregar información de dispositivo para analytics
         config.headers["X-Device-Type"] = this.getDeviceType();
 
+        // Agregar información de zona horaria
+        config.headers["X-Timezone"] = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
         console.log(
           `🌐 API Request: ${config.method?.toUpperCase()} ${config.url}`
         );
@@ -90,12 +148,18 @@ class ApiClient {
         console.log(
           `✅ API Response: ${response.status} ${response.config.url}`
         );
+        this.isConnected = true;
         return response;
       },
       async (error: AxiosError<ApiError>) => {
         console.error(
-          `❌ API Error: ${error.response?.status} ${error.config?.url}`
+          `❌ API Error: ${error.response?.status || 'Network'} ${error.config?.url}`
         );
+
+        // Marcar como desconectado si es un error de red
+        if (!error.response) {
+          this.isConnected = false;
+        }
 
         // Manejar errores de autenticación
         if (error.response?.status === 401) {
@@ -104,14 +168,26 @@ class ApiClient {
 
         // Manejar errores de red
         if (!error.response) {
-          throw new Error("Error de conexión - Verifique su internet");
+          throw new Error("Error de conexión - Verifique que el backend esté ejecutándose en puerto 5000");
         }
 
-        // Formatear mensaje de error
-        const errorMessage =
-          error.response.data?.message || "Error inesperado en el servidor";
+        // Formatear mensaje de error basado en la respuesta del backend
+        const errorData = error.response.data;
+        let errorMessage = "Error inesperado en el servidor";
 
-        throw new Error(errorMessage);
+        if (errorData) {
+          errorMessage = errorData.message || 
+                        errorData.error || 
+                        `Error HTTP ${error.response.status}`;
+        }
+
+        // Crear error personalizado con información adicional
+        const customError = new Error(errorMessage) as any;
+        customError.status = error.response.status;
+        customError.code = errorData?.code || errorData?.errorCode;
+        customError.details = errorData?.details;
+
+        throw customError;
       }
     );
   }
@@ -133,6 +209,7 @@ class ApiClient {
   private async handleUnauthorized(): Promise<void> {
     this.authToken = null;
     localStorage.removeItem("authToken");
+    localStorage.removeItem("auth_token");
 
     // Emitir evento para que la app maneje el logout
     window.dispatchEvent(new CustomEvent("auth:unauthorized"));
@@ -142,10 +219,22 @@ class ApiClient {
   public setAuthToken(token: string | null): void {
     this.authToken = token;
     if (token) {
-      localStorage.setItem("authToken", token);
+      localStorage.setItem("auth_token", token);
+      localStorage.setItem("authToken", token); // Compatibilidad
     } else {
+      localStorage.removeItem("auth_token");
       localStorage.removeItem("authToken");
     }
+  }
+
+  // Obtener token actual
+  public getAuthToken(): string | null {
+    return this.authToken;
+  }
+
+  // Verificar si está conectado
+  public isApiConnected(): boolean {
+    return this.isConnected;
   }
 
   // Obtener geolocalización actual del usuario
@@ -202,7 +291,7 @@ class ApiClient {
           longitude: position.coords.longitude,
           accuracy: position.coords.accuracy,
           timestamp: new Date().toISOString(),
-        },
+        } as LocationData,
       };
     } catch (error) {
       console.warn("⚠️ No se pudo obtener ubicación:", error);
@@ -315,6 +404,53 @@ class ApiClient {
     return response.data;
   }
 
+  // Método para upload múltiple de archivos
+  public async uploadMultiple<T = any>(
+    url: string,
+    files: File[],
+    fieldName: string = "files",
+    onProgress?: (progress: number) => void,
+    additionalData?: Record<string, any>
+  ): Promise<ApiResponse<T>> {
+    const formData = new FormData();
+    
+    // Agregar todos los archivos
+    files.forEach((file, index) => {
+      formData.append(`${fieldName}[${index}]`, file);
+    });
+
+    // Agregar datos adicionales
+    if (additionalData) {
+      Object.entries(additionalData).forEach(([key, value]) => {
+        formData.append(
+          key,
+          typeof value === "object" ? JSON.stringify(value) : value
+        );
+      });
+    }
+
+    const config: AxiosRequestConfig = {
+      headers: {
+        "Content-Type": "multipart/form-data",
+      },
+      onUploadProgress: (progressEvent) => {
+        if (onProgress && progressEvent.total) {
+          const progress = Math.round(
+            (progressEvent.loaded * 100) / progressEvent.total
+          );
+          onProgress(progress);
+        }
+      },
+    };
+
+    const response = await this.instance.post<ApiResponse<T>>(
+      url,
+      formData,
+      config
+    );
+    return response.data;
+  }
+
   // Método para download de archivos
   public async download(
     url: string,
@@ -384,15 +520,22 @@ class ApiClient {
     throw lastError!;
   }
 
-  // Método para verificar estado de conexión
+  // Método para verificar estado de conexión con el backend
   public async healthCheck(): Promise<boolean> {
     try {
-      await this.get("/health");
+      await this.get(API_CONFIG.ENDPOINTS.HEALTH);
+      this.isConnected = true;
       return true;
     } catch (error) {
       console.error("❌ Health check falló:", error);
+      this.isConnected = false;
       return false;
     }
+  }
+
+  // Método para test de conectividad simple (compatible con el código anterior)
+  public async testConnection(): Promise<boolean> {
+    return this.healthCheck();
   }
 
   // Método para configurar headers personalizados
@@ -404,12 +547,86 @@ class ApiClient {
   public removeDefaultHeader(key: string): void {
     delete this.instance.defaults.headers.common[key];
   }
+
+  // Método para cambiar la URL base (útil para diferentes entornos)
+  public setBaseURL(baseURL: string): void {
+    this.instance.defaults.baseURL = baseURL;
+  }
+
+  // Método para obtener la configuración actual
+  public getConfig() {
+    return {
+      baseURL: this.instance.defaults.baseURL,
+      timeout: this.instance.defaults.timeout,
+      headers: this.instance.defaults.headers,
+      isConnected: this.isConnected,
+      hasAuthToken: !!this.authToken,
+    };
+  }
 }
 
 // Instancia singleton del cliente API
 export const apiClient = new ApiClient();
 
-// Helper functions para uso común
+// ========================================
+// SERVICIOS ESPECÍFICOS DEL BACKEND
+// ========================================
+
+// Servicio para embarazos/pregnancy tracking
+export const pregnancyService = {
+  // Obtener todas las gestaciones
+  getAll: (filters?: {
+    search?: string;
+    status?: string;
+    trimester?: string;
+    veterinarianId?: string;
+    page?: number;
+    limit?: number;
+  }) => apiClient.get(API_CONFIG.ENDPOINTS.PREGNANCY_TRACKING, { params: filters }),
+
+  // Obtener una gestación específica
+  getById: (id: string) => apiClient.get(`${API_CONFIG.ENDPOINTS.PREGNANCY_TRACKING}/${id}`),
+
+  // Crear chequeo de embarazo
+  createCheck: (data: {
+    femaleId: string;
+    examDate: string;
+    method: string;
+    result: string;
+    gestationAge?: number;
+    expectedCalvingDate?: string;
+    veterinarianId: string;
+    notes?: string;
+  }) => apiClient.post(API_CONFIG.ENDPOINTS.PREGNANCY_CHECK, data),
+
+  // Actualizar gestación
+  update: (id: string, data: any) => 
+    apiClient.put(`${API_CONFIG.ENDPOINTS.PREGNANCY_TRACKING}/${id}`, data),
+
+  // Eliminar gestación
+  delete: (id: string) => 
+    apiClient.delete(`${API_CONFIG.ENDPOINTS.PREGNANCY_TRACKING}/${id}`),
+};
+
+// Servicio para veterinarios
+export const veterinarianService = {
+  getAll: () => apiClient.get(API_CONFIG.ENDPOINTS.VETERINARIANS),
+  getById: (id: string) => apiClient.get(`${API_CONFIG.ENDPOINTS.VETERINARIANS}/${id}`),
+};
+
+// Servicio para inventario
+export const inventoryService = {
+  getDashboard: (timeRange?: string) => 
+    apiClient.get(API_CONFIG.ENDPOINTS.INVENTORY_DASHBOARD, { 
+      params: { timeRange } 
+    }),
+  getReports: (filters?: any) => 
+    apiClient.get(API_CONFIG.ENDPOINTS.INVENTORY_REPORTS, { 
+      params: filters 
+    }),
+};
+
+// Helper functions para uso común (compatibilidad con código anterior)
 export const api = {
   // Métodos básicos
   get: <T = any>(url: string, config?: AxiosRequestConfig) =>
@@ -435,15 +652,73 @@ export const api = {
 
   // Métodos especializados
   upload: apiClient.upload.bind(apiClient),
+  uploadMultiple: apiClient.uploadMultiple.bind(apiClient),
   download: apiClient.download.bind(apiClient),
   parallel: apiClient.parallel.bind(apiClient),
   retry: apiClient.retry.bind(apiClient),
   healthCheck: apiClient.healthCheck.bind(apiClient),
+  testConnection: apiClient.testConnection.bind(apiClient),
 
   // Configuración
   setAuthToken: apiClient.setAuthToken.bind(apiClient),
+  getAuthToken: apiClient.getAuthToken.bind(apiClient),
   setDefaultHeader: apiClient.setDefaultHeader.bind(apiClient),
   removeDefaultHeader: apiClient.removeDefaultHeader.bind(apiClient),
+  setBaseURL: apiClient.setBaseURL.bind(apiClient),
+  getConfig: apiClient.getConfig.bind(apiClient),
+  isConnected: apiClient.isApiConnected.bind(apiClient),
+
+  // Servicios específicos
+  pregnancy: pregnancyService,
+  veterinarians: veterinarianService,
+  inventory: inventoryService,
 };
 
+// ========================================
+// CONSTANTES Y CONFIGURACIÓN EXPORTADA
+// ========================================
+
+export { API_CONFIG };
 export default apiClient;
+
+// ========================================
+// UTILIDADES ADICIONALES
+// ========================================
+
+// Hook para React (si se usa en un contexto de React)
+export const useApiClient = () => {
+  return {
+    client: apiClient,
+    isConnected: apiClient.isApiConnected(),
+    config: apiClient.getConfig(),
+    services: {
+      pregnancy: pregnancyService,
+      veterinarians: veterinarianService,
+      inventory: inventoryService,
+    }
+  };
+};
+
+// Función para configurar el cliente en diferentes entornos
+export const configureApiClient = (config: {
+  baseURL?: string;
+  timeout?: number;
+  authToken?: string;
+  defaultHeaders?: Record<string, string>;
+}) => {
+  if (config.baseURL) {
+    apiClient.setBaseURL(config.baseURL);
+  }
+
+  if (config.authToken) {
+    apiClient.setAuthToken(config.authToken);
+  }
+
+  if (config.defaultHeaders) {
+    Object.entries(config.defaultHeaders).forEach(([key, value]) => {
+      apiClient.setDefaultHeader(key, value);
+    });
+  }
+
+  return apiClient;
+};

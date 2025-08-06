@@ -15,9 +15,14 @@ import {
   Save,
   Calendar,
   AlertTriangle,
+  Wifi,
+  WifiOff,
 } from "lucide-react";
 
-// Interface simplificada
+// Configuración de la API
+const API_BASE_URL = 'http://localhost:5000/api';
+
+// Interface actualizada para el backend
 interface MatingRecord {
   id: string;
   bullName: string;
@@ -27,17 +32,147 @@ interface MatingRecord {
   matingDate: string;
   matingTime: string;
   location: string;
-  status: "scheduled" | "completed" | "failed";
+  status: "planned" | "completed" | "failed" | "cancelled";
   result?: "successful" | "unsuccessful" | "pending";
   cost: number;
   notes: string;
   createdAt: string;
+  updatedAt?: string;
+}
+
+// Interface para respuestas del API
+interface ApiResponse<T> {
+  success: boolean;
+  data: T;
+  message?: string;
+  pagination?: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  };
+}
+
+// Clase para manejar las peticiones HTTP
+class ApiClient {
+  private baseURL: string;
+  private token: string | null = null;
+
+  constructor(baseURL: string) {
+    this.baseURL = baseURL;
+    this.token = localStorage.getItem('authToken');
+  }
+
+  private async request<T>(
+    endpoint: string,
+    options: RequestInit = {}
+  ): Promise<ApiResponse<T>> {
+    const url = `${this.baseURL}${endpoint}`;
+    
+    const config: RequestInit = {
+      headers: {
+        'Content-Type': 'application/json',
+        ...(this.token && { 'Authorization': `Bearer ${this.token}` }),
+        ...options.headers,
+      },
+      ...options,
+    };
+
+    try {
+      console.log(`🌐 API Request: ${options.method || 'GET'} ${url}`);
+      
+      const response = await fetch(url, config);
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || `HTTP error! status: ${response.status}`);
+      }
+
+      console.log('✅ API Response:', data);
+      return data;
+    } catch (error) {
+      console.error('❌ API Error:', error);
+      throw error;
+    }
+  }
+
+  // Métodos CRUD para mating records
+  async getMatingRecords(params?: {
+    page?: number;
+    limit?: number;
+    status?: string;
+    dateFrom?: string;
+    dateTo?: string;
+  }): Promise<ApiResponse<MatingRecord[]>> {
+    const searchParams = new URLSearchParams();
+    
+    if (params?.page) searchParams.set('page', params.page.toString());
+    if (params?.limit) searchParams.set('limit', params.limit.toString());
+    if (params?.status) searchParams.set('status', params.status);
+    if (params?.dateFrom) searchParams.set('dateFrom', params.dateFrom);
+    if (params?.dateTo) searchParams.set('dateTo', params.dateTo);
+
+    const queryString = searchParams.toString();
+    const endpoint = `/reproduction/mating-records${queryString ? `?${queryString}` : ''}`;
+    
+    return this.request<MatingRecord[]>(endpoint);
+  }
+
+  async createMatingRecord(data: Omit<MatingRecord, 'id' | 'createdAt' | 'updatedAt'>): Promise<ApiResponse<MatingRecord>> {
+    return this.request<MatingRecord>('/reproduction/mating-records', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateMatingRecord(id: string, data: Partial<MatingRecord>): Promise<ApiResponse<MatingRecord>> {
+    return this.request<MatingRecord>(`/reproduction/mating-records/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteMatingRecord(id: string): Promise<ApiResponse<void>> {
+    return this.request<void>(`/reproduction/mating-records/${id}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async getMatingRecord(id: string): Promise<ApiResponse<MatingRecord>> {
+    return this.request<MatingRecord>(`/reproduction/mating-records/${id}`);
+  }
+
+  // Método para obtener estadísticas
+  async getMatingStatistics(): Promise<ApiResponse<any>> {
+    return this.request<any>('/reproduction/statistics');
+  }
+
+  // Método para verificar conexión
+  async checkConnection(): Promise<boolean> {
+    try {
+      const response = await fetch(`${this.baseURL}/health`);
+      return response.ok;
+    } catch {
+      return false;
+    }
+  }
 }
 
 const MatingRecords: React.FC = () => {
+  // Instancia del cliente API
+  const [apiClient] = useState(() => new ApiClient(API_BASE_URL));
+  
+  // Estados principales
   const [records, setRecords] = useState<MatingRecord[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string>("");
+  const [isOnline, setIsOnline] = useState<boolean>(true);
+  const [pagination, setPagination] = useState({
+    page: 1,
+    limit: 20,
+    total: 0,
+    totalPages: 0,
+  });
   
   // Estados para modales y formularios
   const [showForm, setShowForm] = useState<boolean>(false);
@@ -50,83 +185,87 @@ const MatingRecords: React.FC = () => {
   // Estados para formulario
   const [formData, setFormData] = useState<Partial<MatingRecord>>({});
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   
   // Estados para geolocalización
   const [isGettingLocation, setIsGettingLocation] = useState<boolean>(false);
+  
+  // Estados para estadísticas
+  const [, setStatistics] = useState<any>(null);
 
-  // Datos de ejemplo ultra simples - FECHAS CORREGIDAS
-  const mockRecords: MatingRecord[] = [
-    {
-      id: "1",
-      bullName: "Campeón",
-      bullEarTag: "T-001",
-      cowName: "Bella",
-      cowEarTag: "MX-001",
-      matingDate: "2025-07-15",
-      matingTime: "07:30",
-      location: "Potrero Norte",
-      status: "completed",
-      result: "successful",
-      cost: 800,
-      notes: "Apareamiento exitoso",
-      createdAt: "2025-07-15T07:30:00.000Z",
-    },
-    {
-      id: "2",
-      bullName: "Emperador",
-      bullEarTag: "T-002",
-      cowName: "Luna",
-      cowEarTag: "MX-002",
-      matingDate: "2025-07-16",
-      matingTime: "08:15",
-      location: "Potrero Sur",
-      status: "completed",
-      result: "pending",
-      cost: 1200,
-      notes: "Pendiente de confirmación",
-      createdAt: "2025-07-16T08:15:00.000Z",
-    },
-    {
-      id: "3",
-      bullName: "Titán",
-      bullEarTag: "T-003",
-      cowName: "Esperanza",
-      cowEarTag: "MX-003",
-      matingDate: "2025-07-18",
-      matingTime: "09:00",
-      location: "Potrero Central",
-      status: "scheduled",
-      result: "pending",
-      cost: 1000,
-      notes: "Programado para mañana",
-      createdAt: "2025-07-17T10:00:00.000Z",
-    },
-  ];
-
-  // Cargar datos
-  useEffect(() => {
-    const loadData = async () => {
-      try {
-        setIsLoading(true);
-        setError("");
-        
-        // Simular carga
-        await new Promise(resolve => setTimeout(resolve, 500));
-        
-        setRecords(mockRecords);
-        console.log("✅ Datos cargados correctamente:", mockRecords);
-      } catch (err) {
-        console.error("❌ Error cargando datos:", err);
-        setError("Error al cargar los registros");
-      } finally {
-        setIsLoading(false);
+  // Verificar conexión al backend
+  const checkBackendConnection = useCallback(async () => {
+    try {
+      const connected = await apiClient.checkConnection();
+      setIsOnline(connected);
+      
+      if (!connected) {
+        setError("No se puede conectar al servidor. Verifica que el backend esté corriendo en el puerto 5000.");
       }
-    };
+    } catch (err) {
+      setIsOnline(false);
+      setError("Error de conexión con el servidor");
+    }
+  }, [apiClient]);
 
+  // Cargar datos del backend
+  const loadData = useCallback(async (page: number = 1) => {
+    try {
+      setIsLoading(true);
+      setError("");
+      
+      // Verificar conexión primero
+      await checkBackendConnection();
+      
+      if (!isOnline) {
+        return;
+      }
+
+      // Cargar registros
+      const response = await apiClient.getMatingRecords({
+        page,
+        limit: pagination.limit,
+      });
+
+      if (response.success) {
+        setRecords(response.data);
+        
+        if (response.pagination) {
+          setPagination(response.pagination);
+        }
+        
+        console.log(`✅ ${response.data.length} registros cargados desde el backend`);
+      } else {
+        throw new Error(response.message || "Error desconocido");
+      }
+
+      // Cargar estadísticas
+      try {
+        const statsResponse = await apiClient.getMatingStatistics();
+        if (statsResponse.success) {
+          setStatistics(statsResponse.data);
+        }
+      } catch (statsError) {
+        console.warn("⚠️ No se pudieron cargar las estadísticas:", statsError);
+      }
+
+    } catch (err: any) {
+      console.error("❌ Error cargando datos:", err);
+      setError(err.message || "Error al cargar los registros");
+      
+      // Si hay error de autenticación
+      if (err.message?.includes('401') || err.message?.includes('unauthorized')) {
+        setError("Sesión expirada. Por favor, inicia sesión nuevamente.");
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  }, [apiClient, checkBackendConnection, isOnline, pagination.limit]);
+
+  // Cargar datos al montar el componente
+  useEffect(() => {
     loadData();
-  }, []);
-
-  // FUNCIONES CRUD CORREGIDAS
+  }, [loadData]);
 
   // Validar formulario
   const validateForm = (data: Partial<MatingRecord>): Record<string, string> => {
@@ -160,11 +299,11 @@ const MatingRecords: React.FC = () => {
     return errors;
   };
 
-  // Resetear formulario - SIMPLIFICADO
+  // Resetear formulario
   const resetForm = () => {
     const now = new Date();
-    const today = now.toISOString().substr(0, 10); // YYYY-MM-DD
-    const currentTime = now.toTimeString().substr(0, 5); // HH:MM
+    const today = now.toISOString().substr(0, 10);
+    const currentTime = now.toTimeString().substr(0, 5);
     
     setFormData({
       bullName: "",
@@ -174,7 +313,7 @@ const MatingRecords: React.FC = () => {
       matingDate: today,
       matingTime: currentTime,
       location: "",
-      status: "scheduled",
+      status: "planned",
       result: "pending",
       cost: 0,
       notes: "",
@@ -182,7 +321,7 @@ const MatingRecords: React.FC = () => {
     setFormErrors({});
   };
 
-  // Obtener ubicación actual - SIMPLIFICADO
+  // Obtener ubicación actual
   const getCurrentLocation = () => {
     if (!navigator.geolocation) {
       alert("Tu navegador no soporta geolocalización");
@@ -223,37 +362,48 @@ const MatingRecords: React.FC = () => {
   };
 
   // Crear nuevo registro
-  const handleCreate = () => {
+  const handleCreate = async () => {
     const errors = validateForm(formData);
     if (Object.keys(errors).length > 0) {
       setFormErrors(errors);
       return;
     }
 
-    const newRecord: MatingRecord = {
-      id: `mating-${Date.now()}`,
-      bullName: formData.bullName!,
-      bullEarTag: formData.bullEarTag!,
-      cowName: formData.cowName!,
-      cowEarTag: formData.cowEarTag!,
-      matingDate: formData.matingDate!,
-      matingTime: formData.matingTime!,
-      location: formData.location!,
-      status: formData.status as "scheduled" | "completed" | "failed" || "scheduled",
-      result: formData.result as "successful" | "unsuccessful" | "pending",
-      cost: formData.cost!,
-      notes: formData.notes || "",
-      createdAt: new Date().toISOString(),
-    };
+    setIsSubmitting(true);
+    
+    try {
+      const response = await apiClient.createMatingRecord({
+        bullName: formData.bullName!,
+        bullEarTag: formData.bullEarTag!,
+        cowName: formData.cowName!,
+        cowEarTag: formData.cowEarTag!,
+        matingDate: formData.matingDate!,
+        matingTime: formData.matingTime!,
+        location: formData.location!,
+        status: formData.status as any || "planned",
+        result: formData.result as any,
+        cost: formData.cost!,
+        notes: formData.notes || "",
+      });
 
-    setRecords(prev => [newRecord, ...prev]);
-    setShowForm(false);
-    resetForm();
-    alert("✅ Registro de apareamiento creado exitosamente");
+      if (response.success) {
+        setShowForm(false);
+        resetForm();
+        await loadData(); // Recargar datos
+        alert("✅ Registro de apareamiento creado exitosamente");
+      } else {
+        throw new Error(response.message || "Error creando el registro");
+      }
+    } catch (err: any) {
+      console.error("❌ Error creando registro:", err);
+      alert(`❌ Error: ${err.message}`);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   // Actualizar registro existente
-  const handleUpdate = () => {
+  const handleUpdate = async () => {
     if (!editingRecord) return;
 
     const errors = validateForm(formData);
@@ -262,22 +412,46 @@ const MatingRecords: React.FC = () => {
       return;
     }
 
-    setRecords(prev => prev.map(record => 
-      record.id === editingRecord.id 
-        ? { ...record, ...formData }
-        : record
-    ));
-    
-    setEditingRecord(null);
-    setShowForm(false);
-    resetForm();
-    alert("✅ Registro actualizado exitosamente");
+    setIsSubmitting(true);
+
+    try {
+      const response = await apiClient.updateMatingRecord(editingRecord.id, formData);
+
+      if (response.success) {
+        setEditingRecord(null);
+        setShowForm(false);
+        resetForm();
+        await loadData(); // Recargar datos
+        alert("✅ Registro actualizado exitosamente");
+      } else {
+        throw new Error(response.message || "Error actualizando el registro");
+      }
+    } catch (err: any) {
+      console.error("❌ Error actualizando registro:", err);
+      alert(`❌ Error: ${err.message}`);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   // Ver detalles
-  const handleView = (record: MatingRecord) => {
-    setSelectedRecord(record);
-    setShowDetailsModal(true);
+  const handleView = async (record: MatingRecord) => {
+    try {
+      // Obtener datos actualizados del registro
+      const response = await apiClient.getMatingRecord(record.id);
+      
+      if (response.success) {
+        setSelectedRecord(response.data);
+        setShowDetailsModal(true);
+      } else {
+        setSelectedRecord(record); // Usar datos locales como fallback
+        setShowDetailsModal(true);
+      }
+    } catch (err) {
+      console.warn("⚠️ Error obteniendo detalles, usando datos locales");
+      setSelectedRecord(record);
+      setShowDetailsModal(true);
+    }
   };
 
   // Editar registro
@@ -287,41 +461,49 @@ const MatingRecords: React.FC = () => {
     setShowForm(true);
   };
 
-  // FUNCIÓN ELIMINAR CORREGIDA - Usando modal de confirmación
+  // Confirmar eliminación
   const handleDeleteClick = useCallback((record: MatingRecord) => {
     console.log("🔴 CLICK en botón eliminar para:", record.id, record.bullName);
     setRecordToDelete(record);
     setShowDeleteModal(true);
   }, []);
 
-  // Confirmar eliminación - NUEVA FUNCIÓN
-  const confirmDelete = useCallback(() => {
+  // Eliminar registro
+  const confirmDelete = useCallback(async () => {
     if (!recordToDelete) return;
 
-    console.log("🗑️ Eliminando registro:", recordToDelete.id);
-    
-    setRecords(prev => {
-      const newRecords = prev.filter(r => r.id !== recordToDelete.id);
-      console.log("📝 Registros actualizados:", newRecords.length, "registros restantes");
-      return newRecords;
-    });
-    
-    // Cerrar modales si están abiertos
-    if (selectedRecord?.id === recordToDelete.id) {
-      setSelectedRecord(null);
-      setShowDetailsModal(false);
+    try {
+      console.log("🗑️ Eliminando registro:", recordToDelete.id);
+      
+      const response = await apiClient.deleteMatingRecord(recordToDelete.id);
+      
+      if (response.success) {
+        // Cerrar modales si están abiertos
+        if (selectedRecord?.id === recordToDelete.id) {
+          setSelectedRecord(null);
+          setShowDetailsModal(false);
+        }
+        if (editingRecord?.id === recordToDelete.id) {
+          setEditingRecord(null);
+          setShowForm(false);
+        }
+        
+        // Cerrar modal de confirmación
+        setShowDeleteModal(false);
+        setRecordToDelete(null);
+        
+        // Recargar datos
+        await loadData();
+        
+        alert("✅ Registro eliminado correctamente");
+      } else {
+        throw new Error(response.message || "Error eliminando el registro");
+      }
+    } catch (err: any) {
+      console.error("❌ Error eliminando registro:", err);
+      alert(`❌ Error: ${err.message}`);
     }
-    if (editingRecord?.id === recordToDelete.id) {
-      setEditingRecord(null);
-      setShowForm(false);
-    }
-    
-    // Cerrar modal de confirmación
-    setShowDeleteModal(false);
-    setRecordToDelete(null);
-    
-    console.log("✅ Registro eliminado correctamente");
-  }, [recordToDelete, selectedRecord, editingRecord]);
+  }, [recordToDelete, selectedRecord, editingRecord, apiClient, loadData]);
 
   // Nuevo registro
   const handleNew = () => {
@@ -330,21 +512,23 @@ const MatingRecords: React.FC = () => {
     setShowForm(true);
   };
 
-  // Funciones auxiliares
+  // Funciones auxiliares (sin cambios)
   const getStatusColor = (status: string) => {
     const colors = {
-      scheduled: "bg-yellow-100 text-yellow-800",
+      planned: "bg-blue-100 text-blue-800",
       completed: "bg-green-100 text-green-800",
       failed: "bg-red-100 text-red-800",
+      cancelled: "bg-gray-100 text-gray-800",
     };
-    return colors[status as keyof typeof colors] || colors.scheduled;
+    return colors[status as keyof typeof colors] || colors.planned;
   };
 
   const getStatusText = (status: string) => {
     const texts = {
-      scheduled: "Programado",
+      planned: "Planeado",
       completed: "Completado",
       failed: "Fallido",
+      cancelled: "Cancelado",
     };
     return texts[status as keyof typeof texts] || status;
   };
@@ -367,15 +551,13 @@ const MatingRecords: React.FC = () => {
     return texts[result as keyof typeof texts] || "Pendiente";
   };
 
-  // Función para formatear fechas - CORREGIDO
   const formatDate = (dateString: string) => {
-    const date = new Date(dateString + 'T12:00:00'); // Medio día para evitar problemas de zona
+    const date = new Date(dateString + 'T12:00:00');
     return date.toLocaleDateString('es-MX');
   };
 
-  // Función para formatear fecha completa - CORREGIDO
   const formatFullDate = (dateString: string) => {
-    const date = new Date(dateString + 'T12:00:00'); // Medio día para evitar problemas de zona
+    const date = new Date(dateString + 'T12:00:00');
     return date.toLocaleDateString('es-MX', {
       weekday: 'long',
       year: 'numeric',
@@ -384,12 +566,49 @@ const MatingRecords: React.FC = () => {
     });
   };
 
-  // Debug: Log del componente
+  // Debug del componente
   console.log("🔄 MatingRecords renderizado - Estado:", {
     isLoading,
     recordsCount: records.length,
-    error
+    error,
+    isOnline,
+    pagination
   });
+
+  // Estado de conexión
+  if (!isOnline) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-[#519a7c] via-[#f2e9d8] to-[#f4ac3a] flex items-center justify-center">
+        <div className="bg-white rounded-lg p-8 shadow-lg max-w-md">
+          <div className="flex items-center space-x-3 mb-4">
+            <WifiOff className="w-8 h-8 text-red-500" />
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900">Sin Conexión</h3>
+              <p className="text-sm text-gray-600">Backend no disponible</p>
+            </div>
+          </div>
+          <p className="text-gray-700 mb-6">
+            No se puede conectar al servidor en el puerto 5000. 
+            Verifica que el backend esté funcionando.
+          </p>
+          <div className="space-y-3">
+            <button 
+              onClick={checkBackendConnection}
+              className="w-full px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+            >
+              Reintentar Conexión
+            </button>
+            <button 
+              onClick={() => window.location.reload()}
+              className="w-full px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700"
+            >
+              Recargar Página
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // Loading
   if (isLoading) {
@@ -398,7 +617,9 @@ const MatingRecords: React.FC = () => {
         <div className="bg-white rounded-lg p-8 shadow-lg">
           <div className="flex items-center space-x-3">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#519a7c]"></div>
-            <p className="text-gray-600">Cargando registros...</p>
+            <p className="text-gray-600">
+              {isOnline ? "Cargando registros desde el backend..." : "Conectando al servidor..."}
+            </p>
           </div>
         </div>
       </div>
@@ -409,14 +630,22 @@ const MatingRecords: React.FC = () => {
   if (error) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-[#519a7c] via-[#f2e9d8] to-[#f4ac3a] flex items-center justify-center">
-        <div className="bg-white rounded-lg p-8 shadow-lg">
-          <p className="text-red-600">❌ {error}</p>
-          <button 
-            onClick={() => window.location.reload()}
-            className="mt-4 px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
-          >
-            Recargar
-          </button>
+        <div className="bg-white rounded-lg p-8 shadow-lg max-w-md">
+          <p className="text-red-600 mb-4">❌ {error}</p>
+          <div className="space-y-3">
+            <button 
+              onClick={() => loadData()}
+              className="w-full px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
+            >
+              Reintentar
+            </button>
+            <button 
+              onClick={() => window.location.reload()}
+              className="w-full px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700"
+            >
+              Recargar
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -426,7 +655,7 @@ const MatingRecords: React.FC = () => {
     <div className="min-h-screen bg-gradient-to-br from-[#519a7c] via-[#f2e9d8] to-[#f4ac3a] p-6">
       <div className="max-w-7xl mx-auto">
         
-        {/* Header Simple */}
+        {/* Header con indicador de conexión */}
         <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
@@ -437,9 +666,22 @@ const MatingRecords: React.FC = () => {
                 <h1 className="text-2xl font-bold text-gray-900">
                   Registros de Apareamiento
                 </h1>
-                <p className="text-gray-600">
-                  Sistema de gestión reproductiva
-                </p>
+                <div className="flex items-center space-x-2 text-sm">
+                  <span className="text-gray-600">Sistema de gestión reproductiva</span>
+                  <div className="flex items-center space-x-1">
+                    {isOnline ? (
+                      <>
+                        <Wifi className="w-4 h-4 text-green-500" />
+                        <span className="text-green-600">Conectado</span>
+                      </>
+                    ) : (
+                      <>
+                        <WifiOff className="w-4 h-4 text-red-500" />
+                        <span className="text-red-600">Desconectado</span>
+                      </>
+                    )}
+                  </div>
+                </div>
               </div>
             </div>
             <button 
@@ -451,13 +693,13 @@ const MatingRecords: React.FC = () => {
             </button>
           </div>
 
-          {/* Estadísticas simples */}
+          {/* Estadísticas */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6">
             <div className="bg-blue-50 rounded-lg p-4">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-gray-600">Total</p>
-                  <p className="text-2xl font-bold text-gray-900">{records.length}</p>
+                  <p className="text-2xl font-bold text-gray-900">{pagination.total || records.length}</p>
                 </div>
                 <Activity className="w-8 h-8 text-blue-600" />
               </div>
@@ -478,9 +720,9 @@ const MatingRecords: React.FC = () => {
             <div className="bg-yellow-50 rounded-lg p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-gray-600">Programados</p>
+                  <p className="text-sm text-gray-600">Planeados</p>
                   <p className="text-2xl font-bold text-gray-900">
-                    {records.filter(r => r.status === "scheduled").length}
+                    {records.filter(r => r.status === "planned").length}
                   </p>
                 </div>
                 <Clock className="w-8 h-8 text-yellow-600" />
@@ -509,7 +751,7 @@ const MatingRecords: React.FC = () => {
               No hay registros
             </h3>
             <p className="text-gray-600 mb-6">
-              Aún no se han registrado apareamientos
+              {isLoading ? "Cargando registros..." : "Aún no se han registrado apareamientos"}
             </p>
             <button 
               onClick={handleNew}
@@ -520,101 +762,133 @@ const MatingRecords: React.FC = () => {
             </button>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {records.map((record) => (
-              <motion.div
-                key={record.id}
-                className="bg-white rounded-lg shadow-lg overflow-hidden hover:shadow-xl transition-shadow"
-                whileHover={{ y: -2 }}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.3 }}
-              >
-                {/* Header de la tarjeta */}
-                <div className="bg-gradient-to-r from-[#519a7c] to-[#4e9c75] p-4 text-white">
-                  <h3 className="font-bold text-lg">
-                    {record.bullName} × {record.cowName}
-                  </h3>
-                  <p className="text-white/80 text-sm">
-                    {record.bullEarTag} × {record.cowEarTag}
-                  </p>
-                  <div className="flex justify-between items-center mt-2">
-                    <span className={`inline-block px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(record.status)}`}>
-                      {getStatusText(record.status)}
-                    </span>
-                    {record.result && (
-                      <span className={`inline-block px-2 py-1 rounded-full text-xs font-medium ${getResultColor(record.result)}`}>
-                        {getResultText(record.result)}
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {records.map((record) => (
+                <motion.div
+                  key={record.id}
+                  className="bg-white rounded-lg shadow-lg overflow-hidden hover:shadow-xl transition-shadow"
+                  whileHover={{ y: -2 }}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.3 }}
+                >
+                  {/* Header de la tarjeta */}
+                  <div className="bg-gradient-to-r from-[#519a7c] to-[#4e9c75] p-4 text-white">
+                    <h3 className="font-bold text-lg">
+                      {record.bullName} × {record.cowName}
+                    </h3>
+                    <p className="text-white/80 text-sm">
+                      {record.bullEarTag} × {record.cowEarTag}
+                    </p>
+                    <div className="flex justify-between items-center mt-2">
+                      <span className={`inline-block px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(record.status)}`}>
+                        {getStatusText(record.status)}
                       </span>
+                      {record.result && (
+                        <span className={`inline-block px-2 py-1 rounded-full text-xs font-medium ${getResultColor(record.result)}`}>
+                          {getResultText(record.result)}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Contenido */}
+                  <div className="p-4 space-y-3">
+                    <div className="grid grid-cols-2 gap-3 text-sm">
+                      <div>
+                        <p className="text-gray-600">Fecha:</p>
+                        <p className="font-medium">
+                          {formatDate(record.matingDate)}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-gray-600">Hora:</p>
+                        <p className="font-medium">{record.matingTime}</p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center space-x-2 text-sm text-gray-600">
+                      <MapPin className="w-4 h-4" />
+                      <span>{record.location}</span>
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      <span className="text-lg font-bold text-[#519a7c]">
+                        ${record.cost.toLocaleString()}
+                      </span>
+                    </div>
+
+                    {record.notes && (
+                      <div className="bg-gray-50 rounded p-2">
+                        <p className="text-sm text-gray-700 line-clamp-2">{record.notes}</p>
+                      </div>
                     )}
                   </div>
-                </div>
 
-                {/* Contenido */}
-                <div className="p-4 space-y-3">
-                  <div className="grid grid-cols-2 gap-3 text-sm">
-                    <div>
-                      <p className="text-gray-600">Fecha:</p>
-                      <p className="font-medium">
-                        {formatDate(record.matingDate)}
-                      </p>
+                  {/* Acciones */}
+                  <div className="bg-gray-50 px-4 py-3 flex justify-between">
+                    <div className="flex space-x-2">
+                      <button 
+                        onClick={() => handleView(record)}
+                        className="p-2 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                        title="Ver detalles"
+                      >
+                        <Eye className="w-4 h-4" />
+                      </button>
+                      <button 
+                        onClick={() => handleEdit(record)}
+                        className="p-2 text-gray-600 hover:text-green-600 hover:bg-green-50 rounded transition-colors"
+                        title="Editar"
+                      >
+                        <Edit className="w-4 h-4" />
+                      </button>
+                      <button 
+                        onClick={() => handleDeleteClick(record)}
+                        className="p-2 text-gray-600 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                        title="Eliminar"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
                     </div>
-                    <div>
-                      <p className="text-gray-600">Hora:</p>
-                      <p className="font-medium">{record.matingTime}</p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center space-x-2 text-sm text-gray-600">
-                    <MapPin className="w-4 h-4" />
-                    <span>{record.location}</span>
-                  </div>
-
-                  <div className="flex items-center justify-between">
-                    <span className="text-lg font-bold text-[#519a7c]">
-                      ${record.cost.toLocaleString()}
+                    <span className="text-xs text-gray-500">
+                      {formatDate(record.createdAt.split('T')[0])}
                     </span>
                   </div>
+                </motion.div>
+              ))}
+            </div>
 
-                  {record.notes && (
-                    <div className="bg-gray-50 rounded p-2">
-                      <p className="text-sm text-gray-700 line-clamp-2">{record.notes}</p>
-                    </div>
-                  )}
-                </div>
-
-                {/* Acciones - CORREGIDAS */}
-                <div className="bg-gray-50 px-4 py-3 flex justify-between">
+            {/* Paginación */}
+            {pagination.totalPages > 1 && (
+              <div className="mt-6 bg-white rounded-lg shadow-lg p-4">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-gray-600">
+                    Mostrando {records.length} de {pagination.total} registros
+                  </span>
                   <div className="flex space-x-2">
-                    <button 
-                      onClick={() => handleView(record)}
-                      className="p-2 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
-                      title="Ver detalles"
+                    <button
+                      onClick={() => loadData(pagination.page - 1)}
+                      disabled={pagination.page === 1}
+                      className="px-3 py-1 text-sm bg-gray-100 text-gray-600 rounded hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      <Eye className="w-4 h-4" />
+                      Anterior
                     </button>
-                    <button 
-                      onClick={() => handleEdit(record)}
-                      className="p-2 text-gray-600 hover:text-green-600 hover:bg-green-50 rounded transition-colors"
-                      title="Editar"
+                    <span className="px-3 py-1 text-sm bg-[#519a7c] text-white rounded">
+                      {pagination.page} de {pagination.totalPages}
+                    </span>
+                    <button
+                      onClick={() => loadData(pagination.page + 1)}
+                      disabled={pagination.page === pagination.totalPages}
+                      className="px-3 py-1 text-sm bg-gray-100 text-gray-600 rounded hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      <Edit className="w-4 h-4" />
-                    </button>
-                    <button 
-                      onClick={() => handleDeleteClick(record)}
-                      className="p-2 text-gray-600 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
-                      title="Eliminar"
-                    >
-                      <Trash2 className="w-4 h-4" />
+                      Siguiente
                     </button>
                   </div>
-                  <span className="text-xs text-gray-500">
-                    {formatDate(record.createdAt.split('T')[0])}
-                  </span>
                 </div>
-              </motion.div>
-            ))}
-          </div>
+              </div>
+            )}
+          </>
         )}
 
         {/* Modal de formulario */}
@@ -831,13 +1105,14 @@ const MatingRecords: React.FC = () => {
                         Estado
                       </label>
                       <select
-                        value={formData.status || "scheduled"}
+                        value={formData.status || "planned"}
                         onChange={(e) => setFormData(prev => ({ ...prev, status: e.target.value as any }))}
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
                       >
-                        <option value="scheduled">Programado</option>
+                        <option value="planned">Planeado</option>
                         <option value="completed">Completado</option>
                         <option value="failed">Fallido</option>
+                        <option value="cancelled">Cancelado</option>
                       </select>
                     </div>
 
@@ -876,16 +1151,27 @@ const MatingRecords: React.FC = () => {
                 <div className="flex justify-end space-x-3 p-6 border-t bg-gray-50">
                   <button
                     onClick={() => setShowForm(false)}
-                    className="px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                    disabled={isSubmitting}
+                    className="px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
                   >
                     Cancelar
                   </button>
                   <button
                     onClick={editingRecord ? handleUpdate : handleCreate}
-                    className="px-4 py-2 bg-[#519a7c] text-white rounded-lg hover:bg-[#4a8970] flex items-center space-x-2 transition-colors"
+                    disabled={isSubmitting}
+                    className="px-4 py-2 bg-[#519a7c] text-white rounded-lg hover:bg-[#4a8970] flex items-center space-x-2 transition-colors disabled:opacity-50"
                   >
-                    <Save className="w-4 h-4" />
-                    <span>{editingRecord ? "Actualizar" : "Guardar"}</span>
+                    {isSubmitting ? (
+                      <>
+                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                        <span>Guardando...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Save className="w-4 h-4" />
+                        <span>{editingRecord ? "Actualizar" : "Guardar"}</span>
+                      </>
+                    )}
                   </button>
                 </div>
               </motion.div>
@@ -965,6 +1251,14 @@ const MatingRecords: React.FC = () => {
                             {formatDate(selectedRecord.createdAt.split('T')[0])}
                           </span>
                         </div>
+                        {selectedRecord.updatedAt && (
+                          <div>
+                            <span className="text-gray-600">Actualizado:</span>
+                            <span className="ml-2 font-medium">
+                              {formatDate(selectedRecord.updatedAt.split('T')[0])}
+                            </span>
+                          </div>
+                        )}
                       </div>
                     </div>
 
@@ -1023,7 +1317,7 @@ const MatingRecords: React.FC = () => {
           )}
         </AnimatePresence>
 
-        {/* MODAL DE CONFIRMACIÓN DE ELIMINACIÓN - NUEVO */}
+        {/* Modal de confirmación de eliminación */}
         <AnimatePresence>
           {showDeleteModal && recordToDelete && (
             <motion.div 

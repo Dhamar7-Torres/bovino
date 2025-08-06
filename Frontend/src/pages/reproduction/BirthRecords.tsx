@@ -20,7 +20,28 @@ import {
   AlertTriangle,
 } from "lucide-react";
 
-// Interfaces optimizadas
+// ============================================================================
+// CONFIGURACIÓN DE API
+// ============================================================================
+
+const API_BASE_URL = 'http://localhost:5000/api';
+const BIRTH_RECORDS_ENDPOINT = `${API_BASE_URL}/reproduction/birth-records`;
+
+// Función para obtener token de autenticación (ajustar según tu implementación)
+const getAuthToken = () => {
+  return localStorage.getItem('authToken') || '';
+};
+
+// Función para headers de autenticación
+const getAuthHeaders = () => ({
+  'Content-Type': 'application/json',
+  'Authorization': `Bearer ${getAuthToken()}`
+});
+
+// ============================================================================
+// INTERFACES OPTIMIZADAS PARA BACKEND
+// ============================================================================
+
 interface BirthRecord {
   id: string;
   motherId: string;
@@ -87,17 +108,173 @@ interface BirthFilters {
   };
 }
 
+interface ApiResponse<T> {
+  success: boolean;
+  data: T;
+  message: string;
+  pagination?: {
+    total: number;
+    currentPage: number;
+    totalPages: number;
+  };
+}
+
+// ============================================================================
+// SERVICIOS DE API
+// ============================================================================
+
+class BirthRecordsService {
+  
+  /**
+   * Obtener todos los registros de nacimientos
+   */
+  static async getAll(page = 1, limit = 50, filters?: any): Promise<ApiResponse<BirthRecord[]>> {
+    try {
+      const queryParams = new URLSearchParams({
+        page: page.toString(),
+        limit: limit.toString(),
+        ...filters
+      });
+
+      console.log(`🔄 Obteniendo registros: ${BIRTH_RECORDS_ENDPOINT}?${queryParams}`);
+      
+      const response = await fetch(`${BIRTH_RECORDS_ENDPOINT}?${queryParams}`, {
+        method: 'GET',
+        headers: getAuthHeaders()
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      console.log('✅ Registros obtenidos:', data);
+      return data;
+    } catch (error) {
+      console.error('❌ Error obteniendo registros:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Crear nuevo registro de nacimiento
+   */
+  static async create(record: Partial<BirthRecord>): Promise<ApiResponse<BirthRecord>> {
+    try {
+      console.log('🔄 Creando registro:', record);
+      
+      const response = await fetch(BIRTH_RECORDS_ENDPOINT, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify(record)
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || `HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      console.log('✅ Registro creado:', data);
+      return data;
+    } catch (error) {
+      console.error('❌ Error creando registro:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Actualizar registro existente
+   */
+  static async update(id: string, record: Partial<BirthRecord>): Promise<ApiResponse<BirthRecord>> {
+    try {
+      console.log(`🔄 Actualizando registro ${id}:`, record);
+      
+      const response = await fetch(`${BIRTH_RECORDS_ENDPOINT}/${id}`, {
+        method: 'PUT',
+        headers: getAuthHeaders(),
+        body: JSON.stringify(record)
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || `HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      console.log('✅ Registro actualizado:', data);
+      return data;
+    } catch (error) {
+      console.error('❌ Error actualizando registro:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Eliminar registro
+   */
+  static async delete(id: string): Promise<ApiResponse<any>> {
+    try {
+      console.log(`🔄 Eliminando registro ${id}`);
+      
+      const response = await fetch(`${BIRTH_RECORDS_ENDPOINT}/${id}`, {
+        method: 'DELETE',
+        headers: getAuthHeaders()
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || `HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      console.log('✅ Registro eliminado:', data);
+      return data;
+    } catch (error) {
+      console.error('❌ Error eliminando registro:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Probar conectividad con el backend
+   */
+  static async testConnection(): Promise<boolean> {
+    try {
+      console.log('🔄 Probando conexión con backend...');
+      
+      const response = await fetch(`${API_BASE_URL}/ping`, {
+        method: 'GET',
+        headers: getAuthHeaders()
+      });
+
+      const data = await response.json();
+      console.log('✅ Conexión exitosa:', data);
+      return response.ok;
+    } catch (error) {
+      console.error('❌ Error de conexión:', error);
+      return false;
+    }
+  }
+}
+
+// ============================================================================
+// COMPONENTE PRINCIPAL
+// ============================================================================
+
 const BirthRecords: React.FC = () => {
   const [records, setRecords] = useState<BirthRecord[]>([]);
   const [filteredRecords, setFilteredRecords] = useState<BirthRecord[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [isConnected, setIsConnected] = useState<boolean>(false);
+  const [connectionError, setConnectionError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState<boolean>(false);
   const [selectedRecord, setSelectedRecord] = useState<BirthRecord | null>(null);
   const [editingRecord, setEditingRecord] = useState<BirthRecord | null>(null);
   const [showFilters, setShowFilters] = useState<boolean>(false);
-  const [] = useState<boolean>(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<boolean>(false);
   const [recordToDelete, setRecordToDelete] = useState<BirthRecord | null>(null);
+  const [isSaving, setIsSaving] = useState<boolean>(false);
   
   const [filters, setFilters] = useState<BirthFilters>({
     searchTerm: "",
@@ -109,171 +286,125 @@ const BirthRecords: React.FC = () => {
 
   const [formData, setFormData] = useState<Partial<BirthRecord>>({});
 
-  const mockRecords: BirthRecord[] = [
-    {
-      id: "birth-001",
-      motherId: "cow-123",
-      motherName: "Bella",
-      motherEarTag: "MX-001",
-      motherAge: 4,
-      pregnancyNumber: 3,
-      gestationDays: 285,
-      fatherId: "bull-001",
-      fatherName: "Campeón",
-      fatherEarTag: "T-001",
-      breedingType: "natural",
-      birthDate: "2025-07-15",
-      birthTime: "06:30",
-      location: {
-        lat: 17.989,
-        lng: -92.247,
-        address: "Rancho San Miguel",
-        paddock: "Corral de Partos",
-      },
-      laborDetails: {
-        duration: 45,
-        type: "natural",
-        difficulty: "easy",
-        assistedBy: { name: "Miguel Hernández", role: "staff" },
-        complications: [],
-      },
-      calf: {
-        id: "calf-001",
-        tempEarTag: "TEMP-001",
-        gender: "male",
-        birthWeight: 42.5,
-        healthStatus: "excellent",
-        firstStanding: true,
-        firstNursing: true,
-      },
-      motherPostBirth: {
-        condition: "excellent",
-        placentaExpelled: true,
-        treatmentRequired: false,
-      },
-      economics: {
-        totalCost: 2500,
-        estimatedValue: 15000,
-      },
-      notes: "Nacimiento exitoso sin complicaciones.",
-      status: "active",
-      outcome: "successful",
-      createdAt: "2025-07-15T06:30:00.000Z",
-      updatedAt: "2025-07-15T08:00:00.000Z",
-    },
-    {
-      id: "birth-002",
-      motherId: "cow-124",
-      motherName: "Luna",
-      motherEarTag: "MX-002",
-      motherAge: 2,
-      pregnancyNumber: 1,
-      gestationDays: 278,
-      breedingType: "artificial_insemination",
-      birthDate: "2025-07-12",
-      birthTime: "14:20",
-      location: {
-        lat: 17.995,
-        lng: -92.255,
-        address: "Potrero Sur",
-        paddock: "Potrero 7",
-      },
-      laborDetails: {
-        duration: 110,
-        type: "assisted",
-        difficulty: "moderate",
-        assistedBy: { name: "Dr. García", role: "veterinarian" },
-        complications: ["Posición anormal"],
-      },
-      calf: {
-        id: "calf-002",
-        tempEarTag: "TEMP-002",
-        gender: "female",
-        birthWeight: 38.0,
-        healthStatus: "good",
-        firstStanding: true,
-        firstNursing: true,
-      },
-      motherPostBirth: {
-        condition: "good",
-        placentaExpelled: true,
-        treatmentRequired: true,
-      },
-      economics: {
-        totalCost: 4500,
-        estimatedValue: 12000,
-      },
-      notes: "Primer parto de vaquillona joven. Distocia leve resuelta.",
-      status: "active",
-      outcome: "complicated",
-      createdAt: "2025-07-12T14:20:00.000Z",
-      updatedAt: "2025-07-13T09:00:00.000Z",
-    },
-    {
-      id: "birth-003",
-      motherId: "cow-125",
-      motherName: "Esperanza",
-      motherEarTag: "MX-003",
-      motherAge: 6,
-      pregnancyNumber: 5,
-      gestationDays: 290,
-      breedingType: "embryo_transfer",
-      birthDate: "2025-07-18",
-      birthTime: "09:00",
-      location: {
-        lat: 17.992,
-        lng: -92.250,
-        address: "Potrero Central",
-        paddock: "Potrero 3",
-      },
-      laborDetails: {
-        duration: 180,
-        type: "cesarean",
-        difficulty: "difficult",
-        assistedBy: { name: "Dr. Martínez", role: "veterinarian" },
-        complications: ["Becerro grande", "Cirugía"],
-      },
-      calf: {
-        id: "calf-003",
-        tempEarTag: "TEMP-003",
-        gender: "male",
-        birthWeight: 55.0,
-        healthStatus: "fair",
-        firstStanding: false,
-        firstNursing: false,
-      },
-      motherPostBirth: {
-        condition: "fair",
-        placentaExpelled: false,
-        treatmentRequired: true,
-      },
-      economics: {
-        totalCost: 8000,
-        estimatedValue: 18000,
-      },
-      notes: "Cesárea de emergencia por becerro excesivamente grande. Requiere cuidados especiales.",
-      status: "active",
-      outcome: "complicated",
-      createdAt: "2025-07-18T09:00:00.000Z",
-      updatedAt: "2025-07-18T12:00:00.000Z",
-    },
-  ];
+  // ============================================================================
+  // EFECTOS DE INICIALIZACIÓN
+  // ============================================================================
 
   useEffect(() => {
-    const loadData = async () => {
+    const initializeApp = async () => {
       setIsLoading(true);
+      setConnectionError(null);
+      
       try {
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        setRecords(mockRecords);
-        setFilteredRecords(mockRecords);
+        // Probar conexión
+        console.log('🔄 Inicializando aplicación...');
+        const isConnectedToBackend = await BirthRecordsService.testConnection();
+        setIsConnected(isConnectedToBackend);
+
+        if (isConnectedToBackend) {
+          // Cargar datos del backend
+          await loadDataFromBackend();
+        } else {
+          setConnectionError('No se pudo conectar con el backend en puerto 5000');
+          // Cargar datos mock como fallback
+          loadMockData();
+        }
       } catch (error) {
-        console.error("Error cargando datos:", error);
+        console.error('❌ Error inicializando:', error);
+        setConnectionError(error instanceof Error ? error.message : 'Error desconocido');
+        loadMockData();
       } finally {
         setIsLoading(false);
       }
     };
-    loadData();
+
+    initializeApp();
   }, []);
+
+  const loadDataFromBackend = async () => {
+    try {
+      console.log('🔄 Cargando datos del backend...');
+      const response = await BirthRecordsService.getAll();
+      
+      if (response.success && Array.isArray(response.data)) {
+        setRecords(response.data);
+        setFilteredRecords(response.data);
+        console.log(`✅ ${response.data.length} registros cargados desde backend`);
+      } else {
+        console.warn('⚠️ Respuesta inesperada del backend:', response);
+        loadMockData();
+      }
+    } catch (error) {
+      console.error('❌ Error cargando datos del backend:', error);
+      setConnectionError('Error cargando datos del servidor');
+      loadMockData();
+    }
+  };
+
+  const loadMockData = () => {
+    console.log('🔄 Cargando datos mock...');
+    const mockRecords: BirthRecord[] = [
+      {
+        id: "birth-001",
+        motherId: "cow-123",
+        motherName: "Bella",
+        motherEarTag: "MX-001",
+        motherAge: 4,
+        pregnancyNumber: 3,
+        gestationDays: 285,
+        fatherId: "bull-001",
+        fatherName: "Campeón",
+        fatherEarTag: "T-001",
+        breedingType: "natural",
+        birthDate: "2025-07-15",
+        birthTime: "06:30",
+        location: {
+          lat: 17.989,
+          lng: -92.247,
+          address: "Rancho San Miguel",
+          paddock: "Corral de Partos",
+        },
+        laborDetails: {
+          duration: 45,
+          type: "natural",
+          difficulty: "easy",
+          assistedBy: { name: "Miguel Hernández", role: "staff" },
+          complications: [],
+        },
+        calf: {
+          id: "calf-001",
+          tempEarTag: "TEMP-001",
+          gender: "male",
+          birthWeight: 42.5,
+          healthStatus: "excellent",
+          firstStanding: true,
+          firstNursing: true,
+        },
+        motherPostBirth: {
+          condition: "excellent",
+          placentaExpelled: true,
+          treatmentRequired: false,
+        },
+        economics: {
+          totalCost: 2500,
+          estimatedValue: 15000,
+        },
+        notes: "Nacimiento exitoso sin complicaciones.",
+        status: "active",
+        outcome: "successful",
+        createdAt: "2025-07-15T06:30:00.000Z",
+        updatedAt: "2025-07-15T08:00:00.000Z",
+      }
+    ];
+    
+    setRecords(mockRecords);
+    setFilteredRecords(mockRecords);
+    console.log('✅ Datos mock cargados');
+  };
+
+  // ============================================================================
+  // FILTRADO DE REGISTROS
+  // ============================================================================
 
   useEffect(() => {
     let filtered = records;
@@ -309,6 +440,10 @@ const BirthRecords: React.FC = () => {
     setFilteredRecords(filtered);
   }, [records, filters]);
 
+  // ============================================================================
+  // ESTADÍSTICAS
+  // ============================================================================
+
   const stats = useMemo(() => {
     const total = records.length;
     const males = records.filter(r => r.calf.gender === "male").length;
@@ -326,6 +461,10 @@ const BirthRecords: React.FC = () => {
       successRate: total > 0 ? `${((successful / total) * 100).toFixed(1)}%` : "0%",
     };
   }, [records]);
+
+  // ============================================================================
+  // MANEJO DE FORMULARIOS
+  // ============================================================================
 
   const resetForm = () => {
     const now = new Date();
@@ -372,109 +511,169 @@ const BirthRecords: React.FC = () => {
     });
   };
 
+  // ============================================================================
+  // OPERACIONES CRUD
+  // ============================================================================
 
-  const handleCreate = () => {
-    const newRecord: BirthRecord = {
-      id: `birth-${Date.now()}`,
-      motherId: formData.motherId || `cow-${Date.now()}`,
-      motherName: formData.motherName || "",
-      motherEarTag: formData.motherEarTag || "",
-      motherAge: formData.motherAge || 0,
-      pregnancyNumber: formData.pregnancyNumber || 1,
-      gestationDays: formData.gestationDays || 283,
-      breedingType: formData.breedingType || "natural",
-      birthDate: formData.birthDate || new Date().toISOString().substr(0, 10),
-      birthTime: formData.birthTime || new Date().toTimeString().substr(0, 5),
-      location: formData.location || {
-        lat: 17.989,
-        lng: -92.247,
-        address: "Villahermosa, Tabasco",
-      },
-      laborDetails: formData.laborDetails || {
-        duration: 0,
-        type: "natural",
-        difficulty: "easy",
-        assistedBy: { name: "", role: "staff" },
-        complications: [],
-      },
-      calf: formData.calf || {
-        id: `calf-${Date.now()}`,
-        gender: "male",
-        birthWeight: 0,
-        healthStatus: "good",
-        firstStanding: false,
-        firstNursing: false,
-      },
-      motherPostBirth: formData.motherPostBirth || {
-        condition: "good",
-        placentaExpelled: false,
-        treatmentRequired: false,
-      },
-      economics: formData.economics || {
-        totalCost: 0,
-        estimatedValue: 0,
-      },
-      notes: formData.notes || "",
-      status: formData.status || "active",
-      outcome: formData.outcome || "successful",
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
+  const handleCreate = async () => {
+    if (isSaving) return;
+    
+    setIsSaving(true);
+    try {
+      if (isConnected) {
+        // Crear en backend
+        const response = await BirthRecordsService.create(formData);
+        if (response.success) {
+          setRecords(prev => [response.data, ...prev]);
+          alert("✅ Registro creado exitosamente en el servidor");
+        }
+      } else {
+        // Crear localmente
+        const newRecord: BirthRecord = {
+          id: `birth-${Date.now()}`,
+          motherId: formData.motherId || `cow-${Date.now()}`,
+          motherName: formData.motherName || "",
+          motherEarTag: formData.motherEarTag || "",
+          motherAge: formData.motherAge || 0,
+          pregnancyNumber: formData.pregnancyNumber || 1,
+          gestationDays: formData.gestationDays || 283,
+          breedingType: formData.breedingType || "natural",
+          birthDate: formData.birthDate || new Date().toISOString().substr(0, 10),
+          birthTime: formData.birthTime || new Date().toTimeString().substr(0, 5),
+          location: formData.location || {
+            lat: 17.989,
+            lng: -92.247,
+            address: "Villahermosa, Tabasco",
+          },
+          laborDetails: formData.laborDetails || {
+            duration: 0,
+            type: "natural",
+            difficulty: "easy",
+            assistedBy: { name: "", role: "staff" },
+            complications: [],
+          },
+          calf: formData.calf || {
+            id: `calf-${Date.now()}`,
+            gender: "male",
+            birthWeight: 0,
+            healthStatus: "good",
+            firstStanding: false,
+            firstNursing: false,
+          },
+          motherPostBirth: formData.motherPostBirth || {
+            condition: "good",
+            placentaExpelled: false,
+            treatmentRequired: false,
+          },
+          economics: formData.economics || {
+            totalCost: 0,
+            estimatedValue: 0,
+          },
+          notes: formData.notes || "",
+          status: formData.status || "active",
+          outcome: formData.outcome || "successful",
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        };
 
-    setRecords(prev => [newRecord, ...prev]);
-    setShowForm(false);
-    resetForm();
-    alert("✅ Registro creado exitosamente");
+        setRecords(prev => [newRecord, ...prev]);
+        alert("✅ Registro creado localmente (sin conexión al servidor)");
+      }
+
+      setShowForm(false);
+      resetForm();
+    } catch (error) {
+      console.error('❌ Error creando registro:', error);
+      alert(`❌ Error: ${error instanceof Error ? error.message : 'Error desconocido'}`);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
-  const handleUpdate = () => {
-    if (!editingRecord) return;
+  const handleUpdate = async () => {
+    if (!editingRecord || isSaving) return;
 
-    setRecords(prev => prev.map(record => 
-      record.id === editingRecord.id 
-        ? { ...record, ...formData, updatedAt: new Date().toISOString() }
-        : record
-    ));
-    setEditingRecord(null);
-    setShowForm(false);
-    resetForm();
-    alert("✅ Registro actualizado exitosamente");
+    setIsSaving(true);
+    try {
+      if (isConnected) {
+        // Actualizar en backend
+        const response = await BirthRecordsService.update(editingRecord.id, formData);
+        if (response.success) {
+          setRecords(prev => prev.map(record => 
+            record.id === editingRecord.id ? response.data : record
+          ));
+          alert("✅ Registro actualizado exitosamente en el servidor");
+        }
+      } else {
+        // Actualizar localmente
+        setRecords(prev => prev.map(record => 
+          record.id === editingRecord.id 
+            ? { ...record, ...formData, updatedAt: new Date().toISOString() }
+            : record
+        ));
+        alert("✅ Registro actualizado localmente (sin conexión al servidor)");
+      }
+
+      setEditingRecord(null);
+      setShowForm(false);
+      resetForm();
+    } catch (error) {
+      console.error('❌ Error actualizando registro:', error);
+      alert(`❌ Error: ${error instanceof Error ? error.message : 'Error desconocido'}`);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
-  // FUNCIONES DE ELIMINACIÓN CORREGIDAS
+  const confirmDelete = async () => {
+    if (!recordToDelete || isSaving) return;
+
+    setIsSaving(true);
+    try {
+      if (isConnected) {
+        // Eliminar en backend
+        const response = await BirthRecordsService.delete(recordToDelete.id);
+        if (response.success) {
+          setRecords(currentRecords => 
+            currentRecords.filter(r => r.id !== recordToDelete.id)
+          );
+          alert("✅ Registro eliminado exitosamente del servidor");
+        }
+      } else {
+        // Eliminar localmente
+        setRecords(currentRecords => 
+          currentRecords.filter(r => r.id !== recordToDelete.id)
+        );
+        alert("✅ Registro eliminado localmente (sin conexión al servidor)");
+      }
+
+      if (selectedRecord?.id === recordToDelete.id) {
+        setSelectedRecord(null);
+      }
+      
+      if (editingRecord?.id === recordToDelete.id) {
+        setEditingRecord(null);
+        setShowForm(false);
+      }
+
+      setShowDeleteConfirm(false);
+      setRecordToDelete(null);
+    } catch (error) {
+      console.error('❌ Error eliminando registro:', error);
+      alert(`❌ Error: ${error instanceof Error ? error.message : 'Error desconocido'}`);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // ============================================================================
+  // MANEJO DE EVENTOS UI
+  // ============================================================================
+
   const initiateDelete = (record: BirthRecord) => {
     console.log("🗑️ Iniciando eliminación para:", record.id);
     setRecordToDelete(record);
     setShowDeleteConfirm(true);
-  };
-
-  const confirmDelete = () => {
-    if (!recordToDelete) {
-      console.log("❌ No hay registro para eliminar");
-      return;
-    }
-
-    console.log("✅ Confirmando eliminación de:", recordToDelete.id);
-    
-    setRecords(currentRecords => {
-      const updatedRecords = currentRecords.filter(r => r.id !== recordToDelete.id);
-      console.log("📊 Total antes:", currentRecords.length, "Total después:", updatedRecords.length);
-      return updatedRecords;
-    });
-
-    if (selectedRecord?.id === recordToDelete.id) {
-      setSelectedRecord(null);
-    }
-    
-    if (editingRecord?.id === recordToDelete.id) {
-      setEditingRecord(null);
-      setShowForm(false);
-    }
-
-    setShowDeleteConfirm(false);
-    setRecordToDelete(null);
-    
-    alert(`✅ ${recordToDelete.motherName} eliminado correctamente`);
   };
 
   const cancelDelete = () => {
@@ -494,6 +693,31 @@ const BirthRecords: React.FC = () => {
     resetForm();
     setShowForm(true);
   };
+
+  const testConnection = async () => {
+    setIsLoading(true);
+    try {
+      const connected = await BirthRecordsService.testConnection();
+      setIsConnected(connected);
+      if (connected) {
+        setConnectionError(null);
+        await loadDataFromBackend();
+        alert('✅ Conexión exitosa con el backend');
+      } else {
+        setConnectionError('No se pudo conectar con el backend');
+        alert('❌ No se pudo conectar con el backend');
+      }
+    } catch (error) {
+      setConnectionError(error instanceof Error ? error.message : 'Error desconocido');
+      alert('❌ Error de conexión');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // ============================================================================
+  // UTILIDADES
+  // ============================================================================
 
   const getHealthColor = (health: string) => {
     const colors = {
@@ -609,18 +833,37 @@ const BirthRecords: React.FC = () => {
     return date.toLocaleDateString('es-MX');
   };
 
+  // ============================================================================
+  // RENDER LOADING
+  // ============================================================================
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-[#519a7c] via-[#f2e9d8] to-[#f4ac3a] flex items-center justify-center">
-        <div className="bg-white/90 backdrop-blur-sm rounded-2xl p-8 shadow-xl">
+        <div className="bg-white/90 backdrop-blur-sm rounded-2xl p-8 shadow-xl max-w-md">
           <div className="flex flex-col items-center space-y-4">
             <div className="w-12 h-12 border-4 border-[#519a7c] border-t-transparent rounded-full animate-spin" />
             <p className="text-gray-600 font-medium">Cargando registros de nacimientos...</p>
+            {connectionError && (
+              <div className="text-center">
+                <p className="text-red-600 text-sm mb-2">⚠️ {connectionError}</p>
+                <button
+                  onClick={testConnection}
+                  className="text-sm bg-[#519a7c] text-white px-4 py-2 rounded-lg hover:bg-[#4a8970]"
+                >
+                  Reintentar conexión
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </div>
     );
   }
+
+  // ============================================================================
+  // RENDER PRINCIPAL
+  // ============================================================================
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#519a7c] via-[#f2e9d8] to-[#f4ac3a] p-6">
@@ -637,9 +880,25 @@ const BirthRecords: React.FC = () => {
                 <h1 className="text-3xl font-bold text-gray-900">
                   Registros de Nacimientos
                 </h1>
-                <p className="text-gray-600 mt-1">
-                  Gestión de nacimientos y seguimiento neonatal bovino
-                </p>
+                <div className="flex items-center space-x-4 mt-1">
+                  <p className="text-gray-600">
+                    Gestión de nacimientos y seguimiento neonatal bovino
+                  </p>
+                  <div className="flex items-center space-x-2">
+                    <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'}`}></div>
+                    <span className={`text-xs font-medium ${isConnected ? 'text-green-600' : 'text-red-600'}`}>
+                      {isConnected ? 'Conectado' : 'Sin conexión'}
+                    </span>
+                    {!isConnected && (
+                      <button
+                        onClick={testConnection}
+                        className="text-xs bg-gray-200 text-gray-700 px-2 py-1 rounded hover:bg-gray-300"
+                      >
+                        Reconectar
+                      </button>
+                    )}
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -660,13 +919,33 @@ const BirthRecords: React.FC = () => {
               <button
                 type="button"
                 onClick={handleNew}
-                className="px-6 py-2 bg-gradient-to-r from-[#519a7c] to-[#4e9c75] text-white rounded-xl hover:from-[#4e9c75] hover:to-[#519a7c] transition-all duration-200 flex items-center space-x-2 shadow-lg"
+                disabled={isSaving}
+                className="px-6 py-2 bg-gradient-to-r from-[#519a7c] to-[#4e9c75] text-white rounded-xl hover:from-[#4e9c75] hover:to-[#519a7c] transition-all duration-200 flex items-center space-x-2 shadow-lg disabled:opacity-50"
               >
                 <Plus className="w-4 h-4" />
                 <span>Nuevo Nacimiento</span>
               </button>
             </div>
           </div>
+
+          {/* Indicador de conexión más visible */}
+          {connectionError && (
+            <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  <AlertTriangle className="w-5 h-5 text-red-600" />
+                  <p className="text-red-700 font-medium">Error de conexión:</p>
+                  <p className="text-red-600">{connectionError}</p>
+                </div>
+                <button
+                  onClick={testConnection}
+                  className="bg-red-600 text-white px-3 py-1 rounded-lg text-sm hover:bg-red-700"
+                >
+                  Reconectar
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Estadísticas */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6">
@@ -790,6 +1069,9 @@ const BirthRecords: React.FC = () => {
           <div className="flex items-center justify-between">
             <span className="text-sm text-gray-600 font-medium">
               Mostrando {filteredRecords.length} de {records.length} nacimientos
+              {!isConnected && (
+                <span className="ml-2 text-orange-600">(Modo offline)</span>
+              )}
             </span>
 
             <button 
@@ -955,7 +1237,7 @@ const BirthRecords: React.FC = () => {
                 )}
               </div>
 
-              {/* Acciones - BOTÓN DE ELIMINAR CORREGIDO */}
+              {/* Acciones */}
               <div className="bg-gray-50 px-4 py-3 flex items-center justify-between">
                 <div className="flex items-center space-x-2">
                   <button
@@ -969,7 +1251,8 @@ const BirthRecords: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => handleEdit(record)}
-                    className="p-2 text-gray-600 hover:text-blue-600 hover:bg-white rounded-lg transition-all duration-200"
+                    disabled={isSaving}
+                    className="p-2 text-gray-600 hover:text-blue-600 hover:bg-white rounded-lg transition-all duration-200 disabled:opacity-50"
                     title="Editar"
                   >
                     <Edit className="w-4 h-4" />
@@ -979,10 +1262,10 @@ const BirthRecords: React.FC = () => {
                     onClick={(e) => {
                       e.preventDefault();
                       e.stopPropagation();
-                      console.log("🔥 BOTÓN ELIMINAR PRESIONADO - ID:", record.id);
                       initiateDelete(record);
                     }}
-                    className="p-2 text-gray-600 hover:text-red-600 hover:bg-white rounded-lg transition-all duration-200"
+                    disabled={isSaving}
+                    className="p-2 text-gray-600 hover:text-red-600 hover:bg-white rounded-lg transition-all duration-200 disabled:opacity-50"
                     title="Eliminar"
                   >
                     <Trash2 className="w-4 h-4" />
@@ -996,7 +1279,7 @@ const BirthRecords: React.FC = () => {
           ))}
         </div>
 
-        {/* MODAL DE CONFIRMACIÓN DE ELIMINACIÓN - CORREGIDO */}
+        {/* MODAL DE CONFIRMACIÓN DE ELIMINACIÓN */}
         {showDeleteConfirm && recordToDelete && (
           <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50">
             <div className="bg-white rounded-2xl w-full max-w-md p-6 shadow-2xl">
@@ -1027,16 +1310,22 @@ const BirthRecords: React.FC = () => {
                 <button
                   type="button"
                   onClick={cancelDelete}
-                  className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                  disabled={isSaving}
+                  className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
                 >
                   Cancelar
                 </button>
                 <button
                   type="button"
                   onClick={confirmDelete}
-                  className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium"
+                  disabled={isSaving}
+                  className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium disabled:opacity-50 flex items-center justify-center"
                 >
-                  Eliminar
+                  {isSaving ? (
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    "Eliminar"
+                  )}
                 </button>
               </div>
             </div>
@@ -1050,11 +1339,13 @@ const BirthRecords: React.FC = () => {
               <div className="flex justify-between items-center mb-6">
                 <h2 className="text-2xl font-bold text-gray-900">
                   {editingRecord ? "Editar" : "Nuevo"} Nacimiento
+                  {!isConnected && <span className="text-orange-600 ml-2">(Offline)</span>}
                 </h2>
                 <button 
                   type="button"
                   onClick={() => setShowForm(false)}
-                  className="p-2 text-gray-400 hover:text-gray-600 rounded-lg"
+                  disabled={isSaving}
+                  className="p-2 text-gray-400 hover:text-gray-600 rounded-lg disabled:opacity-50"
                 >
                   <X className="w-5 h-5" />
                 </button>
@@ -1156,17 +1447,23 @@ const BirthRecords: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => setShowForm(false)}
-                    className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                    disabled={isSaving}
+                    className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
                   >
                     Cancelar
                   </button>
                   <button
                     type="button"
                     onClick={editingRecord ? handleUpdate : handleCreate}
-                    className="px-6 py-2 bg-gradient-to-r from-[#519a7c] to-[#4e9c75] text-white rounded-lg hover:from-[#4e9c75] hover:to-[#519a7c] transition-all duration-200 flex items-center space-x-2"
+                    disabled={isSaving}
+                    className="px-6 py-2 bg-gradient-to-r from-[#519a7c] to-[#4e9c75] text-white rounded-lg hover:from-[#4e9c75] hover:to-[#519a7c] transition-all duration-200 flex items-center space-x-2 disabled:opacity-50"
                   >
-                    <Save className="w-4 h-4" />
-                    <span>{editingRecord ? "Actualizar" : "Guardar"}</span>
+                    {isSaving ? (
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    ) : (
+                      <Save className="w-4 h-4" />
+                    )}
+                    <span>{isSaving ? "Guardando..." : (editingRecord ? "Actualizar" : "Guardar")}</span>
                   </button>
                 </div>
               </div>
@@ -1174,7 +1471,7 @@ const BirthRecords: React.FC = () => {
           </div>
         )}
 
-        {/* Modal de detalles - Simplificado */}
+        {/* Modal de detalles */}
         {selectedRecord && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
             <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto p-6">
@@ -1255,7 +1552,12 @@ const BirthRecords: React.FC = () => {
           <div className="bg-white/95 backdrop-blur-sm rounded-2xl shadow-xl p-12 text-center border border-white/20">
             <Baby className="w-16 h-16 text-gray-400 mx-auto mb-4" />
             <h3 className="text-xl font-semibold text-gray-900 mb-2">No se encontraron nacimientos</h3>
-            <p className="text-gray-600 mb-6">No hay registros que coincidan con los filtros aplicados.</p>
+            <p className="text-gray-600 mb-6">
+              No hay registros que coincidan con los filtros aplicados.
+              {!isConnected && (
+                <span className="block text-orange-600 mt-2">Trabajando en modo offline.</span>
+              )}
+            </p>
             <button
               type="button"
               onClick={handleNew}

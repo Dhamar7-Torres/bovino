@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from "react";
+import React, { useState, useCallback, useMemo, useEffect } from "react";
 import { motion, Variants, AnimatePresence } from "framer-motion";
 import {
   Users,
@@ -21,6 +21,10 @@ import {
   UserCheck,
   AlertCircle,
   CheckCircle,
+  Loader,
+  Wifi,
+  WifiOff,
+  RefreshCw
 } from "lucide-react";
 
 // ============================================================================
@@ -64,9 +68,131 @@ interface StaffMember {
   photo?: string;
 }
 
+interface ApiResponse<T> {
+  success: boolean;
+  data?: T;
+  message: string;
+  error?: string;
+}
+
+interface PaginatedResponse<T> {
+  data: T[];
+  pagination: {
+    current: number;
+    total: number;
+    pageSize: number;
+    totalItems: number;
+  };
+}
+
 interface FormErrors {
   [key: string]: string;
 }
+
+// ============================================================================
+// SERVICIO API
+// ============================================================================
+
+class StaffApiService {
+  private baseURL = 'http://localhost:5000/api';
+  
+  private getAuthToken(): string | null {
+    // En una aplicación real, obtendrías esto del contexto de autenticación o localStorage
+    return localStorage.getItem('auth_token');
+  }
+
+  private async makeRequest<T>(endpoint: string, options: RequestInit = {}): Promise<ApiResponse<T>> {
+    const token = this.getAuthToken();
+    
+    const defaultHeaders = {
+      'Content-Type': 'application/json',
+      ...(token && { 'Authorization': `Bearer ${token}` }),
+    };
+
+    try {
+      const response = await fetch(`${this.baseURL}${endpoint}`, {
+        ...options,
+        headers: {
+          ...defaultHeaders,
+          ...options.headers,
+        },
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || 'Error en la solicitud');
+      }
+
+      return data;
+    } catch (error) {
+      console.error('API Error:', error);
+      throw error instanceof Error ? error : new Error('Error de conexión');
+    }
+  }
+
+  // Obtener todo el personal
+  async getStaff(params?: {
+    page?: number;
+    limit?: number;
+    search?: string;
+    department?: string;
+    status?: string;
+  }): Promise<ApiResponse<PaginatedResponse<StaffMember>>> {
+    const queryParams = new URLSearchParams();
+    if (params?.page) queryParams.append('page', params.page.toString());
+    if (params?.limit) queryParams.append('limit', params.limit.toString());
+    if (params?.search) queryParams.append('search', params.search);
+    if (params?.department && params.department !== 'Todos') queryParams.append('department', params.department);
+    if (params?.status && params.status !== 'Todos') queryParams.append('status', params.status);
+
+    const queryString = queryParams.toString();
+    return this.makeRequest<PaginatedResponse<StaffMember>>(
+      `/ranch/staff${queryString ? `?${queryString}` : ''}`
+    );
+  }
+
+  // Obtener un miembro del personal por ID
+  async getStaffMember(id: string): Promise<ApiResponse<StaffMember>> {
+    return this.makeRequest<StaffMember>(`/ranch/staff/${id}`);
+  }
+
+  // Crear nuevo miembro del personal
+  async createStaffMember(memberData: Omit<StaffMember, 'id'>): Promise<ApiResponse<StaffMember>> {
+    return this.makeRequest<StaffMember>('/ranch/staff', {
+      method: 'POST',
+      body: JSON.stringify(memberData),
+    });
+  }
+
+  // Actualizar miembro del personal
+  async updateStaffMember(id: string, memberData: Partial<StaffMember>): Promise<ApiResponse<StaffMember>> {
+    return this.makeRequest<StaffMember>(`/ranch/staff/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(memberData),
+    });
+  }
+
+  // Eliminar miembro del personal
+  async deleteStaffMember(id: string): Promise<ApiResponse<void>> {
+    return this.makeRequest<void>(`/ranch/staff/${id}`, {
+      method: 'DELETE',
+    });
+  }
+
+  // Verificar conexión con el backend
+  async checkConnection(): Promise<boolean> {
+    try {
+      const response = await fetch(`${this.baseURL}/ping`);
+      return response.ok;
+    } catch (error) {
+      return false;
+    }
+  }
+}
+
+// Instancia del servicio API
+const staffApi = new StaffApiService();
 
 // ============================================================================
 // CONSTANTES
@@ -90,125 +216,6 @@ const DEPARTMENT_ICONS: Record<Department, any> = {
 const DEPARTMENTS: Department[] = ["Administración", "Veterinaria", "Ganadería", "Mantenimiento", "Seguridad"];
 const STATUS_OPTIONS: EmploymentStatus[] = ["Activo", "Inactivo", "Vacaciones", "Suspendido"];
 const CONTRACT_TYPES: ContractType[] = ["Permanente", "Temporal", "Por Proyecto"];
-
-// ============================================================================
-// DATOS SIMULADOS INICIALES
-// ============================================================================
-
-const initialStaffData: StaffMember[] = [
-  {
-    id: "1",
-    personalInfo: {
-      firstName: "Carlos",
-      lastName: "Mendoza García",
-      dateOfBirth: "1975-03-15",
-      nationalId: "MECG750315HTCNDR01",
-      phone: "+52 993 123 4567",
-      email: "carlos.mendoza@rancho.com",
-      address: "Av. Ruiz Cortines 123, Villahermosa, Tabasco",
-      emergencyContact: {
-        name: "María Mendoza",
-        phone: "+52 993 123 4568",
-        relationship: "Esposa"
-      }
-    },
-    employment: {
-      employeeId: "EMP-001",
-      position: "Gerente General",
-      department: "Administración",
-      hireDate: "2020-01-15",
-      salary: 35000,
-      contractType: "Permanente",
-      status: "Activo"
-    },
-    skills: ["Liderazgo", "Gestión Ganadera", "Administración"],
-    photo: "/api/placeholder/150/150"
-  },
-  {
-    id: "2",
-    personalInfo: {
-      firstName: "Ana",
-      lastName: "López Hernández",
-      dateOfBirth: "1988-07-22",
-      nationalId: "LOHA880722MTCPRN01",
-      phone: "+52 993 234 5678",
-      email: "ana.lopez@rancho.com",
-      address: "Calle Aldama 45, Villahermosa, Tabasco",
-      emergencyContact: {
-        name: "José López",
-        phone: "+52 993 234 5679",
-        relationship: "Padre"
-      }
-    },
-    employment: {
-      employeeId: "EMP-002",
-      position: "Médico Veterinario",
-      department: "Veterinaria",
-      hireDate: "2021-03-10",
-      salary: 28000,
-      contractType: "Permanente",
-      status: "Activo"
-    },
-    skills: ["Medicina Veterinaria", "Reproducción Bovina", "Vacunación"],
-    photo: "/api/placeholder/150/150"
-  },
-  {
-    id: "3",
-    personalInfo: {
-      firstName: "Miguel",
-      lastName: "Ramírez Torres",
-      dateOfBirth: "1992-11-08",
-      nationalId: "RATM921108HTCMRG01",
-      phone: "+52 993 345 6789",
-      email: "miguel.ramirez@rancho.com",
-      address: "Calle Morelos 78, Villahermosa, Tabasco",
-      emergencyContact: {
-        name: "Rosa Torres",
-        phone: "+52 993 345 6790",
-        relationship: "Madre"
-      }
-    },
-    employment: {
-      employeeId: "EMP-003",
-      position: "Vaquero Principal",
-      department: "Ganadería",
-      hireDate: "2022-05-15",
-      salary: 18000,
-      contractType: "Permanente",
-      status: "Activo"
-    },
-    skills: ["Manejo de Ganado", "Ordeño", "Pastoreo"],
-    photo: "/api/placeholder/150/150"
-  },
-  {
-    id: "4",
-    personalInfo: {
-      firstName: "Laura",
-      lastName: "Hernández Mora",
-      dateOfBirth: "1985-04-12",
-      nationalId: "HEML850412MTCRRA01",
-      phone: "+52 993 456 7890",
-      email: "laura.hernandez@rancho.com",
-      address: "Av. Universidad 234, Villahermosa, Tabasco",
-      emergencyContact: {
-        name: "Pedro Hernández",
-        phone: "+52 993 456 7891",
-        relationship: "Hermano"
-      }
-    },
-    employment: {
-      employeeId: "EMP-004",
-      position: "Contadora",
-      department: "Administración",
-      hireDate: "2021-09-01",
-      salary: 22000,
-      contractType: "Permanente",
-      status: "Activo"
-    },
-    skills: ["Contabilidad", "Finanzas", "Recursos Humanos"],
-    photo: "/api/placeholder/150/150"
-  }
-];
 
 // ============================================================================
 // VARIANTES DE ANIMACIÓN
@@ -299,10 +306,13 @@ const validateCURP = (curp: string): boolean => {
 
 const Staff: React.FC = () => {
   // Estados principales
-  const [staffMembers, setStaffMembers] = useState<StaffMember[]>(initialStaffData);
+  const [staffMembers, setStaffMembers] = useState<StaffMember[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedDepartment, setSelectedDepartment] = useState("Todos");
   const [selectedStatus, setSelectedStatus] = useState("Todos");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalItems, setTotalItems] = useState(0);
   
   // Estados para modales
   const [showAddModal, setShowAddModal] = useState(false);
@@ -316,6 +326,11 @@ const Staff: React.FC = () => {
   const [formErrors, setFormErrors] = useState<FormErrors>({});
   const [skillInput, setSkillInput] = useState("");
 
+  // Estados para API y conexión
+  const [isLoadingData, setIsLoadingData] = useState(false);
+  const [isConnected, setIsConnected] = useState(true);
+  const [apiError, setApiError] = useState<string | null>(null);
+
   // Estados para notificaciones
   const [showSuccessMessage, setShowSuccessMessage] = useState(false);
   const [successMessage, setSuccessMessage] = useState("");
@@ -323,30 +338,6 @@ const Staff: React.FC = () => {
   // Listas memoizadas para filtros
   const departments = useMemo(() => ["Todos", ...DEPARTMENTS], []);
   const statusOptions = useMemo(() => ["Todos", ...STATUS_OPTIONS], []);
-
-  // Personal filtrado memoizado
-  const filteredStaff = useMemo(() => {
-    let filtered = staffMembers;
-
-    if (searchTerm) {
-      filtered = filtered.filter(member =>
-        member.personalInfo.firstName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        member.personalInfo.lastName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        member.employment.position.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        member.employment.employeeId.toLowerCase().includes(searchTerm.toLowerCase())
-      );
-    }
-
-    if (selectedDepartment !== "Todos") {
-      filtered = filtered.filter(member => member.employment.department === selectedDepartment);
-    }
-
-    if (selectedStatus !== "Todos") {
-      filtered = filtered.filter(member => member.employment.status === selectedStatus);
-    }
-
-    return filtered;
-  }, [staffMembers, searchTerm, selectedDepartment, selectedStatus]);
 
   // Estadísticas memoizadas
   const statistics = useMemo(() => {
@@ -358,17 +349,84 @@ const Staff: React.FC = () => {
       : 0;
 
     return {
-      totalStaff,
+      totalStaff: totalItems || totalStaff,
       activeStaff,
       totalDepartments,
       averageSalary,
     };
-  }, [staffMembers]);
+  }, [staffMembers, totalItems]);
 
-  // Función para generar ID único
-  const generateId = useCallback(() => {
-    return Date.now().toString();
+  // ============================================================================
+  // FUNCIONES DE API
+  // ============================================================================
+
+  // Verificar conexión con el backend
+  const checkConnection = useCallback(async () => {
+    const connected = await staffApi.checkConnection();
+    setIsConnected(connected);
+    return connected;
   }, []);
+
+  // Cargar datos del personal desde el backend
+  const loadStaffData = useCallback(async (showLoader = true) => {
+    if (showLoader) setIsLoadingData(true);
+    setApiError(null);
+
+    try {
+      const response = await staffApi.getStaff({
+        page: currentPage,
+        limit: 12,
+        search: searchTerm || undefined,
+        department: selectedDepartment !== "Todos" ? selectedDepartment : undefined,
+        status: selectedStatus !== "Todos" ? selectedStatus : undefined,
+      });
+
+      if (response.success && response.data) {
+        setStaffMembers(response.data.data);
+        setCurrentPage(response.data.pagination.current);
+        setTotalPages(response.data.pagination.total);
+        setTotalItems(response.data.pagination.totalItems);
+        setIsConnected(true);
+      }
+    } catch (error) {
+      console.error('Error loading staff data:', error);
+      setApiError(error instanceof Error ? error.message : 'Error desconocido');
+      setIsConnected(false);
+      // En caso de error, mostrar datos vacíos o de respaldo
+      setStaffMembers([]);
+    } finally {
+      if (showLoader) setIsLoadingData(false);
+    }
+  }, [currentPage, searchTerm, selectedDepartment, selectedStatus]);
+
+  // Recargar datos
+  const refreshData = useCallback(() => {
+    loadStaffData(true);
+  }, [loadStaffData]);
+
+  // ============================================================================
+  // EFECTOS
+  // ============================================================================
+
+  // Cargar datos iniciales
+  useEffect(() => {
+    checkConnection();
+    loadStaffData();
+  }, [loadStaffData, checkConnection]);
+
+  // Recargar datos cuando cambien los filtros
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      setCurrentPage(1);
+      loadStaffData();
+    }, 500); // Debounce de 500ms para la búsqueda
+
+    return () => clearTimeout(timeoutId);
+  }, [searchTerm, selectedDepartment, selectedStatus]);
+
+  // ============================================================================
+  // FUNCIONES DE UTILIDAD
+  // ============================================================================
 
   // Función para generar ID de empleado
   const generateEmployeeId = useCallback(() => {
@@ -378,7 +436,17 @@ const Staff: React.FC = () => {
     return `EMP-${String(maxId + 1).padStart(3, '0')}`;
   }, [staffMembers]);
 
-  // Función para validar formulario
+  // Función para mostrar notificación de éxito
+  const showSuccessNotification = useCallback((message: string) => {
+    setSuccessMessage(message);
+    setShowSuccessMessage(true);
+    setTimeout(() => setShowSuccessMessage(false), 3000);
+  }, []);
+
+  // ============================================================================
+  // FUNCIONES DE VALIDACIÓN
+  // ============================================================================
+
   const validateForm = useCallback((): boolean => {
     const errors: FormErrors = {};
 
@@ -443,12 +511,9 @@ const Staff: React.FC = () => {
     return Object.keys(errors).length === 0;
   }, [formData]);
 
-  // Función para mostrar notificación de éxito
-  const showSuccessNotification = useCallback((message: string) => {
-    setSuccessMessage(message);
-    setShowSuccessMessage(true);
-    setTimeout(() => setShowSuccessMessage(false), 3000);
-  }, []);
+  // ============================================================================
+  // FUNCIONES DE MANEJO DE PERSONAL
+  // ============================================================================
 
   // Función para agregar personal
   const handleAddStaff = useCallback(() => {
@@ -499,12 +564,24 @@ const Staff: React.FC = () => {
   }, []);
 
   // Función para eliminar personal
-  const handleDeleteStaff = useCallback((member: StaffMember) => {
+  const handleDeleteStaff = useCallback(async (member: StaffMember) => {
     if (confirm(`¿Estás seguro de que quieres eliminar a ${member.personalInfo.firstName} ${member.personalInfo.lastName}?`)) {
-      setStaffMembers(prev => prev.filter(m => m.id !== member.id));
-      showSuccessNotification("Personal eliminado exitosamente");
+      try {
+        setIsLoadingData(true);
+        const response = await staffApi.deleteStaffMember(member.id);
+        
+        if (response.success) {
+          showSuccessNotification("Personal eliminado exitosamente");
+          loadStaffData(false); // Recargar datos sin mostrar loader
+        }
+      } catch (error) {
+        console.error('Error deleting staff member:', error);
+        setApiError(error instanceof Error ? error.message : 'Error al eliminar');
+      } finally {
+        setIsLoadingData(false);
+      }
     }
-  }, [showSuccessNotification]);
+  }, [showSuccessNotification, loadStaffData]);
 
   // Función para agregar habilidad
   const handleAddSkill = useCallback(() => {
@@ -532,42 +609,48 @@ const Staff: React.FC = () => {
     }
 
     setSaveLoading(true);
+    setApiError(null);
 
     try {
-      // Simular llamada a API
-      await new Promise(resolve => setTimeout(resolve, 1500));
-
-      const newMember: StaffMember = {
-        id: selectedMember?.id || generateId(),
+      const memberData = {
         personalInfo: formData.personalInfo!,
         employment: formData.employment!,
         skills: formData.skills || [],
         photo: formData.photo
       };
 
+      let response: ApiResponse<StaffMember>;
+
       if (selectedMember) {
         // Editar
-        setStaffMembers(prev => prev.map(m => m.id === selectedMember.id ? newMember : m));
-        showSuccessNotification("Personal actualizado exitosamente");
+        response = await staffApi.updateStaffMember(selectedMember.id, memberData);
       } else {
         // Agregar
-        setStaffMembers(prev => [...prev, newMember]);
-        showSuccessNotification("Personal agregado exitosamente");
+        response = await staffApi.createStaffMember(memberData as StaffMember);
       }
 
-      setShowAddModal(false);
-      setShowEditModal(false);
-      setFormData({});
-      setSelectedMember(null);
-      setFormErrors({});
+      if (response.success) {
+        showSuccessNotification(
+          selectedMember ? "Personal actualizado exitosamente" : "Personal agregado exitosamente"
+        );
+        
+        setShowAddModal(false);
+        setShowEditModal(false);
+        setFormData({});
+        setSelectedMember(null);
+        setFormErrors({});
+        
+        // Recargar datos
+        loadStaffData(false);
+      }
 
     } catch (error) {
       console.error("Error al guardar:", error);
-      // Aquí podrías mostrar un mensaje de error
+      setApiError(error instanceof Error ? error.message : 'Error al guardar');
     } finally {
       setSaveLoading(false);
     }
-  }, [validateForm, selectedMember, formData, generateId, showSuccessNotification]);
+  }, [validateForm, selectedMember, formData, showSuccessNotification, loadStaffData]);
 
   // Función para cancelar
   const handleCancel = useCallback(() => {
@@ -577,6 +660,7 @@ const Staff: React.FC = () => {
     setSelectedMember(null);
     setFormErrors({});
     setSkillInput("");
+    setApiError(null);
   }, []);
 
   // Función para obtener color del estado
@@ -618,19 +702,66 @@ const Staff: React.FC = () => {
           )}
         </AnimatePresence>
 
+        {/* Notificación de error de API */}
+        <AnimatePresence>
+          {apiError && (
+            <motion.div
+              initial={{ opacity: 0, y: -50 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -50 }}
+              className="fixed top-4 right-4 z-50 bg-red-500 text-white px-6 py-3 rounded-lg shadow-lg flex items-center max-w-md"
+            >
+              <AlertCircle className="w-5 h-5 mr-2 flex-shrink-0" />
+              <span className="text-sm">{apiError}</span>
+              <button 
+                onClick={() => setApiError(null)}
+                className="ml-3 text-white hover:text-gray-200"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         {/* Header */}
         <motion.div variants={itemVariants} className="mb-8">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-4xl font-bold text-[#2d5a45] mb-2">
-                Gestión de Personal
-              </h1>
+              <div className="flex items-center">
+                <h1 className="text-4xl font-bold text-[#2d5a45] mb-2 mr-4">
+                  Gestión de Personal
+                </h1>
+                {/* Indicador de conexión */}
+                <div className="flex items-center mb-2">
+                  {isConnected ? (
+                    <div className="flex items-center text-green-600">
+                      <Wifi className="w-5 h-5 mr-1" />
+                      <span className="text-sm font-medium">Conectado</span>
+                    </div>
+                  ) : (
+                    <div className="flex items-center text-red-600">
+                      <WifiOff className="w-5 h-5 mr-1" />
+                      <span className="text-sm font-medium">Desconectado</span>
+                    </div>
+                  )}
+                </div>
+              </div>
               <p className="text-gray-600 text-lg">
                 Administra todo el personal del rancho
               </p>
             </div>
 
             <div className="flex items-center space-x-3">
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={refreshData}
+                disabled={isLoadingData}
+                className="px-4 py-2 border border-[#519a7c] text-[#519a7c] rounded-lg hover:bg-[#519a7c] hover:text-white transition-colors flex items-center disabled:opacity-50"
+              >
+                <RefreshCw className={`w-4 h-4 mr-2 ${isLoadingData ? 'animate-spin' : ''}`} />
+                Actualizar
+              </motion.button>
               <motion.button
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
@@ -741,7 +872,14 @@ const Staff: React.FC = () => {
 
               <div className="flex items-center text-sm text-gray-600">
                 <Filter className="w-4 h-4 mr-2" />
-                Mostrando {filteredStaff.length} de {staffMembers.length}
+                {isLoadingData ? (
+                  <div className="flex items-center">
+                    <Loader className="w-4 h-4 mr-2 animate-spin" />
+                    Cargando...
+                  </div>
+                ) : (
+                  `Mostrando ${staffMembers.length} de ${totalItems}`
+                )}
               </div>
             </div>
           </div>
@@ -749,22 +887,56 @@ const Staff: React.FC = () => {
 
         {/* Lista de Personal */}
         <motion.div variants={itemVariants}>
-          {filteredStaff.length === 0 ? (
+          {isLoadingData ? (
+            <motion.div
+              variants={cardVariants}
+              className="bg-white/90 backdrop-blur-sm rounded-xl p-12 shadow-lg border border-white/20 text-center"
+            >
+              <Loader className="w-12 h-12 text-[#519a7c] mx-auto mb-4 animate-spin" />
+              <h3 className="text-lg font-medium text-gray-900 mb-2">
+                Cargando personal...
+              </h3>
+              <p className="text-gray-600">
+                Por favor espera mientras obtenemos los datos del servidor
+              </p>
+            </motion.div>
+          ) : !isConnected ? (
+            <motion.div
+              variants={cardVariants}
+              className="bg-white/90 backdrop-blur-sm rounded-xl p-12 shadow-lg border border-white/20 text-center"
+            >
+              <WifiOff className="w-12 h-12 text-red-500 mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-gray-900 mb-2">
+                Sin conexión al servidor
+              </h3>
+              <p className="text-gray-600 mb-4">
+                No se puede conectar con el backend. Verifica que el servidor esté ejecutándose en el puerto 5000.
+              </p>
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={refreshData}
+                className="px-4 py-2 bg-[#519a7c] text-white rounded-lg hover:bg-[#2d5a45] transition-colors"
+              >
+                Reintentar conexión
+              </motion.button>
+            </motion.div>
+          ) : staffMembers.length === 0 ? (
             <motion.div
               variants={cardVariants}
               className="bg-white/90 backdrop-blur-sm rounded-xl p-12 shadow-lg border border-white/20 text-center"
             >
               <Users className="w-12 h-12 text-gray-400 mx-auto mb-4" />
               <h3 className="text-lg font-medium text-gray-900 mb-2">
-                {staffMembers.length === 0 ? "No hay personal registrado" : "No se encontró personal"}
+                No hay personal registrado
               </h3>
               <p className="text-gray-600 mb-4">
-                {staffMembers.length === 0 
-                  ? "Agrega el primer miembro del personal para comenzar"
-                  : "Intenta ajustar los filtros de búsqueda"
+                {searchTerm || selectedDepartment !== "Todos" || selectedStatus !== "Todos"
+                  ? "No se encontró personal con los filtros seleccionados"
+                  : "Agrega el primer miembro del personal para comenzar"
                 }
               </p>
-              {staffMembers.length === 0 && (
+              {(!searchTerm && selectedDepartment === "Todos" && selectedStatus === "Todos") && (
                 <motion.button
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
@@ -776,131 +948,160 @@ const Staff: React.FC = () => {
               )}
             </motion.div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {filteredStaff.map((member) => {
-                const DepartmentIcon = getDepartmentIcon(member.employment.department);
-                
-                return (
-                  <motion.div
-                    key={member.id}
-                    variants={cardVariants}
-                    whileHover="hover"
-                    className="bg-white/90 backdrop-blur-sm rounded-xl p-6 shadow-lg border border-white/20 hover:shadow-xl transition-shadow duration-200"
-                  >
-                    {/* Header de la tarjeta */}
-                    <div className="flex items-start justify-between mb-4">
-                      <div className="flex items-center space-x-4">
-                        <img
-                          src={member.photo || "/api/placeholder/60/60"}
-                          alt={`${member.personalInfo.firstName} ${member.personalInfo.lastName}`}
-                          className="w-16 h-16 rounded-full object-cover border-2 border-[#519a7c]"
-                          onError={(e) => {
-                            e.currentTarget.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='60' height='60' viewBox='0 0 60 60'%3E%3Crect width='60' height='60' fill='%23f3f4f6'/%3E%3Ctext x='30' y='35' text-anchor='middle' dominant-baseline='middle' font-family='Arial' font-size='24' fill='%236b7280'%3E👤%3C/text%3E%3C/svg%3E";
-                          }}
-                        />
-                        
-                        <div>
-                          <h3 className="text-lg font-semibold text-[#2d5a45]">
-                            {member.personalInfo.firstName} {member.personalInfo.lastName}
-                          </h3>
-                          <p className="text-gray-600">{member.employment.position}</p>
-                          <div className="flex items-center mt-1">
-                            <DepartmentIcon className="w-4 h-4 text-[#519a7c] mr-1" />
-                            <span className="text-sm text-gray-500">{member.employment.department}</span>
+            <>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {staffMembers.map((member) => {
+                  const DepartmentIcon = getDepartmentIcon(member.employment.department);
+                  
+                  return (
+                    <motion.div
+                      key={member.id}
+                      variants={cardVariants}
+                      whileHover="hover"
+                      className="bg-white/90 backdrop-blur-sm rounded-xl p-6 shadow-lg border border-white/20 hover:shadow-xl transition-shadow duration-200"
+                    >
+                      {/* Header de la tarjeta */}
+                      <div className="flex items-start justify-between mb-4">
+                        <div className="flex items-center space-x-4">
+                          <img
+                            src={member.photo || "/api/placeholder/60/60"}
+                            alt={`${member.personalInfo.firstName} ${member.personalInfo.lastName}`}
+                            className="w-16 h-16 rounded-full object-cover border-2 border-[#519a7c]"
+                            onError={(e) => {
+                              e.currentTarget.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='60' height='60' viewBox='0 0 60 60'%3E%3Crect width='60' height='60' fill='%23f3f4f6'/%3E%3Ctext x='30' y='35' text-anchor='middle' dominant-baseline='middle' font-family='Arial' font-size='24' fill='%236b7280'%3E👤%3C/text%3E%3C/svg%3E";
+                            }}
+                          />
+                          
+                          <div>
+                            <h3 className="text-lg font-semibold text-[#2d5a45]">
+                              {member.personalInfo.firstName} {member.personalInfo.lastName}
+                            </h3>
+                            <p className="text-gray-600">{member.employment.position}</p>
+                            <div className="flex items-center mt-1">
+                              <DepartmentIcon className="w-4 h-4 text-[#519a7c] mr-1" />
+                              <span className="text-sm text-gray-500">{member.employment.department}</span>
+                            </div>
                           </div>
                         </div>
+
+                        <span className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(member.employment.status)}`}>
+                          {member.employment.status}
+                        </span>
                       </div>
 
-                      <span className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(member.employment.status)}`}>
-                        {member.employment.status}
-                      </span>
-                    </div>
-
-                    {/* Información de contacto */}
-                    <div className="space-y-2 mb-4">
-                      <div className="flex items-center text-sm text-gray-600">
-                        <Phone className="w-4 h-4 mr-2" />
-                        {member.personalInfo.phone}
-                      </div>
-                      <div className="flex items-center text-sm text-gray-600">
-                        <Mail className="w-4 h-4 mr-2" />
-                        {member.personalInfo.email}
-                      </div>
-                      <div className="flex items-center text-sm text-gray-600">
-                        <Calendar className="w-4 h-4 mr-2" />
-                        Ingreso: {new Date(member.employment.hireDate).toLocaleDateString('es-MX')}
-                      </div>
-                    </div>
-
-                    {/* Información laboral */}
-                    <div className="grid grid-cols-2 gap-4 mb-4 text-sm">
-                      <div>
-                        <p className="text-gray-600">ID Empleado</p>
-                        <p className="font-medium text-[#2d5a45]">{member.employment.employeeId}</p>
-                      </div>
-                      <div>
-                        <p className="text-gray-600">Salario</p>
-                        <p className="font-medium text-[#2d5a45]">${member.employment.salary.toLocaleString()}</p>
-                      </div>
-                    </div>
-
-                    {/* Habilidades */}
-                    {member.skills && member.skills.length > 0 && (
-                      <div className="mb-4">
-                        <p className="text-sm text-gray-600 mb-2">Habilidades</p>
-                        <div className="flex flex-wrap gap-1">
-                          {member.skills.slice(0, 3).map((skill, index) => (
-                            <span
-                              key={index}
-                              className="px-2 py-1 bg-[#519a7c] bg-opacity-10 text-[#519a7c] text-xs rounded-full"
-                            >
-                              {skill}
-                            </span>
-                          ))}
-                          {member.skills.length > 3 && (
-                            <span className="px-2 py-1 bg-gray-100 text-gray-600 text-xs rounded-full">
-                              +{member.skills.length - 3}
-                            </span>
-                          )}
+                      {/* Información de contacto */}
+                      <div className="space-y-2 mb-4">
+                        <div className="flex items-center text-sm text-gray-600">
+                          <Phone className="w-4 h-4 mr-2" />
+                          {member.personalInfo.phone}
+                        </div>
+                        <div className="flex items-center text-sm text-gray-600">
+                          <Mail className="w-4 h-4 mr-2" />
+                          {member.personalInfo.email}
+                        </div>
+                        <div className="flex items-center text-sm text-gray-600">
+                          <Calendar className="w-4 h-4 mr-2" />
+                          Ingreso: {new Date(member.employment.hireDate).toLocaleDateString('es-MX')}
                         </div>
                       </div>
-                    )}
 
-                    {/* Botones de acción */}
-                    <div className="flex space-x-2">
-                      <motion.button
-                        whileHover={{ scale: 1.05 }}
-                        whileTap={{ scale: 0.95 }}
-                        onClick={() => handleViewStaff(member)}
-                        className="flex-1 px-3 py-2 bg-[#519a7c] text-white text-sm rounded-lg hover:bg-[#2d5a45] transition-colors flex items-center justify-center"
-                        aria-label={`Ver detalles de ${member.personalInfo.firstName}`}
-                      >
-                        <Eye className="w-4 h-4 mr-1" />
-                        Ver
-                      </motion.button>
-                      <motion.button
-                        whileHover={{ scale: 1.05 }}
-                        whileTap={{ scale: 0.95 }}
-                        onClick={() => handleEditStaff(member)}
-                        className="px-3 py-2 border border-gray-300 text-gray-700 text-sm rounded-lg hover:bg-gray-50 transition-colors"
-                        aria-label={`Editar ${member.personalInfo.firstName}`}
-                      >
-                        <Edit3 className="w-4 h-4" />
-                      </motion.button>
-                      <motion.button
-                        whileHover={{ scale: 1.05 }}
-                        whileTap={{ scale: 0.95 }}
-                        onClick={() => handleDeleteStaff(member)}
-                        className="px-3 py-2 border border-red-300 text-red-700 text-sm rounded-lg hover:bg-red-50 transition-colors"
-                        aria-label={`Eliminar ${member.personalInfo.firstName}`}
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </motion.button>
-                    </div>
-                  </motion.div>
-                );
-              })}
-            </div>
+                      {/* Información laboral */}
+                      <div className="grid grid-cols-2 gap-4 mb-4 text-sm">
+                        <div>
+                          <p className="text-gray-600">ID Empleado</p>
+                          <p className="font-medium text-[#2d5a45]">{member.employment.employeeId}</p>
+                        </div>
+                        <div>
+                          <p className="text-gray-600">Salario</p>
+                          <p className="font-medium text-[#2d5a45]">${member.employment.salary.toLocaleString()}</p>
+                        </div>
+                      </div>
+
+                      {/* Habilidades */}
+                      {member.skills && member.skills.length > 0 && (
+                        <div className="mb-4">
+                          <p className="text-sm text-gray-600 mb-2">Habilidades</p>
+                          <div className="flex flex-wrap gap-1">
+                            {member.skills.slice(0, 3).map((skill, index) => (
+                              <span
+                                key={index}
+                                className="px-2 py-1 bg-[#519a7c] bg-opacity-10 text-[#519a7c] text-xs rounded-full"
+                              >
+                                {skill}
+                              </span>
+                            ))}
+                            {member.skills.length > 3 && (
+                              <span className="px-2 py-1 bg-gray-100 text-gray-600 text-xs rounded-full">
+                                +{member.skills.length - 3}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Botones de acción */}
+                      <div className="flex space-x-2">
+                        <motion.button
+                          whileHover={{ scale: 1.05 }}
+                          whileTap={{ scale: 0.95 }}
+                          onClick={() => handleViewStaff(member)}
+                          className="flex-1 px-3 py-2 bg-[#519a7c] text-white text-sm rounded-lg hover:bg-[#2d5a45] transition-colors flex items-center justify-center"
+                          aria-label={`Ver detalles de ${member.personalInfo.firstName}`}
+                        >
+                          <Eye className="w-4 h-4 mr-1" />
+                          Ver
+                        </motion.button>
+                        <motion.button
+                          whileHover={{ scale: 1.05 }}
+                          whileTap={{ scale: 0.95 }}
+                          onClick={() => handleEditStaff(member)}
+                          className="px-3 py-2 border border-gray-300 text-gray-700 text-sm rounded-lg hover:bg-gray-50 transition-colors"
+                          aria-label={`Editar ${member.personalInfo.firstName}`}
+                        >
+                          <Edit3 className="w-4 h-4" />
+                        </motion.button>
+                        <motion.button
+                          whileHover={{ scale: 1.05 }}
+                          whileTap={{ scale: 0.95 }}
+                          onClick={() => handleDeleteStaff(member)}
+                          className="px-3 py-2 border border-red-300 text-red-700 text-sm rounded-lg hover:bg-red-50 transition-colors"
+                          aria-label={`Eliminar ${member.personalInfo.firstName}`}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </motion.button>
+                      </div>
+                    </motion.div>
+                  );
+                })}
+              </div>
+
+              {/* Paginación */}
+              {totalPages > 1 && (
+                <div className="mt-8 flex justify-center">
+                  <div className="flex items-center space-x-2">
+                    <button
+                      onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                      disabled={currentPage === 1 || isLoadingData}
+                      className="px-3 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      Anterior
+                    </button>
+                    
+                    <span className="px-4 py-2 text-gray-700">
+                      Página {currentPage} de {totalPages}
+                    </span>
+                    
+                    <button
+                      onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
+                      disabled={currentPage === totalPages || isLoadingData}
+                      className="px-3 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      Siguiente
+                    </button>
+                  </div>
+                </div>
+              )}
+            </>
           )}
         </motion.div>
       </motion.div>
@@ -952,6 +1153,17 @@ const Staff: React.FC = () => {
                         <li key={index}>{error}</li>
                       ))}
                     </ul>
+                  </div>
+                )}
+
+                {/* Mostrar error de API si existe */}
+                {apiError && (
+                  <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
+                    <div className="flex items-center">
+                      <AlertCircle className="w-5 h-5 text-red-500 mr-2" />
+                      <p className="text-red-800 font-medium">Error del servidor:</p>
+                    </div>
+                    <p className="text-red-700 text-sm mt-1">{apiError}</p>
                   </div>
                 )}
 

@@ -1,5 +1,3 @@
-// BullManagement.tsx
-// Página para gestión integral de toros y tabla de empadre (CRUD completo)
 import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { motion, AnimatePresence, Variants } from "framer-motion";
 import {
@@ -29,9 +27,30 @@ import {
   X,
   Save,
   Info,
+  RefreshCw,
+  AlertCircle,
 } from "lucide-react";
 
-// Interfaces para gestión de toros
+// ============================================================================
+// CONFIGURACIÓN DE API
+// ============================================================================
+
+const API_BASE_URL = 'http://localhost:5000/api';
+
+// Configuración de headers por defecto
+const getAuthHeaders = () => {
+  const token = localStorage.getItem('authToken');
+  return {
+    'Content-Type': 'application/json',
+    ...(token && { 'Authorization': `Bearer ${token}` })
+  };
+};
+
+// ============================================================================
+// INTERFACES ACTUALIZADAS PARA BACKEND
+// ============================================================================
+
+// Interfaces para gestión de toros (adaptadas al backend)
 interface Bull {
   id: string;
   name: string;
@@ -41,29 +60,37 @@ interface Bull {
   birthDate: string;
   weight: number;
   height?: number;
-  currentLocation: {
-    lat: number;
-    lng: number;
+  cattleType: 'bull' | 'cow' | 'calf';
+  gender: 'male' | 'female';
+  location: {
+    latitude: number;
+    longitude: number;
     address: string;
     paddock: string;
   };
   healthStatus: "excellent" | "good" | "fair" | "poor" | "quarantine";
   reproductiveStatus: "active" | "resting" | "retired" | "testing";
-  genetics: {
-    sireId?: string;
-    sireName?: string;
-    damId?: string;
-    damName?: string;
-    genealogy: string[];
+  vaccinationStatus: string;
+  physicalMetrics?: {
+    height?: number;
+    chestGirth?: number;
+    bodyCondition?: number;
   };
-  performance: {
+  reproductiveInfo?: {
     totalMating: number;
     successfulMating: number;
     offspring: number;
     pregnancyRate: number;
     lastMatingDate?: string;
   };
-  health: {
+  genetics?: {
+    sireId?: string;
+    sireName?: string;
+    damId?: string;
+    damName?: string;
+    genealogy: string[];
+  };
+  health?: {
     lastCheckupDate: string;
     veterinarian: string;
     vaccinations: {
@@ -79,75 +106,62 @@ interface Bull {
       veterinarian: string;
     }[];
   };
-  nutrition: {
+  nutrition?: {
     diet: string;
     dailyFeed: number;
     supplements: string[];
     lastWeightDate: string;
   };
-  acquisition: {
-    date: string;
-    source: string;
-    cost: number;
-    purpose: "breeding" | "genetic_improvement" | "replacement";
-  };
-  notes: string;
-  photos: string[];
+  notes?: string;
+  photos?: string[];
   active: boolean;
   createdAt: string;
   updatedAt: string;
 }
 
-// Interface para registros de empadre
+// Interface para registros de empadre (adaptada al backend)
 interface MatingRecord {
   id: string;
-  bullId: string;
-  bullName: string;
-  cowId: string;
-  cowName: string;
-  cowEarTag: string;
-  matingDate: string;
-  matingTime: string;
+  femaleId: string;
+  femaleName: string;
+  femaleEarTag: string;
+  maleId: string;
+  maleName: string;
+  maleEarTag: string;
+  serviceDate: string;
+  serviceTime?: string;
+  matingType: "natural" | "artificial_insemination" | "embryo_transfer";
   location: {
-    lat: number;
-    lng: number;
+    latitude: number;
+    longitude: number;
     address: string;
     paddock: string;
   };
-  matingType: "natural" | "artificial" | "embryo_transfer";
-  estrusDetected: boolean;
-  estrusDate?: string;
-  assistedBy: {
-    id: string;
-    name: string;
-    role: string;
+  heatDetection?: {
+    detected: boolean;
+    intensity?: 'weak' | 'moderate' | 'strong' | 'silent';
+    duration?: number;
+    signs?: string[];
   };
   pregnancyTestDate?: string;
   pregnancyResult?: "pregnant" | "not_pregnant" | "pending";
-  expectedBirthDate?: string;
-  actualBirthDate?: string;
-  offspring?: {
-    id: string;
-    earTag: string;
-    sex: "male" | "female";
-    weight: number;
-    healthStatus: string;
-  }[];
-  observations: string;
-  weatherConditions?: string;
-  temperature?: number;
+  expectedCalvingDate?: string;
+  actualCalvingDate?: string;
+  technician: string;
+  behaviorObservations?: string;
+  weatherConditions?: {
+    temperature?: number;
+    humidity?: number;
+    condition?: string;
+  };
   success: boolean;
-  costs: {
+  costs?: {
     veterinary: number;
     medication: number;
     equipment: number;
     total: number;
   };
-  followUp: {
-    checkDates: string[];
-    veterinarian: string;
-    notes: string[];
-  };
+  notes?: string;
   active: boolean;
   createdAt: string;
   updatedAt: string;
@@ -171,30 +185,311 @@ interface MatingFilters {
   pregnancyResult: string[];
   bullId: string;
   location: string;
-  assistedBy: string;
+  technician: string;
 }
 
-// Interface para formulario de toro
+// Interface para formulario de toro (adaptada al backend)
 interface BullFormData {
   name: string;
   earTag: string;
-  registrationNumber: string;
+  registrationNumber?: string;
   breed: string;
   birthDate: string;
   weight: number;
-  height: number;
-  address: string;
-  paddock: string;
-  lat: number;
-  lng: number;
+  height?: number;
+  cattleType: 'bull';
+  gender: 'male';
+  location: {
+    latitude: number;
+    longitude: number;
+    address: string;
+    paddock: string;
+  };
   healthStatus: "excellent" | "good" | "fair" | "poor" | "quarantine";
   reproductiveStatus: "active" | "resting" | "retired" | "testing";
-  diet: string;
-  dailyFeed: number;
-  supplements: string;
-  veterinarian: string;
-  notes: string;
+  vaccinationStatus: string;
+  physicalMetrics?: {
+    height?: number;
+    chestGirth?: number;
+    bodyCondition?: number;
+  };
+  notes?: string;
 }
+
+// Interface para formulario de empadre
+interface MatingFormData {
+  femaleId: string;
+  maleId: string;
+  serviceDate: string;
+  serviceTime?: string;
+  matingType: "natural" | "artificial_insemination" | "embryo_transfer";
+  location: {
+    latitude: number;
+    longitude: number;
+    address: string;
+    paddock: string;
+  };
+  heatDetection: {
+    detected: boolean;
+    intensity?: 'weak' | 'moderate' | 'strong' | 'silent';
+    duration?: number;
+    signs?: string[];
+  };
+  technician: string;
+  behaviorObservations?: string;
+  weatherConditions?: {
+    temperature?: number;
+    humidity?: number;
+    condition?: string;
+  };
+  notes?: string;
+}
+
+// Respuesta estándar del API
+interface APIResponse<T> {
+  success: boolean;
+  message: string;
+  data: T;
+  errors?: Record<string, string>;
+}
+
+// ============================================================================
+// SERVICIOS DE API
+// ============================================================================
+
+class BullService {
+  // Obtener todos los toros
+  static async getBulls(): Promise<Bull[]> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/bovines?cattleType=bull&gender=male`, {
+        method: 'GET',
+        headers: getAuthHeaders(),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Error ${response.status}: ${response.statusText}`);
+      }
+
+      const result: APIResponse<{ bovines: Bull[]; pagination?: any }> = await response.json();
+      
+      if (!result.success) {
+        throw new Error(result.message || 'Error al obtener toros');
+      }
+
+      return result.data.bovines || [];
+    } catch (error) {
+      console.error('Error fetching bulls:', error);
+      throw error;
+    }
+  }
+
+  // Crear nuevo toro
+  static async createBull(bullData: BullFormData): Promise<Bull> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/bovines`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({
+          name: bullData.name,
+          earTag: bullData.earTag,
+          registrationNumber: bullData.registrationNumber,
+          breed: bullData.breed,
+          birthDate: bullData.birthDate,
+          weight: bullData.weight,
+          cattleType: 'bull',
+          gender: 'male',
+          location: bullData.location,
+          healthStatus: bullData.healthStatus,
+          reproductiveStatus: bullData.reproductiveStatus,
+          vaccinationStatus: bullData.vaccinationStatus || 'none',
+          physicalMetrics: {
+            height: bullData.height,
+            ...bullData.physicalMetrics
+          },
+          notes: bullData.notes
+        }),
+      });
+
+      if (!response.ok) {
+        const errorResult = await response.json();
+        throw new Error(errorResult.message || `Error ${response.status}: ${response.statusText}`);
+      }
+
+      const result: APIResponse<{ bovine: Bull }> = await response.json();
+      
+      if (!result.success) {
+        throw new Error(result.message || 'Error al crear toro');
+      }
+
+      return result.data.bovine;
+    } catch (error) {
+      console.error('Error creating bull:', error);
+      throw error;
+    }
+  }
+
+  // Actualizar toro
+  static async updateBull(id: string, bullData: Partial<BullFormData>): Promise<Bull> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/bovines/${id}`, {
+        method: 'PUT',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({
+          name: bullData.name,
+          earTag: bullData.earTag,
+          registrationNumber: bullData.registrationNumber,
+          breed: bullData.breed,
+          birthDate: bullData.birthDate,
+          weight: bullData.weight,
+          location: bullData.location,
+          healthStatus: bullData.healthStatus,
+          reproductiveStatus: bullData.reproductiveStatus,
+          vaccinationStatus: bullData.vaccinationStatus,
+          physicalMetrics: {
+            height: bullData.height,
+            ...bullData.physicalMetrics
+          },
+          notes: bullData.notes
+        }),
+      });
+
+      if (!response.ok) {
+        const errorResult = await response.json();
+        throw new Error(errorResult.message || `Error ${response.status}: ${response.statusText}`);
+      }
+
+      const result: APIResponse<{ bovine: Bull }> = await response.json();
+      
+      if (!result.success) {
+        throw new Error(result.message || 'Error al actualizar toro');
+      }
+
+      return result.data.bovine;
+    } catch (error) {
+      console.error('Error updating bull:', error);
+      throw error;
+    }
+  }
+
+  // Eliminar toro
+  static async deleteBull(id: string): Promise<void> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/bovines/${id}`, {
+        method: 'DELETE',
+        headers: getAuthHeaders(),
+      });
+
+      if (!response.ok) {
+        const errorResult = await response.json();
+        throw new Error(errorResult.message || `Error ${response.status}: ${response.statusText}`);
+      }
+
+      const result: APIResponse<any> = await response.json();
+      
+      if (!result.success) {
+        throw new Error(result.message || 'Error al eliminar toro');
+      }
+    } catch (error) {
+      console.error('Error deleting bull:', error);
+      throw error;
+    }
+  }
+}
+
+class MatingService {
+  // Obtener todos los registros de empadre
+  static async getMatingRecords(): Promise<MatingRecord[]> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/reproduction/mating-records`, {
+        method: 'GET',
+        headers: getAuthHeaders(),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Error ${response.status}: ${response.statusText}`);
+      }
+
+      const result: APIResponse<{ data: MatingRecord[]; pagination?: any }> = await response.json();
+      
+      if (!result.success) {
+        throw new Error(result.message || 'Error al obtener registros de empadre');
+      }
+
+      return result.data.data || [];
+    } catch (error) {
+      console.error('Error fetching mating records:', error);
+      // En caso de error, devolver array vacío como fallback
+      return [];
+    }
+  }
+
+  // Crear nuevo registro de empadre
+  static async createMatingRecord(matingData: MatingFormData): Promise<MatingRecord> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/reproduction/mating-records`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({
+          femaleId: matingData.femaleId,
+          maleId: matingData.maleId,
+          serviceDate: matingData.serviceDate,
+          serviceTime: matingData.serviceTime,
+          matingType: matingData.matingType,
+          location: matingData.location,
+          heatDetection: matingData.heatDetection,
+          technician: matingData.technician,
+          behaviorObservations: matingData.behaviorObservations,
+          weatherConditions: matingData.weatherConditions,
+          notes: matingData.notes
+        }),
+      });
+
+      if (!response.ok) {
+        const errorResult = await response.json();
+        throw new Error(errorResult.message || `Error ${response.status}: ${response.statusText}`);
+      }
+
+      const result: APIResponse<MatingRecord> = await response.json();
+      
+      if (!result.success) {
+        throw new Error(result.message || 'Error al crear registro de empadre');
+      }
+
+      return result.data;
+    } catch (error) {
+      console.error('Error creating mating record:', error);
+      throw error;
+    }
+  }
+
+  // Eliminar registro de empadre
+  static async deleteMatingRecord(id: string): Promise<void> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/reproduction/mating-records/${id}`, {
+        method: 'DELETE',
+        headers: getAuthHeaders(),
+      });
+
+      if (!response.ok) {
+        const errorResult = await response.json();
+        throw new Error(errorResult.message || `Error ${response.status}: ${response.statusText}`);
+      }
+
+      const result: APIResponse<any> = await response.json();
+      
+      if (!result.success) {
+        throw new Error(result.message || 'Error al eliminar registro');
+      }
+    } catch (error) {
+      console.error('Error deleting mating record:', error);
+      throw error;
+    }
+  }
+}
+
+// ============================================================================
+// COMPONENTES AUXILIARES
+// ============================================================================
 
 // Componente AnimatedText para animaciones de texto
 const AnimatedText: React.FC<{ 
@@ -249,7 +544,6 @@ const Modal: React.FC<{
   children: React.ReactNode;
   size?: "sm" | "md" | "lg" | "xl";
 }> = ({ isOpen, onClose, title, children, size = "md" }) => {
-  // Early return si el modal no está abierto
   if (!isOpen) return null;
 
   const sizeClasses = {
@@ -267,7 +561,6 @@ const Modal: React.FC<{
       document.body.style.overflow = 'unset';
     }
 
-    // Cleanup
     return () => {
       document.body.style.overflow = 'unset';
     };
@@ -298,7 +591,6 @@ const Modal: React.FC<{
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
       >
-        {/* Overlay */}
         <motion.div
           className="absolute inset-0 bg-black/50 backdrop-blur-sm"
           initial={{ opacity: 0 }}
@@ -307,7 +599,6 @@ const Modal: React.FC<{
           onClick={onClose}
         />
         
-        {/* Modal Content */}
         <motion.div
           className={`relative bg-white rounded-2xl shadow-2xl w-full ${sizeClasses[size]} max-h-[90vh] overflow-hidden`}
           variants={modalVariants}
@@ -315,7 +606,6 @@ const Modal: React.FC<{
           animate="visible"
           exit="exit"
         >
-          {/* Header */}
           <div className="flex items-center justify-between p-6 border-b border-gray-200 bg-white">
             <h2 className="text-2xl font-bold text-gray-900">{title}</h2>
             <button
@@ -327,7 +617,6 @@ const Modal: React.FC<{
             </button>
           </div>
           
-          {/* Content */}
           <div className="overflow-y-auto max-h-[calc(90vh-80px)]">
             {children}
           </div>
@@ -446,133 +735,77 @@ const BullDetailModal: React.FC<{
               <div className="space-y-2">
                 <div className="flex justify-between">
                   <span className="text-gray-600">Potrero:</span>
-                  <span className="font-medium">{bull.currentLocation.paddock}</span>
+                  <span className="font-medium">{bull.location.paddock}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-600">Dirección:</span>
-                  <span className="font-medium text-right text-sm">{bull.currentLocation.address}</span>
+                  <span className="font-medium text-right text-sm">{bull.location.address}</span>
                 </div>
               </div>
             </div>
 
-            <div>
-              <h3 className="text-lg font-semibold text-gray-900 mb-3">Rendimiento</h3>
-              <div className="space-y-2">
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Total Montas:</span>
-                  <span className="font-medium">{bull.performance.totalMating}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Exitosas:</span>
-                  <span className="font-medium">{bull.performance.successfulMating}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Crías:</span>
-                  <span className="font-medium">{bull.performance.offspring}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Tasa de Preñez:</span>
-                  <span className="font-medium">{bull.performance.pregnancyRate}%</span>
-                </div>
-                {bull.performance.lastMatingDate && (
+            {bull.reproductiveInfo && (
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900 mb-3">Rendimiento</h3>
+                <div className="space-y-2">
                   <div className="flex justify-between">
-                    <span className="text-gray-600">Última Monta:</span>
-                    <span className="font-medium">
-                      {new Date(bull.performance.lastMatingDate).toLocaleDateString('es-MX')}
-                    </span>
+                    <span className="text-gray-600">Total Montas:</span>
+                    <span className="font-medium">{bull.reproductiveInfo.totalMating}</span>
                   </div>
-                )}
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Exitosas:</span>
+                    <span className="font-medium">{bull.reproductiveInfo.successfulMating}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Crías:</span>
+                    <span className="font-medium">{bull.reproductiveInfo.offspring}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Tasa de Preñez:</span>
+                    <span className="font-medium">{bull.reproductiveInfo.pregnancyRate}%</span>
+                  </div>
+                  {bull.reproductiveInfo.lastMatingDate && (
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Última Monta:</span>
+                      <span className="font-medium">
+                        {new Date(bull.reproductiveInfo.lastMatingDate).toLocaleDateString('es-MX')}
+                      </span>
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
+            )}
           </div>
         </div>
 
         {/* Sección de Genética */}
-        <div>
-          <h3 className="text-lg font-semibold text-gray-900 mb-3">Información Genética</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <span className="text-gray-600">Padre:</span>
-              <span className="font-medium ml-2">{bull.genetics.sireName || "No especificado"}</span>
-            </div>
-            <div>
-              <span className="text-gray-600">Madre:</span>
-              <span className="font-medium ml-2">{bull.genetics.damName || "No especificado"}</span>
-            </div>
-          </div>
-          {bull.genetics.genealogy.length > 0 && (
-            <div className="mt-2">
-              <span className="text-gray-600">Línea Genética:</span>
-              <div className="flex flex-wrap gap-2 mt-1">
-                {bull.genetics.genealogy.map((line, index) => (
-                  <span key={index} className="px-2 py-1 bg-blue-100 text-blue-800 rounded-md text-sm">
-                    {line}
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Sección de Salud */}
-        <div>
-          <h3 className="text-lg font-semibold text-gray-900 mb-3">Información de Salud</h3>
-          <div className="space-y-2">
-            <div className="flex justify-between">
-              <span className="text-gray-600">Último Chequeo:</span>
-              <span className="font-medium">
-                {new Date(bull.health.lastCheckupDate).toLocaleDateString('es-MX')}
-              </span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-gray-600">Veterinario:</span>
-              <span className="font-medium">{bull.health.veterinarian}</span>
-            </div>
-          </div>
-
-          {bull.health.vaccinations.length > 0 && (
-            <div className="mt-4">
-              <h4 className="font-medium text-gray-900 mb-2">Vacunas Recientes</h4>
-              <div className="space-y-2">
-                {bull.health.vaccinations.slice(0, 3).map((vaccination, index) => (
-                  <div key={index} className="flex justify-between text-sm">
-                    <span>{vaccination.vaccine}</span>
-                    <span className="text-gray-600">
-                      {new Date(vaccination.date).toLocaleDateString('es-MX')}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Sección de Nutrición */}
-        <div>
-          <h3 className="text-lg font-semibold text-gray-900 mb-3">Nutrición</h3>
-          <div className="space-y-2">
-            <div className="flex justify-between">
-              <span className="text-gray-600">Dieta:</span>
-              <span className="font-medium">{bull.nutrition.diet}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-gray-600">Alimento Diario:</span>
-              <span className="font-medium">{bull.nutrition.dailyFeed} kg</span>
-            </div>
-            {bull.nutrition.supplements.length > 0 && (
+        {bull.genetics && (
+          <div>
+            <h3 className="text-lg font-semibold text-gray-900 mb-3">Información Genética</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <span className="text-gray-600">Suplementos:</span>
-                <div className="flex flex-wrap gap-1 mt-1">
-                  {bull.nutrition.supplements.map((supplement, index) => (
-                    <span key={index} className="px-2 py-1 bg-green-100 text-green-800 rounded-md text-sm">
-                      {supplement}
+                <span className="text-gray-600">Padre:</span>
+                <span className="font-medium ml-2">{bull.genetics.sireName || "No especificado"}</span>
+              </div>
+              <div>
+                <span className="text-gray-600">Madre:</span>
+                <span className="font-medium ml-2">{bull.genetics.damName || "No especificado"}</span>
+              </div>
+            </div>
+            {bull.genetics.genealogy.length > 0 && (
+              <div className="mt-2">
+                <span className="text-gray-600">Línea Genética:</span>
+                <div className="flex flex-wrap gap-2 mt-1">
+                  {bull.genetics.genealogy.map((line, index) => (
+                    <span key={index} className="px-2 py-1 bg-blue-100 text-blue-800 rounded-md text-sm">
+                      {line}
                     </span>
                   ))}
                 </div>
               </div>
             )}
           </div>
-        </div>
+        )}
 
         {/* Notas */}
         {bull.notes && (
@@ -601,16 +834,22 @@ const BullFormModal: React.FC<{
     birthDate: "",
     weight: 0,
     height: 0,
-    address: "",
-    paddock: "",
-    lat: 0,
-    lng: 0,
+    cattleType: "bull",
+    gender: "male",
+    location: {
+      latitude: 0,
+      longitude: 0,
+      address: "",
+      paddock: "",
+    },
     healthStatus: "good",
     reproductiveStatus: "active",
-    diet: "",
-    dailyFeed: 0,
-    supplements: "",
-    veterinarian: "",
+    vaccinationStatus: "none",
+    physicalMetrics: {
+      height: 0,
+      chestGirth: 0,
+      bodyCondition: 5,
+    },
     notes: "",
   });
 
@@ -627,17 +866,18 @@ const BullFormModal: React.FC<{
         birthDate: bull.birthDate,
         weight: bull.weight,
         height: bull.height || 0,
-        address: bull.currentLocation.address,
-        paddock: bull.currentLocation.paddock,
-        lat: bull.currentLocation.lat,
-        lng: bull.currentLocation.lng,
+        cattleType: "bull",
+        gender: "male",
+        location: bull.location,
         healthStatus: bull.healthStatus,
         reproductiveStatus: bull.reproductiveStatus,
-        diet: bull.nutrition.diet,
-        dailyFeed: bull.nutrition.dailyFeed,
-        supplements: bull.nutrition.supplements.join(", "),
-        veterinarian: bull.health.veterinarian,
-        notes: bull.notes,
+        vaccinationStatus: bull.vaccinationStatus || "none",
+        physicalMetrics: bull.physicalMetrics || {
+          height: bull.height || 0,
+          chestGirth: 0,
+          bodyCondition: 5,
+        },
+        notes: bull.notes || "",
       });
     } else {
       setFormData({
@@ -648,16 +888,22 @@ const BullFormModal: React.FC<{
         birthDate: "",
         weight: 0,
         height: 0,
-        address: "",
-        paddock: "",
-        lat: 0,
-        lng: 0,
+        cattleType: "bull",
+        gender: "male",
+        location: {
+          latitude: 17.9869, // Coordenadas por defecto de Villahermosa, Tabasco
+          longitude: -92.9303,
+          address: "",
+          paddock: "",
+        },
         healthStatus: "good",
         reproductiveStatus: "active",
-        diet: "",
-        dailyFeed: 0,
-        supplements: "",
-        veterinarian: "",
+        vaccinationStatus: "none",
+        physicalMetrics: {
+          height: 0,
+          chestGirth: 0,
+          bodyCondition: 5,
+        },
         notes: "",
       });
     }
@@ -680,8 +926,11 @@ const BullFormModal: React.FC<{
         
         setFormData(prev => ({
           ...prev,
-          lat: latitude,
-          lng: longitude,
+          location: {
+            ...prev.location,
+            latitude,
+            longitude,
+          }
         }));
 
         // Obtener dirección desde coordenadas
@@ -715,10 +964,9 @@ const BullFormModal: React.FC<{
     );
   }, []);
 
-  // Función para obtener dirección desde coordenadas (usando API de geocodificación)
+  // Función para obtener dirección desde coordenadas
   const getAddressFromCoords = useCallback(async (lat: number, lng: number) => {
     try {
-      // Usar un servicio gratuito de geocodificación inversa
       const response = await fetch(
         `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lng}&localityLanguage=es`
       );
@@ -728,7 +976,10 @@ const BullFormModal: React.FC<{
         const address = `${data.locality}, ${data.principalSubdivision}, ${data.countryName}`;
         setFormData(prev => ({
           ...prev,
-          address: address,
+          location: {
+            ...prev.location,
+            address: address,
+          }
         }));
       }
     } catch (error) {
@@ -744,7 +995,7 @@ const BullFormModal: React.FC<{
     if (!formData.breed.trim()) newErrors.breed = "La raza es requerida";
     if (!formData.birthDate) newErrors.birthDate = "La fecha de nacimiento es requerida";
     if (formData.weight <= 0) newErrors.weight = "El peso debe ser mayor a 0";
-    if (!formData.paddock.trim()) newErrors.paddock = "El potrero es requerido";
+    if (!formData.location.paddock.trim()) newErrors.paddock = "El potrero es requerido";
 
     // Validar que la fecha de nacimiento no sea en el futuro
     if (formData.birthDate && new Date(formData.birthDate) > new Date()) {
@@ -763,8 +1014,20 @@ const BullFormModal: React.FC<{
     }
   }, [formData, validateForm, onSave]);
 
-  const handleInputChange = useCallback((field: keyof BullFormData, value: any) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
+  const handleInputChange = useCallback((field: string, value: any) => {
+    if (field.includes('.')) {
+      const [parent, child] = field.split('.');
+      setFormData(prev => ({
+        ...prev,
+        [parent]: {
+          ...(prev[parent as keyof BullFormData] as any),
+          [child]: value
+        }
+      }));
+    } else {
+      setFormData(prev => ({ ...prev, [field]: value }));
+    }
+    
     if (errors[field]) {
       setErrors(prev => ({ ...prev, [field]: "" }));
     }
@@ -912,8 +1175,8 @@ const BullFormModal: React.FC<{
               <input
                 id="paddock"
                 type="text"
-                value={formData.paddock}
-                onChange={(e) => handleInputChange("paddock", e.target.value)}
+                value={formData.location.paddock}
+                onChange={(e) => handleInputChange("location.paddock", e.target.value)}
                 className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent ${
                   errors.paddock ? "border-red-500" : "border-gray-300"
                 }`}
@@ -965,57 +1228,7 @@ const BullFormModal: React.FC<{
           </div>
         </div>
 
-        {/* Nutrición */}
-        <div>
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Nutrición</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label htmlFor="diet" className="block text-sm font-medium text-gray-700 mb-1">
-                Dieta
-              </label>
-              <input
-                id="diet"
-                type="text"
-                value={formData.diet}
-                onChange={(e) => handleInputChange("diet", e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
-                placeholder="Descripción de la dieta"
-              />
-            </div>
-
-            <div>
-              <label htmlFor="dailyFeed" className="block text-sm font-medium text-gray-700 mb-1">
-                Alimento Diario (kg)
-              </label>
-              <input
-                id="dailyFeed"
-                type="number"
-                value={formData.dailyFeed || ""}
-                onChange={(e) => handleInputChange("dailyFeed", Number(e.target.value))}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
-                placeholder="Cantidad diaria de alimento"
-                min="0"
-                step="0.1"
-              />
-            </div>
-
-            <div className="md:col-span-2">
-              <label htmlFor="supplements" className="block text-sm font-medium text-gray-700 mb-1">
-                Suplementos
-              </label>
-              <input
-                id="supplements"
-                type="text"
-                value={formData.supplements}
-                onChange={(e) => handleInputChange("supplements", e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
-                placeholder="Suplementos separados por comas"
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* Información adicional */}
+        {/* Ubicación */}
         <div>
           <h3 className="text-lg font-semibold text-gray-900 mb-4">Ubicación</h3>
           <div className="space-y-4">
@@ -1026,8 +1239,8 @@ const BullFormModal: React.FC<{
               <input
                 id="address"
                 type="text"
-                value={formData.address}
-                onChange={(e) => handleInputChange("address", e.target.value)}
+                value={formData.location.address}
+                onChange={(e) => handleInputChange("location.address", e.target.value)}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
                 placeholder="Dirección completa"
               />
@@ -1035,14 +1248,14 @@ const BullFormModal: React.FC<{
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label htmlFor="lat" className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="latitude" className="block text-sm font-medium text-gray-700 mb-1">
                   Latitud
                 </label>
                 <input
-                  id="lat"
+                  id="latitude"
                   type="number"
-                  value={formData.lat || ""}
-                  onChange={(e) => handleInputChange("lat", Number(e.target.value))}
+                  value={formData.location.latitude || ""}
+                  onChange={(e) => handleInputChange("location.latitude", Number(e.target.value))}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
                   placeholder="Latitud"
                   step="any"
@@ -1050,14 +1263,14 @@ const BullFormModal: React.FC<{
               </div>
 
               <div>
-                <label htmlFor="lng" className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="longitude" className="block text-sm font-medium text-gray-700 mb-1">
                   Longitud
                 </label>
                 <input
-                  id="lng"
+                  id="longitude"
                   type="number"
-                  value={formData.lng || ""}
-                  onChange={(e) => handleInputChange("lng", Number(e.target.value))}
+                  value={formData.location.longitude || ""}
+                  onChange={(e) => handleInputChange("location.longitude", Number(e.target.value))}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
                   placeholder="Longitud"
                   step="any"
@@ -1097,20 +1310,6 @@ const BullFormModal: React.FC<{
           <h3 className="text-lg font-semibold text-gray-900 mb-4">Información Adicional</h3>
           <div className="space-y-4">
             <div>
-              <label htmlFor="veterinarian" className="block text-sm font-medium text-gray-700 mb-1">
-                Veterinario
-              </label>
-              <input
-                id="veterinarian"
-                type="text"
-                value={formData.veterinarian}
-                onChange={(e) => handleInputChange("veterinarian", e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
-                placeholder="Nombre del veterinario"
-              />
-            </div>
-
-            <div>
               <label htmlFor="notes" className="block text-sm font-medium text-gray-700 mb-1">
                 Notas
               </label>
@@ -1147,6 +1346,10 @@ const BullFormModal: React.FC<{
     </Modal>
   );
 };
+
+// ============================================================================
+// COMPONENTE PRINCIPAL
+// ============================================================================
 
 const BullManagement: React.FC = () => {
   // Estados principales
@@ -1192,18 +1395,87 @@ const BullManagement: React.FC = () => {
     pregnancyResult: [],
     bullId: "",
     location: "",
-    assistedBy: "",
+    technician: "",
   });
+
+  // Estado para conexión con API
+  const [apiStatus, setApiStatus] = useState<{
+    connected: boolean;
+    error: string | null;
+  }>({ connected: false, error: null });
 
   // Función para mostrar notificaciones
   const showNotification = useCallback((message: string, type: "success" | "error" | "info" = "success") => {
     setNotification({ message, type, show: true });
     
-    // Auto-ocultar después de 3 segundos
+    // Auto-ocultar después de 5 segundos para errores, 3 para otros
     setTimeout(() => {
       setNotification(prev => ({ ...prev, show: false }));
-    }, 3000);
+    }, type === "error" ? 5000 : 3000);
   }, []);
+
+  // Función para verificar conexión con API
+  const checkApiConnection = useCallback(async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/ping`, {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' }
+      });
+
+      if (response.ok) {
+        setApiStatus({ connected: true, error: null });
+        return true;
+      } else {
+        setApiStatus({ 
+          connected: false, 
+          error: `Error ${response.status}: ${response.statusText}` 
+        });
+        return false;
+      }
+    } catch (error) {
+      setApiStatus({ 
+        connected: false, 
+        error: `Error de conexión: ${error instanceof Error ? error.message : 'Error desconocido'}` 
+      });
+      return false;
+    }
+  }, []);
+
+  // Función para cargar toros desde API
+  const loadBulls = useCallback(async () => {
+    try {
+      setIsLoading(true);
+      const bullsData = await BullService.getBulls();
+      setBulls(bullsData);
+      setApiStatus({ connected: true, error: null });
+    } catch (error) {
+      console.error('Error loading bulls:', error);
+      setApiStatus({ 
+        connected: false, 
+        error: error instanceof Error ? error.message : 'Error desconocido' 
+      });
+      showNotification(
+        `Error al cargar toros: ${error instanceof Error ? error.message : 'Error desconocido'}`, 
+        "error"
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  }, [showNotification]);
+
+  // Función para cargar registros de empadre desde API
+  const loadMatingRecords = useCallback(async () => {
+    try {
+      const matingData = await MatingService.getMatingRecords();
+      setMatingRecords(matingData);
+    } catch (error) {
+      console.error('Error loading mating records:', error);
+      showNotification(
+        `Error al cargar registros de empadre: ${error instanceof Error ? error.message : 'Error desconocido'}`, 
+        "error"
+      );
+    }
+  }, [showNotification]);
 
   // Funciones para manejar acciones de toros
   const handleViewBull = useCallback((bull: Bull) => {
@@ -1221,9 +1493,7 @@ const BullManagement: React.FC = () => {
     setShowBullForm(true);
   }, []);
 
-  // FUNCIÓN DE ELIMINACIÓN CORREGIDA
-  const handleDeleteBull = useCallback((bullId: string) => {
-    // Buscar el toro en el estado actual
+  const handleDeleteBull = useCallback(async (bullId: string) => {
     const bullToDelete = bulls.find(bull => bull.id === bullId);
     
     if (!bullToDelete) {
@@ -1231,7 +1501,6 @@ const BullManagement: React.FC = () => {
       return;
     }
 
-    // Mostrar confirmación
     const confirmMessage = `¿Está seguro de que desea eliminar el toro "${bullToDelete.name}" (${bullToDelete.earTag})?\n\nEsta acción también eliminará todos los registros de empadre relacionados y no se puede deshacer.`;
     
     if (!window.confirm(confirmMessage)) {
@@ -1239,127 +1508,44 @@ const BullManagement: React.FC = () => {
     }
 
     try {
-      // Eliminar el toro del estado
-      setBulls(prevBulls => {
-        return prevBulls.filter(bull => bull.id !== bullId);
-      });
-
+      await BullService.deleteBull(bullId);
+      
+      // Actualizar estado local
+      setBulls(prevBulls => prevBulls.filter(bull => bull.id !== bullId));
+      
       // Eliminar registros de empadre relacionados
-      setMatingRecords(prevRecords => {
-        const relatedRecordsCount = prevRecords.filter(record => record.bullId === bullId).length;
-        const newRecords = prevRecords.filter(record => record.bullId !== bullId);
-        
-        // Mostrar notificación de éxito
-        const message = relatedRecordsCount > 0 
-          ? `Toro "${bullToDelete.name}" eliminado exitosamente junto con ${relatedRecordsCount} registro(s) de empadre relacionado(s).`
-          : `Toro "${bullToDelete.name}" eliminado exitosamente.`;
-        
-        showNotification(message, "success");
-        
-        return newRecords;
-      });
+      const relatedRecordsCount = matingRecords.filter(record => record.maleId === bullId).length;
+      setMatingRecords(prevRecords => prevRecords.filter(record => record.maleId !== bullId));
+      
+      const message = relatedRecordsCount > 0 
+        ? `Toro "${bullToDelete.name}" eliminado exitosamente junto con ${relatedRecordsCount} registro(s) de empadre relacionado(s).`
+        : `Toro "${bullToDelete.name}" eliminado exitosamente.`;
+      
+      showNotification(message, "success");
       
     } catch (error) {
       console.error("Error al eliminar el toro:", error);
-      showNotification("Error al eliminar el toro. Por favor, inténtelo de nuevo.", "error");
+      showNotification(
+        `Error al eliminar el toro: ${error instanceof Error ? error.message : 'Error desconocido'}`, 
+        "error"
+      );
     }
-  }, [bulls, showNotification]);
+  }, [bulls, matingRecords, showNotification]);
 
-  const handleSaveBull = useCallback((formData: BullFormData) => {
+  const handleSaveBull = useCallback(async (formData: BullFormData) => {
     try {
       if (editingBull) {
         // Actualizar toro existente
-        setBulls(prev => {
-          const updated = prev.map(bull => 
-            bull.id === editingBull.id 
-              ? {
-                  ...bull,
-                  name: formData.name,
-                  earTag: formData.earTag,
-                  registrationNumber: formData.registrationNumber,
-                  breed: formData.breed,
-                  birthDate: formData.birthDate,
-                  weight: formData.weight,
-                  height: formData.height,
-                  currentLocation: {
-                    lat: formData.lat || bull.currentLocation.lat,
-                    lng: formData.lng || bull.currentLocation.lng,
-                    address: formData.address,
-                    paddock: formData.paddock,
-                  },
-                  healthStatus: formData.healthStatus,
-                  reproductiveStatus: formData.reproductiveStatus,
-                  nutrition: {
-                    ...bull.nutrition,
-                    diet: formData.diet,
-                    dailyFeed: formData.dailyFeed,
-                    supplements: formData.supplements.split(',').map(s => s.trim()).filter(s => s),
-                  },
-                  health: {
-                    ...bull.health,
-                    veterinarian: formData.veterinarian,
-                  },
-                  notes: formData.notes,
-                  updatedAt: new Date().toISOString(),
-                }
-              : bull
-          );
-          return updated;
-        });
+        const updatedBull = await BullService.updateBull(editingBull.id, formData);
+        
+        setBulls(prev => prev.map(bull => 
+          bull.id === editingBull.id ? updatedBull : bull
+        ));
         
         showNotification(`Toro ${editingBull.name} actualizado exitosamente`, "success");
       } else {
         // Crear nuevo toro
-        const newBull: Bull = {
-          id: Date.now().toString(),
-          name: formData.name,
-          earTag: formData.earTag,
-          registrationNumber: formData.registrationNumber,
-          breed: formData.breed,
-          birthDate: formData.birthDate,
-          weight: formData.weight,
-          height: formData.height,
-          currentLocation: {
-            lat: formData.lat || 17.9869, // Coordenadas por defecto de Villahermosa, Tabasco
-            lng: formData.lng || -92.9303,
-            address: formData.address || "Villahermosa, Tabasco",
-            paddock: formData.paddock,
-          },
-          healthStatus: formData.healthStatus,
-          reproductiveStatus: formData.reproductiveStatus,
-          genetics: {
-            genealogy: [],
-          },
-          performance: {
-            totalMating: 0,
-            successfulMating: 0,
-            offspring: 0,
-            pregnancyRate: 0,
-          },
-          health: {
-            lastCheckupDate: new Date().toISOString().split('T')[0],
-            veterinarian: formData.veterinarian,
-            vaccinations: [],
-            treatments: [],
-          },
-          nutrition: {
-            diet: formData.diet,
-            dailyFeed: formData.dailyFeed,
-            supplements: formData.supplements.split(',').map(s => s.trim()).filter(s => s),
-            lastWeightDate: new Date().toISOString().split('T')[0],
-          },
-          acquisition: {
-            date: new Date().toISOString().split('T')[0],
-            source: "Registro manual",
-            cost: 0,
-            purpose: "breeding",
-          },
-          notes: formData.notes,
-          photos: [],
-          active: true,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        };
+        const newBull = await BullService.createBull(formData);
         
         setBulls(prev => [...prev, newBull]);
         showNotification(`Nuevo toro ${formData.name} creado exitosamente`, "success");
@@ -1371,7 +1557,10 @@ const BullManagement: React.FC = () => {
       
     } catch (error) {
       console.error("Error al guardar el toro:", error);
-      showNotification("Error al guardar el toro. Por favor, inténtelo de nuevo.", "error");
+      showNotification(
+        `Error al guardar el toro: ${error instanceof Error ? error.message : 'Error desconocido'}`, 
+        "error"
+      );
     }
   }, [editingBull, showNotification]);
 
@@ -1386,27 +1575,41 @@ const BullManagement: React.FC = () => {
     setShowMatingForm(true);
   }, []);
 
-  const handleDeleteMating = useCallback((recordId: string) => {
+  const handleDeleteMating = useCallback(async (recordId: string) => {
     const recordToDelete = matingRecords.find(record => record.id === recordId);
     if (!recordToDelete) {
       showNotification("Registro de empadre no encontrado", "error");
       return;
     }
 
-    const confirmMessage = `¿Está seguro de que desea eliminar el registro de empadre entre "${recordToDelete.bullName}" y "${recordToDelete.cowName}" del ${new Date(recordToDelete.matingDate).toLocaleDateString('es-MX')}?\n\nEsta acción no se puede deshacer.`;
+    const confirmMessage = `¿Está seguro de que desea eliminar el registro de empadre entre "${recordToDelete.maleName}" y "${recordToDelete.femaleName}" del ${new Date(recordToDelete.serviceDate).toLocaleDateString('es-MX')}?\n\nEsta acción no se puede deshacer.`;
     
-    if (window.confirm(confirmMessage)) {
-      try {
-        setMatingRecords(prev => prev.filter(record => record.id !== recordId));
-        showNotification("Registro de empadre eliminado exitosamente", "success");
-        
-      } catch (error) {
-        console.error("Error al eliminar el registro:", error);
-        showNotification("Error al eliminar el registro. Por favor, inténtelo de nuevo.", "error");
-      }
+    if (!window.confirm(confirmMessage)) return;
+
+    try {
+      await MatingService.deleteMatingRecord(recordId);
+      setMatingRecords(prev => prev.filter(record => record.id !== recordId));
+      showNotification("Registro de empadre eliminado exitosamente", "success");
+      
+    } catch (error) {
+      console.error("Error al eliminar el registro:", error);
+      showNotification(
+        `Error al eliminar el registro: ${error instanceof Error ? error.message : 'Error desconocido'}`, 
+        "error"
+      );
     }
   }, [matingRecords, showNotification]);
 
+  // Función para refrescar datos
+  const handleRefresh = useCallback(async () => {
+    setIsLoading(true);
+    await Promise.all([
+      loadBulls(),
+      loadMatingRecords()
+    ]);
+  }, [loadBulls, loadMatingRecords]);
+
+  // Función para exportar datos
   const handleExport = useCallback(() => {
     try {
       const dataToExport = {
@@ -1414,7 +1617,8 @@ const BullManagement: React.FC = () => {
         matingRecords: matingRecords,
         exportDate: new Date().toISOString(),
         totalBulls: bulls.length,
-        totalMatingRecords: matingRecords.length
+        totalMatingRecords: matingRecords.length,
+        apiStatus: apiStatus
       };
       
       const blob = new Blob([JSON.stringify(dataToExport, null, 2)], { type: 'application/json' });
@@ -1432,235 +1636,30 @@ const BullManagement: React.FC = () => {
       console.error("Error al exportar:", error);
       showNotification("Error al exportar los datos", "error");
     }
-  }, [bulls, matingRecords, showNotification]);
+  }, [bulls, matingRecords, apiStatus, showNotification]);
 
-  // Datos mock para desarrollo
+  // Cargar datos iniciales
   useEffect(() => {
-    const loadData = setTimeout(() => {
-      setBulls([
-        {
-          id: "1",
-          name: "Toro Campeón",
-          earTag: "TC001",
-          registrationNumber: "REG-2024-001",
-          breed: "Brahman",
-          birthDate: "2020-03-15",
-          weight: 850,
-          height: 145,
-          currentLocation: {
-            lat: 17.9869,
-            lng: -92.9303,
-            address: "Potrero Norte, Villahermosa, Tabasco",
-            paddock: "Potrero A1"
-          },
-          healthStatus: "excellent",
-          reproductiveStatus: "active",
-          genetics: {
-            sireId: "SIRE001",
-            sireName: "Brahman Elite",
-            damId: "DAM001",
-            damName: "Vaca Madre",
-            genealogy: ["Brahman Elite", "Toro Superior", "Línea Premium"]
-          },
-          performance: {
-            totalMating: 45,
-            successfulMating: 38,
-            offspring: 32,
-            pregnancyRate: 84.4,
-            lastMatingDate: "2024-06-15"
-          },
-          health: {
-            lastCheckupDate: "2024-07-10",
-            veterinarian: "Dr. Carlos Mendoza",
-            vaccinations: [
-              {
-                date: "2024-06-01",
-                vaccine: "Triple Bovina",
-                batch: "TB-2024-06",
-                nextDue: "2025-06-01"
-              }
-            ],
-            treatments: []
-          },
-          nutrition: {
-            diet: "Pasto estrella + concentrado",
-            dailyFeed: 12,
-            supplements: ["Vitamina A", "Minerales"],
-            lastWeightDate: "2024-07-10"
-          },
-          acquisition: {
-            date: "2020-03-15",
-            source: "Rancho Los Altos",
-            cost: 45000,
-            purpose: "breeding"
-          },
-          notes: "Excelente toro reproductor con alta tasa de preñez",
-          photos: [],
-          active: true,
-          createdAt: "2024-01-15",
-          updatedAt: "2024-07-15"
-        },
-        {
-          id: "2",
-          name: "Toro Dorado",
-          earTag: "TD002",
-          registrationNumber: "REG-2024-002",
-          breed: "Angus",
-          birthDate: "2019-08-22",
-          weight: 920,
-          height: 150,
-          currentLocation: {
-            lat: 17.9950,
-            lng: -92.9400,
-            address: "Potrero Sur, Villahermosa, Tabasco",
-            paddock: "Potrero B2"
-          },
-          healthStatus: "good",
-          reproductiveStatus: "active",
-          genetics: {
-            sireId: "SIRE002",
-            sireName: "Angus Premium",
-            damId: "DAM002",
-            damName: "Madre Dorada",
-            genealogy: ["Angus Premium", "Línea Dorada", "Genética Superior"]
-          },
-          performance: {
-            totalMating: 52,
-            successfulMating: 44,
-            offspring: 38,
-            pregnancyRate: 84.6,
-            lastMatingDate: "2024-07-01"
-          },
-          health: {
-            lastCheckupDate: "2024-07-05",
-            veterinarian: "Dra. Ana Rodríguez",
-            vaccinations: [
-              {
-                date: "2024-05-15",
-                vaccine: "Brucelosis",
-                batch: "BR-2024-05",
-                nextDue: "2025-05-15"
-              }
-            ],
-            treatments: []
-          },
-          nutrition: {
-            diet: "Pasto bermuda + suplemento proteico",
-            dailyFeed: 14,
-            supplements: ["Proteína", "Minerales", "Vitamina E"],
-            lastWeightDate: "2024-07-05"
-          },
-          acquisition: {
-            date: "2019-08-22",
-            source: "Ganadería La Esperanza",
-            cost: 52000,
-            purpose: "genetic_improvement"
-          },
-          notes: "Toro con excelente conformación y buenos índices reproductivos",
-          photos: [],
-          active: true,
-          createdAt: "2024-01-10",
-          updatedAt: "2024-07-10"
-        }
-      ]);
+    const initializeData = async () => {
+      // Verificar conexión primero
+      const isConnected = await checkApiConnection();
+      
+      if (isConnected) {
+        await Promise.all([
+          loadBulls(),
+          loadMatingRecords()
+        ]);
+      } else {
+        setIsLoading(false);
+        showNotification(
+          "No se pudo conectar con el backend. Verifique que el servidor esté ejecutándose en el puerto 5000.", 
+          "error"
+        );
+      }
+    };
 
-      setMatingRecords([
-        {
-          id: "1",
-          bullId: "1",
-          bullName: "Toro Campeón",
-          cowId: "COW001",
-          cowName: "Vaca Luna",
-          cowEarTag: "VL001",
-          matingDate: "2024-07-15",
-          matingTime: "08:30",
-          location: {
-            lat: 17.9869,
-            lng: -92.9303,
-            address: "Potrero Norte, Villahermosa, Tabasco",
-            paddock: "Potrero A1"
-          },
-          matingType: "natural",
-          estrusDetected: true,
-          estrusDate: "2024-07-14",
-          assistedBy: {
-            id: "VET001",
-            name: "Dr. Carlos Mendoza",
-            role: "Veterinario"
-          },
-          pregnancyTestDate: "2024-08-15",
-          pregnancyResult: "pregnant",
-          expectedBirthDate: "2025-04-15",
-          observations: "Monta natural exitosa, vaca en celo evidente",
-          weatherConditions: "Soleado",
-          temperature: 28,
-          success: true,
-          costs: {
-            veterinary: 800,
-            medication: 200,
-            equipment: 0,
-            total: 1000
-          },
-          followUp: {
-            checkDates: ["2024-08-15", "2024-09-15"],
-            veterinarian: "Dr. Carlos Mendoza",
-            notes: ["Gestación confirmada", "Desarrollo normal"]
-          },
-          active: true,
-          createdAt: "2024-07-15",
-          updatedAt: "2024-08-15"
-        },
-        {
-          id: "2",
-          bullId: "2",
-          bullName: "Toro Dorado",
-          cowId: "COW002",
-          cowName: "Vaca Estrella",
-          cowEarTag: "VE002",
-          matingDate: "2024-07-10",
-          matingTime: "14:15",
-          location: {
-            lat: 17.9950,
-            lng: -92.9400,
-            address: "Potrero Sur, Villahermosa, Tabasco",
-            paddock: "Potrero B2"
-          },
-          matingType: "artificial",
-          estrusDetected: true,
-          estrusDate: "2024-07-09",
-          assistedBy: {
-            id: "VET002",
-            name: "Dra. Ana Rodríguez",
-            role: "Veterinaria"
-          },
-          pregnancyTestDate: "2024-08-10",
-          pregnancyResult: "pending",
-          observations: "Inseminación artificial programada, sincronización exitosa",
-          weatherConditions: "Nublado",
-          temperature: 26,
-          success: true,
-          costs: {
-            veterinary: 1200,
-            medication: 400,
-            equipment: 300,
-            total: 1900
-          },
-          followUp: {
-            checkDates: ["2024-08-10"],
-            veterinarian: "Dra. Ana Rodríguez",
-            notes: ["Esperando resultado de gestación"]
-          },
-          active: true,
-          createdAt: "2024-07-10",
-          updatedAt: "2024-07-10"
-        }
-      ]);
-
-      setIsLoading(false);
-    }, 1500);
-
-    return () => clearTimeout(loadData);
-  }, []);
+    initializeData();
+  }, [checkApiConnection, loadBulls, loadMatingRecords, showNotification]);
 
   // Efectos para filtros
   useEffect(() => {
@@ -1728,15 +1727,16 @@ const BullManagement: React.FC = () => {
       const searchLower = matingFilters.searchTerm.toLowerCase();
       filtered = filtered.filter(
         record =>
-          record.bullName.toLowerCase().includes(searchLower) ||
-          record.cowName.toLowerCase().includes(searchLower) ||
-          record.cowEarTag.toLowerCase().includes(searchLower)
+          record.maleName.toLowerCase().includes(searchLower) ||
+          record.femaleName.toLowerCase().includes(searchLower) ||
+          record.femaleEarTag.toLowerCase().includes(searchLower) ||
+          record.maleEarTag.toLowerCase().includes(searchLower)
       );
     }
 
     if (matingFilters.dateRange.start && matingFilters.dateRange.end) {
       filtered = filtered.filter(record => {
-        const recordDate = new Date(record.matingDate);
+        const recordDate = new Date(record.serviceDate);
         const startDate = new Date(matingFilters.dateRange.start);
         const endDate = new Date(matingFilters.dateRange.end);
         return recordDate >= startDate && recordDate <= endDate;
@@ -1754,7 +1754,7 @@ const BullManagement: React.FC = () => {
     }
 
     if (matingFilters.bullId) {
-      filtered = filtered.filter(record => record.bullId === matingFilters.bullId);
+      filtered = filtered.filter(record => record.maleId === matingFilters.bullId);
     }
 
     setFilteredMatingRecords(filtered);
@@ -1800,7 +1800,9 @@ const BullManagement: React.FC = () => {
       const age = new Date().getFullYear() - new Date(bull.birthDate).getFullYear();
       return sum + age;
     }, 0) / bulls.length) : 0;
-    const avgPregnancyRate = bulls.length > 0 ? Math.round(bulls.reduce((sum, bull) => sum + bull.performance.pregnancyRate, 0) / bulls.length) : 0;
+    const avgPregnancyRate = bulls.length > 0 ? Math.round(bulls.reduce((sum, bull) => {
+      return sum + (bull.reproductiveInfo?.pregnancyRate || 0);
+    }, 0) / bulls.length) : 0;
 
     return {
       total: totalBulls,
@@ -1822,7 +1824,7 @@ const BullManagement: React.FC = () => {
     const currentMonth = new Date().getMonth();
     const currentYear = new Date().getFullYear();
     const thisMonth = matingRecords.filter(record => {
-      const recordDate = new Date(record.matingDate);
+      const recordDate = new Date(record.serviceDate);
       return recordDate.getMonth() === currentMonth && recordDate.getFullYear() === currentYear;
     }).length;
 
@@ -1862,7 +1864,7 @@ const BullManagement: React.FC = () => {
     </motion.div>
   );
 
-  // Componente de tarjeta de toro CORREGIDO
+  // Componente de tarjeta de toro
   const BullCard: React.FC<{ bull: Bull }> = ({ bull }) => {
     const age = useMemo(() => {
       return new Date().getFullYear() - new Date(bull.birthDate).getFullYear();
@@ -1914,31 +1916,33 @@ const BullManagement: React.FC = () => {
           </div>
           <div>
             <p className="text-xs text-gray-500">Ubicación</p>
-            <p className="text-sm font-medium text-gray-900">{bull.currentLocation.paddock}</p>
+            <p className="text-sm font-medium text-gray-900">{bull.location.paddock}</p>
           </div>
         </div>
 
-        <div className="bg-gray-50/50 rounded-lg p-3 mb-4">
-          <h4 className="text-xs font-medium text-gray-600 mb-2">Rendimiento Reproductivo</h4>
-          <div className="grid grid-cols-2 gap-2 text-xs">
-            <div>
-              <span className="text-gray-500">Total Montas:</span>
-              <span className="font-medium ml-1">{bull.performance.totalMating}</span>
-            </div>
-            <div>
-              <span className="text-gray-500">Exitosas:</span>
-              <span className="font-medium ml-1">{bull.performance.successfulMating}</span>
-            </div>
-            <div>
-              <span className="text-gray-500">Crías:</span>
-              <span className="font-medium ml-1">{bull.performance.offspring}</span>
-            </div>
-            <div>
-              <span className="text-gray-500">Tasa Preñez:</span>
-              <span className="font-medium ml-1">{bull.performance.pregnancyRate}%</span>
+        {bull.reproductiveInfo && (
+          <div className="bg-gray-50/50 rounded-lg p-3 mb-4">
+            <h4 className="text-xs font-medium text-gray-600 mb-2">Rendimiento Reproductivo</h4>
+            <div className="grid grid-cols-2 gap-2 text-xs">
+              <div>
+                <span className="text-gray-500">Total Montas:</span>
+                <span className="font-medium ml-1">{bull.reproductiveInfo.totalMating}</span>
+              </div>
+              <div>
+                <span className="text-gray-500">Exitosas:</span>
+                <span className="font-medium ml-1">{bull.reproductiveInfo.successfulMating}</span>
+              </div>
+              <div>
+                <span className="text-gray-500">Crías:</span>
+                <span className="font-medium ml-1">{bull.reproductiveInfo.offspring}</span>
+              </div>
+              <div>
+                <span className="text-gray-500">Tasa Preñez:</span>
+                <span className="font-medium ml-1">{bull.reproductiveInfo.pregnancyRate}%</span>
+              </div>
             </div>
           </div>
-        </div>
+        )}
 
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-2">
@@ -1969,7 +1973,7 @@ const BullManagement: React.FC = () => {
           </div>
           <div className="flex items-center space-x-1">
             <MapPin className="w-4 h-4 text-gray-400" />
-            <span className="text-xs text-gray-500">{bull.currentLocation.address.split(',')[0]}</span>
+            <span className="text-xs text-gray-500">{bull.location.address.split(',')[0] || 'Sin dirección'}</span>
           </div>
         </div>
       </motion.div>
@@ -1983,29 +1987,31 @@ const BullManagement: React.FC = () => {
         <div className="flex items-center space-x-3">
           <Crown className="w-5 h-5 text-yellow-600" />
           <div>
-            <p className="text-sm font-medium text-gray-900">{record.bullName}</p>
-            <p className="text-xs text-gray-500">ID: {record.bullId}</p>
+            <p className="text-sm font-medium text-gray-900">{record.maleName}</p>
+            <p className="text-xs text-gray-500">Arete: {record.maleEarTag}</p>
           </div>
         </div>
       </td>
       <td className="px-6 py-4">
         <div>
-          <p className="text-sm font-medium text-gray-900">{record.cowName}</p>
-          <p className="text-xs text-gray-500">Arete: {record.cowEarTag}</p>
+          <p className="text-sm font-medium text-gray-900">{record.femaleName}</p>
+          <p className="text-xs text-gray-500">Arete: {record.femaleEarTag}</p>
         </div>
       </td>
       <td className="px-6 py-4">
         <div>
           <p className="text-sm font-medium text-gray-900">
-            {new Date(record.matingDate).toLocaleDateString('es-MX')}
+            {new Date(record.serviceDate).toLocaleDateString('es-MX')}
           </p>
-          <p className="text-xs text-gray-500">{record.matingTime}</p>
+          {record.serviceTime && (
+            <p className="text-xs text-gray-500">{record.serviceTime}</p>
+          )}
         </div>
       </td>
       <td className="px-6 py-4">
         <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
           record.matingType === "natural" ? "bg-green-100 text-green-800" :
-          record.matingType === "artificial" ? "bg-blue-100 text-blue-800" :
+          record.matingType === "artificial_insemination" ? "bg-blue-100 text-blue-800" :
           "bg-purple-100 text-purple-800"
         }`}>
           {record.matingType === "natural" ? (
@@ -2013,7 +2019,7 @@ const BullManagement: React.FC = () => {
               <Heart className="w-3 h-3 mr-1" />
               Natural
             </>
-          ) : record.matingType === "artificial" ? (
+          ) : record.matingType === "artificial_insemination" ? (
             <>
               <Syringe className="w-3 h-3 mr-1" />
               Artificial
@@ -2096,14 +2102,24 @@ const BullManagement: React.FC = () => {
               animate={{ rotate: 360 }}
               transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
             />
-            <p className="text-gray-600 font-medium">Cargando gestión de toros...</p>
+            <div className="text-center">
+              <p className="text-gray-600 font-medium">
+                {!apiStatus.connected && apiStatus.error 
+                  ? "Conectando con el backend..."
+                  : "Cargando gestión de toros..."
+                }
+              </p>
+              <p className="text-sm text-gray-500 mt-1">
+                {!apiStatus.connected && "Puerto 5000 - Backend API"}
+              </p>
+            </div>
           </div>
         </motion.div>
       </div>
     );
   }
 
-  // LAYOUT CORREGIDO CON GRADIENTE
+  // LAYOUT PRINCIPAL
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#519a7c] via-[#f2e9d8] to-[#f4ac3a] p-6">
       <motion.div
@@ -2126,13 +2142,31 @@ const BullManagement: React.FC = () => {
                 <h1 className="text-3xl font-bold text-gray-900">
                   <AnimatedText>Gestión de Toros y Empadre</AnimatedText>
                 </h1>
-                <p className="text-gray-600 mt-1">
-                  Control integral de toros reproductores y registros de empadre
-                </p>
+                <div className="flex items-center space-x-2 mt-1">
+                  <p className="text-gray-600">
+                    Control integral de toros reproductores y registros de empadre
+                  </p>
+                  <div className="flex items-center space-x-1">
+                    <div className={`w-2 h-2 rounded-full ${apiStatus.connected ? 'bg-green-500' : 'bg-red-500'}`}></div>
+                    <span className={`text-xs font-medium ${apiStatus.connected ? 'text-green-700' : 'text-red-700'}`}>
+                      {apiStatus.connected ? 'Backend conectado' : 'Backend desconectado'}
+                    </span>
+                  </div>
+                </div>
               </div>
             </div>
 
             <div className="flex items-center space-x-3">
+              {!apiStatus.connected && (
+                <button
+                  onClick={handleRefresh}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-xl border-2 border-blue-600 hover:bg-blue-700 transition-colors flex items-center space-x-2"
+                  title="Reintentar conexión"
+                >
+                  <RefreshCw className="w-4 h-4" />
+                  <span>Reconectar</span>
+                </button>
+              )}
               <button
                 onClick={() => setShowFilters(!showFilters)}
                 className={`px-4 py-2 rounded-xl border-2 transition-all duration-200 flex items-center space-x-2 ${
@@ -2184,6 +2218,25 @@ const BullManagement: React.FC = () => {
             </button>
           </div>
         </motion.div>
+
+        {/* Alerta de desconexión */}
+        {!apiStatus.connected && apiStatus.error && (
+          <motion.div
+            variants={itemVariants}
+            className="bg-red-50/90 border border-red-200 rounded-xl p-4 mb-6 backdrop-blur-sm"
+          >
+            <div className="flex items-center space-x-3">
+              <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0" />
+              <div>
+                <h3 className="text-sm font-medium text-red-800">Error de conexión con el backend</h3>
+                <p className="text-sm text-red-700 mt-1">{apiStatus.error}</p>
+                <p className="text-xs text-red-600 mt-2">
+                  Asegúrese de que el servidor backend esté ejecutándose en http://localhost:5000
+                </p>
+              </div>
+            </div>
+          </motion.div>
+        )}
 
         {/* Contenido de tabs */}
         <AnimatePresence mode="wait">
@@ -2249,11 +2302,26 @@ const BullManagement: React.FC = () => {
                     <button
                       type="button"
                       onClick={handleNewBull}
-                      className="inline-flex items-center px-4 py-2 bg-[#519a7c] text-white rounded-lg hover:bg-[#4a8970] transition-colors"
+                      disabled={!apiStatus.connected}
+                      className={`inline-flex items-center px-4 py-2 rounded-lg transition-colors ${
+                        apiStatus.connected
+                          ? "bg-[#519a7c] text-white hover:bg-[#4a8970]"
+                          : "bg-gray-300 text-gray-500 cursor-not-allowed"
+                      }`}
                     >
                       <Plus className="w-4 h-4 mr-2" />
                       Nuevo Toro
                     </button>
+                    {apiStatus.connected && (
+                      <button
+                        type="button"
+                        onClick={handleRefresh}
+                        className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                      >
+                        <RefreshCw className="w-4 h-4 mr-2" />
+                        Actualizar
+                      </button>
+                    )}
                   </div>
                 </div>
               </motion.div>
@@ -2264,19 +2332,31 @@ const BullManagement: React.FC = () => {
                   <div className="bg-white/80 backdrop-blur-sm rounded-xl p-12 text-center shadow-md border border-white/20">
                     <Crown className="w-16 h-16 text-gray-400 mx-auto mb-4" />
                     <h3 className="text-xl font-semibold text-gray-900 mb-2">
-                      No se encontraron toros
+                      {!apiStatus.connected 
+                        ? "No se pueden cargar los toros"
+                        : bulls.length === 0 
+                          ? "No hay toros registrados"
+                          : "No se encontraron toros"
+                      }
                     </h3>
                     <p className="text-gray-600 mb-6">
-                      No hay toros que coincidan con los filtros aplicados.
+                      {!apiStatus.connected 
+                        ? "Verifique la conexión con el backend en el puerto 5000."
+                        : bulls.length === 0 
+                          ? "Comience registrando su primer toro en el sistema."
+                          : "No hay toros que coincidan con los filtros aplicados."
+                      }
                     </p>
-                    <button
-                      type="button"
-                      onClick={handleNewBull}
-                      className="inline-flex items-center px-6 py-3 bg-[#519a7c] text-white rounded-xl hover:bg-[#4a8970] transition-colors"
-                    >
-                      <Plus className="w-5 h-5 mr-2" />
-                      Registrar primer toro
-                    </button>
+                    {apiStatus.connected && (
+                      <button
+                        type="button"
+                        onClick={handleNewBull}
+                        className="inline-flex items-center px-6 py-3 bg-[#519a7c] text-white rounded-xl hover:bg-[#4a8970] transition-colors"
+                      >
+                        <Plus className="w-5 h-5 mr-2" />
+                        {bulls.length === 0 ? "Registrar primer toro" : "Nuevo toro"}
+                      </button>
+                    )}
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
@@ -2356,7 +2436,12 @@ const BullManagement: React.FC = () => {
                   <div className="flex items-center space-x-3">
                     <button
                       onClick={handleNewMating}
-                      className="inline-flex items-center px-4 py-2 bg-[#519a7c] text-white rounded-lg hover:bg-[#4a8970] transition-colors"
+                      disabled={!apiStatus.connected}
+                      className={`inline-flex items-center px-4 py-2 rounded-lg transition-colors ${
+                        apiStatus.connected
+                          ? "bg-[#519a7c] text-white hover:bg-[#4a8970]"
+                          : "bg-gray-300 text-gray-500 cursor-not-allowed"
+                      }`}
                     >
                       <Plus className="w-4 h-4 mr-2" />
                       Nuevo Empadre
@@ -2371,18 +2456,30 @@ const BullManagement: React.FC = () => {
                   <div className="p-12 text-center">
                     <Heart className="w-16 h-16 text-gray-400 mx-auto mb-4" />
                     <h3 className="text-xl font-semibold text-gray-900 mb-2">
-                      No se encontraron registros de empadre
+                      {!apiStatus.connected 
+                        ? "No se pueden cargar los registros"
+                        : matingRecords.length === 0 
+                          ? "No hay registros de empadre"
+                          : "No se encontraron registros de empadre"
+                      }
                     </h3>
                     <p className="text-gray-600 mb-6">
-                      No hay registros de empadre que coincidan con los filtros aplicados.
+                      {!apiStatus.connected 
+                        ? "Verifique la conexión con el backend en el puerto 5000."
+                        : matingRecords.length === 0 
+                          ? "Comience registrando su primer empadre en el sistema."
+                          : "No hay registros de empadre que coincidan con los filtros aplicados."
+                      }
                     </p>
-                    <button
-                      onClick={handleNewMating}
-                      className="inline-flex items-center px-6 py-3 bg-[#519a7c] text-white rounded-xl hover:bg-[#4a8970] transition-colors"
-                    >
-                      <Plus className="w-5 h-5 mr-2" />
-                      Registrar primer empadre
-                    </button>
+                    {apiStatus.connected && (
+                      <button
+                        onClick={handleNewMating}
+                        className="inline-flex items-center px-6 py-3 bg-[#519a7c] text-white rounded-xl hover:bg-[#4a8970] transition-colors"
+                      >
+                        <Plus className="w-5 h-5 mr-2" />
+                        {matingRecords.length === 0 ? "Registrar primer empadre" : "Nuevo empadre"}
+                      </button>
+                    )}
                   </div>
                 ) : (
                   <div className="overflow-x-auto">
@@ -2463,14 +2560,14 @@ const BullManagement: React.FC = () => {
                   notification.type === "error" ? "bg-red-50/90 border-red-400 text-red-800" :
                   "bg-blue-50/90 border-blue-400 text-blue-800"}
               `}>
-                <div className="flex items-center">
+                <div className="flex items-start">
                   <div className="flex-shrink-0">
                     {notification.type === "success" && <CheckCircle className="w-5 h-5 text-green-400" />}
                     {notification.type === "error" && <XCircle className="w-5 h-5 text-red-400" />}
                     {notification.type === "info" && <Info className="w-5 h-5 text-blue-400" />}
                   </div>
-                  <div className="ml-3">
-                    <p className="text-sm font-medium">{notification.message}</p>
+                  <div className="ml-3 flex-1">
+                    <p className="text-sm font-medium whitespace-pre-line">{notification.message}</p>
                   </div>
                   <div className="ml-auto pl-3">
                     <button

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Plus, 
@@ -25,8 +25,32 @@ import {
   Share2,
   ChevronDown,
   ChevronUp,
-  CheckCircle
+  CheckCircle,
+  WifiOff,
+  RefreshCw,
+  Server,
+  XCircle
 } from 'lucide-react';
+
+// ===================================================================
+// CONFIGURACIÓN DE API
+// ===================================================================
+
+const API_BASE_URL = 'http://localhost:5000/api';
+const API_ENDPOINTS = {
+  PRODUCTION_REPORTS: '/reports/production',
+  PRODUCTION_OVERVIEW: '/reports/production/overview',
+  PRODUCTION_EFFICIENCY: '/reports/production/efficiency',
+  PRODUCTION_CRUD: '/production',
+  RANCH_REPORT: '/production/reports/ranch',
+  PRODUCTION_COMPARISON: '/production/comparison',
+  PING: '/ping',
+  HEALTH_CHECK: '/health'
+};
+
+// ===================================================================
+// INTERFACES Y TIPOS
+// ===================================================================
 
 // Función de utilidad para combinar clases CSS
 const cn = (...classes: (string | undefined | null | false)[]): string => {
@@ -70,6 +94,21 @@ interface ReportPeriod {
   type: 'daily' | 'weekly' | 'monthly' | 'quarterly' | 'annual' | 'custom';
 }
 
+interface ApiResponse<T> {
+  success: boolean;
+  data?: T;
+  message: string;
+  error?: string;
+  errorCode?: string;
+}
+
+interface ConnectionStatus {
+  isConnected: boolean;
+  isLoading: boolean;
+  lastCheck: Date | null;
+  error: string | null;
+}
+
 type ProductionReportType = 
   | 'weight_analysis' 
   | 'feed_efficiency' 
@@ -81,12 +120,11 @@ type ProductionReportType =
 
 type ReportStatus = 'draft' | 'active' | 'archived' | 'processing';
 
-// Props del componente principal
+// Props de componentes
 interface ProductionReportsProps {
   className?: string;
 }
 
-// Props del modal
 interface ModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -95,15 +133,13 @@ interface ModalProps {
   size?: 'sm' | 'md' | 'lg' | 'xl';
 }
 
-// Props del formulario
 interface ReportFormProps {
   report?: ProductionReport;
-  onSave: (report: Omit<ProductionReport, 'id' | 'createdAt' | 'updatedAt'>) => void;
+  onSave: (report: Omit<ProductionReport, 'id' | 'createdAt' | 'updatedAt'>) => Promise<void>;
   onCancel: () => void;
   isEditing: boolean;
 }
 
-// Props del visor de reportes
 interface ReportViewerProps {
   report: ProductionReport;
 }
@@ -118,69 +154,161 @@ interface GeolocationState {
   } | undefined;
 }
 
-// Datos de ejemplo
-const SAMPLE_REPORTS: ProductionReport[] = [
-  {
-    id: '1',
-    title: 'Análisis de Peso - Enero 2025',
-    description: 'Reporte mensual de ganancia de peso en todas las ubicaciones',
-    reportType: 'weight_analysis',
-    period: {
-      startDate: '2025-01-01',
-      endDate: '2025-01-31',
-      type: 'monthly'
-    },
-    location: 'Todas las ubicaciones',
-    coordinates: {
-      latitude: 17.989058,
-      longitude: -92.935139
-    },
-    metrics: {
-      totalAnimals: 1248,
-      averageWeight: 485.5,
-      weightGain: 1.2,
-      feedEfficiency: 87.3,
-      mortalityRate: 0.8,
-      reproductionRate: 92.1,
-      profitability: 15.7,
-      costPerKg: 4.25
-    },
-    createdAt: '2025-01-15T10:30:00Z',
-    updatedAt: '2025-01-15T14:20:00Z',
-    status: 'active',
-    createdBy: 'Juan Pérez'
-  },
-  {
-    id: '2',
-    title: 'Eficiencia Alimentaria Q4 2024',
-    description: 'Análisis trimestral de conversión alimentaria por potrero',
-    reportType: 'feed_efficiency',
-    period: {
-      startDate: '2024-10-01',
-      endDate: '2024-12-31',
-      type: 'quarterly'
-    },
-    location: 'Potrero Norte',
-    coordinates: {
-      latitude: 18.025058,
-      longitude: -92.905139
-    },
-    metrics: {
-      totalAnimals: 324,
-      averageWeight: 512.3,
-      weightGain: 1.8,
-      feedEfficiency: 91.2,
-      mortalityRate: 0.3,
-      reproductionRate: 88.9,
-      profitability: 18.2,
-      costPerKg: 3.95
-    },
-    createdAt: '2025-01-10T09:15:00Z',
-    updatedAt: '2025-01-12T16:45:00Z',
-    status: 'active',
-    createdBy: 'María González'
+// ===================================================================
+// SERVICIOS DE API
+// ===================================================================
+
+class ProductionApiService {
+  private static baseURL = API_BASE_URL;
+  private static authToken: string | null = null;
+
+  // Configurar token de autenticación
+  static setAuthToken(token: string) {
+    this.authToken = token;
   }
-];
+
+  // Obtener headers para las requests
+  private static getHeaders(): HeadersInit {
+    const headers: HeadersInit = {
+      'Content-Type': 'application/json',
+    };
+
+    if (this.authToken) {
+      headers['Authorization'] = `Bearer ${this.authToken}`;
+    }
+
+    return headers;
+  }
+
+  // Método genérico para hacer requests
+  private static async request<T>(
+    endpoint: string, 
+    options: RequestInit = {}
+  ): Promise<ApiResponse<T>> {
+    const url = `${this.baseURL}${endpoint}`;
+    
+    try {
+      const response = await fetch(url, {
+        headers: this.getHeaders(),
+        ...options,
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      console.error(`Error en API request a ${url}:`, error);
+      throw error;
+    }
+  }
+
+  // Verificar conexión con el backend
+  static async checkConnection(): Promise<boolean> {
+    try {
+      const response = await this.request(API_ENDPOINTS.PING);
+      return response.success;
+    } catch (error) {
+      return false;
+    }
+  }
+
+  // Obtener reportes de producción
+  static async getProductionReports(filters?: {
+    type?: string;
+    status?: string;
+    startDate?: string;
+    endDate?: string;
+    search?: string;
+    productionType?: string;
+  }): Promise<ApiResponse<ProductionReport[]>> {
+    const queryParams = new URLSearchParams();
+    
+    if (filters) {
+      Object.entries(filters).forEach(([key, value]) => {
+        if (value) queryParams.append(key, value);
+      });
+    }
+
+    const endpoint = `${API_ENDPOINTS.PRODUCTION_REPORTS}${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
+    return this.request<ProductionReport[]>(endpoint);
+  }
+
+  // Obtener reporte de producción específico
+  static async getProductionReport(id: string): Promise<ApiResponse<ProductionReport>> {
+    return this.request<ProductionReport>(`${API_ENDPOINTS.PRODUCTION_CRUD}/${id}`);
+  }
+
+  // Crear nuevo reporte de producción
+  static async createProductionReport(report: Omit<ProductionReport, 'id' | 'createdAt' | 'updatedAt'>): Promise<ApiResponse<ProductionReport>> {
+    return this.request<ProductionReport>(API_ENDPOINTS.PRODUCTION_CRUD, {
+      method: 'POST',
+      body: JSON.stringify(report),
+    });
+  }
+
+  // Actualizar reporte de producción
+  static async updateProductionReport(id: string, report: Partial<ProductionReport>): Promise<ApiResponse<ProductionReport>> {
+    return this.request<ProductionReport>(`${API_ENDPOINTS.PRODUCTION_CRUD}/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(report),
+    });
+  }
+
+  // Eliminar reporte de producción
+  static async deleteProductionReport(id: string): Promise<ApiResponse<void>> {
+    return this.request<void>(`${API_ENDPOINTS.PRODUCTION_CRUD}/${id}`, {
+      method: 'DELETE',
+    });
+  }
+
+  // Obtener overview de producción
+  static async getProductionOverview(params?: {
+    startDate?: string;
+    endDate?: string;
+    period?: string;
+    productionType?: string;
+    includeComparisons?: boolean;
+    includeProjections?: boolean;
+  }): Promise<ApiResponse<any>> {
+    const queryParams = new URLSearchParams();
+    
+    if (params) {
+      Object.entries(params).forEach(([key, value]) => {
+        if (value !== undefined) queryParams.append(key, String(value));
+      });
+    }
+
+    const endpoint = `${API_ENDPOINTS.PRODUCTION_OVERVIEW}${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
+    return this.request<any>(endpoint);
+  }
+
+  // Obtener análisis de eficiencia
+  static async getProductionEfficiency(params?: {
+    startDate?: string;
+    endDate?: string;
+    metric?: string;
+    benchmarkComparison?: boolean;
+  }): Promise<ApiResponse<any>> {
+    const queryParams = new URLSearchParams();
+    
+    if (params) {
+      Object.entries(params).forEach(([key, value]) => {
+        if (value !== undefined) queryParams.append(key, String(value));
+      });
+    }
+
+    const endpoint = `${API_ENDPOINTS.PRODUCTION_EFFICIENCY}${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
+    return this.request<any>(endpoint);
+  }
+
+  // Obtener reporte por rancho
+  static async getRanchReport(ranchId: string): Promise<ApiResponse<any>> {
+    return this.request<any>(`${API_ENDPOINTS.RANCH_REPORT}/${ranchId}`);
+  }
+}
 
 // Configuración de tipos de reporte
 const REPORT_TYPE_CONFIG = {
@@ -221,6 +349,49 @@ const REPORT_TYPE_CONFIG = {
   }
 };
 
+// ===================================================================
+// HOOKS PERSONALIZADOS
+// ===================================================================
+
+// Hook para verificar conexión con el backend
+const useBackendConnection = () => {
+  const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>({
+    isConnected: false,
+    isLoading: true,
+    lastCheck: null,
+    error: null
+  });
+
+  const checkConnection = useCallback(async () => {
+    setConnectionStatus(prev => ({ ...prev, isLoading: true, error: null }));
+    
+    try {
+      const isConnected = await ProductionApiService.checkConnection();
+      setConnectionStatus({
+        isConnected,
+        isLoading: false,
+        lastCheck: new Date(),
+        error: isConnected ? null : 'No se puede conectar con el servidor'
+      });
+    } catch (error) {
+      setConnectionStatus({
+        isConnected: false,
+        isLoading: false,
+        lastCheck: new Date(),
+        error: error instanceof Error ? error.message : 'Error desconocido'
+      });
+    }
+  }, []);
+
+  useEffect(() => {
+    checkConnection();
+    const interval = setInterval(checkConnection, 30000); // Check every 30 seconds
+    return () => clearInterval(interval);
+  }, [checkConnection]);
+
+  return { connectionStatus, checkConnection };
+};
+
 // Hook personalizado para geolocalización
 const useGeolocation = () => {
   const [state, setState] = useState<GeolocationState>({
@@ -229,7 +400,7 @@ const useGeolocation = () => {
     coordinates: undefined
   });
 
-  const getCurrentLocation = () => {
+  const getCurrentLocation = useCallback(() => {
     if (!navigator.geolocation) {
       setState(prev => ({
         ...prev,
@@ -281,10 +452,14 @@ const useGeolocation = () => {
         maximumAge: 300000 // 5 minutos
       }
     );
-  };
+  }, []);
 
   return { ...state, getCurrentLocation };
 };
+
+// ===================================================================
+// FUNCIONES DE UTILIDAD
+// ===================================================================
 
 // Función para obtener dirección desde coordenadas
 const getAddressFromCoordinates = async (lat: number, lng: number): Promise<string> => {
@@ -368,6 +543,59 @@ Fecha Creación,${report.createdAt}
       resolve(blob);
     }, 1200);
   });
+};
+
+// ===================================================================
+// COMPONENTES
+// ===================================================================
+
+// Componente de estado de conexión
+const ConnectionStatus: React.FC<{ connectionStatus: ConnectionStatus; onRetry: () => void }> = ({ 
+  connectionStatus, 
+  onRetry 
+}) => {
+  if (connectionStatus.isLoading) {
+    return (
+      <div className="flex items-center gap-2 px-3 py-2 bg-yellow-50 border border-yellow-200 rounded-lg">
+        <RefreshCw className="w-4 h-4 text-yellow-600 animate-spin" />
+        <span className="text-sm text-yellow-800">Verificando conexión...</span>
+      </div>
+    );
+  }
+
+  if (!connectionStatus.isConnected) {
+    return (
+      <div className="flex items-center justify-between px-3 py-2 bg-red-50 border border-red-200 rounded-lg">
+        <div className="flex items-center gap-2">
+          <WifiOff className="w-4 h-4 text-red-600" />
+          <div>
+            <span className="text-sm text-red-800 font-medium">Sin conexión al servidor</span>
+            {connectionStatus.error && (
+              <p className="text-xs text-red-600 mt-1">{connectionStatus.error}</p>
+            )}
+          </div>
+        </div>
+        <button
+          onClick={onRetry}
+          className="px-2 py-1 text-xs bg-red-100 text-red-700 rounded hover:bg-red-200 transition-colors"
+        >
+          Reintentar
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-2 px-3 py-2 bg-green-50 border border-green-200 rounded-lg">
+      <CheckCircle className="w-4 h-4 text-green-600" />
+      <span className="text-sm text-green-800">Conectado al servidor</span>
+      {connectionStatus.lastCheck && (
+        <span className="text-xs text-green-600">
+          {connectionStatus.lastCheck.toLocaleTimeString()}
+        </span>
+      )}
+    </div>
+  );
 };
 
 // Componente Modal reutilizable
@@ -924,9 +1152,7 @@ const ReportForm: React.FC<ReportFormProps> = ({ report, onSave, onCancel, isEdi
   };
 
   // Manejar envío del formulario
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
+  const handleSubmit = async () => {
     if (!validateForm()) {
       return;
     }
@@ -934,9 +1160,6 @@ const ReportForm: React.FC<ReportFormProps> = ({ report, onSave, onCancel, isEdi
     setIsSubmitting(true);
 
     try {
-      // Simular delay de guardado
-      await new Promise(resolve => setTimeout(resolve, 1000));
-
       const reportData = {
         title: formData.title,
         description: formData.description,
@@ -950,17 +1173,17 @@ const ReportForm: React.FC<ReportFormProps> = ({ report, onSave, onCancel, isEdi
       };
 
       console.log('Guardando reporte:', reportData);
-      onSave(reportData);
+      await onSave(reportData);
     } catch (error) {
       console.error('Error al guardar reporte:', error);
-      alert('Error al guardar el reporte. Por favor, inténtalo de nuevo.');
+      // El error se maneja en el componente padre
     } finally {
       setIsSubmitting(false);
     }
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-6">
+    <div className="space-y-6">
       {/* Información básica */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="lg:col-span-2">
@@ -976,6 +1199,7 @@ const ReportForm: React.FC<ReportFormProps> = ({ report, onSave, onCancel, isEdi
               errors.title ? "border-red-500" : "border-gray-300"
             )}
             placeholder="Ej: Análisis de Producción - Enero 2025"
+            disabled={isSubmitting}
           />
           {errors.title && (
             <p className="text-red-500 text-sm mt-1">{errors.title}</p>
@@ -990,6 +1214,7 @@ const ReportForm: React.FC<ReportFormProps> = ({ report, onSave, onCancel, isEdi
             value={formData.reportType}
             onChange={(e) => setFormData(prev => ({ ...prev, reportType: e.target.value as ProductionReportType }))}
             className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2d6f51] focus:border-transparent transition-colors"
+            disabled={isSubmitting}
           >
             {Object.entries(REPORT_TYPE_CONFIG).map(([key, config]) => (
               <option key={key} value={key}>
@@ -1007,6 +1232,7 @@ const ReportForm: React.FC<ReportFormProps> = ({ report, onSave, onCancel, isEdi
             value={formData.status}
             onChange={(e) => setFormData(prev => ({ ...prev, status: e.target.value as ReportStatus }))}
             className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2d6f51] focus:border-transparent transition-colors"
+            disabled={isSubmitting}
           >
             <option value="draft">Borrador</option>
             <option value="active">Activo</option>
@@ -1030,6 +1256,7 @@ const ReportForm: React.FC<ReportFormProps> = ({ report, onSave, onCancel, isEdi
             errors.description ? "border-red-500" : "border-gray-300"
           )}
           placeholder="Describe el propósito y alcance del reporte"
+          disabled={isSubmitting}
         />
         {errors.description && (
           <p className="text-red-500 text-sm mt-1">{errors.description}</p>
@@ -1056,7 +1283,7 @@ const ReportForm: React.FC<ReportFormProps> = ({ report, onSave, onCancel, isEdi
                 errors.location ? "border-red-500" : "border-gray-300"
               )}
               placeholder="Ej: Potrero Norte, Todas las ubicaciones"
-              disabled={gettingAddress}
+              disabled={gettingAddress || isSubmitting}
             />
             {errors.location && (
               <p className="text-red-500 text-sm mt-1">{errors.location}</p>
@@ -1076,7 +1303,7 @@ const ReportForm: React.FC<ReportFormProps> = ({ report, onSave, onCancel, isEdi
             <button
               type="button"
               onClick={handleGetCurrentLocation}
-              disabled={geolocation.loading || gettingAddress}
+              disabled={geolocation.loading || gettingAddress || isSubmitting}
               className="flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {geolocation.loading ? (
@@ -1122,6 +1349,7 @@ const ReportForm: React.FC<ReportFormProps> = ({ report, onSave, onCancel, isEdi
                 period: { ...prev.period, type: e.target.value as any }
               }))}
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2d6f51] focus:border-transparent transition-colors"
+              disabled={isSubmitting}
             >
               <option value="daily">Diario</option>
               <option value="weekly">Semanal</option>
@@ -1147,6 +1375,7 @@ const ReportForm: React.FC<ReportFormProps> = ({ report, onSave, onCancel, isEdi
                 "w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-[#2d6f51] focus:border-transparent transition-colors",
                 errors.startDate ? "border-red-500" : "border-gray-300"
               )}
+              disabled={isSubmitting}
             />
             {errors.startDate && (
               <p className="text-red-500 text-sm mt-1">{errors.startDate}</p>
@@ -1168,6 +1397,7 @@ const ReportForm: React.FC<ReportFormProps> = ({ report, onSave, onCancel, isEdi
                 "w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-[#2d6f51] focus:border-transparent transition-colors",
                 errors.endDate ? "border-red-500" : "border-gray-300"
               )}
+              disabled={isSubmitting}
             />
             {errors.endDate && (
               <p className="text-red-500 text-sm mt-1">{errors.endDate}</p>
@@ -1196,6 +1426,7 @@ const ReportForm: React.FC<ReportFormProps> = ({ report, onSave, onCancel, isEdi
                 metrics: { ...prev.metrics, totalAnimals: parseInt(e.target.value) || 0 }
               }))}
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2d6f51] focus:border-transparent transition-colors"
+              disabled={isSubmitting}
             />
           </div>
 
@@ -1213,6 +1444,7 @@ const ReportForm: React.FC<ReportFormProps> = ({ report, onSave, onCancel, isEdi
                 metrics: { ...prev.metrics, averageWeight: parseFloat(e.target.value) || 0 }
               }))}
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2d6f51] focus:border-transparent transition-colors"
+              disabled={isSubmitting}
             />
           </div>
 
@@ -1230,6 +1462,7 @@ const ReportForm: React.FC<ReportFormProps> = ({ report, onSave, onCancel, isEdi
                 metrics: { ...prev.metrics, weightGain: parseFloat(e.target.value) || 0 }
               }))}
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2d6f51] focus:border-transparent transition-colors"
+              disabled={isSubmitting}
             />
           </div>
 
@@ -1248,6 +1481,7 @@ const ReportForm: React.FC<ReportFormProps> = ({ report, onSave, onCancel, isEdi
                 metrics: { ...prev.metrics, feedEfficiency: parseFloat(e.target.value) || 0 }
               }))}
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2d6f51] focus:border-transparent transition-colors"
+              disabled={isSubmitting}
             />
           </div>
 
@@ -1266,6 +1500,7 @@ const ReportForm: React.FC<ReportFormProps> = ({ report, onSave, onCancel, isEdi
                 metrics: { ...prev.metrics, mortalityRate: parseFloat(e.target.value) || 0 }
               }))}
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2d6f51] focus:border-transparent transition-colors"
+              disabled={isSubmitting}
             />
           </div>
 
@@ -1284,6 +1519,7 @@ const ReportForm: React.FC<ReportFormProps> = ({ report, onSave, onCancel, isEdi
                 metrics: { ...prev.metrics, reproductionRate: parseFloat(e.target.value) || 0 }
               }))}
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2d6f51] focus:border-transparent transition-colors"
+              disabled={isSubmitting}
             />
           </div>
 
@@ -1300,6 +1536,7 @@ const ReportForm: React.FC<ReportFormProps> = ({ report, onSave, onCancel, isEdi
                 metrics: { ...prev.metrics, profitability: parseFloat(e.target.value) || 0 }
               }))}
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2d6f51] focus:border-transparent transition-colors"
+              disabled={isSubmitting}
             />
           </div>
 
@@ -1317,6 +1554,7 @@ const ReportForm: React.FC<ReportFormProps> = ({ report, onSave, onCancel, isEdi
                 metrics: { ...prev.metrics, costPerKg: parseFloat(e.target.value) || 0 }
               }))}
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2d6f51] focus:border-transparent transition-colors"
+              disabled={isSubmitting}
             />
           </div>
         </div>
@@ -1338,6 +1576,7 @@ const ReportForm: React.FC<ReportFormProps> = ({ report, onSave, onCancel, isEdi
                   metrics: { ...prev.metrics, milkProduction: parseFloat(e.target.value) || 0 }
                 }))}
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2d6f51] focus:border-transparent transition-colors"
+                disabled={isSubmitting}
               />
             </div>
           </div>
@@ -1355,7 +1594,8 @@ const ReportForm: React.FC<ReportFormProps> = ({ report, onSave, onCancel, isEdi
           Cancelar
         </button>
         <button
-          type="submit"
+          type="button"
+          onClick={handleSubmit}
           disabled={isSubmitting}
           className="flex items-center gap-2 px-6 py-2 bg-gradient-to-r from-[#2d6f51] to-[#4e9c75] text-white rounded-lg hover:from-[#265a44] hover:to-[#3d7a5c] transition-all duration-200 disabled:opacity-50"
         >
@@ -1372,13 +1612,18 @@ const ReportForm: React.FC<ReportFormProps> = ({ report, onSave, onCancel, isEdi
           }
         </button>
       </div>
-    </form>
+    </div>
   );
 };
 
-// Componente principal
+// ===================================================================
+// COMPONENTE PRINCIPAL
+// ===================================================================
+
 export const ProductionReports: React.FC<ProductionReportsProps> = ({ }) => {
-  const [reports, setReports] = useState<ProductionReport[]>(SAMPLE_REPORTS);
+  const [reports, setReports] = useState<ProductionReport[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isViewerOpen, setIsViewerOpen] = useState(false);
   const [selectedReport, setSelectedReport] = useState<ProductionReport | null>(null);
@@ -1388,8 +1633,46 @@ export const ProductionReports: React.FC<ProductionReportsProps> = ({ }) => {
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [downloadLoading, setDownloadLoading] = useState<string | null>(null);
+  
+  const { connectionStatus, checkConnection } = useBackendConnection();
 
-  // Filtrar reportes
+  // Cargar reportes de producción desde el backend
+  const loadProductionReports = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    
+    try {
+      const filters = {
+        type: filterType !== 'all' ? filterType : undefined,
+        status: filterStatus !== 'all' ? filterStatus : undefined,
+        search: searchTerm || undefined,
+      };
+
+      const response = await ProductionApiService.getProductionReports(filters);
+      
+      if (response.success && response.data) {
+        setReports(response.data);
+      } else {
+        throw new Error(response.message || 'Error al cargar reportes');
+      }
+    } catch (error) {
+      console.error('Error loading production reports:', error);
+      setError(error instanceof Error ? error.message : 'Error al cargar los reportes de producción');
+      // En caso de error, usar datos vacíos
+      setReports([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [filterType, filterStatus, searchTerm]);
+
+  // Cargar reportes al montar el componente y cuando cambien los filtros
+  useEffect(() => {
+    if (connectionStatus.isConnected) {
+      loadProductionReports();
+    }
+  }, [connectionStatus.isConnected, loadProductionReports]);
+
+  // Filtrar reportes localmente como fallback
   const filteredReports = reports.filter(report => {
     const matchesSearch = report.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          report.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -1460,44 +1743,55 @@ export const ProductionReports: React.FC<ProductionReportsProps> = ({ }) => {
   };
 
   // Guardar reporte (crear o editar)
-  const handleSaveReport = (reportData: Omit<ProductionReport, 'id' | 'createdAt' | 'updatedAt'>) => {
-    console.log('Guardando reporte:', reportData);
-    
-    if (isEditing && selectedReport) {
-      // Editar reporte existente
-      setReports(prev => prev.map(report => 
-        report.id === selectedReport.id 
-          ? {
-              ...reportData,
-              id: selectedReport.id,
-              createdAt: selectedReport.createdAt,
-              updatedAt: new Date().toISOString()
-            }
-          : report
-      ));
-      console.log('Reporte actualizado exitosamente');
-    } else {
-      // Crear nuevo reporte
-      const newReport: ProductionReport = {
-        ...reportData,
-        id: Date.now().toString(),
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      };
-      setReports(prev => [newReport, ...prev]);
-      console.log('Nuevo reporte creado exitosamente');
+  const handleSaveReport = async (reportData: Omit<ProductionReport, 'id' | 'createdAt' | 'updatedAt'>) => {
+    try {
+      if (isEditing && selectedReport) {
+        // Editar reporte existente
+        const response = await ProductionApiService.updateProductionReport(selectedReport.id, reportData);
+        if (response.success && response.data) {
+          setReports(prev => prev.map(report => 
+            report.id === selectedReport.id ? response.data! : report
+          ));
+          console.log('Reporte actualizado exitosamente');
+        } else {
+          throw new Error(response.message || 'Error al actualizar el reporte');
+        }
+      } else {
+        // Crear nuevo reporte
+        const response = await ProductionApiService.createProductionReport(reportData);
+        if (response.success && response.data) {
+          setReports(prev => [response.data!, ...prev]);
+          console.log('Nuevo reporte creado exitosamente');
+        } else {
+          throw new Error(response.message || 'Error al crear el reporte');
+        }
+      }
+      
+      setIsModalOpen(false);
+      setSelectedReport(null);
+      setIsEditing(false);
+    } catch (error) {
+      console.error('Error saving report:', error);
+      throw error; // Re-throw para que el formulario pueda manejar el error
     }
-    
-    setIsModalOpen(false);
-    setSelectedReport(null);
-    setIsEditing(false);
   };
 
   // Eliminar reporte
-  const handleDeleteReport = (reportId: string) => {
-    console.log('Eliminando reporte con ID:', reportId);
-    setReports(prev => prev.filter(report => report.id !== reportId));
-    setDeleteConfirm(null);
+  const handleDeleteReport = async (reportId: string) => {
+    try {
+      const response = await ProductionApiService.deleteProductionReport(reportId);
+      if (response.success) {
+        setReports(prev => prev.filter(report => report.id !== reportId));
+        console.log('Reporte eliminado exitosamente');
+      } else {
+        throw new Error(response.message || 'Error al eliminar el reporte');
+      }
+    } catch (error) {
+      console.error('Error deleting report:', error);
+      setError(error instanceof Error ? error.message : 'Error al eliminar el reporte');
+    } finally {
+      setDeleteConfirm(null);
+    }
   };
 
   // Obtener color del estado
@@ -1540,13 +1834,38 @@ export const ProductionReports: React.FC<ProductionReportsProps> = ({ }) => {
             </p>
           </div>
 
-          <button
-            onClick={handleCreateReport}
-            className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-[#2d6f51] to-[#4e9c75] text-white rounded-lg hover:from-[#265a44] hover:to-[#3d7a5c] transition-all duration-200 shadow-lg"
-          >
-            <Plus className="w-5 h-5" />
-            Nuevo Reporte
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={checkConnection}
+              className="hidden sm:flex items-center gap-1 px-3 py-2 bg-white/20 text-white rounded-lg hover:bg-white/30 transition-colors text-sm"
+              title="Probar conexión con servidor"
+            >
+              <Server className="w-4 h-4" />
+              <span className="hidden lg:inline">Servidor</span>
+            </button>
+            
+            <button
+              onClick={handleCreateReport}
+              disabled={!connectionStatus.isConnected}
+              className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-[#2d6f51] to-[#4e9c75] text-white rounded-lg hover:from-[#265a44] hover:to-[#3d7a5c] transition-all duration-200 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+              title={!connectionStatus.isConnected ? 'Sin conexión al servidor' : ''}
+            >
+              <Plus className="w-5 h-5" />
+              Nuevo Reporte
+            </button>
+          </div>
+        </motion.div>
+
+        {/* Estado de conexión */}
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="mb-6"
+        >
+          <ConnectionStatus 
+            connectionStatus={connectionStatus} 
+            onRetry={checkConnection}
+          />
         </motion.div>
 
         {/* Filtros y búsqueda */}
@@ -1617,7 +1936,34 @@ export const ProductionReports: React.FC<ProductionReportsProps> = ({ }) => {
           transition={{ delay: 0.2 }}
           className="bg-white/95 backdrop-blur-sm rounded-xl shadow-lg border border-white/20 overflow-hidden"
         >
-          {filteredReports.length === 0 ? (
+          {loading ? (
+            <div className="p-12 text-center">
+              <RefreshCw className="w-16 h-16 text-gray-400 mx-auto mb-4 animate-spin" />
+              <h3 className="text-lg font-medium text-gray-800 mb-2">
+                Cargando reportes de producción...
+              </h3>
+              <p className="text-gray-600">
+                Conectando con el servidor
+              </p>
+            </div>
+          ) : error ? (
+            <div className="p-12 text-center">
+              <XCircle className="w-16 h-16 text-red-400 mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-gray-800 mb-2">
+                Error al cargar reportes
+              </h3>
+              <p className="text-gray-600 mb-6">
+                {error}
+              </p>
+              <button
+                onClick={() => loadProductionReports()}
+                className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-[#2d6f51] to-[#4e9c75] text-white rounded-lg hover:from-[#265a44] hover:to-[#3d7a5c] transition-all duration-200"
+              >
+                <RefreshCw className="w-5 h-5" />
+                Reintentar
+              </button>
+            </div>
+          ) : filteredReports.length === 0 ? (
             <div className="p-12 text-center">
               <BarChart3 className="w-16 h-16 text-gray-400 mx-auto mb-4" />
               <h3 className="text-lg font-medium text-gray-800 mb-2">
@@ -1629,7 +1975,7 @@ export const ProductionReports: React.FC<ProductionReportsProps> = ({ }) => {
                   : 'Ajusta los filtros o términos de búsqueda'
                 }
               </p>
-              {reports.length === 0 && (
+              {reports.length === 0 && connectionStatus.isConnected && (
                 <button
                   onClick={handleCreateReport}
                   className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-[#2d6f51] to-[#4e9c75] text-white rounded-lg hover:from-[#265a44] hover:to-[#3d7a5c] transition-all duration-200"

@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from "react";
+import React, { useState, useMemo, useCallback, useEffect } from "react";
 import { motion, AnimatePresence, Variants } from "framer-motion";
 import {
   Search,
@@ -11,21 +11,158 @@ import {
   MapPin,
   Heart,
   Baby,
-  Stethoscope,
   AlertTriangle,
   CheckCircle,
   Clock,
-  Activity,
   X,
   Save,
   FileText,
   Menu,
   ChevronDown,
   ChevronUp,
+  Wifi,
+  WifiOff,
+  RefreshCw,
+  Loader2,
 } from "lucide-react";
 
 // ========================================
-// INTERFACES Y TIPOS
+// CONFIGURACIÓN DE LA API
+// ========================================
+
+const API_CONFIG = {
+  BASE_URL: 'http://localhost:5000/api',
+  ENDPOINTS: {
+    PREGNANCY_TRACKING: '/reproduction/pregnancy-tracking',
+    PREGNANCY_CHECK: '/reproduction/pregnancy-check',
+    HEALTH: '/health',
+    VETERINARIANS: '/users/veterinarians',
+  }
+};
+
+// ========================================
+// SERVICIO DE API
+// ========================================
+
+interface ApiError {
+  message: string;
+  status: number;
+  code?: string;
+}
+
+class ApiService {
+  private static baseURL = API_CONFIG.BASE_URL;
+  private static token: string | null = null;
+
+  static setAuthToken(token: string) {
+    this.token = token;
+    localStorage.setItem('auth_token', token);
+  }
+
+  static getAuthToken(): string | null {
+    if (!this.token) {
+      this.token = localStorage.getItem('auth_token');
+    }
+    return this.token;
+  }
+
+  private static getHeaders(): HeadersInit {
+    const headers: HeadersInit = {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+    };
+
+    const token = this.getAuthToken();
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+
+    return headers;
+  }
+
+  private static async handleResponse<T>(response: Response): Promise<T> {
+    const contentType = response.headers.get('content-type');
+    const isJson = contentType && contentType.includes('application/json');
+    
+    let data;
+    if (isJson) {
+      data = await response.json();
+    } else {
+      data = { success: false, message: await response.text() };
+    }
+
+    if (!response.ok) {
+      const error: ApiError = {
+        message: data.message || `Error HTTP ${response.status}`,
+        status: response.status,
+        code: data.error || data.errorCode
+      };
+      throw error;
+    }
+
+    return data.data || data;
+  }
+
+  static async get<T>(endpoint: string, params?: Record<string, any>): Promise<T> {
+    const url = new URL(`${this.baseURL}${endpoint}`);
+    if (params) {
+      Object.entries(params).forEach(([key, value]) => {
+        if (value !== undefined && value !== null) {
+          url.searchParams.append(key, String(value));
+        }
+      });
+    }
+
+    const response = await fetch(url.toString(), {
+      method: 'GET',
+      headers: this.getHeaders(),
+    });
+
+    return this.handleResponse<T>(response);
+  }
+
+  static async post<T>(endpoint: string, data?: any): Promise<T> {
+    const response = await fetch(`${this.baseURL}${endpoint}`, {
+      method: 'POST',
+      headers: this.getHeaders(),
+      body: data ? JSON.stringify(data) : undefined,
+    });
+
+    return this.handleResponse<T>(response);
+  }
+
+  static async put<T>(endpoint: string, data?: any): Promise<T> {
+    const response = await fetch(`${this.baseURL}${endpoint}`, {
+      method: 'PUT',
+      headers: this.getHeaders(),
+      body: data ? JSON.stringify(data) : undefined,
+    });
+
+    return this.handleResponse<T>(response);
+  }
+
+  static async delete<T>(endpoint: string): Promise<T> {
+    const response = await fetch(`${this.baseURL}${endpoint}`, {
+      method: 'DELETE',
+      headers: this.getHeaders(),
+    });
+
+    return this.handleResponse<T>(response);
+  }
+
+  static async testConnection(): Promise<boolean> {
+    try {
+      await this.get('/health');
+      return true;
+    } catch (error) {
+      console.error('Error de conectividad:', error);
+      return false;
+    }
+  }
+}
+
+// ========================================
+// INTERFACES Y TIPOS (ACTUALIZADAS PARA BACKEND)
 // ========================================
 
 interface Veterinarian {
@@ -79,7 +216,7 @@ interface NutritionPlan {
 
 interface HealthStatus {
   overall: "poor" | "fair" | "good" | "excellent";
-  bodyCondition: number; // 1-5 scale
+  bodyCondition: number;
   weight: number;
   temperature: number;
   heartRate: number;
@@ -178,6 +315,163 @@ interface FormDataType {
   status?: PregnancyStatus;
   notes?: string;
 }
+
+// ========================================
+// SERVICIO DE SEGUIMIENTO DE EMBARAZOS
+// ========================================
+
+class PregnancyTrackingService {
+  // Obtener todas las gestaciones
+  static async getAllPregnancies(filters?: {
+    search?: string;
+    status?: string;
+    trimester?: string;
+    veterinarianId?: string;
+    page?: number;
+    limit?: number;
+  }): Promise<{pregnancies: PregnancyRecord[], total: number, pagination: any}> {
+    try {
+      const response = await ApiService.get<{
+        data: PregnancyRecord[], 
+        pagination: any
+      }>(
+        API_CONFIG.ENDPOINTS.PREGNANCY_TRACKING,
+        filters
+      );
+      
+      return {
+        pregnancies: response.data || [],
+        total: response.pagination?.total || 0,
+        pagination: response.pagination || {}
+      };
+    } catch (error) {
+      console.error('Error obteniendo embarazos:', error);
+      throw error;
+    }
+  }
+
+  // Obtener un embarazo específico
+  static async getPregnancy(id: string): Promise<PregnancyRecord> {
+    try {
+      return await ApiService.get<PregnancyRecord>(`${API_CONFIG.ENDPOINTS.PREGNANCY_TRACKING}/${id}`);
+    } catch (error) {
+      console.error('Error obteniendo embarazo:', error);
+      throw error;
+    }
+  }
+
+  // Crear nuevo chequeo de embarazo
+  static async createPregnancyCheck(data: {
+    femaleId: string;
+    examDate: string;
+    method: string;
+    result: string;
+    gestationAge?: number;
+    expectedCalvingDate?: string;
+    veterinarianId: string;
+    notes?: string;
+  }): Promise<any> {
+    try {
+      return await ApiService.post<any>(API_CONFIG.ENDPOINTS.PREGNANCY_CHECK, data);
+    } catch (error) {
+      console.error('Error creando chequeo de embarazo:', error);
+      throw error;
+    }
+  }
+
+  // Actualizar embarazo
+  static async updatePregnancy(id: string, data: Partial<PregnancyRecord>): Promise<PregnancyRecord> {
+    try {
+      return await ApiService.put<PregnancyRecord>(`${API_CONFIG.ENDPOINTS.PREGNANCY_TRACKING}/${id}`, data);
+    } catch (error) {
+      console.error('Error actualizando embarazo:', error);
+      throw error;
+    }
+  }
+
+  // Eliminar embarazo
+  static async deletePregnancy(id: string): Promise<boolean> {
+    try {
+      await ApiService.delete(`${API_CONFIG.ENDPOINTS.PREGNANCY_TRACKING}/${id}`);
+      return true;
+    } catch (error) {
+      console.error('Error eliminando embarazo:', error);
+      throw error;
+    }
+  }
+
+  // Obtener veterinarios
+  static async getVeterinarians(): Promise<Veterinarian[]> {
+    try {
+      const response = await ApiService.get<{data: Veterinarian[]}>(API_CONFIG.ENDPOINTS.VETERINARIANS);
+      return response.data || [];
+    } catch (error) {
+      console.error('Error obteniendo veterinarios:', error);
+      return [];
+    }
+  }
+
+  // Obtener estadísticas del dashboard
+  static async getDashboardStats(): Promise<{
+    total: number;
+    active: number;
+    withComplications: number;
+    nearCalving: number;
+  }> {
+    try {
+      // Por ahora usar datos mock, implementar endpoint específico más tarde
+      return {
+        total: 0,
+        active: 0,
+        withComplications: 0,
+        nearCalving: 0
+      };
+    } catch (error) {
+      console.error('Error obteniendo estadísticas:', error);
+      throw error;
+    }
+  }
+}
+
+// ========================================
+// HOOK PERSONALIZADO PARA MANEJAR API
+// ========================================
+
+const useApiState = () => {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [connected, setConnected] = useState<boolean | null>(null);
+
+  const executeAsync = async <T,>(
+    apiCall: () => Promise<T>,
+    onSuccess?: (data: T) => void,
+    onError?: (error: ApiError) => void
+  ): Promise<T | null> => {
+    try {
+      setLoading(true);
+      setError(null);
+      const result = await apiCall();
+      onSuccess?.(result);
+      return result;
+    } catch (err: any) {
+      const errorMessage = err.message || 'Error desconocido';
+      setError(errorMessage);
+      onError?.(err);
+      console.error('Error en API:', err);
+      return null;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const testConnection = async () => {
+    const isConnected = await ApiService.testConnection();
+    setConnected(isConnected);
+    return isConnected;
+  };
+
+  return { loading, error, connected, executeAsync, testConnection, setError };
+};
 
 // ========================================
 // COMPONENTES UI REUTILIZABLES
@@ -363,6 +657,40 @@ const Badge: React.FC<BadgeProps> = ({ children, variant = "default", className 
 };
 
 // ========================================
+// COMPONENTE DE INDICADOR DE CONECTIVIDAD
+// ========================================
+
+const ConnectionIndicator: React.FC<{ connected: boolean | null, onRetry: () => void }> = ({ connected, onRetry }) => {
+  if (connected === null) return null;
+
+  return (
+    <div className={`fixed top-4 right-4 z-50 px-3 py-2 rounded-lg shadow-lg flex items-center gap-2 text-sm ${
+      connected 
+        ? "bg-green-100 text-green-800 border border-green-200" 
+        : "bg-red-100 text-red-800 border border-red-200"
+    }`}>
+      {connected ? (
+        <>
+          <Wifi className="w-4 h-4" />
+          <span>Conectado</span>
+        </>
+      ) : (
+        <>
+          <WifiOff className="w-4 h-4" />
+          <span>Sin conexión</span>
+          <button
+            onClick={onRetry}
+            className="ml-2 px-2 py-1 bg-red-200 hover:bg-red-300 rounded transition-colors"
+          >
+            <RefreshCw className="w-4 h-4" />
+          </button>
+        </>
+      )}
+    </div>
+  );
+};
+
+// ========================================
 // COMPONENTE DE PREGNANCY CARD PARA MÓVILES
 // ========================================
 interface PregnancyCardProps {
@@ -538,229 +866,13 @@ const PregnancyCard: React.FC<PregnancyCardProps> = ({ pregnancy, onView, onEdit
 };
 
 // ========================================
-// DATOS MOCK
-// ========================================
-
-const mockPregnancies: PregnancyRecord[] = [
-  {
-    id: "pregnancy-001",
-    animalId: "cow-123",
-    animalName: "Bella",
-    animalEarTag: "MX-001",
-    bullId: "bull-001",
-    bullName: "Campeón",
-    bullEarTag: "T-001",
-    breedingDate: "2025-04-15",
-    breedingType: "artificial_insemination",
-    confirmationDate: "2025-05-15",
-    confirmationMethod: "ultrasound",
-    gestationDay: 92,
-    expectedCalvingDate: "2025-12-31",
-    currentStage: "middle",
-    pregnancyNumber: 3,
-    veterinarian: {
-      id: "vet-001",
-      name: "Dr. García",
-      license: "MVZ-123456",
-      phone: "+52 993 123 4567",
-      email: "dr.garcia@veterinaria.com",
-    },
-    location: {
-      lat: 17.989,
-      lng: -92.247,
-      address: "Potrero Norte, Rancho San Miguel",
-      paddock: "Potrero 3",
-      facility: "Área de Maternidad",
-    },
-    examinations: [
-      {
-        id: "exam-001",
-        date: "2025-07-15",
-        time: "09:00",
-        type: "routine",
-        veterinarian: "Dr. García",
-        gestationDay: 92,
-        findings: {
-          fetalMovement: "strong",
-          fetalSize: "normal",
-          placentalHealth: "normal",
-          amnioticFluid: "normal",
-          cervicalCondition: "closed",
-        },
-        measurements: {
-          fetalLength: 18.5,
-          fetalWeight: 8.2,
-          heartRate: 165,
-        },
-        recommendations: ["Continuar monitoreo mensual", "Suplementos vitamínicos"],
-        nextExamDate: "2025-08-15",
-        cost: 800,
-        notes: "Desarrollo fetal normal. Sin complicaciones observadas.",
-      },
-    ],
-    nutritionPlan: {
-      currentStage: "increased",
-      supplements: ["Vitaminas prenatales", "Calcio", "Fósforo"],
-      specialDiet: true,
-      waterAccess: "excellent",
-      notes: "Dieta rica en proteínas y minerales",
-    },
-    healthStatus: {
-      overall: "excellent",
-      bodyCondition: 4,
-      weight: 580,
-      temperature: 38.3,
-      heartRate: 65,
-      respiratoryRate: 18,
-      bloodPressure: "120/80",
-    },
-    complications: {
-      hasComplications: false,
-      treatmentRequired: false,
-    },
-    monitoringSchedule: {
-      nextExamDate: "2025-08-15",
-      frequency: "monthly",
-      specialRequirements: ["Ultrasonido mensual", "Análisis de sangre"],
-    },
-    notes: "Gestación transcurriendo normalmente. Vaca en excelentes condiciones.",
-    cost: 15000,
-    status: "active",
-    alerts: [],
-    photos: ["ultrasound_001.jpg", "exam_002.jpg"],
-    createdAt: "2025-05-15T09:00:00Z",
-    updatedAt: "2025-07-15T10:30:00Z",
-  },
-  {
-    id: "pregnancy-002",
-    animalId: "cow-124",
-    animalName: "Luna",
-    animalEarTag: "MX-002",
-    bullId: "bull-002",
-    bullName: "Emperador",
-    bullEarTag: "T-002",
-    breedingDate: "2025-03-20",
-    breedingType: "natural_mating",
-    confirmationDate: "2025-04-20",
-    confirmationMethod: "palpation",
-    gestationDay: 118,
-    expectedCalvingDate: "2025-12-26",
-    currentStage: "middle",
-    pregnancyNumber: 1,
-    veterinarian: {
-      id: "vet-002",
-      name: "Dra. Martínez",
-      license: "MVZ-789012",
-      phone: "+52 993 987 6543",
-      email: "dra.martinez@reprovet.com",
-    },
-    location: {
-      lat: 17.995,
-      lng: -92.255,
-      address: "Potrero Sur, Rancho San Miguel",
-      paddock: "Potrero 7",
-      facility: "Área de Gestación",
-    },
-    examinations: [
-      {
-        id: "exam-003",
-        date: "2025-07-10",
-        time: "14:00",
-        type: "routine",
-        veterinarian: "Dra. Martínez",
-        gestationDay: 112,
-        findings: {
-          fetalMovement: "moderate",
-          fetalSize: "normal",
-          placentalHealth: "normal",
-          amnioticFluid: "normal",
-          cervicalCondition: "closed",
-        },
-        measurements: {
-          fetalLength: 22.0,
-          heartRate: 170,
-        },
-        recommendations: ["Monitoreo cada 3 semanas", "Suplementación mineral"],
-        nextExamDate: "2025-08-01",
-        cost: 750,
-        notes: "Primera gestación. Desarrollo normal.",
-      },
-    ],
-    nutritionPlan: {
-      currentStage: "increased",
-      supplements: ["Complejo vitamínico", "Minerales"],
-      specialDiet: false,
-      waterAccess: "good",
-      notes: "Dieta estándar con suplementos",
-    },
-    healthStatus: {
-      overall: "good",
-      bodyCondition: 3,
-      weight: 520,
-      temperature: 38.4,
-      heartRate: 68,
-      respiratoryRate: 22,
-    },
-    complications: {
-      hasComplications: true,
-      type: "nutritional",
-      description: "Ligera pérdida de condición corporal",
-      severity: "mild",
-      treatmentRequired: true,
-      veterinaryAction: "Ajuste nutricional y suplementación",
-    },
-    monitoringSchedule: {
-      nextExamDate: "2025-08-01",
-      frequency: "biweekly",
-      specialRequirements: ["Control de peso semanal"],
-    },
-    notes: "Primera gestación. Requiere monitoreo cercano de condición corporal.",
-    cost: 12000,
-    status: "active",
-    alerts: [
-      {
-        id: "alert-001",
-        type: "nutrition",
-        severity: "medium",
-        title: "Pérdida de Condición Corporal",
-        message: "Se observa ligera pérdida de peso. Revisar plan nutricional.",
-        date: "2025-07-10T00:00:00Z",
-        resolved: false,
-      },
-    ],
-    photos: ["luna_exam_001.jpg"],
-    createdAt: "2025-04-20T14:00:00Z",
-    updatedAt: "2025-07-10T16:00:00Z",
-  },
-];
-
-const mockVeterinarians: Veterinarian[] = [
-  {
-    id: "vet-001",
-    name: "Dr. García",
-    license: "MVZ-123456",
-    phone: "+52 993 123 4567",
-    email: "dr.garcia@veterinaria.com",
-  },
-  {
-    id: "vet-002",
-    name: "Dra. Martínez",
-    license: "MVZ-789012",
-    phone: "+52 993 987 6543",
-    email: "dra.martinez@reprovet.com",
-  },
-];
-
-// ========================================
-// COMPONENTE PRINCIPAL
+// COMPONENTE PRINCIPAL CONECTADO AL BACKEND
 // ========================================
 
 const PregnancyTracking: React.FC = () => {
   // Estados principales
-  const [pregnancies, setPregnancies] = useState<PregnancyRecord[]>(mockPregnancies);
-  const [veterinarians] = useState<Veterinarian[]>(mockVeterinarians);
-  const [isLoading, setIsLoading] = useState<boolean>(false);
-  const [error, setError] = useState<string | null>(null);
+  const [pregnancies, setPregnancies] = useState<PregnancyRecord[]>([]);
+  const [veterinarians, setVeterinarians] = useState<Veterinarian[]>([]);
 
   // Estados para modales y formularios
   const [isCreateModalOpen, setIsCreateModalOpen] = useState<boolean>(false);
@@ -789,8 +901,16 @@ const PregnancyTracking: React.FC = () => {
   const [showFilters, setShowFilters] = useState<boolean>(false);
   const [viewMode, setViewMode] = useState<"table" | "cards">("table");
 
+  // Estados de paginación
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPregnancies, setTotalPregnancies] = useState(0);
+  const [pageSize] = useState(20);
+
   // Detectar si es móvil
   const [isMobile, setIsMobile] = useState<boolean>(false);
+
+  // Hook de API
+  const { loading, error, connected, executeAsync, testConnection, setError } = useApiState();
 
   React.useEffect(() => {
     const checkMobile = () => {
@@ -802,6 +922,59 @@ const PregnancyTracking: React.FC = () => {
     window.addEventListener('resize', checkMobile);
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
+
+  // Cargar datos desde la API
+  const loadPregnancies = async (page = 1) => {
+    const apiFilters = {
+      search: filters.searchTerm || undefined,
+      status: filters.status || undefined,
+      veterinarianId: filters.veterinarian || undefined,
+      page,
+      limit: pageSize
+    };
+
+    await executeAsync(
+      () => PregnancyTrackingService.getAllPregnancies(apiFilters),
+      (data) => {
+        setPregnancies(data.pregnancies);
+        setTotalPregnancies(data.total);
+        setCurrentPage(page);
+      },
+      (error) => {
+        console.error('Error cargando embarazos:', error);
+        setPregnancies([]);
+      }
+    );
+  };
+
+  const loadVeterinarians = async () => {
+    await executeAsync(
+      () => PregnancyTrackingService.getVeterinarians(),
+      (data) => {
+        setVeterinarians(data);
+      }
+    );
+  };
+
+  // Efecto para cargar datos iniciales
+  useEffect(() => {
+    const initializeData = async () => {
+      await testConnection();
+      await loadVeterinarians();
+      await loadPregnancies(1);
+    };
+    
+    initializeData();
+  }, []);
+
+  // Efecto para recargar cuando cambien los filtros
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      loadPregnancies(1);
+    }, 500);
+
+    return () => clearTimeout(timeoutId);
+  }, [filters.searchTerm, filters.status, filters.veterinarian]);
 
   // Variantes de animación
   const containerVariants: Variants = {
@@ -824,24 +997,16 @@ const PregnancyTracking: React.FC = () => {
     },
   };
 
-  // Filtrado de datos
+  // Filtrado de datos (solo filtros locales, los principales van al backend)
   const filteredPregnancies = useMemo(() => {
     return pregnancies.filter((pregnancy) => {
-      const matchesSearch = 
-        pregnancy.animalName.toLowerCase().includes(filters.searchTerm.toLowerCase()) ||
-        pregnancy.animalEarTag.toLowerCase().includes(filters.searchTerm.toLowerCase()) ||
-        pregnancy.bullName.toLowerCase().includes(filters.searchTerm.toLowerCase());
-      
       const matchesBreedingType = !filters.breedingType || pregnancy.breedingType === filters.breedingType;
       const matchesStage = !filters.currentStage || pregnancy.currentStage === filters.currentStage;
-      const matchesStatus = !filters.status || pregnancy.status === filters.status;
-      const matchesVeterinarian = !filters.veterinarian || pregnancy.veterinarian.id === filters.veterinarian;
       const matchesComplications = !filters.hasComplications || 
         (filters.hasComplications === "true" && pregnancy.complications.hasComplications) ||
         (filters.hasComplications === "false" && !pregnancy.complications.hasComplications);
 
-      return matchesSearch && matchesBreedingType && matchesStage && 
-             matchesStatus && matchesVeterinarian && matchesComplications;
+      return matchesBreedingType && matchesStage && matchesComplications;
     });
   }, [pregnancies, filters]);
 
@@ -855,7 +1020,7 @@ const PregnancyTracking: React.FC = () => {
     return { total, active, withComplications, nearCalving };
   }, [pregnancies]);
 
-  // Funciones CRUD
+  // Funciones CRUD actualizadas para backend
   const handleCreate = () => {
     setFormData({
       animalName: "",
@@ -895,137 +1060,64 @@ const PregnancyTracking: React.FC = () => {
   const confirmDelete = useCallback(async () => {
     if (!pregnancyToDelete) return;
 
-    try {
-      setIsLoading(true);
-      
-      // Simular API call
-      await new Promise(resolve => setTimeout(resolve, 800));
-      
-      setPregnancies(prev => {
-        const newPregnancies = prev.filter(p => p.id !== pregnancyToDelete.id);
-        return newPregnancies;
-      });
-      
-      // Cerrar modales si están abiertos
-      if (selectedPregnancy?.id === pregnancyToDelete.id) {
-        setSelectedPregnancy(null);
-        setIsViewModalOpen(false);
-        setIsEditModalOpen(false);
+    await executeAsync(
+      () => PregnancyTrackingService.deletePregnancy(pregnancyToDelete.id),
+      () => {
+        // Cerrar modales si están abiertos
+        if (selectedPregnancy?.id === pregnancyToDelete.id) {
+          setSelectedPregnancy(null);
+          setIsViewModalOpen(false);
+          setIsEditModalOpen(false);
+        }
+        
+        // Cerrar modal de confirmación
+        setShowDeleteModal(false);
+        setPregnancyToDelete(null);
+        
+        // Recargar datos
+        loadPregnancies(currentPage);
       }
-      
-      // Cerrar modal de confirmación
-      setShowDeleteModal(false);
-      setPregnancyToDelete(null);
-      
-    } catch (err) {
-      setError("Error al eliminar el registro de embarazo");
-    } finally {
-      setIsLoading(false);
-    }
-  }, [pregnancyToDelete, selectedPregnancy]);
+    );
+  }, [pregnancyToDelete, selectedPregnancy, currentPage]);
 
   const handleSave = async () => {
-    try {
-      setIsLoading(true);
-      // Simular API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
+    if (!formData.animalName || !formData.animalEarTag) {
+      setError("Por favor completa los campos obligatorios");
+      return;
+    }
 
-      if (selectedPregnancy) {
-        // Actualizar
-        const updatedData: Partial<PregnancyRecord> = {};
-        
-        if (formData.animalName !== undefined) updatedData.animalName = formData.animalName;
-        if (formData.animalEarTag !== undefined) updatedData.animalEarTag = formData.animalEarTag;
-        if (formData.bullName !== undefined) updatedData.bullName = formData.bullName;
-        if (formData.bullEarTag !== undefined) updatedData.bullEarTag = formData.bullEarTag;
-        if (formData.breedingDate !== undefined) updatedData.breedingDate = formData.breedingDate;
-        if (formData.breedingType !== undefined) updatedData.breedingType = formData.breedingType;
-        if (formData.confirmationDate !== undefined) updatedData.confirmationDate = formData.confirmationDate;
-        if (formData.confirmationMethod !== undefined) updatedData.confirmationMethod = formData.confirmationMethod;
-        if (formData.gestationDay !== undefined) updatedData.gestationDay = formData.gestationDay;
-        if (formData.expectedCalvingDate !== undefined) updatedData.expectedCalvingDate = formData.expectedCalvingDate;
-        if (formData.currentStage !== undefined) updatedData.currentStage = formData.currentStage;
-        if (formData.pregnancyNumber !== undefined) updatedData.pregnancyNumber = formData.pregnancyNumber;
-        if (formData.status !== undefined) updatedData.status = formData.status;
-        if (formData.notes !== undefined) updatedData.notes = formData.notes;
-        
-        updatedData.updatedAt = new Date().toISOString();
-        
-        setPregnancies(prev => prev.map(p => 
-          p.id === selectedPregnancy.id 
-            ? { ...p, ...updatedData }
-            : p
-        ));
-        setIsEditModalOpen(false);
-      } else {
-        // Crear nuevo
-        const newPregnancy: PregnancyRecord = {
-          id: `pregnancy-${Date.now()}`,
-          animalId: `cow-${Date.now()}`,
-          animalName: formData.animalName || "",
-          animalEarTag: formData.animalEarTag || "",
-          bullId: `bull-${Date.now()}`,
-          bullName: formData.bullName || "",
-          bullEarTag: formData.bullEarTag || "",
-          breedingDate: formData.breedingDate || "",
-          breedingType: formData.breedingType || "artificial_insemination",
-          confirmationDate: formData.confirmationDate || "",
-          confirmationMethod: formData.confirmationMethod || "ultrasound",
-          gestationDay: formData.gestationDay || 0,
-          expectedCalvingDate: formData.expectedCalvingDate || "",
-          currentStage: formData.currentStage || "early",
-          pregnancyNumber: formData.pregnancyNumber || 1,
-          status: formData.status || "active",
-          notes: formData.notes || "",
-          veterinarian: veterinarians[0],
-          location: {
-            lat: 17.989,
-            lng: -92.247,
-            address: "Potrero Norte, Rancho San Miguel",
-            paddock: "Potrero 1",
-            facility: "Área de Maternidad",
-          },
-          examinations: [],
-          nutritionPlan: {
-            currentStage: "normal",
-            supplements: [],
-            specialDiet: false,
-            waterAccess: "good",
-            notes: "",
-          },
-          healthStatus: {
-            overall: "good",
-            bodyCondition: 3,
-            weight: 500,
-            temperature: 38.5,
-            heartRate: 70,
-            respiratoryRate: 20,
-          },
-          complications: {
-            hasComplications: false,
-            treatmentRequired: false,
-          },
-          monitoringSchedule: {
-            nextExamDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-            frequency: "monthly",
-            specialRequirements: [],
-          },
-          cost: 0,
-          alerts: [],
-          photos: [],
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        };
-        setPregnancies(prev => [...prev, newPregnancy]);
-        setIsCreateModalOpen(false);
-      }
+    if (selectedPregnancy) {
+      // Actualizar
+      await executeAsync(
+        () => PregnancyTrackingService.updatePregnancy(selectedPregnancy.id, formData),
+        () => {
+          setIsEditModalOpen(false);
+          setFormData({});
+          setSelectedPregnancy(null);
+          loadPregnancies(currentPage);
+        }
+      );
+    } else {
+      // Crear nuevo - usar endpoint de pregnancy-check
+      const pregnancyCheckData = {
+        femaleId: 'temp-female-id', // En un caso real, necesitarías seleccionar la vaca
+        examDate: formData.confirmationDate || new Date().toISOString().split('T')[0],
+        method: formData.confirmationMethod || 'ultrasound',
+        result: 'pregnant',
+        gestationAge: formData.gestationDay,
+        expectedCalvingDate: formData.expectedCalvingDate,
+        veterinarianId: veterinarians[0]?.id || 'temp-vet-id',
+        notes: formData.notes || ''
+      };
 
-      setFormData({});
-      setSelectedPregnancy(null);
-    } catch (err) {
-      setError("Error al guardar el registro");
-    } finally {
-      setIsLoading(false);
+      await executeAsync(
+        () => PregnancyTrackingService.createPregnancyCheck(pregnancyCheckData),
+        () => {
+          setIsCreateModalOpen(false);
+          setFormData({});
+          loadPregnancies(currentPage);
+        }
+      );
     }
   };
 
@@ -1075,6 +1167,9 @@ const PregnancyTracking: React.FC = () => {
     return <Badge variant="default">{typeLabels[type]}</Badge>;
   };
 
+  // Calcular número total de páginas
+  const totalPages = Math.ceil(totalPregnancies / pageSize);
+
   return (
     <motion.div
       variants={containerVariants}
@@ -1083,14 +1178,35 @@ const PregnancyTracking: React.FC = () => {
       className="min-h-screen bg-gradient-to-br from-[#519a7c] via-[#f2e9d8] to-[#f4ac3a] p-3 sm:p-4 md:p-6"
     >
       <div className="mx-auto max-w-7xl space-y-4 sm:space-y-6">
+        
+        {/* Indicador de conectividad */}
+        <ConnectionIndicator 
+          connected={connected} 
+          onRetry={testConnection}
+        />
+
         {/* Header */}
         <motion.div variants={itemVariants} className="text-center px-2">
           <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">
             Seguimiento de Embarazos
           </h1>
           <p className="text-sm sm:text-base text-gray-600">
-            Gestión completa del programa de reproducción bovina
+            Gestión completa del programa de reproducción bovina conectado al sistema
           </p>
+          {error && (
+            <div className="mt-2 p-2 bg-red-100 border border-red-200 rounded-lg text-red-700 text-sm">
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4" />
+                <span>{error}</span>
+                <button
+                  onClick={() => loadPregnancies(currentPage)}
+                  className="ml-auto text-red-600 hover:text-red-800"
+                >
+                  <RefreshCw className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          )}
         </motion.div>
 
         {/* Estadísticas */}
@@ -1172,6 +1288,16 @@ const PregnancyTracking: React.FC = () => {
                         <Filter className="h-4 w-4" />
                         Filtros
                       </Button>
+                      <Button
+                        variant="secondary"
+                        onClick={() => loadPregnancies(currentPage)}
+                        disabled={loading}
+                        className="flex items-center gap-2"
+                        size="sm"
+                      >
+                        <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+                        Recargar
+                      </Button>
                       {!isMobile && (
                         <Button
                           variant="secondary"
@@ -1188,7 +1314,8 @@ const PregnancyTracking: React.FC = () => {
 
                   <Button
                     onClick={handleCreate}
-                    className="flex items-center gap-2 w-full sm:w-auto justify-center"
+                    disabled={loading || !connected}
+                    className="flex items-center gap-2 w-full sm:w-auto justify-center disabled:opacity-50 disabled:cursor-not-allowed"
                     size="sm"
                   >
                     <Plus className="h-4 w-4" />
@@ -1274,29 +1401,6 @@ const PregnancyTracking: React.FC = () => {
           </Card>
         </motion.div>
 
-        {/* Error Alert */}
-        {error && (
-          <motion.div variants={itemVariants}>
-            <Card className="border-red-200 bg-red-50/90 backdrop-blur-sm">
-              <CardContent className="p-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2 text-red-800">
-                    <AlertTriangle className="h-4 w-4" />
-                    <span className="text-sm">{error}</span>
-                  </div>
-                  <Button
-                    variant="ghost"
-                    size="xs"
-                    onClick={() => setError(null)}
-                  >
-                    <X className="h-4 w-4" />
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          </motion.div>
-        )}
-
         {/* Lista de embarazos - Responsive */}
         <motion.div variants={itemVariants}>
           <Card>
@@ -1311,18 +1415,23 @@ const PregnancyTracking: React.FC = () => {
               </CardTitle>
             </CardHeader>
             <CardContent className="p-0">
-              {viewMode === "cards" || isMobile ? (
+              {loading ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="h-6 w-6 animate-spin text-[#519a7c] mr-2" />
+                  <span className="text-sm">Cargando desde el servidor...</span>
+                </div>
+              ) : viewMode === "cards" || isMobile ? (
                 // Vista de cards para móviles
                 <div className="p-3 sm:p-6 space-y-3">
-                  {isLoading ? (
-                    <div className="flex items-center justify-center py-12">
-                      <Activity className="h-6 w-6 animate-spin text-[#519a7c] mr-2" />
-                      <span className="text-sm">Cargando...</span>
-                    </div>
-                  ) : filteredPregnancies.length === 0 ? (
+                  {filteredPregnancies.length === 0 ? (
                     <div className="text-center py-12 text-gray-500">
                       <Baby className="h-12 w-12 mx-auto mb-3 text-gray-300" />
                       <p className="text-sm">No se encontraron registros de embarazos</p>
+                      {!connected && (
+                        <p className="text-xs mt-2 text-red-500">
+                          Sin conexión al servidor. Verifique que el backend esté ejecutándose.
+                        </p>
+                      )}
                     </div>
                   ) : (
                     filteredPregnancies.map((pregnancy) => (
@@ -1372,19 +1481,18 @@ const PregnancyTracking: React.FC = () => {
                       </tr>
                     </thead>
                     <tbody className="bg-white/70 backdrop-blur-sm divide-y divide-gray-200">
-                      {isLoading ? (
-                        <tr>
-                          <td colSpan={9} className="px-6 py-12 text-center">
-                            <div className="flex items-center justify-center">
-                              <Activity className="h-6 w-6 animate-spin text-[#519a7c] mr-2" />
-                              Cargando...
-                            </div>
-                          </td>
-                        </tr>
-                      ) : filteredPregnancies.length === 0 ? (
+                      {filteredPregnancies.length === 0 ? (
                         <tr>
                           <td colSpan={9} className="px-6 py-12 text-center text-gray-500">
-                            No se encontraron registros de embarazos
+                            <div className="flex flex-col items-center">
+                              <Baby className="h-12 w-12 mb-3 text-gray-300" />
+                              <p>No se encontraron registros de embarazos</p>
+                              {!connected && (
+                                <p className="text-xs mt-2 text-red-500">
+                                  Sin conexión al servidor Backend (Puerto 5000)
+                                </p>
+                              )}
+                            </div>
                           </td>
                         </tr>
                       ) : (
@@ -1473,6 +1581,50 @@ const PregnancyTracking: React.FC = () => {
                       )}
                     </tbody>
                   </table>
+                </div>
+              )}
+
+              {/* Paginación */}
+              {totalPages > 1 && (
+                <div className="px-6 py-4 border-t border-gray-200 bg-gray-50">
+                  <div className="flex items-center justify-between">
+                    <div className="text-sm text-gray-600">
+                      Mostrando {((currentPage - 1) * pageSize) + 1} - {Math.min(currentPage * pageSize, totalPregnancies)} de {totalPregnancies} resultados
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="secondary"
+                        onClick={() => loadPregnancies(currentPage - 1)}
+                        disabled={currentPage === 1 || loading}
+                        size="sm"
+                      >
+                        Anterior
+                      </Button>
+                      {/* Páginas numéricas */}
+                      {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => {
+                        const pageNum = Math.max(1, Math.min(totalPages - 4, currentPage - 2)) + i;
+                        return (
+                          <Button
+                            key={pageNum}
+                            variant={pageNum === currentPage ? "primary" : "secondary"}
+                            onClick={() => loadPregnancies(pageNum)}
+                            disabled={loading}
+                            size="sm"
+                          >
+                            {pageNum}
+                          </Button>
+                        );
+                      })}
+                      <Button
+                        variant="secondary"
+                        onClick={() => loadPregnancies(currentPage + 1)}
+                        disabled={currentPage === totalPages || loading}
+                        size="sm"
+                      >
+                        Siguiente
+                      </Button>
+                    </div>
+                  </div>
                 </div>
               )}
             </CardContent>
@@ -1631,33 +1783,6 @@ const PregnancyTracking: React.FC = () => {
                           onChange={(e) => setFormData(prev => ({ ...prev, expectedCalvingDate: e.target.value }))}
                         />
                       </div>
-
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Número de Embarazo
-                        </label>
-                        <Input
-                          type="number"
-                          placeholder="1"
-                          value={formData.pregnancyNumber?.toString() || ""}
-                          onChange={(e) => setFormData(prev => ({ ...prev, pregnancyNumber: parseInt(e.target.value) || 1 }))}
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Estado
-                        </label>
-                        <Select
-                          value={formData.status || ""}
-                          onChange={(value) => setFormData(prev => ({ ...prev, status: value as PregnancyStatus }))}
-                        >
-                          <option value="active">Activo</option>
-                          <option value="completed">Completado</option>
-                          <option value="terminated">Terminado</option>
-                          <option value="lost">Perdido</option>
-                        </Select>
-                      </div>
                     </div>
 
                     <div>
@@ -1684,12 +1809,12 @@ const PregnancyTracking: React.FC = () => {
                   </Button>
                   <Button
                     onClick={handleSave}
-                    disabled={isLoading}
+                    disabled={loading || !connected}
                     className="flex items-center gap-2"
                     size="sm"
                   >
-                    {isLoading ? (
-                      <Activity className="h-4 w-4 animate-spin" />
+                    {loading ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
                     ) : (
                       <Save className="h-4 w-4" />
                     )}
@@ -1832,12 +1957,12 @@ const PregnancyTracking: React.FC = () => {
                   </Button>
                   <Button
                     onClick={handleSave}
-                    disabled={isLoading}
+                    disabled={loading || !connected}
                     className="flex items-center gap-2"
                     size="sm"
                   >
-                    {isLoading ? (
-                      <Activity className="h-4 w-4 animate-spin" />
+                    {loading ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
                     ) : (
                       <Save className="h-4 w-4" />
                     )}
@@ -2023,53 +2148,6 @@ const PregnancyTracking: React.FC = () => {
                       </Card>
                     )}
 
-                    {/* Exámenes recientes */}
-                    {selectedPregnancy.examinations.length > 0 && (
-                      <Card>
-                        <CardHeader>
-                          <CardTitle className="flex items-center gap-2">
-                            <Stethoscope className="h-5 w-5 text-blue-500" />
-                            Último Examen
-                          </CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                          {(() => {
-                            const lastExam = selectedPregnancy.examinations[selectedPregnancy.examinations.length - 1];
-                            return (
-                              <div className="space-y-3">
-                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                                  <div>
-                                    <p className="text-sm text-gray-600">Fecha</p>
-                                    <p className="font-semibold">
-                                      {new Date(lastExam.date).toLocaleDateString('es-ES')}
-                                    </p>
-                                  </div>
-                                  <div>
-                                    <p className="text-sm text-gray-600">Tipo</p>
-                                    <p className="font-semibold capitalize">{lastExam.type}</p>
-                                  </div>
-                                  <div>
-                                    <p className="text-sm text-gray-600">Día de Gestación</p>
-                                    <p className="font-semibold">{lastExam.gestationDay}</p>
-                                  </div>
-                                  <div>
-                                    <p className="text-sm text-gray-600">Costo</p>
-                                    <p className="font-semibold">${lastExam.cost.toLocaleString()}</p>
-                                  </div>
-                                </div>
-                                {lastExam.notes && (
-                                  <div>
-                                    <p className="text-sm text-gray-600 mb-1">Notas:</p>
-                                    <p className="text-gray-800">{lastExam.notes}</p>
-                                  </div>
-                                )}
-                              </div>
-                            );
-                          })()}
-                        </CardContent>
-                      </Card>
-                    )}
-
                     {/* Información de ubicación */}
                     <Card>
                       <CardHeader>
@@ -2198,10 +2276,10 @@ const PregnancyTracking: React.FC = () => {
                     onClick={confirmDelete}
                     className="flex items-center space-x-2"
                     size="sm"
-                    disabled={isLoading}
+                    disabled={loading}
                   >
-                    {isLoading ? (
-                      <Activity className="w-4 h-4 animate-spin" />
+                    {loading ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
                     ) : (
                       <Trash2 className="w-4 h-4" />
                     )}

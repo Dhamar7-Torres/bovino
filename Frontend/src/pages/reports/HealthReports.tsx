@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Plus, 
@@ -26,8 +26,31 @@ import {
   Navigation,
   Clock,
   DollarSign,
-  Target
+  Target,
+  WifiOff,
+  RefreshCw,
+  CheckCircle,
+  XCircle
 } from 'lucide-react';
+
+// ===================================================================
+// CONFIGURACIÓN DE API
+// ===================================================================
+
+const API_BASE_URL = 'http://localhost:5000/api';
+const API_ENDPOINTS = {
+  HEALTH_REPORTS: '/reports/health',
+  HEALTH_OVERVIEW: '/reports/health/overview',
+  DISEASE_ANALYSIS: '/reports/health/disease-analysis',
+  HEALTH_DASHBOARD: '/health/dashboard',
+  HEALTH_REPORTS_GENERATE: '/health/reports/generate',
+  PING: '/ping',
+  HEALTH_CHECK: '/health'
+};
+
+// ===================================================================
+// INTERFACES Y TIPOS
+// ===================================================================
 
 // Función de utilidad para combinar clases CSS
 const cn = (...classes: (string | undefined | null | false)[]): string => {
@@ -113,6 +136,21 @@ interface LocationData {
   address?: string;
 }
 
+interface ApiResponse<T> {
+  success: boolean;
+  data?: T;
+  message: string;
+  error?: string;
+  errorCode?: string;
+}
+
+interface ConnectionStatus {
+  isConnected: boolean;
+  isLoading: boolean;
+  lastCheck: Date | null;
+  error: string | null;
+}
+
 type HealthReportType = 
   | 'general_health' 
   | 'disease_outbreak' 
@@ -126,12 +164,11 @@ type ReportStatus = 'draft' | 'active' | 'archived' | 'processing';
 type DiseaseSeverity = 'low' | 'medium' | 'high' | 'critical';
 type DiseaseStatus = 'active' | 'contained' | 'resolved' | 'monitoring';
 
-// Props del componente principal
+// Props de componentes
 interface HealthReportsProps {
   className?: string;
 }
 
-// Props del modal
 interface ModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -140,223 +177,157 @@ interface ModalProps {
   size?: 'sm' | 'md' | 'lg' | 'xl' | 'full';
 }
 
-// Props del formulario
 interface ReportFormProps {
   report?: HealthReport;
-  onSave: (report: Omit<HealthReport, 'id' | 'createdAt' | 'updatedAt'>) => void;
+  onSave: (report: Omit<HealthReport, 'id' | 'createdAt' | 'updatedAt'>) => Promise<void>;
   onCancel: () => void;
   isEditing: boolean;
 }
 
-// Props del modal de vista detallada
 interface ViewReportModalProps {
   report: HealthReport;
   isOpen: boolean;
   onClose: () => void;
 }
 
-// Datos de ejemplo
-const SAMPLE_REPORTS: HealthReport[] = [
-  {
-    id: '1',
-    title: 'Evaluación General de Salud - Enero 2025',
-    description: 'Revisión mensual del estado de salud del ganado en todas las ubicaciones',
-    reportType: 'general_health',
-    period: {
-      startDate: '2025-01-01',
-      endDate: '2025-01-31',
-      type: 'monthly'
-    },
-    location: 'Todas las ubicaciones',
-    healthMetrics: {
-      totalAnimalsEvaluated: 1248,
-      healthyAnimals: 1156,
-      sickAnimals: 67,
-      underTreatment: 25,
-      recovered: 42,
-      deaths: 8,
-      averageRecoveryTime: 12.5,
-      treatmentSuccessRate: 94.2,
-      vaccinationCoverage: 96.8,
-      totalTreatmentCost: 15420.50,
-      averageCostPerAnimal: 12.35,
-      preventiveMeasures: 45
-    },
-    diseases: [
-      {
-        diseaseId: 'resp001',
-        diseaseName: 'Neumonía Bovina',
-        affectedAnimals: 23,
-        severity: 'medium',
-        symptoms: ['Tos', 'Fiebre', 'Dificultad respiratoria'],
-        firstDetected: '2025-01-05',
-        status: 'contained'
-      },
-      {
-        diseaseId: 'dige002',
-        diseaseName: 'Diarrea Bacteriana',
-        affectedAnimals: 15,
-        severity: 'low',
-        symptoms: ['Diarrea', 'Deshidratación leve'],
-        firstDetected: '2025-01-12',
-        status: 'resolved'
-      }
-    ],
-    treatments: [
-      {
-        treatmentId: 'treat001',
-        treatmentName: 'Antibiótico Respiratorio',
-        medication: 'Tulathromicina',
-        dosage: '2.5 ml/kg',
-        duration: 5,
-        animalsReceived: 23,
-        successRate: 95.7,
-        cost: 1250.00,
-        sideEffects: ['Hinchazón temporal en sitio de inyección']
-      }
-    ],
-    vaccinations: [
-      {
-        vaccineId: 'vacc001',
-        vaccineName: 'Vacuna Respiratoria Polivalente',
-        animalsVaccinated: 1200,
-        dosesAdministered: 1200,
-        effectivenessRate: 97.5,
-        nextDueDate: '2025-07-01',
-        cost: 3600.00,
-        batch: 'RES2025A'
-      }
-    ],
-    createdAt: '2025-01-31T14:30:00Z',
-    updatedAt: '2025-01-31T16:20:00Z',
-    status: 'active',
-    veterinarian: 'Dr. Ana Martínez',
-    createdBy: 'Juan Pérez'
-  },
-  {
-    id: '2',
-    title: 'Brote de Fiebre Aftosa - Potrero Norte',
-    description: 'Análisis y control de brote detectado en sector norte',
-    reportType: 'disease_outbreak',
-    period: {
-      startDate: '2025-01-10',
-      endDate: '2025-01-25',
-      type: 'custom'
-    },
-    location: 'Potrero Norte',
-    healthMetrics: {
-      totalAnimalsEvaluated: 324,
-      healthyAnimals: 298,
-      sickAnimals: 26,
-      underTreatment: 26,
-      recovered: 18,
-      deaths: 2,
-      averageRecoveryTime: 18.3,
-      treatmentSuccessRate: 92.3,
-      vaccinationCoverage: 100.0,
-      totalTreatmentCost: 8750.25,
-      averageCostPerAnimal: 27.01,
-      preventiveMeasures: 15
-    },
-    diseases: [
-      {
-        diseaseId: 'viral001',
-        diseaseName: 'Fiebre Aftosa',
-        affectedAnimals: 26,
-        severity: 'high',
-        symptoms: ['Fiebre alta', 'Lesiones en boca', 'Cojera', 'Salivación excesiva'],
-        firstDetected: '2025-01-10',
-        status: 'contained'
-      }
-    ],
-    treatments: [
-      {
-        treatmentId: 'treat002',
-        treatmentName: 'Tratamiento Sintomático Aftosa',
-        medication: 'Antiinflamatorio + Antibiótico',
-        dosage: 'Según protocolo veterinario',
-        duration: 14,
-        animalsReceived: 26,
-        successRate: 92.3,
-        cost: 8750.25
-      }
-    ],
-    vaccinations: [
-      {
-        vaccineId: 'vacc002',
-        vaccineName: 'Vacuna Aftosa Refuerzo',
-        animalsVaccinated: 324,
-        dosesAdministered: 324,
-        effectivenessRate: 98.5,
-        nextDueDate: '2025-12-01',
-        cost: 1620.00,
-        batch: 'AFT2025B'
-      }
-    ],
-    createdAt: '2025-01-25T11:15:00Z',
-    updatedAt: '2025-01-26T09:30:00Z',
-    status: 'active',
-    veterinarian: 'Dr. Carlos Rodríguez',
-    createdBy: 'María González'
-  },
-  {
-    id: '3',
-    title: 'Programa de Vacunación Q4 2024',
-    description: 'Reporte completo del programa de vacunación del cuarto trimestre',
-    reportType: 'vaccination_report',
-    period: {
-      startDate: '2024-10-01',
-      endDate: '2024-12-31',
-      type: 'quarterly'
-    },
-    location: 'Todas las ubicaciones',
-    healthMetrics: {
-      totalAnimalsEvaluated: 1248,
-      healthyAnimals: 1195,
-      sickAnimals: 38,
-      underTreatment: 15,
-      recovered: 23,
-      deaths: 5,
-      averageRecoveryTime: 8.2,
-      treatmentSuccessRate: 97.8,
-      vaccinationCoverage: 99.2,
-      totalTreatmentCost: 2850.75,
-      averageCostPerAnimal: 2.28,
-      preventiveMeasures: 125
-    },
-    diseases: [],
-    treatments: [],
-    vaccinations: [
-      {
-        vaccineId: 'vacc003',
-        vaccineName: 'Vacuna Triple Bovina',
-        animalsVaccinated: 1238,
-        dosesAdministered: 1238,
-        effectivenessRate: 99.1,
-        nextDueDate: '2025-10-01',
-        cost: 9904.00,
-        batch: 'TRI2024D'
-      },
-      {
-        vaccineId: 'vacc004',
-        vaccineName: 'Vacuna Brucelosis',
-        animalsVaccinated: 156,
-        dosesAdministered: 156,
-        effectivenessRate: 100.0,
-        nextDueDate: '2027-10-01',
-        cost: 780.00,
-        batch: 'BRU2024C'
-      }
-    ],
-    createdAt: '2025-01-05T10:45:00Z',
-    updatedAt: '2025-01-05T10:45:00Z',
-    status: 'archived',
-    veterinarian: 'Dr. Ana Martínez',
-    createdBy: 'Carlos Rodríguez'
-  }
-];
+// ===================================================================
+// SERVICIOS DE API
+// ===================================================================
 
-// Configuración de tipos de reporte
+class ApiService {
+  private static baseURL = API_BASE_URL;
+  private static authToken: string | null = null;
+
+  // Configurar token de autenticación
+  static setAuthToken(token: string) {
+    this.authToken = token;
+  }
+
+  // Obtener headers para las requests
+  private static getHeaders(): HeadersInit {
+    const headers: HeadersInit = {
+      'Content-Type': 'application/json',
+    };
+
+    if (this.authToken) {
+      headers['Authorization'] = `Bearer ${this.authToken}`;
+    }
+
+    return headers;
+  }
+
+  // Método genérico para hacer requests
+  private static async request<T>(
+    endpoint: string, 
+    options: RequestInit = {}
+  ): Promise<ApiResponse<T>> {
+    const url = `${this.baseURL}${endpoint}`;
+    
+    try {
+      const response = await fetch(url, {
+        headers: this.getHeaders(),
+        ...options,
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      console.error(`Error en API request a ${url}:`, error);
+      throw error;
+    }
+  }
+
+  // Verificar conexión con el backend
+  static async checkConnection(): Promise<boolean> {
+    try {
+      const response = await this.request(API_ENDPOINTS.PING);
+      return response.success;
+    } catch (error) {
+      return false;
+    }
+  }
+
+  // Obtener reportes de salud
+  static async getHealthReports(filters?: {
+    type?: string;
+    status?: string;
+    startDate?: string;
+    endDate?: string;
+    search?: string;
+  }): Promise<ApiResponse<HealthReport[]>> {
+    const queryParams = new URLSearchParams();
+    
+    if (filters) {
+      Object.entries(filters).forEach(([key, value]) => {
+        if (value) queryParams.append(key, value);
+      });
+    }
+
+    const endpoint = `${API_ENDPOINTS.HEALTH_REPORTS}${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
+    return this.request<HealthReport[]>(endpoint);
+  }
+
+  // Obtener reporte de salud específico
+  static async getHealthReport(id: string): Promise<ApiResponse<HealthReport>> {
+    return this.request<HealthReport>(`${API_ENDPOINTS.HEALTH_REPORTS}/${id}`);
+  }
+
+  // Crear nuevo reporte de salud
+  static async createHealthReport(report: Omit<HealthReport, 'id' | 'createdAt' | 'updatedAt'>): Promise<ApiResponse<HealthReport>> {
+    return this.request<HealthReport>(API_ENDPOINTS.HEALTH_REPORTS, {
+      method: 'POST',
+      body: JSON.stringify(report),
+    });
+  }
+
+  // Actualizar reporte de salud
+  static async updateHealthReport(id: string, report: Partial<HealthReport>): Promise<ApiResponse<HealthReport>> {
+    return this.request<HealthReport>(`${API_ENDPOINTS.HEALTH_REPORTS}/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(report),
+    });
+  }
+
+  // Eliminar reporte de salud
+  static async deleteHealthReport(id: string): Promise<ApiResponse<void>> {
+    return this.request<void>(`${API_ENDPOINTS.HEALTH_REPORTS}/${id}`, {
+      method: 'DELETE',
+    });
+  }
+
+  // Obtener overview de salud
+  static async getHealthOverview(params?: {
+    startDate?: string;
+    endDate?: string;
+    period?: string;
+    includeDetails?: boolean;
+  }): Promise<ApiResponse<any>> {
+    const queryParams = new URLSearchParams();
+    
+    if (params) {
+      Object.entries(params).forEach(([key, value]) => {
+        if (value !== undefined) queryParams.append(key, String(value));
+      });
+    }
+
+    const endpoint = `${API_ENDPOINTS.HEALTH_OVERVIEW}${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
+    return this.request<any>(endpoint);
+  }
+
+  // Obtener dashboard de salud
+  static async getHealthDashboard(): Promise<ApiResponse<any>> {
+    return this.request<any>(API_ENDPOINTS.HEALTH_DASHBOARD);
+  }
+}
+
+// ===================================================================
+// CONFIGURACIÓN DE TIPOS DE REPORTE
+// ===================================================================
+
 const REPORT_TYPE_CONFIG = {
   general_health: {
     label: 'Salud General',
@@ -393,6 +364,49 @@ const REPORT_TYPE_CONFIG = {
     icon: <Stethoscope className="w-4 h-4" />,
     color: '#2e8b57'
   }
+};
+
+// ===================================================================
+// HOOKS PERSONALIZADOS
+// ===================================================================
+
+// Hook para verificar conexión con el backend
+const useBackendConnection = () => {
+  const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>({
+    isConnected: false,
+    isLoading: true,
+    lastCheck: null,
+    error: null
+  });
+
+  const checkConnection = useCallback(async () => {
+    setConnectionStatus(prev => ({ ...prev, isLoading: true, error: null }));
+    
+    try {
+      const isConnected = await ApiService.checkConnection();
+      setConnectionStatus({
+        isConnected,
+        isLoading: false,
+        lastCheck: new Date(),
+        error: isConnected ? null : 'No se puede conectar con el servidor'
+      });
+    } catch (error) {
+      setConnectionStatus({
+        isConnected: false,
+        isLoading: false,
+        lastCheck: new Date(),
+        error: error instanceof Error ? error.message : 'Error desconocido'
+      });
+    }
+  }, []);
+
+  useEffect(() => {
+    checkConnection();
+    const interval = setInterval(checkConnection, 30000); // Check every 30 seconds
+    return () => clearInterval(interval);
+  }, [checkConnection]);
+
+  return { connectionStatus, checkConnection };
 };
 
 // Hook para geolocalización
@@ -476,6 +490,10 @@ const useGeolocation = () => {
   return { location, isLoading, error, getCurrentLocation };
 };
 
+// ===================================================================
+// FUNCIONES DE UTILIDAD
+// ===================================================================
+
 // Funciones de utilidad para descarga
 const downloadAsJSON = (data: any, filename: string) => {
   const jsonString = JSON.stringify(data, null, 2);
@@ -524,6 +542,59 @@ const downloadAsCSV = (report: HealthReport) => {
   link.download = `reporte_salud_${report.id}.csv`;
   link.click();
   URL.revokeObjectURL(url);
+};
+
+// ===================================================================
+// COMPONENTES
+// ===================================================================
+
+// Componente de estado de conexión
+const ConnectionStatus: React.FC<{ connectionStatus: ConnectionStatus; onRetry: () => void }> = ({ 
+  connectionStatus, 
+  onRetry 
+}) => {
+  if (connectionStatus.isLoading) {
+    return (
+      <div className="flex items-center gap-2 px-3 py-2 bg-yellow-50 border border-yellow-200 rounded-lg">
+        <RefreshCw className="w-4 h-4 text-yellow-600 animate-spin" />
+        <span className="text-sm text-yellow-800">Verificando conexión...</span>
+      </div>
+    );
+  }
+
+  if (!connectionStatus.isConnected) {
+    return (
+      <div className="flex items-center justify-between px-3 py-2 bg-red-50 border border-red-200 rounded-lg">
+        <div className="flex items-center gap-2">
+          <WifiOff className="w-4 h-4 text-red-600" />
+          <div>
+            <span className="text-sm text-red-800 font-medium">Sin conexión al servidor</span>
+            {connectionStatus.error && (
+              <p className="text-xs text-red-600 mt-1">{connectionStatus.error}</p>
+            )}
+          </div>
+        </div>
+        <button
+          onClick={onRetry}
+          className="px-2 py-1 text-xs bg-red-100 text-red-700 rounded hover:bg-red-200 transition-colors"
+        >
+          Reintentar
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-2 px-3 py-2 bg-green-50 border border-green-200 rounded-lg">
+      <CheckCircle className="w-4 h-4 text-green-600" />
+      <span className="text-sm text-green-800">Conectado al servidor</span>
+      {connectionStatus.lastCheck && (
+        <span className="text-xs text-green-600">
+          {connectionStatus.lastCheck.toLocaleTimeString()}
+        </span>
+      )}
+    </div>
+  );
 };
 
 // Componente Modal reutilizable
@@ -578,27 +649,9 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, children, title, size = 
   );
 };
 
-// Componente de Vista Detallada del Reporte
+// Componente de Vista Detallada del Reporte (similar al original pero compacto)
 const ViewReportModal: React.FC<ViewReportModalProps> = ({ report, isOpen, onClose }) => {
-  const getSeverityColor = (severity: DiseaseSeverity) => {
-    switch (severity) {
-      case 'low': return 'text-green-600 bg-green-100';
-      case 'medium': return 'text-yellow-600 bg-yellow-100';
-      case 'high': return 'text-orange-600 bg-orange-100';
-      case 'critical': return 'text-red-600 bg-red-100';
-      default: return 'text-gray-600 bg-gray-100';
-    }
-  };
 
-  const getStatusColor = (status: DiseaseStatus) => {
-    switch (status) {
-      case 'active': return 'text-red-600 bg-red-100';
-      case 'contained': return 'text-yellow-600 bg-yellow-100';
-      case 'resolved': return 'text-green-600 bg-green-100';
-      case 'monitoring': return 'text-blue-600 bg-blue-100';
-      default: return 'text-gray-600 bg-gray-100';
-    }
-  };
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Vista Detallada del Reporte" size="full">
@@ -750,138 +803,6 @@ const ViewReportModal: React.FC<ViewReportModalProps> = ({ report, isOpen, onClo
           </div>
         </div>
 
-        {/* Enfermedades */}
-        {report.diseases.length > 0 && (
-          <div>
-            <h3 className="text-lg font-semibold text-gray-800 mb-4">Enfermedades Registradas</h3>
-            <div className="space-y-4">
-              {report.diseases.map((disease) => (
-                <div key={disease.diseaseId} className="bg-white border rounded-lg p-4">
-                  <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
-                    <div className="flex-1">
-                      <h4 className="font-semibold text-gray-800 mb-2">{disease.diseaseName}</h4>
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-                        <div>
-                          <span className="font-medium text-gray-600">Animales Afectados:</span>
-                          <p className="text-gray-800">{disease.affectedAnimals}</p>
-                        </div>
-                        <div>
-                          <span className="font-medium text-gray-600">Primera Detección:</span>
-                          <p className="text-gray-800">{new Date(disease.firstDetected).toLocaleDateString()}</p>
-                        </div>
-                        <div>
-                          <span className="font-medium text-gray-600">Síntomas:</span>
-                          <p className="text-gray-800">{disease.symptoms.join(', ')}</p>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="flex flex-col gap-2">
-                      <span className={cn(
-                        "inline-flex px-2 py-1 text-xs font-medium rounded-full",
-                        getSeverityColor(disease.severity)
-                      )}>
-                        Severidad: {disease.severity}
-                      </span>
-                      <span className={cn(
-                        "inline-flex px-2 py-1 text-xs font-medium rounded-full",
-                        getStatusColor(disease.status)
-                      )}>
-                        Estado: {disease.status}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Tratamientos */}
-        {report.treatments.length > 0 && (
-          <div>
-            <h3 className="text-lg font-semibold text-gray-800 mb-4">Tratamientos Aplicados</h3>
-            <div className="space-y-4">
-              {report.treatments.map((treatment) => (
-                <div key={treatment.treatmentId} className="bg-white border rounded-lg p-4">
-                  <h4 className="font-semibold text-gray-800 mb-3">{treatment.treatmentName}</h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 text-sm">
-                    <div>
-                      <span className="font-medium text-gray-600">Medicamento:</span>
-                      <p className="text-gray-800">{treatment.medication}</p>
-                    </div>
-                    <div>
-                      <span className="font-medium text-gray-600">Dosificación:</span>
-                      <p className="text-gray-800">{treatment.dosage}</p>
-                    </div>
-                    <div>
-                      <span className="font-medium text-gray-600">Duración:</span>
-                      <p className="text-gray-800">{treatment.duration} días</p>
-                    </div>
-                    <div>
-                      <span className="font-medium text-gray-600">Animales Tratados:</span>
-                      <p className="text-gray-800">{treatment.animalsReceived}</p>
-                    </div>
-                    <div>
-                      <span className="font-medium text-gray-600">Tasa de Éxito:</span>
-                      <p className="text-gray-800">{treatment.successRate.toFixed(1)}%</p>
-                    </div>
-                    <div>
-                      <span className="font-medium text-gray-600">Costo:</span>
-                      <p className="text-gray-800">${treatment.cost.toLocaleString()}</p>
-                    </div>
-                    {treatment.sideEffects && treatment.sideEffects.length > 0 && (
-                      <div className="md:col-span-2">
-                        <span className="font-medium text-gray-600">Efectos Secundarios:</span>
-                        <p className="text-gray-800">{treatment.sideEffects.join(', ')}</p>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Vacunaciones */}
-        {report.vaccinations.length > 0 && (
-          <div>
-            <h3 className="text-lg font-semibold text-gray-800 mb-4">Vacunaciones</h3>
-            <div className="space-y-4">
-              {report.vaccinations.map((vaccination) => (
-                <div key={vaccination.vaccineId} className="bg-white border rounded-lg p-4">
-                  <h4 className="font-semibold text-gray-800 mb-3">{vaccination.vaccineName}</h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 text-sm">
-                    <div>
-                      <span className="font-medium text-gray-600">Animales Vacunados:</span>
-                      <p className="text-gray-800">{vaccination.animalsVaccinated}</p>
-                    </div>
-                    <div>
-                      <span className="font-medium text-gray-600">Dosis Administradas:</span>
-                      <p className="text-gray-800">{vaccination.dosesAdministered}</p>
-                    </div>
-                    <div>
-                      <span className="font-medium text-gray-600">Eficacia:</span>
-                      <p className="text-gray-800">{vaccination.effectivenessRate.toFixed(1)}%</p>
-                    </div>
-                    <div>
-                      <span className="font-medium text-gray-600">Próxima Dosis:</span>
-                      <p className="text-gray-800">{new Date(vaccination.nextDueDate).toLocaleDateString()}</p>
-                    </div>
-                    <div>
-                      <span className="font-medium text-gray-600">Costo:</span>
-                      <p className="text-gray-800">${vaccination.cost.toLocaleString()}</p>
-                    </div>
-                    <div>
-                      <span className="font-medium text-gray-600">Lote:</span>
-                      <p className="text-gray-800">{vaccination.batch}</p>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
         {/* Información de auditoría */}
         <div className="bg-gray-50 rounded-lg p-4">
           <h3 className="text-lg font-semibold text-gray-800 mb-3">Información de Auditoría</h3>
@@ -901,7 +822,7 @@ const ViewReportModal: React.FC<ViewReportModalProps> = ({ report, isOpen, onClo
   );
 };
 
-// Componente Formulario de Reporte de Salud (versión mejorada)
+// Componente Formulario de Reporte de Salud (versión compacta para backend)
 const HealthReportForm: React.FC<ReportFormProps> = ({ report, onSave, onCancel, isEditing }) => {
   const [formData, setFormData] = useState<Partial<HealthReport>>({
     title: report?.title || '',
@@ -935,6 +856,7 @@ const HealthReportForm: React.FC<ReportFormProps> = ({ report, onSave, onCancel,
   });
 
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const { isLoading: locationLoading, error: locationError, getCurrentLocation } = useGeolocation();
 
   // Manejar obtención de ubicación actual
@@ -1048,27 +970,35 @@ const HealthReportForm: React.FC<ReportFormProps> = ({ report, onSave, onCancel,
   };
 
   // Manejar envío del formulario
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!validateForm()) {
       return;
     }
 
-    onSave({
-      title: formData.title!,
-      description: formData.description!,
-      reportType: formData.reportType!,
-      location: formData.location!,
-      veterinarian: formData.veterinarian!,
-      period: formData.period!,
-      healthMetrics: formData.healthMetrics!,
-      diseases: formData.diseases!,
-      treatments: formData.treatments!,
-      vaccinations: formData.vaccinations!,
-      status: formData.status!,
-      createdBy: 'Usuario Actual' // En una app real vendría del contexto de auth
-    });
+    setIsSubmitting(true);
+    try {
+      await onSave({
+        title: formData.title!,
+        description: formData.description!,
+        reportType: formData.reportType!,
+        location: formData.location!,
+        veterinarian: formData.veterinarian!,
+        period: formData.period!,
+        healthMetrics: formData.healthMetrics!,
+        diseases: formData.diseases!,
+        treatments: formData.treatments!,
+        vaccinations: formData.vaccinations!,
+        status: formData.status!,
+        createdBy: 'Usuario Actual' // En una app real vendría del contexto de auth
+      });
+    } catch (error) {
+      console.error('Error al guardar reporte:', error);
+      // Aquí podrías mostrar un mensaje de error al usuario
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -1093,6 +1023,7 @@ const HealthReportForm: React.FC<ReportFormProps> = ({ report, onSave, onCancel,
                 errors.title ? "border-red-500" : "border-gray-300"
               )}
               placeholder="Ej: Evaluación de Salud General - Enero 2025"
+              disabled={isSubmitting}
             />
             {errors.title && (
               <p className="text-red-500 text-xs mt-1">{errors.title}</p>
@@ -1107,6 +1038,7 @@ const HealthReportForm: React.FC<ReportFormProps> = ({ report, onSave, onCancel,
               value={formData.reportType}
               onChange={(e) => handleInputChange('reportType', e.target.value as HealthReportType)}
               className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2d6f51] focus:border-transparent transition-colors"
+              disabled={isSubmitting}
             >
               {Object.entries(REPORT_TYPE_CONFIG).map(([key, config]) => (
                 <option key={key} value={key}>
@@ -1130,11 +1062,12 @@ const HealthReportForm: React.FC<ReportFormProps> = ({ report, onSave, onCancel,
                   errors.location ? "border-red-500" : "border-gray-300"
                 )}
                 placeholder="Ej: Potrero Norte, Todas las ubicaciones"
+                disabled={isSubmitting}
               />
               <button
                 type="button"
                 onClick={handleGetCurrentLocation}
-                disabled={locationLoading}
+                disabled={locationLoading || isSubmitting}
                 className="px-3 py-2 bg-[#2d6f51] text-white rounded-lg hover:bg-[#265a44] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 title="Obtener ubicación actual"
               >
@@ -1162,6 +1095,7 @@ const HealthReportForm: React.FC<ReportFormProps> = ({ report, onSave, onCancel,
                 errors.veterinarian ? "border-red-500" : "border-gray-300"
               )}
               placeholder="Ej: Dr. Ana Martínez"
+              disabled={isSubmitting}
             />
             {errors.veterinarian && (
               <p className="text-red-500 text-xs mt-1">{errors.veterinarian}</p>
@@ -1183,6 +1117,7 @@ const HealthReportForm: React.FC<ReportFormProps> = ({ report, onSave, onCancel,
               errors.description ? "border-red-500" : "border-gray-300"
             )}
             placeholder="Describe el propósito y alcance del reporte de salud"
+            disabled={isSubmitting}
           />
           {errors.description && (
             <p className="text-red-500 text-xs mt-1">{errors.description}</p>
@@ -1205,6 +1140,7 @@ const HealthReportForm: React.FC<ReportFormProps> = ({ report, onSave, onCancel,
               value={formData.period?.type}
               onChange={(e) => handlePeriodChange('type', e.target.value)}
               className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2d6f51] focus:border-transparent transition-colors"
+              disabled={isSubmitting}
             >
               <option value="daily">Diario</option>
               <option value="weekly">Semanal</option>
@@ -1227,6 +1163,7 @@ const HealthReportForm: React.FC<ReportFormProps> = ({ report, onSave, onCancel,
                 "w-full px-3 py-2 text-sm border rounded-lg focus:ring-2 focus:ring-[#2d6f51] focus:border-transparent transition-colors",
                 errors.startDate ? "border-red-500" : "border-gray-300"
               )}
+              disabled={isSubmitting}
             />
             {errors.startDate && (
               <p className="text-red-500 text-xs mt-1">{errors.startDate}</p>
@@ -1245,6 +1182,7 @@ const HealthReportForm: React.FC<ReportFormProps> = ({ report, onSave, onCancel,
                 "w-full px-3 py-2 text-sm border rounded-lg focus:ring-2 focus:ring-[#2d6f51] focus:border-transparent transition-colors",
                 errors.endDate ? "border-red-500" : "border-gray-300"
               )}
+              disabled={isSubmitting}
             />
             {errors.endDate && (
               <p className="text-red-500 text-xs mt-1">{errors.endDate}</p>
@@ -1253,7 +1191,7 @@ const HealthReportForm: React.FC<ReportFormProps> = ({ report, onSave, onCancel,
         </div>
       </div>
 
-      {/* Métricas de salud */}
+      {/* Métricas de salud - versión compacta */}
       <div className="space-y-3 lg:space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
           <h3 className="text-base lg:text-lg font-medium text-gray-800 border-b pb-2 flex-1">
@@ -1262,7 +1200,8 @@ const HealthReportForm: React.FC<ReportFormProps> = ({ report, onSave, onCancel,
           <button
             type="button"
             onClick={calculateDerivedMetrics}
-            className="text-xs sm:text-sm text-[#2d6f51] hover:text-[#265a44] font-medium whitespace-nowrap"
+            disabled={isSubmitting}
+            className="text-xs sm:text-sm text-[#2d6f51] hover:text-[#265a44] font-medium whitespace-nowrap disabled:opacity-50"
           >
             Calcular Automáticamente
           </button>
@@ -1287,6 +1226,7 @@ const HealthReportForm: React.FC<ReportFormProps> = ({ report, onSave, onCancel,
               value={formData.healthMetrics?.totalAnimalsEvaluated || 0}
               onChange={(e) => handleMetricsChange('totalAnimalsEvaluated', parseInt(e.target.value) || 0)}
               className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2d6f51] focus:border-transparent transition-colors"
+              disabled={isSubmitting}
             />
           </div>
 
@@ -1301,6 +1241,7 @@ const HealthReportForm: React.FC<ReportFormProps> = ({ report, onSave, onCancel,
               value={formData.healthMetrics?.healthyAnimals || 0}
               onChange={(e) => handleMetricsChange('healthyAnimals', parseInt(e.target.value) || 0)}
               className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2d6f51] focus:border-transparent transition-colors"
+              disabled={isSubmitting}
             />
           </div>
 
@@ -1315,6 +1256,7 @@ const HealthReportForm: React.FC<ReportFormProps> = ({ report, onSave, onCancel,
               value={formData.healthMetrics?.sickAnimals || 0}
               onChange={(e) => handleMetricsChange('sickAnimals', parseInt(e.target.value) || 0)}
               className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2d6f51] focus:border-transparent transition-colors"
+              disabled={isSubmitting}
             />
           </div>
 
@@ -1329,12 +1271,15 @@ const HealthReportForm: React.FC<ReportFormProps> = ({ report, onSave, onCancel,
               value={formData.healthMetrics?.underTreatment || 0}
               onChange={(e) => handleMetricsChange('underTreatment', parseInt(e.target.value) || 0)}
               className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2d6f51] focus:border-transparent transition-colors"
+              disabled={isSubmitting}
             />
           </div>
+        </div>
 
+        {/* Métricas adicionales condensadas */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           <div>
             <label className="block text-xs lg:text-sm font-medium text-gray-700 mb-1">
-              <TrendingUp className="w-3 h-3 lg:w-4 lg:h-4 inline mr-1 text-green-600" />
               Recuperados
             </label>
             <input
@@ -1343,12 +1288,12 @@ const HealthReportForm: React.FC<ReportFormProps> = ({ report, onSave, onCancel,
               value={formData.healthMetrics?.recovered || 0}
               onChange={(e) => handleMetricsChange('recovered', parseInt(e.target.value) || 0)}
               className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2d6f51] focus:border-transparent transition-colors"
+              disabled={isSubmitting}
             />
           </div>
 
           <div>
             <label className="block text-xs lg:text-sm font-medium text-gray-700 mb-1">
-              <TrendingDown className="w-3 h-3 lg:w-4 lg:h-4 inline mr-1 text-red-800" />
               Muertes
             </label>
             <input
@@ -1357,44 +1302,12 @@ const HealthReportForm: React.FC<ReportFormProps> = ({ report, onSave, onCancel,
               value={formData.healthMetrics?.deaths || 0}
               onChange={(e) => handleMetricsChange('deaths', parseInt(e.target.value) || 0)}
               className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2d6f51] focus:border-transparent transition-colors"
+              disabled={isSubmitting}
             />
           </div>
 
           <div>
             <label className="block text-xs lg:text-sm font-medium text-gray-700 mb-1">
-              Tiempo Prom. Recuperación (días)
-            </label>
-            <input
-              type="number"
-              min="0"
-              step="0.1"
-              value={formData.healthMetrics?.averageRecoveryTime || 0}
-              onChange={(e) => handleMetricsChange('averageRecoveryTime', parseFloat(e.target.value) || 0)}
-              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2d6f51] focus:border-transparent transition-colors"
-            />
-          </div>
-
-          <div>
-            <label className="block text-xs lg:text-sm font-medium text-gray-700 mb-1">
-              Tasa Éxito Tratamiento (%)
-            </label>
-            <input
-              type="number"
-              min="0"
-              max="100"
-              step="0.1"
-              value={formData.healthMetrics?.treatmentSuccessRate || 0}
-              onChange={(e) => handleMetricsChange('treatmentSuccessRate', parseFloat(e.target.value) || 0)}
-              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2d6f51] focus:border-transparent transition-colors"
-            />
-          </div>
-        </div>
-
-        {/* Métricas adicionales */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-3 border-t border-gray-200">
-          <div>
-            <label className="block text-xs lg:text-sm font-medium text-gray-700 mb-1">
-              <Syringe className="w-3 h-3 lg:w-4 lg:h-4 inline mr-1" />
               Cobertura Vacunación (%)
             </label>
             <input
@@ -1405,12 +1318,13 @@ const HealthReportForm: React.FC<ReportFormProps> = ({ report, onSave, onCancel,
               value={formData.healthMetrics?.vaccinationCoverage || 0}
               onChange={(e) => handleMetricsChange('vaccinationCoverage', parseFloat(e.target.value) || 0)}
               className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2d6f51] focus:border-transparent transition-colors"
+              disabled={isSubmitting}
             />
           </div>
 
           <div>
             <label className="block text-xs lg:text-sm font-medium text-gray-700 mb-1">
-              Costo Total Tratamiento ($)
+              Costo Total ($)
             </label>
             <input
               type="number"
@@ -1419,34 +1333,7 @@ const HealthReportForm: React.FC<ReportFormProps> = ({ report, onSave, onCancel,
               value={formData.healthMetrics?.totalTreatmentCost || 0}
               onChange={(e) => handleMetricsChange('totalTreatmentCost', parseFloat(e.target.value) || 0)}
               className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2d6f51] focus:border-transparent transition-colors"
-            />
-          </div>
-
-          <div>
-            <label className="block text-xs lg:text-sm font-medium text-gray-700 mb-1">
-              Costo Prom. por Animal ($)
-            </label>
-            <input
-              type="number"
-              min="0"
-              step="0.01"
-              value={formData.healthMetrics?.averageCostPerAnimal || 0}
-              onChange={(e) => handleMetricsChange('averageCostPerAnimal', parseFloat(e.target.value) || 0)}
-              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2d6f51] focus:border-transparent transition-colors"
-            />
-          </div>
-
-          <div>
-            <label className="block text-xs lg:text-sm font-medium text-gray-700 mb-1">
-              <Shield className="w-3 h-3 lg:w-4 lg:h-4 inline mr-1" />
-              Medidas Preventivas
-            </label>
-            <input
-              type="number"
-              min="0"
-              value={formData.healthMetrics?.preventiveMeasures || 0}
-              onChange={(e) => handleMetricsChange('preventiveMeasures', parseInt(e.target.value) || 0)}
-              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2d6f51] focus:border-transparent transition-colors"
+              disabled={isSubmitting}
             />
           </div>
         </div>
@@ -1466,6 +1353,7 @@ const HealthReportForm: React.FC<ReportFormProps> = ({ report, onSave, onCancel,
             value={formData.status}
             onChange={(e) => handleInputChange('status', e.target.value as ReportStatus)}
             className="w-full max-w-xs px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2d6f51] focus:border-transparent transition-colors"
+            disabled={isSubmitting}
           >
             <option value="draft">Borrador</option>
             <option value="active">Activo</option>
@@ -1480,25 +1368,41 @@ const HealthReportForm: React.FC<ReportFormProps> = ({ report, onSave, onCancel,
         <button
           type="button"
           onClick={onCancel}
-          className="w-full sm:w-auto px-4 py-2 text-sm border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+          disabled={isSubmitting}
+          className="w-full sm:w-auto px-4 py-2 text-sm border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
           Cancelar
         </button>
         <button
           type="submit"
-          className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2 text-sm bg-gradient-to-r from-[#2d6f51] to-[#4e9c75] text-white rounded-lg hover:from-[#265a44] hover:to-[#3d7a5c] transition-all duration-200"
+          disabled={isSubmitting}
+          className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2 text-sm bg-gradient-to-r from-[#2d6f51] to-[#4e9c75] text-white rounded-lg hover:from-[#265a44] hover:to-[#3d7a5c] transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          <Save className="w-4 h-4" />
-          {isEditing ? 'Actualizar Reporte' : 'Crear Reporte'}
+          {isSubmitting ? (
+            <>
+              <RefreshCw className="w-4 h-4 animate-spin" />
+              Guardando...
+            </>
+          ) : (
+            <>
+              <Save className="w-4 h-4" />
+              {isEditing ? 'Actualizar Reporte' : 'Crear Reporte'}
+            </>
+          )}
         </button>
       </div>
     </form>
   );
 };
 
-// Componente principal
+// ===================================================================
+// COMPONENTE PRINCIPAL
+// ===================================================================
+
 export const HealthReports: React.FC<HealthReportsProps> = ({ className }) => {
-  const [reports, setReports] = useState<HealthReport[]>(SAMPLE_REPORTS);
+  const [reports, setReports] = useState<HealthReport[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedReport, setSelectedReport] = useState<HealthReport | null>(null);
   const [isEditing, setIsEditing] = useState(false);
@@ -1508,8 +1412,46 @@ export const HealthReports: React.FC<HealthReportsProps> = ({ className }) => {
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [viewReportModal, setViewReportModal] = useState<HealthReport | null>(null);
   const [isMobileFiltersOpen, setIsMobileFiltersOpen] = useState(false);
+  
+  const { connectionStatus, checkConnection } = useBackendConnection();
 
-  // Filtrar reportes
+  // Cargar reportes de salud desde el backend
+  const loadHealthReports = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    
+    try {
+      const filters = {
+        type: filterType !== 'all' ? filterType : undefined,
+        status: filterStatus !== 'all' ? filterStatus : undefined,
+        search: searchTerm || undefined,
+      };
+
+      const response = await ApiService.getHealthReports(filters);
+      
+      if (response.success && response.data) {
+        setReports(response.data);
+      } else {
+        throw new Error(response.message || 'Error al cargar reportes');
+      }
+    } catch (error) {
+      console.error('Error loading health reports:', error);
+      setError(error instanceof Error ? error.message : 'Error al cargar los reportes de salud');
+      // En caso de error, usar datos de ejemplo para demo
+      setReports([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [filterType, filterStatus, searchTerm]);
+
+  // Cargar reportes al montar el componente y cuando cambien los filtros
+  useEffect(() => {
+    if (connectionStatus.isConnected) {
+      loadHealthReports();
+    }
+  }, [connectionStatus.isConnected, loadHealthReports]);
+
+  // Filtrar reportes localmente como fallback
   const filteredReports = reports.filter(report => {
     const matchesSearch = report.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          report.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -1551,38 +1493,51 @@ export const HealthReports: React.FC<HealthReportsProps> = ({ className }) => {
   };
 
   // Guardar reporte (crear o editar)
-  const handleSaveReport = (reportData: Omit<HealthReport, 'id' | 'createdAt' | 'updatedAt'>) => {
-    if (isEditing && selectedReport) {
-      // Editar reporte existente
-      setReports(prev => prev.map(report => 
-        report.id === selectedReport.id 
-          ? {
-              ...reportData,
-              id: selectedReport.id,
-              createdAt: selectedReport.createdAt,
-              updatedAt: new Date().toISOString()
-            }
-          : report
-      ));
-    } else {
-      // Crear nuevo reporte
-      const newReport: HealthReport = {
-        ...reportData,
-        id: Date.now().toString(),
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      };
-      setReports(prev => [newReport, ...prev]);
+  const handleSaveReport = async (reportData: Omit<HealthReport, 'id' | 'createdAt' | 'updatedAt'>) => {
+    try {
+      if (isEditing && selectedReport) {
+        // Editar reporte existente
+        const response = await ApiService.updateHealthReport(selectedReport.id, reportData);
+        if (response.success && response.data) {
+          setReports(prev => prev.map(report => 
+            report.id === selectedReport.id ? response.data! : report
+          ));
+        } else {
+          throw new Error(response.message || 'Error al actualizar el reporte');
+        }
+      } else {
+        // Crear nuevo reporte
+        const response = await ApiService.createHealthReport(reportData);
+        if (response.success && response.data) {
+          setReports(prev => [response.data!, ...prev]);
+        } else {
+          throw new Error(response.message || 'Error al crear el reporte');
+        }
+      }
+      
+      setIsModalOpen(false);
+      setSelectedReport(null);
+    } catch (error) {
+      console.error('Error saving report:', error);
+      throw error; // Re-throw para que el formulario pueda manejar el error
     }
-    
-    setIsModalOpen(false);
-    setSelectedReport(null);
   };
 
   // Eliminar reporte
-  const handleDeleteReport = (reportId: string) => {
-    setReports(prev => prev.filter(report => report.id !== reportId));
-    setDeleteConfirm(null);
+  const handleDeleteReport = async (reportId: string) => {
+    try {
+      const response = await ApiService.deleteHealthReport(reportId);
+      if (response.success) {
+        setReports(prev => prev.filter(report => report.id !== reportId));
+      } else {
+        throw new Error(response.message || 'Error al eliminar el reporte');
+      }
+    } catch (error) {
+      console.error('Error deleting report:', error);
+      setError(error instanceof Error ? error.message : 'Error al eliminar el reporte');
+    } finally {
+      setDeleteConfirm(null);
+    }
   };
 
   // Obtener color del estado
@@ -1632,12 +1587,26 @@ export const HealthReports: React.FC<HealthReportsProps> = ({ className }) => {
 
           <button
             onClick={handleCreateReport}
-            className="w-full sm:w-auto flex items-center justify-center gap-2 px-3 sm:px-4 lg:px-6 py-2 lg:py-3 bg-gradient-to-r from-[#2d6f51] to-[#4e9c75] text-white rounded-lg hover:from-[#265a44] hover:to-[#3d7a5c] transition-all duration-200 shadow-lg text-xs sm:text-sm lg:text-base"
+            disabled={!connectionStatus.isConnected}
+            className="w-full sm:w-auto flex items-center justify-center gap-2 px-3 sm:px-4 lg:px-6 py-2 lg:py-3 bg-gradient-to-r from-[#2d6f51] to-[#4e9c75] text-white rounded-lg hover:from-[#265a44] hover:to-[#3d7a5c] transition-all duration-200 shadow-lg text-xs sm:text-sm lg:text-base disabled:opacity-50 disabled:cursor-not-allowed"
+            title={!connectionStatus.isConnected ? 'Sin conexión al servidor' : ''}
           >
             <Plus className="w-4 h-4" />
             <span className="hidden sm:inline">Nuevo Reporte de Salud</span>
             <span className="sm:hidden">Nuevo Reporte</span>
           </button>
+        </motion.div>
+
+        {/* Estado de conexión */}
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="mb-4 lg:mb-6"
+        >
+          <ConnectionStatus 
+            connectionStatus={connectionStatus} 
+            onRetry={checkConnection}
+          />
         </motion.div>
 
         {/* Filtros y búsqueda */}
@@ -1765,7 +1734,34 @@ export const HealthReports: React.FC<HealthReportsProps> = ({ className }) => {
           transition={{ delay: 0.2 }}
           className="bg-white/95 backdrop-blur-sm rounded-xl shadow-lg border border-white/20 overflow-hidden"
         >
-          {filteredReports.length === 0 ? (
+          {loading ? (
+            <div className="p-6 lg:p-12 text-center">
+              <RefreshCw className="w-10 h-10 lg:w-16 lg:h-16 text-gray-400 mx-auto mb-3 animate-spin" />
+              <h3 className="text-base lg:text-lg font-medium text-gray-800 mb-2">
+                Cargando reportes de salud...
+              </h3>
+              <p className="text-sm text-gray-600">
+                Conectando con el servidor
+              </p>
+            </div>
+          ) : error ? (
+            <div className="p-6 lg:p-12 text-center">
+              <XCircle className="w-10 h-10 lg:w-16 lg:h-16 text-red-400 mx-auto mb-3" />
+              <h3 className="text-base lg:text-lg font-medium text-gray-800 mb-2">
+                Error al cargar reportes
+              </h3>
+              <p className="text-sm text-gray-600 mb-4 lg:mb-6">
+                {error}
+              </p>
+              <button
+                onClick={() => loadHealthReports()}
+                className="inline-flex items-center gap-2 px-4 lg:px-6 py-2 lg:py-3 bg-gradient-to-r from-[#2d6f51] to-[#4e9c75] text-white rounded-lg hover:from-[#265a44] hover:to-[#3d7a5c] transition-all duration-200 text-sm lg:text-base"
+              >
+                <RefreshCw className="w-4 h-4 lg:w-5 lg:h-5" />
+                Reintentar
+              </button>
+            </div>
+          ) : filteredReports.length === 0 ? (
             <div className="p-6 lg:p-12 text-center">
               <Activity className="w-10 h-10 lg:w-16 lg:h-16 text-gray-400 mx-auto mb-3" />
               <h3 className="text-base lg:text-lg font-medium text-gray-800 mb-2">
@@ -1777,7 +1773,7 @@ export const HealthReports: React.FC<HealthReportsProps> = ({ className }) => {
                   : 'Ajusta los filtros o términos de búsqueda'
                 }
               </p>
-              {reports.length === 0 && (
+              {reports.length === 0 && connectionStatus.isConnected && (
                 <button
                   onClick={handleCreateReport}
                   className="inline-flex items-center gap-2 px-4 lg:px-6 py-2 lg:py-3 bg-gradient-to-r from-[#2d6f51] to-[#4e9c75] text-white rounded-lg hover:from-[#265a44] hover:to-[#3d7a5c] transition-all duration-200 text-sm lg:text-base"
