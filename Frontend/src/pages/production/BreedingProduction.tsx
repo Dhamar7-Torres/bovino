@@ -13,6 +13,7 @@ import {
   Save,
   Search,
   MoreVertical,
+  AlertCircle,
 } from 'lucide-react';
 
 // Interfaces y tipos
@@ -112,6 +113,107 @@ interface FormData {
   complications: string;
   nextCycleExpected: string;
   status: 'Activo' | 'Completado' | 'Fallido' | 'Cancelado';
+}
+
+// API Configuration
+const API_BASE_URL = 'http://localhost:5000/api';
+
+// Token management (assumiendo que tienes el token guardado)
+const getAuthToken = (): string | null => {
+  return localStorage.getItem('authToken') || sessionStorage.getItem('authToken');
+};
+
+// API Service
+class BreedingAPI {
+  private static async makeRequest(endpoint: string, options: RequestInit = {}): Promise<any> {
+    const token = getAuthToken();
+    const url = `${API_BASE_URL}${endpoint}`;
+    
+    const defaultHeaders: HeadersInit = {
+      'Content-Type': 'application/json',
+    };
+
+    if (token) {
+      defaultHeaders['Authorization'] = `Bearer ${token}`;
+    }
+
+    const config: RequestInit = {
+      ...options,
+      headers: {
+        ...defaultHeaders,
+        ...options.headers,
+      },
+    };
+
+    try {
+      const response = await fetch(url, config);
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || `HTTP Error: ${response.status}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error(`API Request failed: ${endpoint}`, error);
+      throw error;
+    }
+  }
+
+  // Obtener todos los registros de reproducción
+  static async getBreedingRecords(filters?: {
+    search?: string;
+    status?: string;
+    page?: number;
+    limit?: number;
+  }): Promise<{ data: BreedingRecord[], total: number }> {
+    const params = new URLSearchParams();
+    
+    if (filters?.search) params.append('search', filters.search);
+    if (filters?.status && filters.status !== 'all') params.append('status', filters.status);
+    if (filters?.page) params.append('page', filters.page.toString());
+    if (filters?.limit) params.append('limit', filters.limit.toString());
+
+    const queryString = params.toString();
+    const endpoint = `/reproduction/mating-records${queryString ? `?${queryString}` : ''}`;
+    
+    const response = await this.makeRequest(endpoint);
+    return {
+      data: response.data || [],
+      total: response.total || 0
+    };
+  }
+
+  // Crear un nuevo registro
+  static async createBreedingRecord(record: Omit<BreedingRecord, 'id'>): Promise<BreedingRecord> {
+    const response = await this.makeRequest('/reproduction/mating-records', {
+      method: 'POST',
+      body: JSON.stringify(record),
+    });
+    return response.data;
+  }
+
+  // Actualizar un registro existente
+  static async updateBreedingRecord(id: string, record: Partial<BreedingRecord>): Promise<BreedingRecord> {
+    const response = await this.makeRequest(`/reproduction/mating-records/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(record),
+    });
+    return response.data;
+  }
+
+  // Eliminar un registro
+  static async deleteBreedingRecord(id: string): Promise<void> {
+    await this.makeRequest(`/reproduction/mating-records/${id}`, {
+      method: 'DELETE',
+    });
+  }
+
+  // Obtener estadísticas del dashboard
+  static async getDashboardStats(): Promise<any> {
+    const response = await this.makeRequest('/reproduction/dashboard');
+    return response.data;
+  }
 }
 
 // Componentes básicos con tipado correcto
@@ -226,13 +328,29 @@ const Badge: React.FC<BadgeProps> = ({ children, variant = 'default', className 
   );
 };
 
+// Componente para mostrar errores
+const ErrorAlert: React.FC<{ message: string; onClose?: () => void }> = ({ message, onClose }) => (
+  <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-start gap-3">
+    <AlertCircle className="h-5 w-5 text-red-500 flex-shrink-0 mt-0.5" />
+    <div className="flex-1">
+      <h4 className="text-red-800 font-medium">Error de conexión</h4>
+      <p className="text-red-700 text-sm mt-1">{message}</p>
+    </div>
+    {onClose && (
+      <Button variant="ghost" size="sm" onClick={onClose} className="text-red-500 hover:text-red-700">
+        <X className="h-4 w-4" />
+      </Button>
+    )}
+  </div>
+);
+
 // Componente para dropdown de acciones en móvil
 const ActionDropdown: React.FC<{
   record: BreedingRecord;
   onView: () => void;
   onEdit: () => void;
   onDelete: () => void;
-}> = ({ record, onView, onEdit, onDelete }) => {
+}> = ({ onView, onEdit, onDelete }) => {
   const [isOpen, setIsOpen] = useState(false);
 
   return (
@@ -380,6 +498,8 @@ const BreedingProduction: React.FC = () => {
   const [records, setRecords] = useState<BreedingRecord[]>([]);
   const [filteredRecords, setFilteredRecords] = useState<BreedingRecord[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState<boolean>(false);
   const [currentLocation, setCurrentLocation] = useState<{lat: number, lng: number, name: string}>({
     lat: 16.7569,
     lng: -92.6348,
@@ -424,51 +544,6 @@ const BreedingProduction: React.FC = () => {
     status: 'Activo'
   });
 
-  // Datos de ejemplo
-  const mockData: BreedingRecord[] = [
-    {
-      id: '1',
-      cowId: 'COW001',
-      cowName: 'Esperanza',
-      cowBreed: 'Holstein',
-      cowAge: 4,
-      bullId: 'BULL001',
-      bullName: 'Campeón',
-      bullBreed: 'Holstein',
-      matingType: 'Natural',
-      matingDate: '2024-10-15',
-      expectedBirthDate: '2025-07-22',
-      gestationDays: 280,
-      pregnancyStatus: 'Confirmado',
-      birthStatus: 'Pendiente',
-      veterinarianNotes: 'Embarazo confirmado por ultrasonido.',
-      status: 'Activo',
-      location: { lat: 16.7569, lng: -92.6348, name: 'Potrero A-1' }
-    },
-    {
-      id: '2',
-      cowId: 'COW002',
-      cowName: 'Maravilla',
-      cowBreed: 'Angus',
-      cowAge: 3,
-      matingType: 'Inseminación Artificial',
-      matingDate: '2024-08-10',
-      expectedBirthDate: '2025-05-17',
-      actualBirthDate: '2025-05-15',
-      gestationDays: 278,
-      pregnancyStatus: 'Confirmado',
-      birthStatus: 'Nacido Vivo',
-      calfId: 'CALF001',
-      calfName: 'Pequeño',
-      calfGender: 'Macho',
-      calfWeight: 35,
-      calfHealth: 'Excelente',
-      veterinarianNotes: 'Parto sin complicaciones.',
-      status: 'Completado',
-      location: { lat: 16.7580, lng: -92.6360, name: 'Potrero B-2' }
-    }
-  ];
-
   // Detectar tamaño de pantalla
   useEffect(() => {
     const checkScreenSize = () => {
@@ -483,31 +558,29 @@ const BreedingProduction: React.FC = () => {
 
   // Cargar datos al inicio y obtener ubicación
   useEffect(() => {
-    // Obtener ubicación actual
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          setCurrentLocation({
-            lat: position.coords.latitude,
-            lng: position.coords.longitude,
-            name: `${position.coords.latitude.toFixed(4)}, ${position.coords.longitude.toFixed(4)}`
-          });
-        },
-        (error) => {
-          console.log('Error obteniendo ubicación:', error);
-          // Mantener ubicación por defecto
-        }
-      );
-    }
+    const initializeComponent = async () => {
+      // Obtener ubicación actual
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          (position) => {
+            setCurrentLocation({
+              lat: position.coords.latitude,
+              lng: position.coords.longitude,
+              name: `${position.coords.latitude.toFixed(4)}, ${position.coords.longitude.toFixed(4)}`
+            });
+          },
+          (error) => {
+            console.log('Error obteniendo ubicación:', error);
+            // Mantener ubicación por defecto
+          }
+        );
+      }
 
-    // Cargar datos simulados
-    const timer = setTimeout(() => {
-      setRecords(mockData);
-      setFilteredRecords(mockData);
-      setLoading(false);
-    }, 1000);
+      // Cargar registros de reproducción
+      await loadBreedingRecords();
+    };
 
-    return () => clearTimeout(timer);
+    initializeComponent();
   }, []);
 
   // Filtrar registros cuando cambian los filtros
@@ -564,6 +637,24 @@ const BreedingProduction: React.FC = () => {
     }
   }, [form.matingDate, form.actualBirthDate]);
 
+  // Funciones de API
+  const loadBreedingRecords = async (): Promise<void> => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      const result = await BreedingAPI.getBreedingRecords();
+      setRecords(result.data);
+      setFilteredRecords(result.data);
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Error desconocido al cargar los registros';
+      setError(`No se pudieron cargar los registros: ${errorMessage}`);
+      console.error('Error loading breeding records:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Funciones principales
   const resetForm = (): void => {
     setForm({
@@ -597,6 +688,7 @@ const BreedingProduction: React.FC = () => {
     resetForm();
     setEditingRecord(null);
     setShowCreateModal(true);
+    setError(null);
   };
 
   const openEditModal = (record: BreedingRecord): void => {
@@ -627,69 +719,91 @@ const BreedingProduction: React.FC = () => {
       status: record.status
     });
     setShowEditModal(true);
+    setError(null);
   };
 
-  const saveRecord = (): void => {
+  const saveRecord = async (): Promise<void> => {
     if (!form.cowId || !form.cowName || !form.matingDate) {
-      alert('Por favor complete los campos obligatorios: ID de la vaca, nombre y fecha de apareamiento');
+      setError('Por favor complete los campos obligatorios: ID de la vaca, nombre y fecha de apareamiento');
       return;
     }
 
-    const recordData: BreedingRecord = {
-      id: editingRecord ? editingRecord.id : Date.now().toString(),
-      cowId: form.cowId,
-      cowName: form.cowName,
-      cowBreed: form.cowBreed,
-      cowAge: parseInt(form.cowAge) || 0,
-      bullId: form.bullId || undefined,
-      bullName: form.bullName || undefined,
-      bullBreed: form.bullBreed || undefined,
-      matingType: form.matingType,
-      matingDate: form.matingDate,
-      expectedBirthDate: form.expectedBirthDate,
-      actualBirthDate: form.actualBirthDate || undefined,
-      gestationDays: parseInt(form.gestationDays) || 0,
-      pregnancyStatus: form.pregnancyStatus,
-      birthStatus: form.birthStatus,
-      calfId: form.calfId || undefined,
-      calfName: form.calfName || undefined,
-      calfGender: form.calfGender || undefined,
-      calfWeight: parseFloat(form.calfWeight) || undefined,
-      calfHealth: form.calfHealth || undefined,
-      veterinarianNotes: form.veterinarianNotes || undefined,
-      complications: form.complications || undefined,
-      nextCycleExpected: form.nextCycleExpected || undefined,
-      status: form.status,
-      location: {
-        lat: currentLocation.lat,
-        lng: currentLocation.lng,
-        name: currentLocation.name
+    try {
+      setSaving(true);
+      setError(null);
+
+      const recordData: BreedingRecord = {
+        id: editingRecord ? editingRecord.id : '', // El backend generará el ID
+        cowId: form.cowId,
+        cowName: form.cowName,
+        cowBreed: form.cowBreed,
+        cowAge: parseInt(form.cowAge) || 0,
+        bullId: form.bullId || undefined,
+        bullName: form.bullName || undefined,
+        bullBreed: form.bullBreed || undefined,
+        matingType: form.matingType,
+        matingDate: form.matingDate,
+        expectedBirthDate: form.expectedBirthDate,
+        actualBirthDate: form.actualBirthDate || undefined,
+        gestationDays: parseInt(form.gestationDays) || 0,
+        pregnancyStatus: form.pregnancyStatus,
+        birthStatus: form.birthStatus,
+        calfId: form.calfId || undefined,
+        calfName: form.calfName || undefined,
+        calfGender: form.calfGender || undefined,
+        calfWeight: parseFloat(form.calfWeight) || undefined,
+        calfHealth: form.calfHealth || undefined,
+        veterinarianNotes: form.veterinarianNotes || undefined,
+        complications: form.complications || undefined,
+        nextCycleExpected: form.nextCycleExpected || undefined,
+        status: form.status,
+        location: {
+          lat: currentLocation.lat,
+          lng: currentLocation.lng,
+          name: currentLocation.name
+        }
+      };
+
+      if (editingRecord) {
+        await BreedingAPI.updateBreedingRecord(editingRecord.id, recordData);
+        alert('Registro actualizado exitosamente');
+      } else {
+        await BreedingAPI.createBreedingRecord(recordData);
+        alert('Registro creado exitosamente');
       }
-    };
 
-    if (editingRecord) {
-      setRecords(records.map(record => 
-        record.id === editingRecord.id ? recordData : record
-      ));
-      alert('Registro actualizado exitosamente');
-    } else {
-      setRecords([recordData, ...records]);
-      alert('Registro creado exitosamente');
+      await loadBreedingRecords(); // Recargar los datos
+      closeModals();
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Error desconocido';
+      setError(`Error al guardar el registro: ${errorMessage}`);
+      console.error('Error saving record:', err);
+    } finally {
+      setSaving(false);
     }
-
-    closeModals();
   };
 
-  const deleteRecord = (id: string): void => {
-    if (window.confirm('¿Está seguro de que desea eliminar este registro?')) {
-      setRecords(records.filter(record => record.id !== id));
+  const deleteRecord = async (id: string): Promise<void> => {
+    if (!window.confirm('¿Está seguro de que desea eliminar este registro?')) {
+      return;
+    }
+
+    try {
+      setError(null);
+      await BreedingAPI.deleteBreedingRecord(id);
       alert('Registro eliminado exitosamente');
+      await loadBreedingRecords(); // Recargar los datos
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Error desconocido';
+      setError(`Error al eliminar el registro: ${errorMessage}`);
+      console.error('Error deleting record:', err);
     }
   };
 
   const viewRecord = (record: BreedingRecord): void => {
     setEditingRecord(record);
     setShowViewModal(true);
+    setError(null);
   };
 
   const closeModals = (): void => {
@@ -697,6 +811,7 @@ const BreedingProduction: React.FC = () => {
     setShowEditModal(false);
     setShowViewModal(false);
     setEditingRecord(null);
+    setError(null);
     resetForm();
   };
 
@@ -755,6 +870,14 @@ const BreedingProduction: React.FC = () => {
           </div>
         </div>
 
+        {/* Error Alert */}
+        {error && (
+          <ErrorAlert 
+            message={error} 
+            onClose={() => setError(null)}
+          />
+        )}
+
         {/* Filtros y búsqueda */}
         <Card className="bg-white/95 backdrop-blur-sm border border-white/20">
           <CardContent className="p-3">
@@ -782,6 +905,14 @@ const BreedingProduction: React.FC = () => {
                   <option value="Fallido">Fallido</option>
                   <option value="Cancelado">Cancelado</option>
                 </Select>
+                <Button 
+                  variant="outline" 
+                  onClick={loadBreedingRecords}
+                  className="text-sm"
+                  disabled={loading}
+                >
+                  Actualizar
+                </Button>
               </div>
             </div>
           </CardContent>
@@ -967,6 +1098,14 @@ const BreedingProduction: React.FC = () => {
             </div>
 
             <div className="p-3 lg:p-4 space-y-4">
+              {/* Error en modal */}
+              {error && (
+                <ErrorAlert 
+                  message={error} 
+                  onClose={() => setError(null)}
+                />
+              )}
+
               {/* Información de la vaca */}
               <div>
                 <h3 className="text-base font-semibold text-gray-900 mb-3">Información de la Vaca</h3>
@@ -1309,12 +1448,12 @@ const BreedingProduction: React.FC = () => {
             </div>
 
             <div className="sticky bottom-0 bg-white p-3 lg:p-4 border-t border-gray-200 flex flex-col sm:flex-row justify-end gap-2">
-              <Button variant="outline" onClick={closeModals} className="order-2 sm:order-1 text-sm">
+              <Button variant="outline" onClick={closeModals} className="order-2 sm:order-1 text-sm" disabled={saving}>
                 Cancelar
               </Button>
-              <Button onClick={saveRecord} className="order-1 sm:order-2 text-sm">
+              <Button onClick={saveRecord} className="order-1 sm:order-2 text-sm" disabled={saving}>
                 <Save className="h-4 w-4 mr-2" />
-                Guardar Registro
+                {saving ? 'Guardando...' : 'Guardar Registro'}
               </Button>
             </div>
           </div>

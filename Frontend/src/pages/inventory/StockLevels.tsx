@@ -1,10 +1,8 @@
-import React, { useState, useEffect } from "react";
-import { motion } from "framer-motion";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   Package,
   TrendingUp,
   AlertTriangle,
-  Target,
   Search,
   X,
   Check,
@@ -12,7 +10,6 @@ import {
   MapPin,
   Zap,
   Activity,
-  Gauge,
   Calendar,
   CheckCircle,
   XCircle,
@@ -21,8 +18,11 @@ import {
   Edit,
   Save,
   Trash2,
+  RefreshCw,
 } from "lucide-react";
-import { getMainBackgroundClasses, CSS_CLASSES } from "../../components/layout";
+
+// Configuración de la API
+const API_BASE_URL = "http://localhost:5000/api";
 
 // Tipos específicos para formularios
 interface StockLevelFormData {
@@ -145,6 +145,17 @@ interface StockAnalytics {
   }[];
 }
 
+interface ApiResponse<T> {
+  success: boolean;
+  data: T;
+  message: string;
+  pagination?: {
+    total: number;
+    currentPage: number;
+    totalPages: number;
+  };
+}
+
 // Enums
 enum StockStatus {
   OPTIMAL = "optimal",
@@ -178,11 +189,243 @@ enum SeasonalPattern {
   YEAR_ROUND = "year_round",
 }
 
+// Servicio API
+class StockLevelsAPI {
+  private static getAuthHeaders() {
+    const token = localStorage.getItem('authToken') || sessionStorage.getItem('authToken');
+    return {
+      'Content-Type': 'application/json',
+      'Authorization': token ? `Bearer ${token}` : '',
+    };
+  }
+
+  // GET - Obtener niveles de stock
+  static async getStockLevels(params = {}): Promise<ApiResponse<StockLevel[]>> {
+    try {
+      const queryParams = new URLSearchParams(params as any).toString();
+      const url = `${API_BASE_URL}/inventory/stock/levels${queryParams ? `?${queryParams}` : ''}`;
+      
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: this.getAuthHeaders(),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Error HTTP: ${response.status}`);
+      }
+
+      const result = await response.json();
+      
+      // Transformar fechas de string a Date
+      if (result.success && result.data) {
+        result.data = result.data.map((item: any) => ({
+          ...item,
+          lastMovementDate: item.lastMovementDate ? new Date(item.lastMovementDate) : undefined,
+          lastReorderDate: item.lastReorderDate ? new Date(item.lastReorderDate) : undefined,
+          nextReorderDate: item.nextReorderDate ? new Date(item.nextReorderDate) : undefined,
+          lastUpdated: new Date(item.lastUpdated || Date.now())
+        }));
+      }
+
+      return result;
+    } catch (error) {
+      console.error('Error obteniendo niveles de stock:', error);
+      throw error;
+    }
+  }
+
+  // POST - Crear nuevo item de stock
+  static async createStockItem(itemData: Omit<StockLevel, "id">): Promise<ApiResponse<StockLevel>> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/inventory`, {
+        method: 'POST',
+        headers: this.getAuthHeaders(),
+        body: JSON.stringify(itemData),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Error HTTP: ${response.status}`);
+      }
+
+      const result = await response.json();
+      
+      // Transformar fechas
+      if (result.success && result.data) {
+        result.data.lastUpdated = new Date(result.data.lastUpdated || Date.now());
+        if (result.data.lastMovementDate) {
+          result.data.lastMovementDate = new Date(result.data.lastMovementDate);
+        }
+      }
+
+      return result;
+    } catch (error) {
+      console.error('Error creando item de stock:', error);
+      throw error;
+    }
+  }
+
+  // PUT - Actualizar item de stock
+  static async updateStockItem(id: string, itemData: Partial<StockLevel>): Promise<ApiResponse<StockLevel>> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/inventory/${id}`, {
+        method: 'PUT',
+        headers: this.getAuthHeaders(),
+        body: JSON.stringify(itemData),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Error HTTP: ${response.status}`);
+      }
+
+      const result = await response.json();
+      
+      // Transformar fechas
+      if (result.success && result.data) {
+        result.data.lastUpdated = new Date(result.data.lastUpdated || Date.now());
+        if (result.data.lastMovementDate) {
+          result.data.lastMovementDate = new Date(result.data.lastMovementDate);
+        }
+      }
+
+      return result;
+    } catch (error) {
+      console.error('Error actualizando item de stock:', error);
+      throw error;
+    }
+  }
+
+  // DELETE - Eliminar item de stock
+  static async deleteStockItem(id: string): Promise<ApiResponse<null>> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/inventory/${id}`, {
+        method: 'DELETE',
+        headers: this.getAuthHeaders(),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Error HTTP: ${response.status}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('Error eliminando item de stock:', error);
+      throw error;
+    }
+  }
+
+  // POST - Actualizar stock (movimiento)
+  static async updateStock(itemId: string, movementData: {
+    movementType: string;
+    quantity: number;
+    reason: string;
+    notes?: string;
+  }): Promise<ApiResponse<any>> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/inventory/stock/movement`, {
+        method: 'POST',
+        headers: this.getAuthHeaders(),
+        body: JSON.stringify({
+          medicineId: itemId,
+          ...movementData
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Error HTTP: ${response.status}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('Error actualizando stock:', error);
+      throw error;
+    }
+  }
+
+  // GET - Obtener estadísticas
+  static async getAnalytics(): Promise<ApiResponse<StockAnalytics>> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/inventory/stats`, {
+        method: 'GET',
+        headers: this.getAuthHeaders(),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Error HTTP: ${response.status}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('Error obteniendo estadísticas:', error);
+      throw error;
+    }
+  }
+}
+
+// Componente de Loading
+const LoadingSpinner = ({ message = "Cargando..." }: { message?: string }) => (
+  <div className="flex items-center justify-center py-8">
+    <div className="text-center">
+      <div className="animate-spin rounded-full h-12 w-12 border-4 border-white border-t-transparent mx-auto"></div>
+      <p className="text-white mt-2">{message}</p>
+    </div>
+  </div>
+);
+
+// Componente de Error
+const ErrorMessage = ({ 
+  message, 
+  onRetry 
+}: { 
+  message: string; 
+  onRetry?: () => void; 
+}) => (
+  <div className="bg-red-50/90 backdrop-blur-sm border border-red-200 rounded-lg p-4 my-4">
+    <div className="flex items-center">
+      <div className="text-red-600 mr-3">⚠️</div>
+      <div className="flex-1">
+        <p className="text-red-800 font-medium">Error</p>
+        <p className="text-red-600 text-sm mt-1">{message}</p>
+      </div>
+      {onRetry && (
+        <button
+          onClick={onRetry}
+          className="ml-3 px-3 py-1 bg-red-100 text-red-800 rounded-md hover:bg-red-200 transition-colors flex items-center space-x-1"
+        >
+          <RefreshCw className="w-4 h-4" />
+          <span>Reintentar</span>
+        </button>
+      )}
+    </div>
+  </div>
+);
+
 const StockLevels: React.FC = () => {
+  // Agregar estilos CSS para animaciones
+  React.useEffect(() => {
+    const style = document.createElement('style');
+    style.textContent = `
+      @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(-20px); }
+        to { opacity: 1; transform: translateY(0); }
+      }
+      
+      @keyframes slideUp {
+        from { opacity: 0; transform: translateY(20px); }
+        to { opacity: 1; transform: translateY(0); }
+      }
+    `;
+    document.head.appendChild(style);
+    
+    return () => {
+      if (document.head.contains(style)) {
+        document.head.removeChild(style);
+      }
+    };
+  }, []);
   // Estados del componente
   const [stockLevels, setStockLevels] = useState<StockLevel[]>([]);
-  const [analytics, setAnalytics] = useState<StockAnalytics | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   // Estados de UI
   const [showNewModal, setShowNewModal] = useState(false);
@@ -211,17 +454,29 @@ const StockLevels: React.FC = () => {
   });
 
   const [editFormData, setEditFormData] = useState<StockLevelFormData>({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Efecto para cargar datos
-  useEffect(() => {
-    const loadStockData = async () => {
-      try {
-        setIsLoading(true);
+  // Cargar datos desde el backend
+  const loadStockData = useCallback(async () => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      
+      const stockResponse = await StockLevelsAPI.getStockLevels();
+      
+      if (stockResponse.success) {
+        setStockLevels(stockResponse.data || []);
+      } else {
+        throw new Error(stockResponse.message || "Error al cargar datos de stock");
+      }
 
-        // Simular carga de datos
-        await new Promise((resolve) => setTimeout(resolve, 1000));
-
-        // Datos simulados de niveles de stock
+    } catch (error) {
+      console.error("Error cargando datos de stock:", error);
+      setError(error instanceof Error ? error.message : "Error al cargar datos de stock");
+      
+      // Si hay error de conexión, usar datos mock
+      if (error instanceof Error && error.message.includes('fetch')) {
+        console.log("Usando datos mock debido a error de conexión");
         const mockStockLevels: StockLevel[] = [
           {
             id: "1",
@@ -304,174 +559,19 @@ const StockLevels: React.FC = () => {
             lastUpdated: new Date("2025-07-12"),
             updatedBy: "Dr. López",
           },
-          {
-            id: "3",
-            itemId: "sup-005",
-            itemName: "Concentrado Proteico 20kg",
-            category: "Suplementos",
-            currentStock: 0,
-            availableStock: 0,
-            reservedStock: 0,
-            inTransitStock: 10,
-            minimumStock: 20,
-            maximumStock: 100,
-            reorderPoint: 35,
-            safetyStock: 15,
-            optimalStock: 60,
-            turnoverRate: 15.2,
-            averageDemand: 12.5,
-            leadTime: 5,
-            serviceLevel: 85,
-            unitCost: 85.0,
-            totalValue: 0,
-            averageCost: 83.2,
-            location: {
-              warehouse: "Almacén de Alimentos",
-              zone: "Área Seca",
-              shelf: "C-5",
-              position: "12",
-            },
-            status: StockStatus.OUT_OF_STOCK,
-            riskLevel: RiskLevel.CRITICAL,
-            lastMovementDate: new Date("2025-07-12"),
-            lastReorderDate: new Date("2025-07-10"),
-            nextReorderDate: new Date("2025-07-15"),
-            autoReorder: true,
-            reorderQuantity: 80,
-            preferredSupplier: "Nutrición Animal SA",
-            stockDays: 0,
-            velocity: StockVelocity.FAST,
-            seasonality: SeasonalPattern.YEAR_ROUND,
-            lastUpdated: new Date("2025-07-12"),
-            updatedBy: "Admin Sistema",
-          },
-          {
-            id: "4",
-            itemId: "equ-012",
-            itemName: "Jeringas Desechables 10ml",
-            category: "Equipos",
-            currentStock: 450,
-            availableStock: 450,
-            reservedStock: 0,
-            inTransitStock: 0,
-            minimumStock: 100,
-            maximumStock: 300,
-            reorderPoint: 150,
-            safetyStock: 50,
-            optimalStock: 200,
-            turnoverRate: 3.2,
-            averageDemand: 25.0,
-            leadTime: 10,
-            serviceLevel: 98,
-            unitCost: 2.5,
-            totalValue: 1125.0,
-            averageCost: 2.45,
-            location: {
-              warehouse: "Almacén General",
-              zone: "Área Ambiente",
-              shelf: "D-3",
-              position: "08",
-            },
-            status: StockStatus.OVERSTOCK,
-            riskLevel: RiskLevel.MEDIUM,
-            lastMovementDate: new Date("2025-07-05"),
-            lastReorderDate: new Date("2025-05-20"),
-            autoReorder: false,
-            reorderQuantity: 200,
-            preferredSupplier: "Suministros Médicos",
-            stockDays: 540,
-            velocity: StockVelocity.SLOW,
-            seasonality: SeasonalPattern.NONE,
-            lastUpdated: new Date("2025-07-12"),
-            updatedBy: "Auxiliar Pérez",
-          },
-          {
-            id: "5",
-            itemId: "vit-007",
-            itemName: "Complejo B + Hierro",
-            category: "Vitaminas",
-            currentStock: 25,
-            availableStock: 23,
-            reservedStock: 2,
-            inTransitStock: 0,
-            minimumStock: 8,
-            maximumStock: 40,
-            reorderPoint: 12,
-            safetyStock: 4,
-            optimalStock: 20,
-            turnoverRate: 15.6,
-            averageDemand: 5.2,
-            leadTime: 7,
-            serviceLevel: 97,
-            unitCost: 18.9,
-            totalValue: 472.5,
-            averageCost: 18.5,
-            location: {
-              warehouse: "Farmacia Veterinaria",
-              zone: "Área Ambiente",
-              shelf: "E-2",
-              position: "18",
-            },
-            status: StockStatus.OPTIMAL,
-            riskLevel: RiskLevel.LOW,
-            lastMovementDate: new Date("2025-07-11"),
-            autoReorder: true,
-            reorderQuantity: 25,
-            preferredSupplier: "NutriVet Laboratories",
-            stockDays: 144,
-            velocity: StockVelocity.FAST,
-            seasonality: SeasonalPattern.YEAR_ROUND,
-            lastUpdated: new Date("2025-07-12"),
-            updatedBy: "Dr. Rodríguez",
-          },
         ];
-
-        // Analíticas simuladas
-        const mockAnalytics: StockAnalytics = {
-          totalItems: 48,
-          totalValue: 85420.5,
-          averageTurnover: 9.8,
-          totalStockDays: 156,
-          statusDistribution: {
-            optimal: 15,
-            adequate: 18,
-            low: 8,
-            critical: 4,
-            overstock: 3,
-          },
-          velocityDistribution: {
-            fast: 12,
-            medium: 23,
-            slow: 10,
-            obsolete: 3,
-          },
-          inventoryTurnover: 8.5,
-          daysOfSupply: 43,
-          carryingCost: 15.2,
-          stockoutRisk: 12.5,
-          activeRecommendations: 15,
-          potentialSavings: 12500.0,
-          trends: [
-            { period: "Ene", totalValue: 78500, turnover: 8.2, stockouts: 3 },
-            { period: "Feb", totalValue: 81200, turnover: 8.6, stockouts: 2 },
-            { period: "Mar", totalValue: 83100, turnover: 9.1, stockouts: 1 },
-            { period: "Abr", totalValue: 84800, turnover: 9.4, stockouts: 2 },
-            { period: "May", totalValue: 85200, turnover: 9.6, stockouts: 1 },
-            { period: "Jun", totalValue: 85400, turnover: 9.8, stockouts: 0 },
-          ],
-        };
-
         setStockLevels(mockStockLevels);
-        setAnalytics(mockAnalytics);
-      } catch (error) {
-        console.error("Error cargando datos de stock:", error);
-      } finally {
-        setIsLoading(false);
+        setError("⚠️ Usando datos de prueba - Backend no disponible");
       }
-    };
-
-    loadStockData();
+    } finally {
+      setIsLoading(false);
+    }
   }, []);
+
+  // Cargar datos al montar el componente
+  useEffect(() => {
+    loadStockData();
+  }, [loadStockData]);
 
   // Funciones auxiliares
   const formatCurrency = (amount: number) => {
@@ -493,7 +593,7 @@ const StockLevels: React.FC = () => {
     switch (status) {
       case StockStatus.OPTIMAL:
         return {
-          bg: "bg-green-50",
+          bg: "bg-green-50/90",
           border: "border-l-green-500",
           text: "text-green-700",
           badge: "bg-green-100 text-green-800",
@@ -501,7 +601,7 @@ const StockLevels: React.FC = () => {
         };
       case StockStatus.ADEQUATE:
         return {
-          bg: "bg-blue-50",
+          bg: "bg-blue-50/90",
           border: "border-l-blue-500",
           text: "text-blue-700",
           badge: "bg-blue-100 text-blue-800",
@@ -509,7 +609,7 @@ const StockLevels: React.FC = () => {
         };
       case StockStatus.LOW:
         return {
-          bg: "bg-yellow-50",
+          bg: "bg-yellow-50/90",
           border: "border-l-yellow-500",
           text: "text-yellow-700",
           badge: "bg-yellow-100 text-yellow-800",
@@ -517,7 +617,7 @@ const StockLevels: React.FC = () => {
         };
       case StockStatus.CRITICAL:
         return {
-          bg: "bg-red-50",
+          bg: "bg-red-50/90",
           border: "border-l-red-500",
           text: "text-red-700",
           badge: "bg-red-100 text-red-800",
@@ -525,7 +625,7 @@ const StockLevels: React.FC = () => {
         };
       case StockStatus.OVERSTOCK:
         return {
-          bg: "bg-purple-50",
+          bg: "bg-purple-50/90",
           border: "border-l-purple-500",
           text: "text-purple-700",
           badge: "bg-purple-100 text-purple-800",
@@ -533,7 +633,7 @@ const StockLevels: React.FC = () => {
         };
       case StockStatus.OUT_OF_STOCK:
         return {
-          bg: "bg-gray-50",
+          bg: "bg-gray-50/90",
           border: "border-l-gray-500",
           text: "text-gray-700",
           badge: "bg-gray-100 text-gray-800",
@@ -541,7 +641,7 @@ const StockLevels: React.FC = () => {
         };
       default:
         return {
-          bg: "bg-gray-50",
+          bg: "bg-gray-50/90",
           border: "border-l-gray-500",
           text: "text-gray-700",
           badge: "bg-gray-100 text-gray-800",
@@ -677,19 +777,15 @@ const StockLevels: React.FC = () => {
   };
 
   const handleSaveNew = async () => {
+    if (!newFormData.itemName || !newFormData.category || !newFormData.location?.warehouse) {
+      alert("Por favor completa todos los campos requeridos");
+      return;
+    }
+
+    setIsSubmitting(true);
+
     try {
-      // Validar campos requeridos
-      if (!newFormData.itemName || !newFormData.category || !newFormData.location?.warehouse) {
-        alert("Por favor completa todos los campos requeridos");
-        return;
-      }
-
-      // Aquí iría la llamada a la API para crear el nuevo item
-      console.log("Creando nuevo item:", newFormData);
-
-      // Simular creación en el estado local
-      const newItem: StockLevel = {
-        id: Math.random().toString(36).substr(2, 9),
+      const newItemData: Omit<StockLevel, "id"> = {
         itemId: `item-${Date.now()}`,
         itemName: newFormData.itemName,
         category: newFormData.category,
@@ -728,106 +824,111 @@ const StockLevels: React.FC = () => {
         updatedBy: "Usuario Actual",
       };
 
-      setStockLevels(prev => [...prev, newItem]);
-      setShowNewModal(false);
-      setNewFormData({
-        itemName: "",
-        category: "",
-        currentStock: 0,
-        minimumStock: 0,
-        maximumStock: 0,
-        reorderPoint: 0,
-        unitCost: 0,
-        location: {
-          warehouse: "",
-          shelf: "",
-          position: "",
-        },
-        autoReorder: false,
-        preferredSupplier: "",
-      });
+      const response = await StockLevelsAPI.createStockItem(newItemData);
       
-      // Mostrar mensaje de éxito
-      alert("Item creado exitosamente");
+      if (response.success) {
+        setStockLevels(prev => [...prev, response.data]);
+        setShowNewModal(false);
+        setNewFormData({
+          itemName: "",
+          category: "",
+          currentStock: 0,
+          minimumStock: 0,
+          maximumStock: 0,
+          reorderPoint: 0,
+          unitCost: 0,
+          location: {
+            warehouse: "",
+            shelf: "",
+            position: "",
+          },
+          autoReorder: false,
+          preferredSupplier: "",
+        });
+        alert("✅ Item creado exitosamente");
+      } else {
+        throw new Error(response.message || "Error al crear item");
+      }
     } catch (error) {
       console.error("Error creando item:", error);
-      alert("Error al crear el item");
+      alert("❌ Error al crear el item. Por favor intenta de nuevo.");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   const handleDeleteItem = async (itemId: string, itemName: string) => {
     try {
-      // Confirmación antes de eliminar
       const confirmDelete = window.confirm(
         `¿Estás seguro de que deseas eliminar "${itemName}"?\n\nEsta acción no se puede deshacer.`
       );
       
       if (!confirmDelete) return;
 
-      // Aquí iría la llamada a la API para eliminar el item
-      console.log("Eliminando item:", itemId);
-
-      // Simular eliminación en el estado local
-      setStockLevels(prev => prev.filter(item => item.id !== itemId));
+      const response = await StockLevelsAPI.deleteStockItem(itemId);
       
-      // Mostrar mensaje de éxito
-      alert("Item eliminado exitosamente");
+      if (response.success) {
+        setStockLevels(prev => prev.filter(item => item.id !== itemId));
+        alert("✅ Item eliminado exitosamente");
+      } else {
+        throw new Error(response.message || "Error al eliminar item");
+      }
     } catch (error) {
       console.error("Error eliminando item:", error);
-      alert("Error al eliminar el item");
+      alert("❌ Error al eliminar el item. Por favor intenta de nuevo.");
     }
   };
 
   const handleSaveEdit = async () => {
+    if (!editingItem) return;
+
+    if (!editFormData.itemName || !editFormData.category || !editFormData.location?.warehouse) {
+      alert("Por favor completa todos los campos requeridos");
+      return;
+    }
+
+    setIsSubmitting(true);
+
     try {
-      if (!editingItem) return;
+      const updatedItemData: Partial<StockLevel> = {
+        itemName: editFormData.itemName,
+        category: editFormData.category,
+        currentStock: editFormData.currentStock,
+        minimumStock: editFormData.minimumStock,
+        maximumStock: editFormData.maximumStock,
+        reorderPoint: editFormData.reorderPoint,
+        unitCost: editFormData.unitCost,
+        totalValue: (editFormData.currentStock || 0) * (editFormData.unitCost || 0),
+        location: {
+          warehouse: editFormData.location?.warehouse || "",
+          zone: editFormData.location?.zone,
+          shelf: editFormData.location?.shelf || "",
+          position: editFormData.location?.position || "",
+        },
+        autoReorder: editFormData.autoReorder,
+        preferredSupplier: editFormData.preferredSupplier,
+        lastUpdated: new Date(),
+        updatedBy: "Usuario Actual",
+      };
 
-      // Validar campos requeridos
-      if (!editFormData.itemName || !editFormData.category || !editFormData.location?.warehouse) {
-        alert("Por favor completa todos los campos requeridos");
-        return;
-      }
-
-      // Aquí iría la llamada a la API para actualizar el item
-      console.log("Actualizando item:", editFormData);
-
-      // Simular actualización en el estado local
-      setStockLevels(prev => prev.map(item => {
-        if (item.id === editingItem.id) {
-          return {
-            ...item,
-            itemName: editFormData.itemName || item.itemName,
-            category: editFormData.category || item.category,
-            currentStock: editFormData.currentStock ?? item.currentStock,
-            minimumStock: editFormData.minimumStock ?? item.minimumStock,
-            maximumStock: editFormData.maximumStock ?? item.maximumStock,
-            reorderPoint: editFormData.reorderPoint ?? item.reorderPoint,
-            unitCost: editFormData.unitCost ?? item.unitCost,
-            totalValue: (editFormData.currentStock ?? item.currentStock) * (editFormData.unitCost ?? item.unitCost),
-            location: {
-              warehouse: editFormData.location?.warehouse || item.location.warehouse,
-              zone: editFormData.location?.zone || item.location.zone,
-              shelf: editFormData.location?.shelf || item.location.shelf,
-              position: editFormData.location?.position || item.location.position,
-            },
-            autoReorder: editFormData.autoReorder ?? item.autoReorder,
-            preferredSupplier: editFormData.preferredSupplier || item.preferredSupplier,
-            lastUpdated: new Date(),
-            updatedBy: "Usuario Actual",
-          };
-        }
-        return item;
-      }));
-
-      setShowEditModal(false);
-      setEditingItem(null);
-      setEditFormData({});
+      const response = await StockLevelsAPI.updateStockItem(editingItem.id, updatedItemData);
       
-      // Mostrar mensaje de éxito
-      alert("Item actualizado exitosamente");
+      if (response.success) {
+        setStockLevels(prev => prev.map(item => 
+          item.id === editingItem.id ? response.data : item
+        ));
+        setShowEditModal(false);
+        setEditingItem(null);
+        setEditFormData({});
+        alert("✅ Item actualizado exitosamente");
+      } else {
+        throw new Error(response.message || "Error al actualizar item");
+      }
     } catch (error) {
       console.error("Error actualizando item:", error);
-      alert("Error al actualizar el item");
+      alert("❌ Error al actualizar el item. Por favor intenta de nuevo.");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -842,27 +943,23 @@ const StockLevels: React.FC = () => {
 
   if (isLoading) {
     return (
-      <div className={`min-h-screen ${getMainBackgroundClasses()}`}>
-        <div className="flex items-center justify-center h-96">
-          <motion.div
-            animate={{ rotate: 360 }}
-            transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-            className="w-12 h-12 border-4 border-white border-t-transparent rounded-full"
-          />
+      <div className="min-h-screen bg-gradient-to-br from-[#519a7c] via-[#f2e9d8] to-[#f4ac3a]">
+        <div className="container mx-auto px-6 py-8">
+          <LoadingSpinner message="Cargando niveles de stock..." />
         </div>
       </div>
     );
   }
 
   return (
-    <div className={`min-h-screen ${getMainBackgroundClasses()}`}>
+    <div className="min-h-screen bg-gradient-to-br from-[#519a7c] via-[#f2e9d8] to-[#f4ac3a]">
       <div className="container mx-auto px-6 py-8">
         {/* Header */}
-        <motion.div
-          initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5 }}
-          className="mb-8"
+        <div 
+          className="mb-8 opacity-0 animate-fade-in"
+          style={{
+            animation: 'fadeIn 0.5s ease-out forwards'
+          }}
         >
           <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between">
             <div>
@@ -889,6 +986,16 @@ const StockLevels: React.FC = () => {
               </div>
 
               <button
+                onClick={loadStockData}
+                disabled={isLoading}
+                className="bg-gradient-to-r from-[#2d6f51] to-[#4e9c75] text-white hover:from-[#265a44] hover:to-[#3d7a5c] px-4 py-2 rounded-lg transition-all duration-200 flex items-center space-x-2 disabled:opacity-50"
+                title="Recargar datos"
+              >
+                <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
+                <span>Recargar</span>
+              </button>
+
+              <button
                 onClick={handleNewItem}
                 className="bg-gradient-to-r from-[#2d6f51] to-[#4e9c75] text-white hover:from-[#265a44] hover:to-[#3d7a5c] px-4 py-2 rounded-lg transition-all duration-200 flex items-center space-x-2"
               >
@@ -897,33 +1004,49 @@ const StockLevels: React.FC = () => {
               </button>
             </div>
           </div>
-        </motion.div>
 
-
+          {/* Mostrar mensaje de error si existe */}
+          {error && (
+            <ErrorMessage 
+              message={error} 
+              onRetry={error.includes('Backend') ? loadStockData : undefined} 
+            />
+          )}
+        </div>
 
         {/* Lista de Niveles de Stock */}
         <div className="space-y-4">
           {filteredStockLevels.length === 0 ? (
-            <div className={`${CSS_CLASSES.card} p-12 text-center`}>
+            <div className="bg-white/90 backdrop-blur-sm rounded-xl border border-white/20 shadow-lg p-12 text-center">
               <Package className="w-16 h-16 text-gray-300 mx-auto mb-4" />
               <h3 className="text-xl font-semibold text-gray-600 mb-2">
                 No se encontraron items
               </h3>
               <p className="text-gray-500">
-                Ajusta la búsqueda para ver más resultados
+                {searchTerm ? 'Ajusta la búsqueda para ver más resultados' : 'Agrega el primer item de stock'}
               </p>
+              {!searchTerm && (
+                <button
+                  onClick={handleNewItem}
+                  className="mt-4 bg-gradient-to-r from-[#2d6f51] to-[#4e9c75] text-white px-4 py-2 rounded-lg hover:from-[#265a44] hover:to-[#3d7a5c] transition-all duration-200 flex items-center space-x-2 mx-auto"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Agregar Primer Item</span>
+                </button>
+              )}
             </div>
           ) : (
             filteredStockLevels.map((item, index) => {
               const statusColors = getStatusColor(item.status);
 
               return (
-                <motion.div
+                <div
                   key={item.id}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.3, delay: 0.1 * index }}
-                  className={`${CSS_CLASSES.card} border-l-4 ${statusColors.border} ${statusColors.bg} hover:shadow-lg transition-all duration-200`}
+                  className={`bg-white/90 backdrop-blur-sm rounded-xl border border-white/20 shadow-lg border-l-4 ${statusColors.border} ${statusColors.bg} hover:shadow-xl transition-all duration-200 opacity-0`}
+                  style={{ 
+                    animation: `slideUp 0.3s ease-out forwards`,
+                    animationDelay: `${index * 0.1}s`
+                  }}
                 >
                   <div className="p-6">
                     {/* Header principal */}
@@ -1206,7 +1329,7 @@ const StockLevels: React.FC = () => {
                       </div>
                     </div>
                   </div>
-                </motion.div>
+                </div>
               );
             })
           )}
@@ -1215,12 +1338,7 @@ const StockLevels: React.FC = () => {
         {/* Modal de Nuevo Item */}
         {showNewModal && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-white rounded-lg shadow-xl w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto"
-            >
+            <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto">
               <div className="p-6">
                 <div className="flex items-center justify-between mb-6">
                   <h2 className="text-2xl font-bold text-gray-900">
@@ -1229,6 +1347,7 @@ const StockLevels: React.FC = () => {
                   <button
                     onClick={() => setShowNewModal(false)}
                     className="text-gray-400 hover:text-gray-600"
+                    disabled={isSubmitting}
                   >
                     <X className="w-6 h-6" />
                   </button>
@@ -1250,6 +1369,7 @@ const StockLevels: React.FC = () => {
                           }))
                         }
                         className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        disabled={isSubmitting}
                         required
                       />
                     </div>
@@ -1267,6 +1387,7 @@ const StockLevels: React.FC = () => {
                           }))
                         }
                         className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        disabled={isSubmitting}
                         required
                       >
                         <option value="">Seleccionar categoría</option>
@@ -1292,6 +1413,7 @@ const StockLevels: React.FC = () => {
                           }))
                         }
                         className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        disabled={isSubmitting}
                       />
                     </div>
 
@@ -1309,6 +1431,7 @@ const StockLevels: React.FC = () => {
                           }))
                         }
                         className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        disabled={isSubmitting}
                         required
                       />
                     </div>
@@ -1327,6 +1450,7 @@ const StockLevels: React.FC = () => {
                           }))
                         }
                         className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        disabled={isSubmitting}
                         required
                       />
                     </div>
@@ -1345,6 +1469,7 @@ const StockLevels: React.FC = () => {
                           }))
                         }
                         className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        disabled={isSubmitting}
                         required
                       />
                     </div>
@@ -1364,6 +1489,7 @@ const StockLevels: React.FC = () => {
                           }))
                         }
                         className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        disabled={isSubmitting}
                         required
                       />
                     </div>
@@ -1387,6 +1513,7 @@ const StockLevels: React.FC = () => {
                           }))
                         }
                         className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        disabled={isSubmitting}
                         required
                       />
                     </div>
@@ -1410,6 +1537,7 @@ const StockLevels: React.FC = () => {
                           }))
                         }
                         className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        disabled={isSubmitting}
                       />
                     </div>
 
@@ -1432,6 +1560,7 @@ const StockLevels: React.FC = () => {
                           }))
                         }
                         className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        disabled={isSubmitting}
                       />
                     </div>
 
@@ -1449,6 +1578,7 @@ const StockLevels: React.FC = () => {
                           }))
                         }
                         className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        disabled={isSubmitting}
                       />
                     </div>
 
@@ -1463,6 +1593,7 @@ const StockLevels: React.FC = () => {
                           }))
                         }
                         className="w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
+                        disabled={isSubmitting}
                       />
                       <label className="ml-2 text-sm font-medium text-gray-700">
                         Auto-Reorden Habilitado
@@ -1475,31 +1606,37 @@ const StockLevels: React.FC = () => {
                   <button
                     onClick={() => setShowNewModal(false)}
                     className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors duration-200"
+                    disabled={isSubmitting}
                   >
                     Cancelar
                   </button>
                   <button
                     onClick={handleSaveNew}
-                    className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors duration-200 flex items-center space-x-2"
+                    disabled={isSubmitting}
+                    className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors duration-200 flex items-center space-x-2 disabled:opacity-50"
                   >
-                    <Plus className="w-4 h-4" />
-                    <span>Crear Item</span>
+                    {isSubmitting ? (
+                      <>
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                        <span>Creando...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Plus className="w-4 h-4" />
+                        <span>Crear Item</span>
+                      </>
+                    )}
                   </button>
                 </div>
               </div>
-            </motion.div>
+            </div>
           </div>
         )}
 
         {/* Modal de Editar Item */}
         {showEditModal && editingItem && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-white rounded-lg shadow-xl w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto"
-            >
+            <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto">
               <div className="p-6">
                 <div className="flex items-center justify-between mb-6">
                   <h2 className="text-2xl font-bold text-gray-900">
@@ -1512,6 +1649,7 @@ const StockLevels: React.FC = () => {
                       setEditFormData({});
                     }}
                     className="text-gray-400 hover:text-gray-600"
+                    disabled={isSubmitting}
                   >
                     <X className="w-6 h-6" />
                   </button>
@@ -1533,6 +1671,7 @@ const StockLevels: React.FC = () => {
                           }))
                         }
                         className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        disabled={isSubmitting}
                         required
                       />
                     </div>
@@ -1550,6 +1689,7 @@ const StockLevels: React.FC = () => {
                           }))
                         }
                         className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        disabled={isSubmitting}
                         required
                       >
                         <option value="">Seleccionar categoría</option>
@@ -1575,6 +1715,7 @@ const StockLevels: React.FC = () => {
                           }))
                         }
                         className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        disabled={isSubmitting}
                       />
                     </div>
 
@@ -1592,6 +1733,7 @@ const StockLevels: React.FC = () => {
                           }))
                         }
                         className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        disabled={isSubmitting}
                         required
                       />
                     </div>
@@ -1610,6 +1752,7 @@ const StockLevels: React.FC = () => {
                           }))
                         }
                         className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        disabled={isSubmitting}
                         required
                       />
                     </div>
@@ -1628,6 +1771,7 @@ const StockLevels: React.FC = () => {
                           }))
                         }
                         className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        disabled={isSubmitting}
                         required
                       />
                     </div>
@@ -1647,6 +1791,7 @@ const StockLevels: React.FC = () => {
                           }))
                         }
                         className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        disabled={isSubmitting}
                         required
                       />
                     </div>
@@ -1670,6 +1815,7 @@ const StockLevels: React.FC = () => {
                           }))
                         }
                         className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        disabled={isSubmitting}
                         required
                       />
                     </div>
@@ -1693,6 +1839,7 @@ const StockLevels: React.FC = () => {
                           }))
                         }
                         className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        disabled={isSubmitting}
                       />
                     </div>
 
@@ -1715,6 +1862,7 @@ const StockLevels: React.FC = () => {
                           }))
                         }
                         className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        disabled={isSubmitting}
                       />
                     </div>
 
@@ -1732,6 +1880,7 @@ const StockLevels: React.FC = () => {
                           }))
                         }
                         className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        disabled={isSubmitting}
                       />
                     </div>
 
@@ -1746,6 +1895,7 @@ const StockLevels: React.FC = () => {
                           }))
                         }
                         className="w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
+                        disabled={isSubmitting}
                       />
                       <label className="ml-2 text-sm font-medium text-gray-700">
                         Auto-Reorden Habilitado
@@ -1762,19 +1912,30 @@ const StockLevels: React.FC = () => {
                       setEditFormData({});
                     }}
                     className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors duration-200"
+                    disabled={isSubmitting}
                   >
                     Cancelar
                   </button>
                   <button
                     onClick={handleSaveEdit}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200 flex items-center space-x-2"
+                    disabled={isSubmitting}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200 flex items-center space-x-2 disabled:opacity-50"
                   >
-                    <Save className="w-4 h-4" />
-                    <span>Guardar Cambios</span>
+                    {isSubmitting ? (
+                      <>
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                        <span>Guardando...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Save className="w-4 h-4" />
+                        <span>Guardar Cambios</span>
+                      </>
+                    )}
                   </button>
                 </div>
               </div>
-            </motion.div>
+            </div>
           </div>
         )}
       </div>

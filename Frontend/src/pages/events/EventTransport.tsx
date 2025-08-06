@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from "react";
+import React, { useState, useMemo, useCallback, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Card,
@@ -27,7 +27,13 @@ import {
   Package,
   Phone,
   Clipboard,
+  AlertTriangle,
 } from "lucide-react";
+
+// ============================================================================
+// CONFIGURACIÓN API
+// ============================================================================
+const API_BASE_URL = 'http://localhost:5000/api';
 
 // ============================================================================
 // INTERFACES Y TIPOS
@@ -82,150 +88,113 @@ interface FormErrors {
 }
 
 // ============================================================================
+// SERVICIOS API
+// ============================================================================
+const transportEventService = {
+  // Obtener todos los eventos
+  getAll: async (): Promise<TransportEvent[]> => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/transport-events`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`Error ${response.status}: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      console.error('Error al obtener eventos de transporte:', error);
+      throw error;
+    }
+  },
+
+  // Crear un evento
+  create: async (eventData: Omit<TransportEvent, 'id' | 'createdAt' | 'updatedAt'>): Promise<TransportEvent> => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/transport-events`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(eventData),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Error ${response.status}: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      console.error('Error al crear evento de transporte:', error);
+      throw error;
+    }
+  },
+
+  // Actualizar un evento
+  update: async (id: string, eventData: Partial<TransportEvent>): Promise<TransportEvent> => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/transport-events/${id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(eventData),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Error ${response.status}: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      console.error('Error al actualizar evento de transporte:', error);
+      throw error;
+    }
+  },
+
+  // Eliminar un evento
+  delete: async (id: string): Promise<void> => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/transport-events/${id}`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`Error ${response.status}: ${response.statusText}`);
+      }
+    } catch (error) {
+      console.error('Error al eliminar evento de transporte:', error);
+      throw error;
+    }
+  },
+};
+
+// ============================================================================
 // COMPONENTE PRINCIPAL
 // ============================================================================
 
 const EventTransport: React.FC = () => {
   // Estados principales
   const [currentView, setCurrentView] = useState<ViewMode>('list');
-  const [events, setEvents] = useState<TransportEvent[]>([
-    {
-      id: "TRN-001",
-      bovineIds: ["ESP-001", "ESP-002"],
-      bovineNames: ["Esperanza", "Paloma"],
-      driverName: "Juan Pérez García",
-      driverLicense: "12345678",
-      vehicleType: "cattle_truck",
-      vehiclePlate: "ABC-123-XYZ",
-      originLocation: {
-        lat: 17.9995,
-        lng: -92.9476,
-        address: "Corral Norte",
-      },
-      destinationLocation: {
-        lat: 18.5,
-        lng: -93.0,
-        address: "Mercado de Ganado Central",
-      },
-      departureDate: "2024-12-29",
-      arrivalDate: "2024-12-29",
-      estimatedDuration: 4,
-      actualDuration: 0,
-      distance: 45,
-      totalCost: 2500,
-      transportCost: 1500,
-      fuelCost: 600,
-      tollCost: 200,
-      driverPayment: 200,
-      temperature: 28,
-      humidity: 70,
-      weatherConditions: "sunny",
-      animalCondition: "excellent",
-      healthCertificates: true,
-      transportPermits: true,
-      insurance: true,
-      emergencyContacts: ["555-0123", "555-0456"],
-      routeNotes: "Ruta directa por carretera federal",
-      incidents: "",
-      status: "completed",
-      createdAt: "2024-12-20T10:00:00Z",
-      updatedAt: "2024-12-20T10:00:00Z",
-      responsible: "Juan Pérez",
-    },
-    {
-      id: "TRN-002",
-      bovineIds: ["PAL-002"],
-      bovineNames: ["Tormenta"],
-      driverName: "María López Sánchez",
-      driverLicense: "87654321",
-      vehicleType: "trailer",
-      vehiclePlate: "XYZ-456-ABC",
-      originLocation: {
-        lat: 17.9869,
-        lng: -92.9303,
-        address: "Corral Sur",
-      },
-      destinationLocation: {
-        lat: 17.8,
-        lng: -92.8,
-        address: "Rastro Municipal",
-      },
-      departureDate: "2024-12-30",
-      arrivalDate: "2024-12-30",
-      estimatedDuration: 2,
-      actualDuration: 0,
-      distance: 25,
-      totalCost: 1800,
-      transportCost: 1000,
-      fuelCost: 400,
-      tollCost: 150,
-      driverPayment: 250,
-      temperature: 26,
-      humidity: 65,
-      weatherConditions: "cloudy",
-      animalCondition: "good",
-      healthCertificates: true,
-      transportPermits: true,
-      insurance: true,
-      emergencyContacts: ["555-0789"],
-      routeNotes: "Transporte directo sin paradas",
-      incidents: "",
-      status: "planned",
-      createdAt: "2024-12-15T08:00:00Z",
-      updatedAt: "2024-12-28T14:30:00Z",
-      responsible: "María González",
-    },
-    {
-      id: "TRN-003",
-      bovineIds: ["ESP-003", "PAL-003"],
-      bovineNames: ["Bruno", "Luna"],
-      driverName: "Carlos Mendoza Rivera",
-      driverLicense: "11223344",
-      vehicleType: "cattle_truck",
-      vehiclePlate: "DEF-789-GHI",
-      originLocation: {
-        lat: 17.9995,
-        lng: -92.9476,
-        address: "Corral Este",
-      },
-      destinationLocation: {
-        lat: 18.2,
-        lng: -92.7,
-        address: "Finca La Esperanza",
-      },
-      departureDate: "2024-12-31",
-      arrivalDate: "2024-12-31",
-      estimatedDuration: 3,
-      actualDuration: 0,
-      distance: 35,
-      totalCost: 2200,
-      transportCost: 1200,
-      fuelCost: 500,
-      tollCost: 250,
-      driverPayment: 250,
-      temperature: 30,
-      humidity: 75,
-      weatherConditions: "sunny",
-      animalCondition: "excellent",
-      healthCertificates: true,
-      transportPermits: true,
-      insurance: true,
-      emergencyContacts: ["555-1111"],
-      routeNotes: "Transporte especial para reproducción",
-      incidents: "",
-      status: "in_transit",
-      createdAt: "2024-12-22T09:00:00Z",
-      updatedAt: "2024-12-30T08:00:00Z",
-      responsible: "Ana Rodríguez",
-    }
-  ]);
-  
+  const [events, setEvents] = useState<TransportEvent[]>([]);
   const [, setSelectedEvent] = useState<TransportEvent | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [typeFilter, setTypeFilter] = useState<string>("all");
   const [dateFilter, setDateFilter] = useState<string>("all");
   const [loading, setLoading] = useState(false);
+  const [dataLoading, setDataLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [errors, setErrors] = useState<FormErrors>({});
 
   // Estado para el formulario
@@ -270,6 +239,28 @@ const EventTransport: React.FC = () => {
   });
 
   const [formData, setFormData] = useState<Partial<TransportEvent>>(getInitialFormData());
+
+  // ============================================================================
+  // FUNCIONES DE CARGA
+  // ============================================================================
+  const loadEvents = async () => {
+    try {
+      setDataLoading(true);
+      setError(null);
+      const eventsData = await transportEventService.getAll();
+      setEvents(eventsData);
+    } catch (error) {
+      console.error('Error cargando eventos de transporte:', error);
+      setError('Error al cargar los eventos de transporte. Verifique que el servidor esté funcionando.');
+      setEvents([]);
+    } finally {
+      setDataLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadEvents();
+  }, []);
 
   // Eventos filtrados
   const filteredEvents = useMemo(() => {
@@ -441,11 +432,11 @@ const EventTransport: React.FC = () => {
 
     setLoading(true);
     try {
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      await transportEventService.delete(eventId);
       setEvents(prev => prev.filter(e => e.id !== eventId));
     } catch (error) {
       console.error("Error al eliminar:", error);
-      alert("Error al eliminar el evento");
+      alert("Error al eliminar el evento de transporte. Por favor, intente nuevamente.");
     } finally {
       setLoading(false);
     }
@@ -458,34 +449,34 @@ const EventTransport: React.FC = () => {
 
     setLoading(true);
     try {
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
       const totalCost = (formData.transportCost || 0) + (formData.fuelCost || 0) + 
                        (formData.tollCost || 0) + (formData.driverPayment || 0);
       
-      const eventData: TransportEvent = {
-        ...formData as TransportEvent,
+      const eventData = {
+        ...formData,
         totalCost,
-        id: currentView === 'create' ? `TRN-${String(events.length + 1).padStart(3, '0')}` : formData.id!,
-        createdAt: currentView === 'create' ? new Date().toISOString() : formData.createdAt!,
-        updatedAt: new Date().toISOString(),
+        arrivalDate: formData.arrivalDate || formData.departureDate,
       };
 
       if (currentView === 'create') {
-        setEvents(prev => [...prev, eventData]);
+        // Crear nuevo evento
+        const newEvent = await transportEventService.create(eventData as Omit<TransportEvent, 'id' | 'createdAt' | 'updatedAt'>);
+        setEvents(prev => [newEvent, ...prev]);
       } else {
-        setEvents(prev => prev.map(e => e.id === eventData.id ? eventData : e));
+        // Actualizar evento existente
+        const updatedEvent = await transportEventService.update(formData.id!, eventData);
+        setEvents(prev => prev.map(e => e.id === updatedEvent.id ? updatedEvent : e));
       }
       
       setCurrentView('list');
       alert(`Evento ${currentView === 'create' ? 'creado' : 'actualizado'} exitosamente`);
     } catch (error) {
       console.error("Error al guardar:", error);
-      alert("Error al guardar el evento");
+      alert("Error al guardar el evento de transporte. Por favor, intente nuevamente.");
     } finally {
       setLoading(false);
     }
-  }, [formData, validateForm, currentView, events.length]);
+  }, [formData, validateForm, currentView]);
 
   const handleInputChange = useCallback((field: string, value: any) => {
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -566,6 +557,38 @@ const EventTransport: React.FC = () => {
     hidden: { opacity: 0, y: 20 },
     visible: { opacity: 1, y: 0 },
   };
+
+  // ============================================================================
+  // PANTALLAS DE CARGA Y ERROR
+  // ============================================================================
+  if (dataLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-green-400 via-green-500 to-yellow-400 p-6 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-white mx-auto mb-4"></div>
+          <p className="text-white text-lg font-medium">Cargando eventos de transporte...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-green-400 via-green-500 to-yellow-400 p-6 flex items-center justify-center">
+        <div className="text-center bg-white/90 backdrop-blur-sm rounded-2xl p-8 border border-red-200">
+          <AlertTriangle className="h-16 w-16 text-red-500 mx-auto mb-4" />
+          <h2 className="text-xl font-bold text-gray-900 mb-2">Error de Conexión</h2>
+          <p className="text-gray-600 mb-6">{error}</p>
+          <button
+            onClick={loadEvents}
+            className="bg-green-500 hover:bg-green-600 text-white px-6 py-3 rounded-xl font-medium"
+          >
+            Reintentar
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   // VISTA LISTA (siguiendo el diseño de referencia)
   if (currentView === 'list') {

@@ -27,6 +27,9 @@ import {
   Star,
   Zap,
   X,
+  Loader2,
+  Wifi,
+  WifiOff,
 } from "lucide-react";
 import { getMainBackgroundClasses, CSS_CLASSES } from "../../components/layout";
 
@@ -34,7 +37,7 @@ import { getMainBackgroundClasses, CSS_CLASSES } from "../../components/layout";
 import MedicineInventory from "./MedicineInventory";
 import StockLevels from "./StockLevels";
 
-// Interfaces para el módulo
+// ===== INTERFACES =====
 interface InventoryModuleStats {
   totalValue: number;
   totalItems: number;
@@ -42,6 +45,8 @@ interface InventoryModuleStats {
   lowStockItems: number;
   expiringItems: number;
   lastUpdate: Date;
+  categoriesCount: number;
+  monthlyGrowth: number;
 }
 
 interface NavigationItem {
@@ -65,23 +70,285 @@ interface QuickAction {
   action: () => void;
 }
 
-const InventoryPage: React.FC = () => {
-  // Estados del componente
-  const [moduleStats, setModuleStats] = useState<InventoryModuleStats | null>(
-    null
+interface InventoryItem {
+  id: string;
+  name: string;
+  category: string;
+  quantity: number;
+  minimumStock: number;
+  value: number;
+  expirationDate?: Date;
+  supplier: string;
+  location: string;
+}
+
+interface StockAlert {
+  id: string;
+  itemId: string;
+  itemName: string;
+  type: 'low_stock' | 'expiring' | 'out_of_stock';
+  priority: 'low' | 'medium' | 'high' | 'critical';
+  currentStock: number;
+  minimumStock: number;
+  expirationDate?: Date;
+  createdAt: Date;
+}
+
+interface ConnectionStatusProps {
+  isConnected: boolean;
+  isLoading: boolean;
+  onRetry: () => void;
+}
+
+// ===== API SERVICE =====
+const API_BASE_URL = 'http://localhost:5000/api/inventory';
+
+class InventoryAPIService {
+  private async handleResponse(response: Response) {
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`API Error ${response.status}: ${errorText}`);
+    }
+    return response.json();
+  }
+
+  private async request(endpoint: string, options: RequestInit = {}) {
+    try {
+      const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+        headers: {
+          'Content-Type': 'application/json',
+          ...options.headers,
+        },
+        ...options,
+      });
+      return await this.handleResponse(response);
+    } catch (error) {
+      console.error(`Inventory API Request failed: ${endpoint}`, error);
+      throw error;
+    }
+  }
+
+  // Health check
+  async testConnection(): Promise<{ status: string; message: string }> {
+    return this.request('/health');
+  }
+
+  // Statistics
+  async getStats(): Promise<InventoryModuleStats> {
+    const data = await this.request('/stats');
+    return {
+      ...data,
+      lastUpdate: new Date(data.lastUpdate),
+    };
+  }
+
+  // Items
+  async getItems(): Promise<InventoryItem[]> {
+    const data = await this.request('/items');
+    return data.map((item: any) => ({
+      ...item,
+      expirationDate: item.expirationDate ? new Date(item.expirationDate) : undefined,
+    }));
+  }
+
+  async createItem(item: Omit<InventoryItem, 'id'>): Promise<InventoryItem> {
+    const data = await this.request('/items', {
+      method: 'POST',
+      body: JSON.stringify(item),
+    });
+    return {
+      ...data,
+      expirationDate: data.expirationDate ? new Date(data.expirationDate) : undefined,
+    };
+  }
+
+  async updateItem(id: string, item: Partial<InventoryItem>): Promise<InventoryItem> {
+    const data = await this.request(`/items/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(item),
+    });
+    return {
+      ...data,
+      expirationDate: data.expirationDate ? new Date(data.expirationDate) : undefined,
+    };
+  }
+
+  async deleteItem(id: string): Promise<void> {
+    await this.request(`/items/${id}`, {
+      method: 'DELETE',
+    });
+  }
+
+  // Alerts
+  async getAlerts(): Promise<StockAlert[]> {
+    const data = await this.request('/alerts');
+    return data.map((alert: any) => ({
+      ...alert,
+      createdAt: new Date(alert.createdAt),
+      expirationDate: alert.expirationDate ? new Date(alert.expirationDate) : undefined,
+    }));
+  }
+
+  // Medicines
+  async getMedicines(): Promise<InventoryItem[]> {
+    const data = await this.request('/medicines');
+    return data.map((item: any) => ({
+      ...item,
+      expirationDate: item.expirationDate ? new Date(item.expirationDate) : undefined,
+    }));
+  }
+
+  // Stock Levels
+  async getStockLevels(): Promise<any[]> {
+    return this.request('/stock-levels');
+  }
+
+  // Stock take
+  async startStockTake(): Promise<{ id: string; status: string }> {
+    return this.request('/stock-take/start', {
+      method: 'POST',
+    });
+  }
+}
+
+// ===== CONNECTION STATUS COMPONENT =====
+const ConnectionStatus: React.FC<ConnectionStatusProps> = ({ 
+  isConnected, 
+  isLoading, 
+  onRetry 
+}) => {
+  if (isLoading) {
+    return (
+      <div className="fixed top-4 right-4 z-50 bg-yellow-100 border border-yellow-400 text-yellow-700 px-4 py-2 rounded-lg shadow-lg flex items-center gap-2">
+        <Loader2 className="w-4 h-4 animate-spin" />
+        <span className="text-sm">Conectando al servidor...</span>
+      </div>
+    );
+  }
+
+  if (!isConnected) {
+    return (
+      <div className="fixed top-4 right-4 z-50 bg-red-100 border border-red-400 text-red-700 px-4 py-2 rounded-lg shadow-lg">
+        <div className="flex items-center gap-2 mb-2">
+          <WifiOff className="w-4 h-4" />
+          <span className="text-sm font-medium">Sin conexión - Inventario</span>
+        </div>
+        <button 
+          onClick={onRetry}
+          className="text-xs bg-red-600 text-white px-2 py-1 rounded hover:bg-red-700 transition-colors"
+        >
+          Reintentar conexión
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="fixed top-4 right-4 z-50 bg-green-100 border border-green-400 text-green-700 px-4 py-2 rounded-lg shadow-lg flex items-center gap-2">
+      <Wifi className="w-4 h-4" />
+      <span className="text-sm">Conectado - Inventario</span>
+    </div>
   );
+};
+
+// ===== MAIN COMPONENT =====
+const InventoryPage: React.FC = () => {
+  // Create API service instance
+  const [apiService] = useState(() => new InventoryAPIService());
+  
+  // Component states
+  const [moduleStats, setModuleStats] = useState<InventoryModuleStats | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isConnected, setIsConnected] = useState(false);
+  const [isConnectionLoading, setIsConnectionLoading] = useState(false);
   const [showQuickActions, setShowQuickActions] = useState(false);
   const [showNavigation, setShowNavigation] = useState(false);
+  const [alerts, setAlerts] = useState<StockAlert[]>([]);
+  const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
 
-  // Hooks de navegación
+  // Navigation hooks
   const navigate = useNavigate();
   const location = useLocation();
-
-  // Obtener la ruta actual para determinar la página activa
   const currentPath = location.pathname;
 
-  // Configuración de navegación del módulo
+  // Test backend connection
+  const testConnection = async () => {
+    try {
+      setIsConnectionLoading(true);
+      await apiService.testConnection();
+      setIsConnected(true);
+      console.log('✅ Conectado al backend de inventario');
+    } catch (error) {
+      setIsConnected(false);
+      console.error('❌ Error conectando al backend de inventario:', error);
+    } finally {
+      setIsConnectionLoading(false);
+    }
+  };
+
+  // Load data from backend
+  const loadData = async () => {
+    if (!isConnected) return;
+    
+    try {
+      setIsLoading(true);
+      
+      // Load stats and alerts in parallel
+      const [statsData, alertsData] = await Promise.all([
+        apiService.getStats(),
+        apiService.getAlerts()
+      ]);
+      
+      setModuleStats(statsData);
+      setAlerts(alertsData);
+      setLastRefresh(new Date());
+      
+      console.log('✅ Datos de inventario cargados desde backend');
+    } catch (error) {
+      console.error('❌ Error cargando datos de inventario:', error);
+      // En caso de error, usar datos de respaldo
+      setModuleStats({
+        totalValue: 0,
+        totalItems: 0,
+        alertsCount: 0,
+        lowStockItems: 0,
+        expiringItems: 0,
+        lastUpdate: new Date(),
+        categoriesCount: 0,
+        monthlyGrowth: 0,
+      });
+      setAlerts([]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Initialize connection and load data
+  useEffect(() => {
+    const initializeApp = async () => {
+      await testConnection();
+    };
+    
+    initializeApp();
+  }, []);
+
+  // Load data when connected
+  useEffect(() => {
+    if (isConnected) {
+      loadData();
+    }
+  }, [isConnected]);
+
+  // Refresh data
+  const handleRefresh = async () => {
+    if (isConnected) {
+      await loadData();
+    } else {
+      await testConnection();
+    }
+  };
+
+  // Navigation items configuration
   const navigationItems: NavigationItem[] = [
     {
       id: "dashboard",
@@ -122,10 +389,10 @@ const InventoryPage: React.FC = () => {
       description: "Monitoreo y gestión de alertas en tiempo real",
       path: "/inventory/low-stock-alerts",
       icon: AlertTriangle,
-      badge: 6,
+      badge: alerts.filter(alert => alert.priority === 'high' || alert.priority === 'critical').length,
       color: "text-orange-600",
       isActive: currentPath.includes("/low-stock-alerts"),
-      hasNotifications: true,
+      hasNotifications: alerts.length > 0,
     },
     {
       id: "reports",
@@ -140,7 +407,7 @@ const InventoryPage: React.FC = () => {
     },
   ];
 
-  // Acciones rápidas del módulo
+  // Quick actions configuration
   const quickActions: QuickAction[] = [
     {
       id: "new-entry",
@@ -148,7 +415,13 @@ const InventoryPage: React.FC = () => {
       description: "Agregar nuevos items al inventario",
       icon: Plus,
       color: "bg-green-500 hover:bg-green-600",
-      action: () => console.log("Navegando a registro de entrada"),
+      action: () => {
+        if (!isConnected) {
+          alert('❌ Sin conexión al servidor. Verifique la conexión.');
+          return;
+        }
+        console.log("Navegando a registro de entrada");
+      },
     },
     {
       id: "stock-take",
@@ -156,7 +429,20 @@ const InventoryPage: React.FC = () => {
       description: "Realizar conteo físico del stock",
       icon: Package,
       color: "bg-blue-500 hover:bg-blue-600",
-      action: () => console.log("Navegando a conteo de inventario"),
+      action: async () => {
+        if (!isConnected) {
+          alert('❌ Sin conexión al servidor. Verifique la conexión.');
+          return;
+        }
+        try {
+          const stockTake = await apiService.startStockTake();
+          console.log("Conteo iniciado:", stockTake);
+          alert(`✅ Conteo de inventario iniciado (ID: ${stockTake.id})`);
+        } catch (error) {
+          console.error("Error iniciando conteo:", error);
+          alert('❌ Error al iniciar el conteo de inventario');
+        }
+      },
     },
     {
       id: "generate-report",
@@ -164,7 +450,13 @@ const InventoryPage: React.FC = () => {
       description: "Crear reportes personalizados",
       icon: FileText,
       color: "bg-purple-500 hover:bg-purple-600",
-      action: () => navigate("/inventory/reports"),
+      action: () => {
+        if (!isConnected) {
+          alert('❌ Sin conexión al servidor. Verifique la conexión.');
+          return;
+        }
+        navigate("/inventory/reports");
+      },
     },
     {
       id: "bulk-update",
@@ -172,41 +464,17 @@ const InventoryPage: React.FC = () => {
       description: "Actualizar múltiples items",
       icon: Settings,
       color: "bg-orange-500 hover:bg-orange-600",
-      action: () => console.log("Navegando a actualización masiva"),
+      action: () => {
+        if (!isConnected) {
+          alert('❌ Sin conexión al servidor. Verifique la conexión.');
+          return;
+        }
+        console.log("Navegando a actualización masiva");
+      },
     },
   ];
 
-  // Efecto para cargar estadísticas del módulo
-  useEffect(() => {
-    const loadModuleStats = async () => {
-      try {
-        setIsLoading(true);
-
-        // Simular carga de datos
-        await new Promise((resolve) => setTimeout(resolve, 800));
-
-        // Estadísticas simuladas del módulo
-        const mockStats: InventoryModuleStats = {
-          totalValue: 185420.5,
-          totalItems: 245,
-          alertsCount: 8,
-          lowStockItems: 12,
-          expiringItems: 5,
-          lastUpdate: new Date(),
-        };
-
-        setModuleStats(mockStats);
-      } catch (error) {
-        console.error("Error cargando estadísticas del módulo:", error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    loadModuleStats();
-  }, []);
-
-  // Funciones auxiliares
+  // Helper functions
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat("es-MX", {
       style: "currency",
@@ -230,19 +498,34 @@ const InventoryPage: React.FC = () => {
     return currentItem ? currentItem.title : "Gestión de Inventario";
   };
 
-  // Si estamos en la ruta base, mostrar la vista del módulo
-  const isModuleRoot =
-    currentPath === "/inventory" || currentPath === "/inventory/";
+  // Wrapper components for child components
+  const MedicineInventoryWrapper: React.FC = () => {
+    const props = { isConnected, apiService };
+    return React.createElement(MedicineInventory as any, props);
+  };
 
-  if (isLoading) {
+  const StockLevelsWrapper: React.FC = () => {
+    const props = { isConnected, apiService };
+    return React.createElement(StockLevels as any, props);
+  };
+
+  // Si estamos en la ruta base, mostrar la vista del módulo
+  const isModuleRoot = currentPath === "/inventory" || currentPath === "/inventory/";
+
+  // Loading state for initial connection
+  if (isLoading && !moduleStats) {
     return (
       <div className={`min-h-screen ${getMainBackgroundClasses()}`}>
-        <div className="flex items-center justify-center h-96">
+        <div className="flex flex-col items-center justify-center h-96">
           <motion.div
             animate={{ rotate: 360 }}
             transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-            className="w-12 h-12 border-4 border-white border-t-transparent rounded-full"
+            className="w-12 h-12 border-4 border-white border-t-transparent rounded-full mb-4"
           />
+          <p className="text-white text-lg">Conectando al sistema de inventario...</p>
+          <p className="text-white/70 text-sm mt-2">
+            {isConnectionLoading ? "Verificando conexión..." : "Cargando datos..."}
+          </p>
         </div>
       </div>
     );
@@ -250,6 +533,13 @@ const InventoryPage: React.FC = () => {
 
   return (
     <div className={`min-h-screen ${getMainBackgroundClasses()}`}>
+      {/* Connection Status */}
+      <ConnectionStatus 
+        isConnected={isConnected}
+        isLoading={isConnectionLoading}
+        onRetry={testConnection}
+      />
+
       {/* Vista principal del módulo */}
       {isModuleRoot ? (
         <div className="container mx-auto px-6 py-8">
@@ -267,6 +557,11 @@ const InventoryPage: React.FC = () => {
                   <h1 className="text-4xl font-bold text-white drop-shadow-sm">
                     Gestión de Inventario
                   </h1>
+                  {!isConnected && (
+                    <div className="bg-red-500/20 text-red-200 px-3 py-1 rounded-full text-sm font-medium">
+                      Modo Sin Conexión
+                    </div>
+                  )}
                 </div>
                 <p className="text-white/90 text-lg">
                   Sistema integral para la gestión de medicamentos, suministros
@@ -281,7 +576,7 @@ const InventoryPage: React.FC = () => {
                     <div className="flex items-center space-x-4 text-white text-sm">
                       <div className="text-center">
                         <div className="font-bold text-lg">
-                          {moduleStats.totalItems}
+                          {moduleStats.totalItems.toLocaleString()}
                         </div>
                         <div className="text-white/80">Items</div>
                       </div>
@@ -294,7 +589,9 @@ const InventoryPage: React.FC = () => {
                       </div>
                       <div className="w-px h-8 bg-white/30"></div>
                       <div className="text-center">
-                        <div className="font-bold text-lg text-orange-200">
+                        <div className={`font-bold text-lg ${
+                          moduleStats.alertsCount > 0 ? 'text-orange-200' : 'text-green-200'
+                        }`}>
                           {moduleStats.alertsCount}
                         </div>
                         <div className="text-white/80">Alertas</div>
@@ -306,15 +603,24 @@ const InventoryPage: React.FC = () => {
                 {/* Botón de acciones rápidas */}
                 <button
                   onClick={() => setShowQuickActions(!showQuickActions)}
-                  className="bg-white/20 hover:bg-white/30 text-white px-4 py-2 rounded-lg backdrop-blur-sm transition-all duration-200 flex items-center space-x-2"
+                  disabled={!isConnected}
+                  className={`px-4 py-2 rounded-lg backdrop-blur-sm transition-all duration-200 flex items-center space-x-2 ${
+                    isConnected 
+                      ? 'bg-white/20 hover:bg-white/30 text-white' 
+                      : 'bg-gray-500/20 text-gray-300 cursor-not-allowed'
+                  }`}
                 >
                   <Zap className="w-4 h-4" />
                   <span>Acciones Rápidas</span>
                 </button>
 
                 {/* Actualizar datos */}
-                <button className="bg-white/20 hover:bg-white/30 text-white px-4 py-2 rounded-lg backdrop-blur-sm transition-all duration-200 flex items-center space-x-2">
-                  <RefreshCw className="w-4 h-4" />
+                <button 
+                  onClick={handleRefresh}
+                  disabled={isLoading}
+                  className="bg-white/20 hover:bg-white/30 text-white px-4 py-2 rounded-lg backdrop-blur-sm transition-all duration-200 flex items-center space-x-2 disabled:opacity-50"
+                >
+                  <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
                   <span>Actualizar</span>
                 </button>
               </div>
@@ -326,12 +632,21 @@ const InventoryPage: React.FC = () => {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, delay: 0.1 }}
-            className="flex items-center space-x-2 text-white/80 text-sm mb-8"
+            className="flex items-center justify-between text-white/80 text-sm mb-8"
           >
-            <Home className="w-4 h-4" />
-            <span>Inicio</span>
-            <ChevronRight className="w-4 h-4" />
-            <span className="text-white font-medium">Inventario</span>
+            <div className="flex items-center space-x-2">
+              <Home className="w-4 h-4" />
+              <span>Inicio</span>
+              <ChevronRight className="w-4 h-4" />
+              <span className="text-white font-medium">Inventario</span>
+            </div>
+            
+            {moduleStats && (
+              <div className="flex items-center space-x-2">
+                <Clock className="w-4 h-4" />
+                <span>Actualizado: {formatTime(moduleStats.lastUpdate)}</span>
+              </div>
+            )}
           </motion.div>
 
           {/* Panel de Acciones Rápidas */}
@@ -348,6 +663,11 @@ const InventoryPage: React.FC = () => {
                   <div className="flex items-center justify-between mb-4">
                     <h3 className="text-lg font-semibold text-gray-900">
                       Acciones Rápidas
+                      {!isConnected && (
+                        <span className="ml-2 text-sm text-gray-500 font-normal">
+                          (Requiere conexión)
+                        </span>
+                      )}
                     </h3>
                     <button
                       onClick={() => setShowQuickActions(false)}
@@ -365,7 +685,8 @@ const InventoryPage: React.FC = () => {
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ duration: 0.3, delay: 0.1 * index }}
                         onClick={action.action}
-                        className={`${action.color} text-white p-4 rounded-lg transition-all duration-200 transform hover:scale-105 hover:shadow-lg`}
+                        disabled={!isConnected}
+                        className={`${action.color} text-white p-4 rounded-lg transition-all duration-200 transform hover:scale-105 hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none`}
                       >
                         <div className="flex items-center space-x-3">
                           <action.icon className="w-5 h-5" />
@@ -402,8 +723,11 @@ const InventoryPage: React.FC = () => {
                     <p className="text-3xl font-bold text-gray-900 mt-1">
                       {formatCurrency(moduleStats.totalValue)}
                     </p>
-                    <p className="text-green-600 text-sm mt-1">
-                      +2.5% vs mes anterior
+                    <p className={`text-sm mt-1 ${
+                      moduleStats.monthlyGrowth >= 0 ? 'text-green-600' : 'text-red-600'
+                    }`}>
+                      {moduleStats.monthlyGrowth >= 0 ? '+' : ''}
+                      {moduleStats.monthlyGrowth.toFixed(1)}% vs mes anterior
                     </p>
                   </div>
                   <div className="bg-green-100 p-3 rounded-lg">
@@ -422,7 +746,9 @@ const InventoryPage: React.FC = () => {
                     <p className="text-3xl font-bold text-gray-900 mt-1">
                       {moduleStats.totalItems.toLocaleString()}
                     </p>
-                    <p className="text-blue-600 text-sm mt-1">48 categorías</p>
+                    <p className="text-blue-600 text-sm mt-1">
+                      {moduleStats.categoriesCount} categorías
+                    </p>
                   </div>
                   <div className="bg-blue-100 p-3 rounded-lg">
                     <Package className="w-6 h-6 text-blue-600" />
@@ -440,8 +766,10 @@ const InventoryPage: React.FC = () => {
                     <p className="text-3xl font-bold text-gray-900 mt-1">
                       {moduleStats.alertsCount}
                     </p>
-                    <p className="text-orange-600 text-sm mt-1">
-                      Requieren atención
+                    <p className={`text-sm mt-1 ${
+                      moduleStats.alertsCount > 0 ? 'text-orange-600' : 'text-green-600'
+                    }`}>
+                      {moduleStats.alertsCount > 0 ? 'Requieren atención' : 'Todo bajo control'}
                     </p>
                   </div>
                   <div className="bg-orange-100 p-3 rounded-lg">
@@ -460,8 +788,10 @@ const InventoryPage: React.FC = () => {
                     <p className="text-3xl font-bold text-gray-900 mt-1">
                       {moduleStats.lowStockItems}
                     </p>
-                    <p className="text-red-600 text-sm mt-1">
-                      Reposición urgente
+                    <p className={`text-sm mt-1 ${
+                      moduleStats.lowStockItems > 0 ? 'text-red-600' : 'text-green-600'
+                    }`}>
+                      {moduleStats.lowStockItems > 0 ? 'Reposición urgente' : 'Niveles óptimos'}
                     </p>
                   </div>
                   <div className="bg-red-100 p-3 rounded-lg">
@@ -503,12 +833,19 @@ const InventoryPage: React.FC = () => {
               <h2 className="text-2xl font-bold text-white">
                 Módulos Disponibles
               </h2>
-              <div className="flex items-center space-x-2 text-white/80 text-sm">
-                <Clock className="w-4 h-4" />
-                <span>
-                  Actualizado:{" "}
-                  {formatTime(moduleStats?.lastUpdate || new Date())}
-                </span>
+              <div className="flex items-center space-x-4">
+                {isConnected && (
+                  <div className="flex items-center space-x-2 text-white/80 text-sm bg-white/10 rounded-lg px-3 py-2">
+                    <Wifi className="w-4 h-4" />
+                    <span>Online</span>
+                  </div>
+                )}
+                <div className="flex items-center space-x-2 text-white/80 text-sm">
+                  <Clock className="w-4 h-4" />
+                  <span>
+                    Actualizado: {formatTime(lastRefresh)}
+                  </span>
+                </div>
               </div>
             </div>
 
@@ -519,10 +856,12 @@ const InventoryPage: React.FC = () => {
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.3, delay: 0.1 * index }}
-                  onClick={() => handleNavigate(item.path)}
+                  onClick={() => isConnected ? handleNavigate(item.path) : null}
                   className={`${
                     CSS_CLASSES.card
-                  } p-6 cursor-pointer hover:shadow-lg transition-all duration-200 transform hover:scale-105 ${
+                  } p-6 transition-all duration-200 transform ${
+                    isConnected ? 'cursor-pointer hover:shadow-lg hover:scale-105' : 'cursor-not-allowed opacity-75'
+                  } ${
                     item.isActive ? "ring-2 ring-blue-500 ring-opacity-50" : ""
                   }`}
                 >
@@ -550,7 +889,7 @@ const InventoryPage: React.FC = () => {
                         </span>
                       )}
                       {item.hasNotifications && (
-                        <Bell className="w-4 h-4 text-orange-500" />
+                        <Bell className="w-4 h-4 text-orange-500 animate-pulse" />
                       )}
                     </div>
                   </div>
@@ -567,10 +906,17 @@ const InventoryPage: React.FC = () => {
                       className={`px-2 py-1 rounded-full text-xs font-medium ${
                         item.isActive
                           ? "bg-blue-100 text-blue-800"
-                          : "bg-gray-100 text-gray-600"
+                          : isConnected
+                          ? "bg-gray-100 text-gray-600"
+                          : "bg-red-100 text-red-600"
                       }`}
                     >
-                      {item.isActive ? "Página actual" : "Disponible"}
+                      {item.isActive 
+                        ? "Página actual" 
+                        : isConnected 
+                        ? "Disponible" 
+                        : "Sin conexión"
+                      }
                     </span>
 
                     <ChevronRight className="w-4 h-4 text-gray-400" />
@@ -600,7 +946,11 @@ const InventoryPage: React.FC = () => {
                   El sistema de gestión de inventario está diseñado
                   específicamente para el sector ganadero, proporcionando
                   control completo sobre medicamentos veterinarios, suplementos,
-                  alimentos y equipos especializados.
+                  alimentos y equipos especializados. {!isConnected && (
+                    <strong className="text-red-600">
+                      Actualmente funcionando en modo sin conexión - algunas características están limitadas.
+                    </strong>
+                  )}
                 </p>
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -649,6 +999,12 @@ const InventoryPage: React.FC = () => {
                       {getPageTitle()}
                     </span>
                   </div>
+                  
+                  {!isConnected && (
+                    <div className="bg-red-500/20 text-red-200 px-2 py-1 rounded text-xs">
+                      Sin conexión
+                    </div>
+                  )}
                 </div>
 
                 <div className="flex items-center space-x-3">
@@ -657,11 +1013,14 @@ const InventoryPage: React.FC = () => {
                     {navigationItems.map((item) => (
                       <button
                         key={item.id}
-                        onClick={() => handleNavigate(item.path)}
+                        onClick={() => isConnected ? handleNavigate(item.path) : null}
+                        disabled={!isConnected}
                         className={`px-3 py-1.5 rounded-lg text-sm transition-all duration-200 flex items-center space-x-1 ${
                           item.isActive
                             ? "bg-white/20 text-white"
-                            : "text-white/70 hover:bg-white/10 hover:text-white"
+                            : isConnected 
+                            ? "text-white/70 hover:bg-white/10 hover:text-white"
+                            : "text-white/40 cursor-not-allowed"
                         }`}
                       >
                         <item.icon className="w-4 h-4" />
@@ -676,6 +1035,15 @@ const InventoryPage: React.FC = () => {
                       </button>
                     ))}
                   </div>
+
+                  {/* Actualizar */}
+                  <button
+                    onClick={handleRefresh}
+                    disabled={isLoading}
+                    className="bg-white/20 hover:bg-white/30 text-white px-3 py-2 rounded-lg flex items-center space-x-1 disabled:opacity-50"
+                  >
+                    <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
+                  </button>
 
                   {/* Botón de menú móvil */}
                   <button
@@ -702,13 +1070,18 @@ const InventoryPage: React.FC = () => {
                         <button
                           key={item.id}
                           onClick={() => {
-                            handleNavigate(item.path);
-                            setShowNavigation(false);
+                            if (isConnected) {
+                              handleNavigate(item.path);
+                              setShowNavigation(false);
+                            }
                           }}
+                          disabled={!isConnected}
                           className={`flex items-center space-x-3 px-3 py-2 rounded-lg text-sm transition-all duration-200 ${
                             item.isActive
                               ? "bg-white/20 text-white"
-                              : "text-white/70 hover:bg-white/10 hover:text-white"
+                              : isConnected
+                              ? "text-white/70 hover:bg-white/10 hover:text-white"
+                              : "text-white/40 cursor-not-allowed"
                           }`}
                         >
                           <item.icon className="w-4 h-4" />
@@ -741,6 +1114,22 @@ const InventoryPage: React.FC = () => {
                     exit={{ opacity: 0, x: -20 }}
                     transition={{ duration: 0.3 }}
                   >
+                    <div className="container mx-auto px-6 py-8">
+                      <div className="bg-white rounded-lg shadow-sm p-8 text-center">
+                        <BarChart3 className="w-16 h-16 text-blue-500 mx-auto mb-4" />
+                        <h2 className="text-2xl font-bold text-gray-900 mb-2">
+                          Dashboard de Inventario
+                        </h2>
+                        <p className="text-gray-600">
+                          Vista general y métricas principales del inventario
+                        </p>
+                        {!isConnected && (
+                          <p className="text-red-600 text-sm mt-2">
+                            ⚠️ Sin conexión al servidor - Datos limitados
+                          </p>
+                        )}
+                      </div>
+                    </div>
                   </motion.div>
                 }
               />
@@ -754,7 +1143,7 @@ const InventoryPage: React.FC = () => {
                     exit={{ opacity: 0, x: -20 }}
                     transition={{ duration: 0.3 }}
                   >
-                    <MedicineInventory />
+                    <MedicineInventoryWrapper />
                   </motion.div>
                 }
               />
@@ -768,7 +1157,7 @@ const InventoryPage: React.FC = () => {
                     exit={{ opacity: 0, x: -20 }}
                     transition={{ duration: 0.3 }}
                   >
-                    <StockLevels />
+                    <StockLevelsWrapper />
                   </motion.div>
                 }
               />
@@ -782,6 +1171,81 @@ const InventoryPage: React.FC = () => {
                     exit={{ opacity: 0, x: -20 }}
                     transition={{ duration: 0.3 }}
                   >
+                    <div className="container mx-auto px-6 py-8">
+                      <div className="bg-white rounded-lg shadow-sm p-8">
+                        <div className="flex items-center space-x-3 mb-6">
+                          <AlertTriangle className="w-8 h-8 text-orange-500" />
+                          <div>
+                            <h2 className="text-2xl font-bold text-gray-900">
+                              Alertas de Stock Bajo
+                            </h2>
+                            <p className="text-gray-600">
+                              Monitoreo en tiempo real de niveles críticos
+                            </p>
+                          </div>
+                        </div>
+                        
+                        {alerts.length > 0 ? (
+                          <div className="space-y-4">
+                            {alerts.map((alert) => (
+                              <div
+                                key={alert.id}
+                                className={`p-4 rounded-lg border-l-4 ${
+                                  alert.priority === 'critical' 
+                                    ? 'bg-red-50 border-red-500'
+                                    : alert.priority === 'high'
+                                    ? 'bg-orange-50 border-orange-500'
+                                    : 'bg-yellow-50 border-yellow-500'
+                                }`}
+                              >
+                                <div className="flex items-center justify-between">
+                                  <div>
+                                    <h3 className="font-semibold text-gray-900">
+                                      {alert.itemName}
+                                    </h3>
+                                    <p className="text-sm text-gray-600">
+                                      Stock actual: {alert.currentStock} | Mínimo: {alert.minimumStock}
+                                    </p>
+                                    {alert.expirationDate && (
+                                      <p className="text-sm text-gray-600">
+                                        Vence: {alert.expirationDate.toLocaleDateString()}
+                                      </p>
+                                    )}
+                                  </div>
+                                  <div className={`px-3 py-1 rounded-full text-sm font-medium ${
+                                    alert.priority === 'critical'
+                                      ? 'bg-red-100 text-red-800'
+                                      : alert.priority === 'high'
+                                      ? 'bg-orange-100 text-orange-800'
+                                      : 'bg-yellow-100 text-yellow-800'
+                                  }`}>
+                                    {alert.priority.toUpperCase()}
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="text-center py-8">
+                            <AlertTriangle className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                            <h3 className="text-lg font-medium text-gray-900 mb-2">
+                              No hay alertas activas
+                            </h3>
+                            <p className="text-gray-600">
+                              Todos los niveles de stock están en rangos óptimos
+                            </p>
+                          </div>
+                        )}
+                        
+                        {!isConnected && (
+                          <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+                            <p className="text-red-700 text-sm">
+                              ⚠️ Sin conexión al servidor - Mostrando últimas alertas cargadas
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
                   </motion.div>
                 }
               />
@@ -795,6 +1259,22 @@ const InventoryPage: React.FC = () => {
                     exit={{ opacity: 0, x: -20 }}
                     transition={{ duration: 0.3 }}
                   >
+                    <div className="container mx-auto px-6 py-8">
+                      <div className="bg-white rounded-lg shadow-sm p-8 text-center">
+                        <FileText className="w-16 h-16 text-indigo-500 mx-auto mb-4" />
+                        <h2 className="text-2xl font-bold text-gray-900 mb-2">
+                          Reportes de Inventario
+                        </h2>
+                        <p className="text-gray-600 mb-4">
+                          Generación y gestión de reportes especializados
+                        </p>
+                        {!isConnected && (
+                          <p className="text-red-600 text-sm">
+                            ⚠️ Sin conexión al servidor - Funcionalidad limitada
+                          </p>
+                        )}
+                      </div>
+                    </div>
                   </motion.div>
                 }
               />

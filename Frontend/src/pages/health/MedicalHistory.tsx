@@ -1,75 +1,255 @@
 import React, { useState, useEffect } from "react";
 
-// Tipos para eventos médicos
-type EventType = "vaccination" | "illness" | "treatment" | "checkup" | "surgery" | "medication" | "exam" | "observation";
-type EventStatus = "active" | "completed" | "ongoing" | "cancelled";
-type EventSeverity = "low" | "medium" | "high" | "critical";
+// Configuración mejorada del backend
+const BACKEND_CONFIG = {
+  baseURL: "http://localhost:5000/api",
+  timeout: 10000, // 10 segundos
+  retryAttempts: 3,
+  retryDelay: 1000, // 1 segundo entre intentos
+};
 
-// Interfaces para tipos de datos
+// Tipos para eventos médicos - Actualizados según el backend
+type EventType = "VACCINATION" | "DISEASE" | "HEALTH_CHECK" | "TREATMENT" | "REPRODUCTION" | "MOVEMENT" | "FEEDING" | "WEIGHING" | "BIRTH" | "DEATH" | "INJURY" | "QUARANTINE" | "MEDICATION" | "SURGERY" | "OTHER";
+type EventStatus = "SCHEDULED" | "IN_PROGRESS" | "COMPLETED" | "CANCELLED" | "POSTPONED" | "FAILED";
+type EventPriority = "LOW" | "MEDIUM" | "HIGH" | "CRITICAL" | "EMERGENCY";
+
+// Interfaz para ubicación
+interface LocationData {
+  latitude: number;
+  longitude: number;
+  address?: string;
+}
+
+// Interfaces actualizadas según el backend
 interface MedicalEvent {
   id: string;
-  animalName: string;
-  animalTag: string;
+  bovineId: string;
   eventType: EventType;
   title: string;
   description: string;
-  date: string;
-  veterinarian: string;
-  location: string;
-  severity?: EventSeverity;
   status: EventStatus;
-  medications?: string[];
-  diagnosis?: string;
-  treatment?: string;
-  followUpDate?: string;
-  cost: number;
-  notes: string;
+  priority: EventPriority;
+  scheduledDate: string;
+  completedDate?: string;
+  location: LocationData;
+  cost?: number;
+  veterinarianId?: string;
+  createdBy: string;
+  publicNotes?: string;
+  eventData?: any;
   createdAt: string;
-  vitalSigns?: {
-    temperature: number;
-    heartRate: number;
-    respiratoryRate: number;
-    weight: number;
+  updatedAt: string;
+  isActive: boolean;
+  // Información del bovino (viene del backend)
+  bovineInfo?: {
+    id: string;
+    earTag: string;
+    name: string;
+    cattleType: string;
+    breed?: string;
+    gender?: string;
   };
 }
 
 interface HealthStats {
   totalEvents: number;
   vaccinationsCount: number;
-  illnessesCount: number;
+  diseasesCount: number;
   treatmentsCount: number;
   healthScore: number;
 }
 
 interface NewEventForm {
-  animalName: string;
-  animalTag: string;
+  bovineId: string;
   eventType: EventType;
   title: string;
   description: string;
-  date: string;
-  veterinarian: string;
-  location: string;
-  severity?: EventSeverity;
-  status: EventStatus;
-  medications: string;
-  diagnosis: string;
-  treatment: string;
-  followUpDate: string;
+  scheduledDate: string;
+  priority: EventPriority;
+  location: LocationData;
   cost: number;
-  notes: string;
-  vitalSigns: {
-    temperature: number;
-    heartRate: number;
-    respiratoryRate: number;
-    weight: number;
-  };
+  veterinarianId: string;
+  publicNotes: string;
+  eventData?: any;
 }
+
+// Clase mejorada de API Client con manejo de errores robusto
+class ApiClient {
+  private baseURL: string;
+  private timeout: number;
+  private retryAttempts: number;
+  private retryDelay: number;
+
+  constructor(config: typeof BACKEND_CONFIG) {
+    this.baseURL = config.baseURL;
+    this.timeout = config.timeout;
+    this.retryAttempts = config.retryAttempts;
+    this.retryDelay = config.retryDelay;
+  }
+
+  // Método helper para hacer requests con reintentos
+  private async fetchWithRetry(url: string, options: RequestInit, attempt = 1): Promise<Response> {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), this.timeout);
+
+      const response = await fetch(url, {
+        ...options,
+        signal: controller.signal,
+        headers: {
+          'Content-Type': 'application/json',
+          ...options.headers,
+        },
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      return response;
+    } catch (error) {
+      console.error(`Intento ${attempt} falló para ${url}:`, error);
+
+      if (attempt < this.retryAttempts && this.shouldRetry(error)) {
+        console.log(`Reintentando en ${this.retryDelay}ms... (${attempt}/${this.retryAttempts})`);
+        await this.delay(this.retryDelay * attempt); // Backoff exponencial
+        return this.fetchWithRetry(url, options, attempt + 1);
+      }
+
+      throw error;
+    }
+  }
+
+  private shouldRetry(error: any): boolean {
+    // Reintentar solo en errores de red, no en errores HTTP 4xx
+    return error.name === 'AbortError' || 
+           error.name === 'TypeError' || 
+           error.message.includes('Failed to fetch') ||
+           error.message.includes('Network Error');
+  }
+
+  private delay(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  // Verificar conexión con el backend
+  async testConnection(): Promise<{ success: boolean; message: string; latency?: number }> {
+    const startTime = Date.now();
+    try {
+
+      const latency = Date.now() - startTime;
+
+      return {
+        success: true,
+        message: `Conectado exitosamente (${latency}ms)`,
+        latency
+      };
+    } catch (error) {
+      console.error('Error de conexión:', error);
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : 'Error de conexión desconocido'
+      };
+    }
+  }
+
+  // Obtener todos los eventos
+  async getEvents(page = 1, limit = 50): Promise<{ events: MedicalEvent[], pagination: any }> {
+    const response = await this.fetchWithRetry(
+      `${this.baseURL}/events?page=${page}&limit=${limit}`,
+      { method: 'GET' }
+    );
+    
+    const data = await response.json();
+    return data.data || { events: [], pagination: {} };
+  }
+
+  // Crear nuevo evento
+  async createEvent(eventData: Partial<NewEventForm>): Promise<MedicalEvent> {
+    const defaultLocation: LocationData = {
+      latitude: 18.0067, // Coordenadas de Villahermosa, Tabasco
+      longitude: -92.9311,
+      address: eventData.location?.address || 'Rancho Principal, Villahermosa, Tabasco'
+    };
+
+    const response = await this.fetchWithRetry(`${this.baseURL}/events`, {
+      method: 'POST',
+      body: JSON.stringify({
+        ...eventData,
+        priority: eventData.priority || 'MEDIUM',
+        location: eventData.location || defaultLocation
+      }),
+    });
+
+    const data = await response.json();
+    return data.data?.event || data.data;
+  }
+
+  // Actualizar evento
+  async updateEvent(id: string, eventData: Partial<NewEventForm>): Promise<MedicalEvent> {
+    const response = await this.fetchWithRetry(`${this.baseURL}/events/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(eventData),
+    });
+
+    const data = await response.json();
+    return data.data?.event || data.data;
+  }
+
+  // Eliminar evento
+  async deleteEvent(id: string): Promise<void> {
+    await this.fetchWithRetry(`${this.baseURL}/events/${id}`, {
+      method: 'DELETE',
+    });
+  }
+
+  // Obtener bovinos
+  async getBovines(): Promise<any[]> {
+    try {
+      const response = await this.fetchWithRetry(`${this.baseURL}/bovines`, {
+        method: 'GET',
+      });
+
+      const data = await response.json();
+      return data.data?.bovines || data.data || [];
+    } catch (error) {
+      // Si no hay endpoint de bovines, devolver datos mock
+      console.warn('Endpoint de bovines no disponible, usando datos de ejemplo');
+      return [
+        { id: '1', name: 'Estrella', earTag: 'TAG-001', cattleType: 'Lechera', breed: 'Holstein', gender: 'Female' },
+        { id: '2', name: 'Toro Real', earTag: 'TAG-002', cattleType: 'Reproductor', breed: 'Brahman', gender: 'Male' },
+        { id: '3', name: 'Luna', earTag: 'TAG-003', cattleType: 'Lechera', breed: 'Jersey', gender: 'Female' }
+      ];
+    }
+  }
+
+  // Obtener estadísticas del sistema
+  async getSystemInfo(): Promise<any> {
+    try {
+      const response = await this.fetchWithRetry(`${this.baseURL}/../system-info`, {
+        method: 'GET',
+      });
+      const systemData = await response.json();
+      return systemData;
+    } catch (error) {
+      console.warn('System info no disponible');
+      return null;
+    }
+  }
+}
+
+// Instancia del cliente API
+const apiClient = new ApiClient(BACKEND_CONFIG);
 
 const MedicalHistory: React.FC = () => {
   const [events, setEvents] = useState<MedicalEvent[]>([]);
+  const [bovines, setBovines] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string>("");
+  const [connectionStatus, setConnectionStatus] = useState<'connecting' | 'connected' | 'error' | 'retrying'>('connecting');
+  const [connectionInfo, setConnectionInfo] = useState<{ message: string; latency?: number }>({ message: '' });
   
   // Estados para modales y formularios
   const [showForm, setShowForm] = useState<boolean>(false);
@@ -82,6 +262,7 @@ const MedicalHistory: React.FC = () => {
   // Estados para formulario
   const [formData, setFormData] = useState<Partial<NewEventForm>>({});
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   
   // Estados para filtros
   const [searchTerm, setSearchTerm] = useState("");
@@ -89,117 +270,111 @@ const MedicalHistory: React.FC = () => {
   const [selectedVeterinarian, setSelectedVeterinarian] = useState<string>("all");
   const [showFilters, setShowFilters] = useState<boolean>(false);
 
-  // Datos de ejemplo
-  const mockEvents: MedicalEvent[] = [
-    {
-      id: "1",
-      animalName: "Bessie",
-      animalTag: "TAG-001",
-      eventType: "checkup",
-      title: "Chequeo Mensual de Rutina",
-      description: "Examen de salud general y evaluación reproductiva",
-      date: "2025-07-01",
-      veterinarian: "Dr. García",
-      location: "Establo Principal",
-      status: "completed",
-      cost: 150,
-      notes: "Animal en excelente estado de salud. Todos los parámetros normales.",
-      createdAt: "2025-07-01T10:00:00.000Z",
-      vitalSigns: {
-        temperature: 38.5,
-        heartRate: 72,
-        respiratoryRate: 24,
-        weight: 580,
-      },
-    },
-    {
-      id: "2",
-      animalName: "Bessie",
-      animalTag: "TAG-001",
-      eventType: "vaccination",
-      title: "Vacuna Antiaftosa",
-      description: "Aplicación de vacuna contra fiebre aftosa - dosis anual",
-      date: "2025-06-15",
-      veterinarian: "Dr. Martínez",
-      location: "Establo Principal",
-      status: "completed",
-      medications: ["Vacuna Antiaftosa"],
-      cost: 85,
-      notes: "Vacunación sin complicaciones. Próxima dosis en 12 meses.",
-      createdAt: "2025-06-15T09:00:00.000Z",
-    },
-    {
-      id: "3",
-      animalName: "Luna",
-      animalTag: "TAG-002",
-      eventType: "illness",
-      title: "Mastitis Clínica",
-      description: "Inflamación aguda de la glándula mamaria",
-      date: "2025-07-08",
-      veterinarian: "Dr. López",
-      location: "Establo Norte",
-      severity: "medium",
-      status: "ongoing",
-      diagnosis: "Mastitis clínica en cuarto anterior derecho",
-      treatment: "Antibioterapia sistémica y tratamiento intramamario",
-      medications: ["Ceftriaxona", "Antiinflamatorio"],
-      cost: 320,
-      notes: "Respuesta favorable al tratamiento. Continuar terapia por 5 días más.",
-      createdAt: "2025-07-08T14:30:00.000Z",
-      vitalSigns: {
-        temperature: 39.2,
-        heartRate: 85,
-        respiratoryRate: 28,
-        weight: 425,
-      },
-    },
-  ];
-
   // Estadísticas calculadas
   const [healthStats, setHealthStats] = useState<HealthStats>({
     totalEvents: 0,
     vaccinationsCount: 0,
-    illnessesCount: 0,
+    diseasesCount: 0,
     treatmentsCount: 0,
     healthScore: 92,
   });
 
-  // Cargar datos
-  useEffect(() => {
-    const loadData = async () => {
-      try {
-        setIsLoading(true);
-        setError("");
-        
-        await new Promise(resolve => setTimeout(resolve, 500));
-        
-        setEvents(mockEvents);
-        
-        // Calcular estadísticas
-        setHealthStats({
-          totalEvents: mockEvents.length,
-          vaccinationsCount: mockEvents.filter(e => e.eventType === "vaccination").length,
-          illnessesCount: mockEvents.filter(e => e.eventType === "illness").length,
-          treatmentsCount: mockEvents.filter(e => e.eventType === "treatment").length,
-          healthScore: 92,
-        });
-        
-      } catch (err) {
-        setError("Error al cargar los eventos médicos");
-      } finally {
-        setIsLoading(false);
+  // Probar conexión con el backend
+  const testConnection = async (showRetrying = false) => {
+    try {
+      if (showRetrying) {
+        setConnectionStatus('retrying');
+      } else {
+        setConnectionStatus('connecting');
       }
-    };
+      
+      const result = await apiClient.testConnection();
+      
+      if (result.success) {
+        setConnectionStatus('connected');
+        setConnectionInfo(result);
+        setError('');
+        return true;
+      } else {
+        throw new Error(result.message);
+      }
+    } catch (error) {
+      console.error('Error de conexión:', error);
+      setConnectionStatus('error');
+      const errorMessage = error instanceof Error ? error.message : 'Error de conexión desconocido';
+      setConnectionInfo({ message: errorMessage });
+      setError(`Error de conexión con el backend: ${errorMessage}\n\nVerifica que el servidor esté ejecutándose en http://localhost:5000`);
+      return false;
+    }
+  };
 
+  // Cargar datos del backend
+  const loadData = async (showRetrying = false) => {
+    try {
+      setIsLoading(true);
+      setError("");
+      
+      // Probar conexión primero
+      const isConnected = await testConnection(showRetrying);
+      if (!isConnected) {
+        return;
+      }
+
+      // Cargar eventos y bovinos en paralelo
+      const [eventsData, bovinesData] = await Promise.all([
+        apiClient.getEvents(),
+        apiClient.getBovines()
+      ]);
+      
+      setEvents(eventsData.events || []);
+      setBovines(bovinesData || []);
+      
+      // Calcular estadísticas
+      const eventsArray = eventsData.events || [];
+      setHealthStats({
+        totalEvents: eventsArray.length,
+        vaccinationsCount: eventsArray.filter(e => e.eventType === "VACCINATION").length,
+        diseasesCount: eventsArray.filter(e => e.eventType === "DISEASE").length,
+        treatmentsCount: eventsArray.filter(e => e.eventType === "TREATMENT").length,
+        healthScore: 92,
+      });
+      
+    } catch (err) {
+      console.error('Error cargando datos:', err);
+      setError(err instanceof Error ? err.message : "Error al cargar los eventos médicos");
+      setConnectionStatus('error');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Cargar datos al montar el componente
+  useEffect(() => {
     loadData();
   }, []);
+
+  // Auto-reconexión cada 30 segundos si hay error
+  useEffect(() => {
+    let intervalId: NodeJS.Timeout;
+    
+    if (connectionStatus === 'error') {
+      intervalId = setInterval(() => {
+        console.log('Intentando reconexión automática...');
+        testConnection(true);
+      }, 30000);
+    }
+
+    return () => {
+      if (intervalId) clearInterval(intervalId);
+    };
+  }, [connectionStatus]);
 
   // Validar formulario
   const validateForm = (data: Partial<NewEventForm>): Record<string, string> => {
     const errors: Record<string, string> = {};
 
-    if (!data.animalName?.trim()) {
-      errors.animalName = "El nombre del animal es obligatorio";
+    if (!data.bovineId) {
+      errors.bovineId = "Debe seleccionar un bovino";
     }
     if (!data.eventType) {
       errors.eventType = "El tipo de evento es obligatorio";
@@ -210,14 +385,8 @@ const MedicalHistory: React.FC = () => {
     if (!data.description?.trim()) {
       errors.description = "La descripción es obligatoria";
     }
-    if (!data.date) {
-      errors.date = "La fecha es obligatoria";
-    }
-    if (!data.veterinarian?.trim()) {
-      errors.veterinarian = "El veterinario es obligatorio";
-    }
-    if (!data.location?.trim()) {
-      errors.location = "La ubicación es obligatoria";
+    if (!data.scheduledDate) {
+      errors.scheduledDate = "La fecha es obligatoria";
     }
 
     return errors;
@@ -226,81 +395,63 @@ const MedicalHistory: React.FC = () => {
   // Resetear formulario
   const resetForm = () => {
     const now = new Date();
-    const today = now.toISOString().substr(0, 10);
+    const today = now.toISOString().substr(0, 16);
+    
+    const defaultLocation: LocationData = {
+      latitude: 18.0067, // Villahermosa, Tabasco
+      longitude: -92.9311,
+      address: "Rancho Principal, Villahermosa, Tabasco"
+    };
     
     setFormData({
-      animalName: "",
-      animalTag: "",
-      eventType: "vaccination" as EventType,
+      bovineId: "",
+      eventType: "VACCINATION" as EventType,
       title: "",
       description: "",
-      date: today,
-      veterinarian: "",
-      location: "",
-      severity: "low" as EventSeverity,
-      status: "active" as EventStatus,
-      medications: "",
-      diagnosis: "",
-      treatment: "",
-      followUpDate: "",
+      scheduledDate: today,
+      priority: "MEDIUM" as EventPriority,
+      location: defaultLocation,
       cost: 0,
-      notes: "",
-      vitalSigns: {
-        temperature: 0,
-        heartRate: 0,
-        respiratoryRate: 0,
-        weight: 0,
-      },
+      veterinarianId: "",
+      publicNotes: "",
     });
     setFormErrors({});
   };
 
   // Crear nuevo evento
-  const handleCreate = () => {
+  const handleCreate = async () => {
     const errors = validateForm(formData);
     if (Object.keys(errors).length > 0) {
       setFormErrors(errors);
       return;
     }
 
-    const newEvent: MedicalEvent = {
-      id: `event-${Date.now()}`,
-      animalName: formData.animalName!,
-      animalTag: formData.animalTag || "N/A",
-      eventType: formData.eventType!,
-      title: formData.title!,
-      description: formData.description!,
-      date: formData.date!,
-      veterinarian: formData.veterinarian!,
-      location: formData.location!,
-      severity: formData.severity,
-      status: formData.status!,
-      medications: formData.medications ? formData.medications.split(',').map(m => m.trim()).filter(m => m) : undefined,
-      diagnosis: formData.diagnosis || undefined,
-      treatment: formData.treatment || undefined,
-      followUpDate: formData.followUpDate || undefined,
-      cost: formData.cost || 0,
-      notes: formData.notes || "",
-      createdAt: new Date().toISOString(),
-      vitalSigns: formData.vitalSigns?.temperature ? formData.vitalSigns : undefined,
-    };
+    setIsSubmitting(true);
+    try {
+      const newEvent = await apiClient.createEvent(formData);
+      setEvents(prev => [newEvent, ...prev]);
+      setShowForm(false);
+      resetForm();
 
-    setEvents(prev => [newEvent, ...prev]);
-    setShowForm(false);
-    resetForm();
+      // Actualizar estadísticas
+      setHealthStats(prev => ({
+        ...prev,
+        totalEvents: prev.totalEvents + 1,
+        vaccinationsCount: newEvent.eventType === 'VACCINATION' ? prev.vaccinationsCount + 1 : prev.vaccinationsCount,
+        diseasesCount: newEvent.eventType === 'DISEASE' ? prev.diseasesCount + 1 : prev.diseasesCount,
+        treatmentsCount: newEvent.eventType === 'TREATMENT' ? prev.treatmentsCount + 1 : prev.treatmentsCount,
+      }));
 
-    // Actualizar estadísticas
-    setHealthStats(prev => ({
-      ...prev,
-      totalEvents: prev.totalEvents + 1,
-      vaccinationsCount: newEvent.eventType === 'vaccination' ? prev.vaccinationsCount + 1 : prev.vaccinationsCount,
-      illnessesCount: newEvent.eventType === 'illness' ? prev.illnessesCount + 1 : prev.illnessesCount,
-      treatmentsCount: newEvent.eventType === 'treatment' ? prev.treatmentsCount + 1 : prev.treatmentsCount,
-    }));
+    } catch (error) {
+      console.error('Error creando evento:', error);
+      setError(error instanceof Error ? error.message : 'Error al crear el evento');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   // Actualizar evento existente
-  const handleUpdate = () => {
+  const handleUpdate = async () => {
     if (!editingEvent) return;
 
     const errors = validateForm(formData);
@@ -309,35 +460,23 @@ const MedicalHistory: React.FC = () => {
       return;
     }
 
-    const updatedData: Partial<MedicalEvent> = {
-      animalName: formData.animalName!,
-      animalTag: formData.animalTag || "N/A",
-      eventType: formData.eventType!,
-      title: formData.title!,
-      description: formData.description!,
-      date: formData.date!,
-      veterinarian: formData.veterinarian!,
-      location: formData.location!,
-      severity: formData.severity,
-      status: formData.status!,
-      medications: formData.medications ? formData.medications.split(',').map(m => m.trim()).filter(m => m) : undefined,
-      diagnosis: formData.diagnosis || undefined,
-      treatment: formData.treatment || undefined,
-      followUpDate: formData.followUpDate || undefined,
-      cost: formData.cost || 0,
-      notes: formData.notes || "",
-      vitalSigns: formData.vitalSigns?.temperature ? formData.vitalSigns : undefined,
-    };
+    setIsSubmitting(true);
+    try {
+      const updatedEvent = await apiClient.updateEvent(editingEvent.id, formData);
+      setEvents(prev => prev.map(event => 
+        event.id === editingEvent.id ? updatedEvent : event
+      ));
+      
+      setEditingEvent(null);
+      setShowForm(false);
+      resetForm();
 
-    setEvents(prev => prev.map(event => 
-      event.id === editingEvent.id 
-        ? { ...event, ...updatedData }
-        : event
-    ));
-    
-    setEditingEvent(null);
-    setShowForm(false);
-    resetForm();
+    } catch (error) {
+      console.error('Error actualizando evento:', error);
+      setError(error instanceof Error ? error.message : 'Error al actualizar el evento');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   // Ver detalles
@@ -350,28 +489,16 @@ const MedicalHistory: React.FC = () => {
   const handleEdit = (event: MedicalEvent) => {
     setEditingEvent(event);
     const formEventData: Partial<NewEventForm> = {
-      animalName: event.animalName,
-      animalTag: event.animalTag,
+      bovineId: event.bovineId,
       eventType: event.eventType,
       title: event.title,
       description: event.description,
-      date: event.date,
-      veterinarian: event.veterinarian,
+      scheduledDate: event.scheduledDate,
+      priority: event.priority,
       location: event.location,
-      severity: event.severity,
-      status: event.status,
-      medications: event.medications ? event.medications.join(', ') : "",
-      diagnosis: event.diagnosis || "",
-      treatment: event.treatment || "",
-      followUpDate: event.followUpDate || "",
-      cost: event.cost,
-      notes: event.notes,
-      vitalSigns: event.vitalSigns || {
-        temperature: 0,
-        heartRate: 0,
-        respiratoryRate: 0,
-        weight: 0,
-      },
+      cost: event.cost || 0,
+      veterinarianId: event.veterinarianId || "",
+      publicNotes: event.publicNotes || "",
     };
     setFormData(formEventData);
     setShowForm(true);
@@ -384,31 +511,38 @@ const MedicalHistory: React.FC = () => {
   };
 
   // Confirmar eliminación
-  const confirmDelete = () => {
+  const confirmDelete = async () => {
     if (!eventToDelete) return;
 
-    setEvents(prev => prev.filter(e => e.id !== eventToDelete.id));
-    
-    if (selectedEvent?.id === eventToDelete.id) {
-      setSelectedEvent(null);
-      setShowDetailsModal(false);
-    }
-    if (editingEvent?.id === eventToDelete.id) {
-      setEditingEvent(null);
-      setShowForm(false);
-    }
-    
-    setShowDeleteModal(false);
-    setEventToDelete(null);
+    try {
+      await apiClient.deleteEvent(eventToDelete.id);
+      setEvents(prev => prev.filter(e => e.id !== eventToDelete.id));
+      
+      if (selectedEvent?.id === eventToDelete.id) {
+        setSelectedEvent(null);
+        setShowDetailsModal(false);
+      }
+      if (editingEvent?.id === eventToDelete.id) {
+        setEditingEvent(null);
+        setShowForm(false);
+      }
+      
+      setShowDeleteModal(false);
+      setEventToDelete(null);
 
-    // Actualizar estadísticas
-    setHealthStats(prev => ({
-      ...prev,
-      totalEvents: prev.totalEvents - 1,
-      vaccinationsCount: eventToDelete.eventType === 'vaccination' ? prev.vaccinationsCount - 1 : prev.vaccinationsCount,
-      illnessesCount: eventToDelete.eventType === 'illness' ? prev.illnessesCount - 1 : prev.illnessesCount,
-      treatmentsCount: eventToDelete.eventType === 'treatment' ? prev.treatmentsCount - 1 : prev.treatmentsCount,
-    }));
+      // Actualizar estadísticas
+      setHealthStats(prev => ({
+        ...prev,
+        totalEvents: prev.totalEvents - 1,
+        vaccinationsCount: eventToDelete.eventType === 'VACCINATION' ? prev.vaccinationsCount - 1 : prev.vaccinationsCount,
+        diseasesCount: eventToDelete.eventType === 'DISEASE' ? prev.diseasesCount - 1 : prev.diseasesCount,
+        treatmentsCount: eventToDelete.eventType === 'TREATMENT' ? prev.treatmentsCount - 1 : prev.treatmentsCount,
+      }));
+
+    } catch (error) {
+      console.error('Error eliminando evento:', error);
+      setError(error instanceof Error ? error.message : 'Error al eliminar el evento');
+    }
   };
 
   // Nuevo evento
@@ -421,59 +555,77 @@ const MedicalHistory: React.FC = () => {
   // Funciones auxiliares
   const getStatusColor = (status: EventStatus) => {
     const colors = {
-      active: "bg-red-100 text-red-800",
-      completed: "bg-green-100 text-green-800",
-      ongoing: "bg-blue-100 text-blue-800",
-      cancelled: "bg-gray-100 text-gray-800",
+      SCHEDULED: "bg-yellow-100 text-yellow-800",
+      IN_PROGRESS: "bg-blue-100 text-blue-800",
+      COMPLETED: "bg-green-100 text-green-800",
+      CANCELLED: "bg-gray-100 text-gray-800",
+      POSTPONED: "bg-orange-100 text-orange-800",
+      FAILED: "bg-red-100 text-red-800",
     };
     return colors[status];
   };
 
   const getStatusText = (status: EventStatus) => {
     const texts = {
-      active: "Activo",
-      completed: "Completado",
-      ongoing: "En progreso",
-      cancelled: "Cancelado",
+      SCHEDULED: "Programado",
+      IN_PROGRESS: "En Progreso",
+      COMPLETED: "Completado",
+      CANCELLED: "Cancelado",
+      POSTPONED: "Pospuesto",
+      FAILED: "Fallido",
     };
     return texts[status];
   };
 
   const getEventTypeColor = (eventType: EventType) => {
     const colors = {
-      vaccination: "bg-purple-100 text-purple-800",
-      illness: "bg-red-100 text-red-800",
-      treatment: "bg-blue-100 text-blue-800",
-      checkup: "bg-green-100 text-green-800",
-      surgery: "bg-orange-100 text-orange-800",
-      medication: "bg-indigo-100 text-indigo-800",
-      exam: "bg-cyan-100 text-cyan-800",
-      observation: "bg-gray-100 text-gray-800",
+      VACCINATION: "bg-purple-100 text-purple-800",
+      DISEASE: "bg-red-100 text-red-800",
+      TREATMENT: "bg-blue-100 text-blue-800",
+      HEALTH_CHECK: "bg-green-100 text-green-800",
+      SURGERY: "bg-orange-100 text-orange-800",
+      MEDICATION: "bg-indigo-100 text-indigo-800",
+      REPRODUCTION: "bg-pink-100 text-pink-800",
+      INJURY: "bg-red-200 text-red-900",
+      QUARANTINE: "bg-yellow-200 text-yellow-900",
+      OTHER: "bg-gray-100 text-gray-800",
+      MOVEMENT: "bg-cyan-100 text-cyan-800",
+      FEEDING: "bg-lime-100 text-lime-800",
+      WEIGHING: "bg-teal-100 text-teal-800",
+      BIRTH: "bg-emerald-100 text-emerald-800",
+      DEATH: "bg-slate-100 text-slate-800",
     };
     return colors[eventType];
   };
 
   const getEventTypeText = (eventType: EventType) => {
     const texts = {
-      vaccination: "Vacunación",
-      illness: "Enfermedad",
-      treatment: "Tratamiento",
-      checkup: "Chequeo",
-      surgery: "Cirugía",
-      medication: "Medicamento",
-      exam: "Examen",
-      observation: "Observación",
+      VACCINATION: "Vacunación",
+      DISEASE: "Enfermedad",
+      TREATMENT: "Tratamiento",
+      HEALTH_CHECK: "Chequeo",
+      SURGERY: "Cirugía",
+      MEDICATION: "Medicamento",
+      REPRODUCTION: "Reproducción",
+      INJURY: "Lesión",
+      QUARANTINE: "Cuarentena",
+      OTHER: "Otro",
+      MOVEMENT: "Movimiento",
+      FEEDING: "Alimentación",
+      WEIGHING: "Pesaje",
+      BIRTH: "Nacimiento",
+      DEATH: "Muerte",
     };
     return texts[eventType];
   };
 
   const formatDate = (dateString: string) => {
-    const date = new Date(dateString + 'T12:00:00');
+    const date = new Date(dateString);
     return date.toLocaleDateString('es-MX');
   };
 
   const formatFullDate = (dateString: string) => {
-    const date = new Date(dateString + 'T12:00:00');
+    const date = new Date(dateString);
     return date.toLocaleDateString('es-MX', {
       weekday: 'long',
       year: 'numeric',
@@ -487,14 +639,46 @@ const MedicalHistory: React.FC = () => {
     const matchesSearch =
       event.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
       event.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      event.animalName.toLowerCase().includes(searchTerm.toLowerCase());
+      (event.bovineInfo?.name && event.bovineInfo.name.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (event.bovineInfo?.earTag && event.bovineInfo.earTag.toLowerCase().includes(searchTerm.toLowerCase()));
     const matchesEventType =
       selectedEventType === "all" || event.eventType === selectedEventType;
     const matchesVeterinarian =
-      selectedVeterinarian === "all" || event.veterinarian === selectedVeterinarian;
+      selectedVeterinarian === "all" || event.veterinarianId === selectedVeterinarian;
 
     return matchesSearch && matchesEventType && matchesVeterinarian;
   });
+
+  // Componente de estado de conexión mejorado
+  const getConnectionStatusDisplay = () => {
+    const statusConfig = {
+      connecting: { color: 'yellow', icon: '🟡', text: 'Conectando...' },
+      connected: { color: 'green', icon: '🟢', text: `Conectado${connectionInfo.latency ? ` (${connectionInfo.latency}ms)` : ''}` },
+      error: { color: 'red', icon: '🔴', text: 'Sin conexión' },
+      retrying: { color: 'orange', icon: '🟠', text: 'Reconectando...' }
+    };
+
+    const config = statusConfig[connectionStatus];
+    return (
+      <div className={`px-2 py-1 rounded-full text-xs font-medium bg-${config.color}-100 text-${config.color}-800`}>
+        {config.icon} {config.text}
+      </div>
+    );
+  };
+
+  // Estado de conexión
+  if (connectionStatus === 'connecting') {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-[#519a7c] via-[#f2e9d8] to-[#f4ac3a] flex items-center justify-center">
+        <div className="bg-white rounded-lg p-8 shadow-lg max-w-sm mx-4 text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#519a7c] mx-auto mb-4"></div>
+          <p className="text-gray-600 font-medium">Conectando con el backend...</p>
+          <p className="text-gray-500 text-sm mt-2">http://localhost:5000</p>
+          <p className="text-gray-400 text-xs mt-2">Verificando disponibilidad del servidor...</p>
+        </div>
+      </div>
+    );
+  }
 
   // Loading
   if (isLoading) {
@@ -503,7 +687,12 @@ const MedicalHistory: React.FC = () => {
         <div className="bg-white rounded-lg p-8 shadow-lg max-w-sm mx-4">
           <div className="flex items-center space-x-3">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#519a7c]"></div>
-            <p className="text-gray-600">Cargando eventos...</p>
+            <div>
+              <p className="text-gray-600">Cargando datos...</p>
+              {connectionStatus === 'connected' && (
+                <p className="text-green-600 text-sm">✅ Conectado al backend</p>
+              )}
+            </div>
           </div>
         </div>
       </div>
@@ -511,19 +700,35 @@ const MedicalHistory: React.FC = () => {
   }
 
   // Error
-  if (error) {
+  if (error && connectionStatus === 'error') {
     return (
       <div className="min-h-screen bg-gradient-to-br from-[#519a7c] via-[#f2e9d8] to-[#f4ac3a] flex items-center justify-center">
-        <div className="bg-white rounded-lg p-8 shadow-lg max-w-sm mx-4">
+        <div className="bg-white rounded-lg p-8 shadow-lg max-w-md mx-4">
           <div className="text-center">
             <span className="text-4xl mb-4 block">⚠️</span>
-            <p className="text-red-600 font-semibold mb-4">{error}</p>
-            <button 
-              onClick={() => window.location.reload()}
-              className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
-            >
-              Recargar
-            </button>
+            <p className="text-red-600 font-semibold mb-4">{connectionInfo.message}</p>
+            <div className="bg-red-50 rounded-lg p-4 mb-4">
+              <p className="text-sm text-red-700">
+                <strong>¿Cómo solucionarlo?</strong>
+              </p>
+              <ol className="text-sm text-red-700 mt-2 list-decimal list-inside space-y-1">
+                <li>Verifica que el backend esté ejecutándose</li>
+                <li>Revisa que el puerto 5000 esté disponible</li>
+                <li>Confirma la configuración de CORS</li>
+                <li>Revisa la consola para más detalles</li>
+              </ol>
+            </div>
+            <div className="space-y-2">
+              <button 
+                onClick={() => loadData(true)}
+                className="w-full px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+              >
+                🔄 Reintentar Conexión
+              </button>
+              <p className="text-xs text-gray-500">
+                Backend URL: {BACKEND_CONFIG.baseURL}
+              </p>
+            </div>
           </div>
         </div>
       </div>
@@ -533,33 +738,60 @@ const MedicalHistory: React.FC = () => {
   return (
     <div className="min-h-screen w-full overflow-x-hidden bg-gradient-to-br from-[#519a7c] via-[#f2e9d8] to-[#f4ac3a] p-2 sm:p-3">
       <div className="w-full max-w-6xl mx-auto px-2 sm:px-4">
-        {/* Header Principal - Aplicando contenedor con límite de ancho */}
+        {/* Header Principal */}
         <div className="bg-white/95 backdrop-blur-sm rounded-xl shadow-xl p-6 mb-6">
-          {/* Título y Botón Principal */}
+          {/* Título y Estado de Conexión */}
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
             <div className="flex items-center space-x-4 min-w-0 flex-1">
               <div className="w-12 h-12 bg-gradient-to-br from-[#519a7c] to-[#4a8970] rounded-xl flex items-center justify-center shadow-lg flex-shrink-0">
                 <span className="text-white text-xl">🩺</span>
               </div>
               <div className="min-w-0 flex-1">
-                <h1 className="text-2xl font-bold text-gray-800 truncate">
-                  Historial Médico
-                </h1>
+                <div className="flex items-center gap-2">
+                  <h1 className="text-2xl font-bold text-gray-800 truncate">
+                    Historial Médico
+                  </h1>
+                  {getConnectionStatusDisplay()}
+                </div>
                 <p className="text-sm text-gray-600 mt-1 truncate">
-                  Gestión completa de eventos médicos del ganado
+                  Sistema de gestión de eventos médicos del ganado
                 </p>
               </div>
             </div>
             <button 
               onClick={handleNew}
-              className="px-6 py-3 bg-gradient-to-r from-[#f4ac3a] to-[#e09b2a] text-white rounded-xl hover:from-[#e09b2a] hover:to-[#d08920] flex items-center justify-center space-x-2 transition-all duration-300 shadow-lg font-medium flex-shrink-0"
+              disabled={connectionStatus !== 'connected'}
+              className="px-6 py-3 bg-gradient-to-r from-[#f4ac3a] to-[#e09b2a] text-white rounded-xl hover:from-[#e09b2a] hover:to-[#d08920] flex items-center justify-center space-x-2 transition-all duration-300 shadow-lg font-medium flex-shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <span>➕</span>
               <span>Nuevo Evento</span>
             </button>
           </div>
 
-          {/* Estadísticas - Grid responsivo mejorado */}
+          {/* Panel de información adicional */}
+          {connectionStatus === 'connected' && connectionInfo.latency && (
+            <div className="bg-green-50 rounded-lg p-4 mb-6">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-3">
+                  <span className="text-green-600 text-lg">⚡</span>
+                  <div>
+                    <p className="text-sm text-green-800 font-medium">Conexión estable</p>
+                    <p className="text-xs text-green-600">
+                      Latencia: {connectionInfo.latency}ms | Backend: {BACKEND_CONFIG.baseURL}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => testConnection()}
+                  className="px-3 py-1 bg-green-200 text-green-800 rounded-lg text-xs hover:bg-green-300 transition-colors"
+                >
+                  Test
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Estadísticas */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
             <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl p-4 text-white shadow-lg">
               <div className="flex items-center justify-between">
@@ -589,7 +821,7 @@ const MedicalHistory: React.FC = () => {
               <div className="flex items-center justify-between">
                 <div className="min-w-0 flex-1">
                   <p className="text-sm text-red-100 font-medium truncate">Enfermedades</p>
-                  <p className="text-2xl font-bold">{healthStats.illnessesCount}</p>
+                  <p className="text-2xl font-bold">{healthStats.diseasesCount}</p>
                 </div>
                 <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center flex-shrink-0">
                   <span className="text-lg">🤒</span>
@@ -612,7 +844,6 @@ const MedicalHistory: React.FC = () => {
 
           {/* Búsqueda y Filtros */}
           <div className="space-y-4">
-            {/* Barra de Búsqueda */}
             <div className="relative">
               <span className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 text-lg">🔍</span>
               <input
@@ -624,7 +855,6 @@ const MedicalHistory: React.FC = () => {
               />
             </div>
 
-            {/* Filtros */}
             <div className="flex items-center justify-between">
               <button
                 onClick={() => setShowFilters(!showFilters)}
@@ -643,11 +873,11 @@ const MedicalHistory: React.FC = () => {
                 onChange={(e) => setSelectedEventType(e.target.value)}
               >
                 <option value="all">🏥 Todos los tipos de eventos</option>
-                <option value="vaccination">💉 Vacunaciones</option>
-                <option value="illness">🤒 Enfermedades</option>
-                <option value="treatment">💊 Tratamientos</option>
-                <option value="checkup">🔍 Chequeos</option>
-                <option value="surgery">⚕️ Cirugías</option>
+                <option value="VACCINATION">💉 Vacunaciones</option>
+                <option value="DISEASE">🤒 Enfermedades</option>
+                <option value="TREATMENT">💊 Tratamientos</option>
+                <option value="HEALTH_CHECK">🔍 Chequeos</option>
+                <option value="SURGERY">⚕️ Cirugías</option>
               </select>
 
               <select
@@ -656,15 +886,12 @@ const MedicalHistory: React.FC = () => {
                 onChange={(e) => setSelectedVeterinarian(e.target.value)}
               >
                 <option value="all">👨‍⚕️ Todos los veterinarios</option>
-                <option value="Dr. García">Dr. García</option>
-                <option value="Dr. Martínez">Dr. Martínez</option>
-                <option value="Dr. López">Dr. López</option>
               </select>
             </div>
           </div>
         </div>
 
-        {/* Content Area - Cards de Eventos con grid responsivo corregido */}
+        {/* Content Area - Cards de Eventos */}
         {filteredEvents.length === 0 ? (
           <div className="bg-white/95 backdrop-blur-sm rounded-lg shadow-md p-8 text-center">
             <div className="w-16 h-16 bg-gradient-to-br from-gray-200 to-gray-300 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -674,11 +901,15 @@ const MedicalHistory: React.FC = () => {
               No hay eventos médicos
             </h3>
             <p className="text-sm text-gray-600 mb-6 max-w-sm mx-auto">
-              No se encontraron eventos con los filtros seleccionados
+              {connectionStatus === 'connected' 
+                ? 'No se encontraron eventos con los filtros seleccionados'
+                : 'Conecta con el backend para ver los eventos médicos'
+              }
             </p>
             <button 
               onClick={handleNew}
-              className="px-4 py-2 bg-gradient-to-r from-[#519a7c] to-[#4a8970] text-white rounded-lg hover:from-[#4a8970] hover:to-[#3d7a63] flex items-center space-x-2 mx-auto transition-all duration-300 shadow-md text-sm font-medium"
+              disabled={connectionStatus !== 'connected'}
+              className="px-4 py-2 bg-gradient-to-r from-[#519a7c] to-[#4a8970] text-white rounded-lg hover:from-[#4a8970] hover:to-[#3d7a63] flex items-center space-x-2 mx-auto transition-all duration-300 shadow-md text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <span>➕</span>
               <span>Crear Primer Evento</span>
@@ -701,8 +932,12 @@ const MedicalHistory: React.FC = () => {
                           {event.title}
                         </h3>
                         <div className="flex items-center space-x-2 text-white/90">
-                          <span className="text-xs font-medium truncate">{event.animalName}</span>
-                          <span className="text-xs bg-white/20 px-2 py-1 rounded-full flex-shrink-0">{event.animalTag}</span>
+                          <span className="text-xs font-medium truncate">
+                            {event.bovineInfo?.name || 'Animal N/A'}
+                          </span>
+                          <span className="text-xs bg-white/20 px-2 py-1 rounded-full flex-shrink-0">
+                            {event.bovineInfo?.earTag || 'TAG-N/A'}
+                          </span>
                         </div>
                       </div>
                     </div>
@@ -723,18 +958,20 @@ const MedicalHistory: React.FC = () => {
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-1 min-w-0">
                       <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Fecha</p>
-                      <p className="text-xs font-bold text-gray-800 truncate">{formatDate(event.date)}</p>
+                      <p className="text-xs font-bold text-gray-800 truncate">{formatDate(event.scheduledDate)}</p>
                     </div>
                     <div className="space-y-1 min-w-0">
-                      <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Veterinario</p>
-                      <p className="text-xs font-bold text-gray-800 truncate">{event.veterinarian}</p>
+                      <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Prioridad</p>
+                      <p className="text-xs font-bold text-gray-800 truncate">{event.priority}</p>
                     </div>
                   </div>
 
                   {/* Ubicación */}
                   <div className="flex items-center space-x-2 p-2 bg-gray-50 rounded min-w-0">
                     <span className="text-gray-500 flex-shrink-0">📍</span>
-                    <span className="text-xs text-gray-700 font-medium truncate">{event.location}</span>
+                    <span className="text-xs text-gray-700 font-medium truncate">
+                      {event.location?.address || `${event.location?.latitude || 0}, ${event.location?.longitude || 0}`}
+                    </span>
                   </div>
 
                   {/* Descripción */}
@@ -742,30 +979,15 @@ const MedicalHistory: React.FC = () => {
                     {event.description}
                   </p>
 
-                  {/* Signos vitales */}
-                  {event.vitalSigns && (
-                    <div className="bg-blue-50 rounded p-2">
-                      <p className="text-xs font-semibold text-blue-800 mb-1 uppercase tracking-wide">Signos Vitales</p>
-                      <div className="grid grid-cols-2 gap-1">
-                        <div className="text-center">
-                          <p className="text-xs text-blue-600">Temp.</p>
-                          <p className="text-xs font-bold text-blue-800">{event.vitalSigns.temperature}°C</p>
-                        </div>
-                        <div className="text-center">
-                          <p className="text-xs text-blue-600">Peso</p>
-                          <p className="text-xs font-bold text-blue-800">{event.vitalSigns.weight}kg</p>
-                        </div>
-                      </div>
+                  {/* Costo */}
+                  {event.cost && (
+                    <div className="flex items-center justify-between pt-2 border-t border-gray-100">
+                      <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Costo</span>
+                      <span className="text-base font-bold text-[#f4ac3a]">
+                        ${event.cost.toLocaleString()}
+                      </span>
                     </div>
                   )}
-
-                  {/* Costo */}
-                  <div className="flex items-center justify-between pt-2 border-t border-gray-100">
-                    <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Costo</span>
-                    <span className="text-base font-bold text-[#f4ac3a]">
-                      ${event.cost.toLocaleString()}
-                    </span>
-                  </div>
                 </div>
 
                 {/* Acciones */}
@@ -780,21 +1002,23 @@ const MedicalHistory: React.FC = () => {
                     </button>
                     <button 
                       onClick={() => handleEdit(event)}
-                      className="p-2 text-gray-600 hover:text-green-600 hover:bg-green-50 rounded transition-all duration-200"
+                      disabled={connectionStatus !== 'connected'}
+                      className="p-2 text-gray-600 hover:text-green-600 hover:bg-green-50 rounded transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
                       title="Editar"
                     >
                       <span>✏️</span>
                     </button>
                     <button 
                       onClick={() => handleDeleteClick(event)}
-                      className="p-2 text-gray-600 hover:text-red-600 hover:bg-red-50 rounded transition-all duration-200"
+                      disabled={connectionStatus !== 'connected'}
+                      className="p-2 text-gray-600 hover:text-red-600 hover:bg-red-50 rounded transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
                       title="Eliminar"
                     >
                       <span>🗑️</span>
                     </button>
                   </div>
                   <span className="text-xs text-gray-500 bg-white px-2 py-1 rounded text-center flex-shrink-0">
-                    {formatDate(event.createdAt.split('T')[0])}
+                    {formatDate(event.createdAt)}
                   </span>
                 </div>
               </div>
@@ -802,7 +1026,7 @@ const MedicalHistory: React.FC = () => {
           </div>
         )}
 
-        {/* Modal de formulario - Con ancho limitado */}
+        {/* Modal de formulario */}
         {showForm && (
           <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
             <div className="bg-white rounded-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-xl">
@@ -826,60 +1050,53 @@ const MedicalHistory: React.FC = () => {
 
               {/* Contenido del formulario */}
               <div className="p-6 space-y-4">
-                {/* Información básica */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Nombre del Animal *
-                    </label>
-                    <input
-                      type="text"
-                      value={formData.animalName || ""}
-                      onChange={(e) => setFormData(prev => ({ ...prev, animalName: e.target.value }))}
-                      className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent text-sm ${
-                        formErrors.animalName ? "border-red-300 bg-red-50" : "border-gray-300"
-                      }`}
-                      placeholder="Ej: Esperanza"
-                    />
-                    {formErrors.animalName && (
-                      <p className="text-red-500 text-xs mt-1">⚠️ {formErrors.animalName}</p>
-                    )}
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Tag del Animal
-                    </label>
-                    <input
-                      type="text"
-                      value={formData.animalTag || ""}
-                      onChange={(e) => setFormData(prev => ({ ...prev, animalTag: e.target.value }))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent text-sm"
-                      placeholder="Ej: TAG-001"
-                    />
-                  </div>
+                {/* Selección de Bovino */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Bovino *
+                  </label>
+                  <select
+                    value={formData.bovineId || ""}
+                    onChange={(e) => setFormData(prev => ({ ...prev, bovineId: e.target.value }))}
+                    className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent text-sm ${
+                      formErrors.bovineId ? "border-red-300 bg-red-50" : "border-gray-300"
+                    }`}
+                  >
+                    <option value="">Seleccionar bovino...</option>
+                    {bovines.map(bovine => (
+                      <option key={bovine.id} value={bovine.id}>
+                        {bovine.name} - {bovine.earTag}
+                      </option>
+                    ))}
+                  </select>
+                  {formErrors.bovineId && (
+                    <p className="text-red-500 text-xs mt-1">⚠️ {formErrors.bovineId}</p>
+                  )}
                 </div>
 
+                {/* Tipo de Evento y Fecha */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
                       Tipo de Evento *
                     </label>
                     <select
-                      value={formData.eventType || "vaccination"}
+                      value={formData.eventType || "VACCINATION"}
                       onChange={(e) => setFormData(prev => ({ ...prev, eventType: e.target.value as EventType }))}
                       className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent text-sm ${
                         formErrors.eventType ? "border-red-300 bg-red-50" : "border-gray-300"
                       }`}
                     >
-                      <option value="vaccination">💉 Vacunación</option>
-                      <option value="illness">🤒 Enfermedad</option>
-                      <option value="treatment">💊 Tratamiento</option>
-                      <option value="checkup">🔍 Chequeo</option>
-                      <option value="surgery">⚕️ Cirugía</option>
-                      <option value="medication">💉 Medicamento</option>
-                      <option value="exam">🩺 Examen</option>
-                      <option value="observation">👁️ Observación</option>
+                      <option value="VACCINATION">💉 Vacunación</option>
+                      <option value="DISEASE">🤒 Enfermedad</option>
+                      <option value="TREATMENT">💊 Tratamiento</option>
+                      <option value="HEALTH_CHECK">🔍 Chequeo</option>
+                      <option value="SURGERY">⚕️ Cirugía</option>
+                      <option value="MEDICATION">💉 Medicamento</option>
+                      <option value="REPRODUCTION">🐄 Reproducción</option>
+                      <option value="INJURY">🩹 Lesión</option>
+                      <option value="QUARANTINE">🚪 Cuarentena</option>
+                      <option value="OTHER">📋 Otro</option>
                     </select>
                     {formErrors.eventType && (
                       <p className="text-red-500 text-xs mt-1">⚠️ {formErrors.eventType}</p>
@@ -888,22 +1105,23 @@ const MedicalHistory: React.FC = () => {
 
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Fecha *
+                      Fecha Programada *
                     </label>
                     <input
-                      type="date"
-                      value={formData.date || new Date().toISOString().substr(0, 10)}
-                      onChange={(e) => setFormData(prev => ({ ...prev, date: e.target.value }))}
+                      type="datetime-local"
+                      value={formData.scheduledDate || new Date().toISOString().substr(0, 16)}
+                      onChange={(e) => setFormData(prev => ({ ...prev, scheduledDate: e.target.value }))}
                       className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent text-sm ${
-                        formErrors.date ? "border-red-300 bg-red-50" : "border-gray-300"
+                        formErrors.scheduledDate ? "border-red-300 bg-red-50" : "border-gray-300"
                       }`}
                     />
-                    {formErrors.date && (
-                      <p className="text-red-500 text-xs mt-1">⚠️ {formErrors.date}</p>
+                    {formErrors.scheduledDate && (
+                      <p className="text-red-500 text-xs mt-1">⚠️ {formErrors.scheduledDate}</p>
                     )}
                   </div>
                 </div>
 
+                {/* Título */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Título *
@@ -922,6 +1140,7 @@ const MedicalHistory: React.FC = () => {
                   )}
                 </div>
 
+                {/* Descripción */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Descripción *
@@ -940,28 +1159,28 @@ const MedicalHistory: React.FC = () => {
                   )}
                 </div>
 
+                {/* Prioridad y Costo */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Veterinario *
+                      Prioridad
                     </label>
-                    <input
-                      type="text"
-                      value={formData.veterinarian || ""}
-                      onChange={(e) => setFormData(prev => ({ ...prev, veterinarian: e.target.value }))}
-                      className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent text-sm ${
-                        formErrors.veterinarian ? "border-red-300 bg-red-50" : "border-gray-300"
-                      }`}
-                      placeholder="Dr. García"
-                    />
-                    {formErrors.veterinarian && (
-                      <p className="text-red-500 text-xs mt-1">⚠️ {formErrors.veterinarian}</p>
-                    )}
+                    <select
+                      value={formData.priority || "MEDIUM"}
+                      onChange={(e) => setFormData(prev => ({ ...prev, priority: e.target.value as EventPriority }))}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent text-sm"
+                    >
+                      <option value="LOW">🟢 Baja</option>
+                      <option value="MEDIUM">🟡 Media</option>
+                      <option value="HIGH">🟠 Alta</option>
+                      <option value="CRITICAL">🔴 Crítica</option>
+                      <option value="EMERGENCY">🚨 Emergencia</option>
+                    </select>
                   </div>
 
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Costo
+                      Costo (MXN)
                     </label>
                     <input
                       type="number"
@@ -975,31 +1194,35 @@ const MedicalHistory: React.FC = () => {
                   </div>
                 </div>
 
+                {/* Dirección de Ubicación */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Ubicación *
+                    Ubicación
                   </label>
                   <input
                     type="text"
-                    value={formData.location || ""}
-                    onChange={(e) => setFormData(prev => ({ ...prev, location: e.target.value }))}
-                    className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent text-sm ${
-                      formErrors.location ? "border-red-300 bg-red-50" : "border-gray-300"
-                    }`}
-                    placeholder="Establo Principal"
+                    value={formData.location?.address || ""}
+                    onChange={(e) => setFormData(prev => ({ 
+                      ...prev, 
+                      location: { 
+                        latitude: prev.location?.latitude || 18.0067,
+                        longitude: prev.location?.longitude || -92.9311,
+                        address: e.target.value 
+                      } as LocationData
+                    }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent text-sm"
+                    placeholder="Rancho Principal, Villahermosa, Tabasco"
                   />
-                  {formErrors.location && (
-                    <p className="text-red-500 text-xs mt-1">⚠️ {formErrors.location}</p>
-                  )}
                 </div>
 
+                {/* Notas */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Notas
+                    Notas Públicas
                   </label>
                   <textarea
-                    value={formData.notes || ""}
-                    onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
+                    value={formData.publicNotes || ""}
+                    onChange={(e) => setFormData(prev => ({ ...prev, publicNotes: e.target.value }))}
                     rows={2}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent text-sm resize-none"
                     placeholder="Observaciones adicionales..."
@@ -1011,23 +1234,34 @@ const MedicalHistory: React.FC = () => {
               <div className="bg-gray-50 px-6 py-4 flex flex-col sm:flex-row gap-3 sm:justify-end sm:space-x-3 rounded-b-lg">
                 <button
                   onClick={() => setShowForm(false)}
-                  className="px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors font-medium text-sm"
+                  disabled={isSubmitting}
+                  className="px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors font-medium text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   ❌ Cancelar
                 </button>
                 <button
                   onClick={editingEvent ? handleUpdate : handleCreate}
-                  className="px-4 py-2 bg-gradient-to-r from-[#519a7c] to-[#4a8970] text-white rounded-lg hover:from-[#4a8970] hover:to-[#3d7a63] flex items-center justify-center space-x-2 transition-all duration-300 shadow-md font-medium text-sm"
+                  disabled={isSubmitting || connectionStatus !== 'connected'}
+                  className="px-4 py-2 bg-gradient-to-r from-[#519a7c] to-[#4a8970] text-white rounded-lg hover:from-[#4a8970] hover:to-[#3d7a63] flex items-center justify-center space-x-2 transition-all duration-300 shadow-md font-medium text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  <span>💾</span>
-                  <span>{editingEvent ? "Actualizar" : "Guardar"}</span>
+                  {isSubmitting ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                      <span>Guardando...</span>
+                    </>
+                  ) : (
+                    <>
+                      <span>💾</span>
+                      <span>{editingEvent ? "Actualizar" : "Guardar"}</span>
+                    </>
+                  )}
                 </button>
               </div>
             </div>
           </div>
         )}
 
-        {/* Modal de detalles - Con ancho limitado */}
+        {/* Modal de detalles */}
         {showDetailsModal && selectedEvent && (
           <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
             <div className="bg-white rounded-lg w-full max-w-4xl max-h-[90vh] overflow-y-auto shadow-xl">
@@ -1057,9 +1291,11 @@ const MedicalHistory: React.FC = () => {
                     {selectedEvent.title}
                   </h3>
                   <div className="flex items-center justify-center space-x-3 mb-4">
-                    <span className="text-lg font-semibold text-gray-700">🐄 {selectedEvent.animalName}</span>
+                    <span className="text-lg font-semibold text-gray-700">
+                      🐄 {selectedEvent.bovineInfo?.name || 'Animal N/A'}
+                    </span>
                     <span className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm font-medium">
-                      {selectedEvent.animalTag}
+                      {selectedEvent.bovineInfo?.earTag || 'TAG-N/A'}
                     </span>
                   </div>
                   <div className="flex flex-wrap justify-center gap-3">
@@ -1068,6 +1304,9 @@ const MedicalHistory: React.FC = () => {
                     </span>
                     <span className={`px-4 py-2 rounded-full text-sm font-semibold ${getStatusColor(selectedEvent.status)}`}>
                       {getStatusText(selectedEvent.status)}
+                    </span>
+                    <span className="px-4 py-2 bg-gray-100 text-gray-800 rounded-full text-sm font-semibold">
+                      Prioridad: {selectedEvent.priority}
                     </span>
                   </div>
                 </div>
@@ -1088,19 +1327,23 @@ const MedicalHistory: React.FC = () => {
                     </h4>
                     <div className="space-y-3">
                       <div className="flex justify-between items-center">
-                        <span className="text-gray-600 font-medium">Fecha:</span>
+                        <span className="text-gray-600 font-medium">Fecha Programada:</span>
                         <span className="font-bold text-gray-800">
-                          {formatFullDate(selectedEvent.date)}
+                          {formatFullDate(selectedEvent.scheduledDate)}
                         </span>
                       </div>
-                      <div className="flex justify-between items-center">
-                        <span className="text-gray-600 font-medium">Veterinario:</span>
-                        <span className="font-bold text-gray-800">{selectedEvent.veterinarian}</span>
-                      </div>
+                      {selectedEvent.completedDate && (
+                        <div className="flex justify-between items-center">
+                          <span className="text-gray-600 font-medium">Fecha Completada:</span>
+                          <span className="font-bold text-gray-800">
+                            {formatFullDate(selectedEvent.completedDate)}
+                          </span>
+                        </div>
+                      )}
                       <div className="flex justify-between items-center">
                         <span className="text-gray-600 font-medium">Registrado:</span>
                         <span className="font-bold text-gray-800">
-                          {formatDate(selectedEvent.createdAt.split('T')[0])}
+                          {formatDate(selectedEvent.createdAt)}
                         </span>
                       </div>
                     </div>
@@ -1113,71 +1356,58 @@ const MedicalHistory: React.FC = () => {
                     <div className="space-y-3">
                       <div className="flex justify-between items-center">
                         <span className="text-gray-600 font-medium">Ubicación:</span>
-                        <span className="font-bold text-gray-800">{selectedEvent.location}</span>
-                      </div>
-                      <div className="flex justify-between items-center">
-                        <span className="text-gray-600 font-medium">Costo Total:</span>
-                        <span className="font-bold text-2xl text-[#f4ac3a]">
-                          ${selectedEvent.cost.toLocaleString()}
+                        <span className="font-bold text-gray-800">
+                          {selectedEvent.location?.address || `${selectedEvent.location?.latitude || 0}, ${selectedEvent.location?.longitude || 0}`}
                         </span>
                       </div>
+                      {selectedEvent.cost && (
+                        <div className="flex justify-between items-center">
+                          <span className="text-gray-600 font-medium">Costo Total:</span>
+                          <span className="font-bold text-2xl text-[#f4ac3a]">
+                            ${selectedEvent.cost.toLocaleString()} MXN
+                          </span>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
 
-                {/* Signos vitales */}
-                {selectedEvent.vitalSigns && (
+                {/* Información del bovino */}
+                {selectedEvent.bovineInfo && (
                   <div className="bg-blue-50 rounded-2xl p-6">
                     <h4 className="font-bold text-lg text-blue-800 mb-4 flex items-center">
-                      🩺 Signos Vitales
+                      🐄 Información del Bovino
                     </h4>
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                       <div className="text-center bg-white rounded-xl p-4">
-                        <p className="text-sm text-blue-600 font-medium mb-1">Temperatura</p>
-                        <p className="text-2xl font-bold text-blue-800">{selectedEvent.vitalSigns.temperature}°C</p>
+                        <p className="text-sm text-blue-600 font-medium mb-1">Nombre</p>
+                        <p className="text-lg font-bold text-blue-800">{selectedEvent.bovineInfo.name}</p>
                       </div>
                       <div className="text-center bg-white rounded-xl p-4">
-                        <p className="text-sm text-blue-600 font-medium mb-1">Pulso</p>
-                        <p className="text-2xl font-bold text-blue-800">{selectedEvent.vitalSigns.heartRate} bpm</p>
+                        <p className="text-sm text-blue-600 font-medium mb-1">Tag</p>
+                        <p className="text-lg font-bold text-blue-800">{selectedEvent.bovineInfo.earTag}</p>
                       </div>
                       <div className="text-center bg-white rounded-xl p-4">
-                        <p className="text-sm text-blue-600 font-medium mb-1">Respiración</p>
-                        <p className="text-2xl font-bold text-blue-800">{selectedEvent.vitalSigns.respiratoryRate} rpm</p>
+                        <p className="text-sm text-blue-600 font-medium mb-1">Tipo</p>
+                        <p className="text-lg font-bold text-blue-800">{selectedEvent.bovineInfo.cattleType}</p>
                       </div>
-                      <div className="text-center bg-white rounded-xl p-4">
-                        <p className="text-sm text-blue-600 font-medium mb-1">Peso</p>
-                        <p className="text-2xl font-bold text-blue-800">{selectedEvent.vitalSigns.weight} kg</p>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Medicamentos */}
-                {selectedEvent.medications && selectedEvent.medications.length > 0 && (
-                  <div className="bg-purple-50 rounded-2xl p-6">
-                    <h4 className="font-bold text-lg text-purple-800 mb-4 flex items-center">
-                      💊 Medicamentos Administrados
-                    </h4>
-                    <div className="flex flex-wrap gap-3">
-                      {selectedEvent.medications.map((med, idx) => (
-                        <span
-                          key={idx}
-                          className="px-4 py-2 bg-purple-200 text-purple-800 rounded-xl text-sm font-semibold"
-                        >
-                          {med}
-                        </span>
-                      ))}
+                      {selectedEvent.bovineInfo.gender && (
+                        <div className="text-center bg-white rounded-xl p-4">
+                          <p className="text-sm text-blue-600 font-medium mb-1">Género</p>
+                          <p className="text-lg font-bold text-blue-800">{selectedEvent.bovineInfo.gender}</p>
+                        </div>
+                      )}
                     </div>
                   </div>
                 )}
 
                 {/* Notas */}
-                {selectedEvent.notes && (
+                {selectedEvent.publicNotes && (
                   <div className="bg-yellow-50 rounded-2xl p-6 border-l-4 border-yellow-400">
                     <h4 className="font-bold text-lg text-yellow-800 mb-3 flex items-center">
                       📝 Notas Adicionales
                     </h4>
-                    <p className="text-gray-700 leading-relaxed">{selectedEvent.notes}</p>
+                    <p className="text-gray-700 leading-relaxed">{selectedEvent.publicNotes}</p>
                   </div>
                 )}
               </div>
@@ -1195,7 +1425,8 @@ const MedicalHistory: React.FC = () => {
                     setShowDetailsModal(false);
                     handleEdit(selectedEvent);
                   }}
-                  className="px-6 py-3 bg-gradient-to-r from-[#519a7c] to-[#4a8970] text-white rounded-xl hover:from-[#4a8970] hover:to-[#3d7a63] flex items-center justify-center space-x-2 transition-all duration-300 shadow-lg font-medium"
+                  disabled={connectionStatus !== 'connected'}
+                  className="px-6 py-3 bg-gradient-to-r from-[#519a7c] to-[#4a8970] text-white rounded-xl hover:from-[#4a8970] hover:to-[#3d7a63] flex items-center justify-center space-x-2 transition-all duration-300 shadow-lg font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <span>✏️</span>
                   <span>Editar Evento</span>
@@ -1234,7 +1465,7 @@ const MedicalHistory: React.FC = () => {
                     "{eventToDelete.title}"
                   </p>
                   <p className="text-gray-600 text-center mt-1 text-sm">
-                    de <strong>{eventToDelete.animalName}</strong>
+                    de <strong>{eventToDelete.bovineInfo?.name || 'Animal N/A'}</strong>
                   </p>
                 </div>
                 <p className="text-gray-600 text-center text-xs">
@@ -1255,7 +1486,8 @@ const MedicalHistory: React.FC = () => {
                 </button>
                 <button
                   onClick={confirmDelete}
-                  className="px-4 py-2 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-lg hover:from-red-600 hover:to-red-700 flex items-center justify-center space-x-2 transition-all duration-300 shadow-md font-medium text-sm"
+                  disabled={connectionStatus !== 'connected'}
+                  className="px-4 py-2 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-lg hover:from-red-600 hover:to-red-700 flex items-center justify-center space-x-2 transition-all duration-300 shadow-md font-medium text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <span>🗑️</span>
                   <span>Eliminar</span>

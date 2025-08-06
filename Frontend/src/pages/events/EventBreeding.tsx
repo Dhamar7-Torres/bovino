@@ -12,8 +12,6 @@ import {
   Trash2,
   Eye,
   X,
-  Bell,
-  FileText,
   MoreVertical,
   Stethoscope,
   Zap,
@@ -22,72 +20,77 @@ import {
   Save,
 } from "lucide-react";
 
-// Interfaces para TypeScript
+// API Base URL
+const API_BASE_URL = 'http://localhost:5000/api';
+
+// Configuración de la API
+const apiConfig = {
+  headers: {
+    'Content-Type': 'application/json',
+    // Agregar token de autorización si es necesario
+    // 'Authorization': `Bearer ${localStorage.getItem('token')}`
+  }
+};
+
+// Interfaces actualizadas para coincidir con el backend
 interface BreedingEvent {
   id: string;
   bovineId: string;
-  bovineName: string;
-  bovineTag: string;
-  eventType: BreedingEventType;
-  status: "scheduled" | "completed" | "failed" | "cancelled" | "pending";
+  eventType: 'REPRODUCTION' | 'HEALTH' | 'VACCINATION' | 'TREATMENT' | 'MOVEMENT';
+  title: string;
+  description?: string;
+  status: 'SCHEDULED' | 'COMPLETED' | 'CANCELLED' | 'IN_PROGRESS' | 'FAILED';
+  priority: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
   scheduledDate: string;
-  completedDate?: string;
-  location: Location;
-  notes?: string;
-
-  // Datos específicos según el tipo de evento
-  breedingData?: {
-    method: "natural" | "artificial_insemination";
-    bullId?: string;
-    bullTag?: string;
-    bullBreed?: string;
-    semenBatch?: string;
-    semenProvider?: string;
-    technician?: string;
-    attempts?: number;
-    success?: boolean;
-    expectedDueDate?: string;
+  startDate?: string;
+  endDate?: string;
+  location: {
+    latitude: number;
+    longitude: number;
+    altitude?: number;
+    address?: string;
+    description?: string;
   };
-
-  pregnancyData?: {
-    gestationWeek: number;
-    method: "palpation" | "ultrasound" | "blood_test";
-    result: "pregnant" | "not_pregnant" | "inconclusive";
-    fetusCount?: number;
-    expectedCalvingDate?: string;
-    veterinarian: string;
-    nextCheckDate?: string;
-  };
-
-  birthData?: {
-    calvingDate: string;
-    calvingTime: string;
-    assistanceRequired: boolean;
-    complications?: string[];
-    calfGender?: "male" | "female";
-    calfWeight?: number;
-    calfHealthStatus: "healthy" | "weak" | "sick" | "deceased";
-    placentaExpulsion: boolean;
-    veterinarian?: string;
-    calfTag?: string;
-  };
-
-  weaningData?: {
-    weaningDate: string;
-    weaningWeight?: number;
-    method: "natural" | "early" | "gradual";
-    reason?: string;
-    newLocation?: string;
-  };
-
+  performedBy?: string;
+  veterinarianId?: string;
   cost?: number;
   currency?: string;
-  veterinarian?: string;
-  reminders: EventReminder[];
-  attachments: string[];
+  publicNotes?: string;
+  privateNotes?: string;
+  isRecurring?: boolean;
+  recurrenceConfig?: any;
+  notificationConfig?: any;
+  eventData?: ReproductionEventData;
   createdAt: string;
   updatedAt: string;
   createdBy: string;
+  isActive: boolean;
+  
+  // Información del bovino (viene del join)
+  bovineInfo?: {
+    id: string;
+    earTag: string;
+    name: string;
+    cattleType: string;
+    breed?: string;
+    gender?: string;
+  };
+}
+
+interface ReproductionEventData {
+  reproductionType: 'ARTIFICIAL_INSEMINATION' | 'NATURAL_BREEDING' | 'PREGNANCY_CHECK' | 'CALVING' | 'WEANING';
+  bullId?: string;
+  semenSource?: string;
+  semenBatch?: string;
+  inseminationMethod?: 'CERVICAL' | 'INTRAUTERINE' | 'DEEP_UTERINE';
+  pregnancyStatus?: 'CONFIRMED' | 'SUSPECTED' | 'NEGATIVE' | 'UNKNOWN';
+  gestationDay?: number;
+  expectedCalvingDate?: string;
+  calfId?: string;
+  birthWeight?: number;
+  calvingDifficulty?: 'EASY' | 'MODERATE' | 'DIFFICULT' | 'CESAREAN';
+  placentaExpulsion?: 'NORMAL' | 'RETAINED' | 'INCOMPLETE';
+  weaningWeight?: number;
 }
 
 interface BreedingEventType {
@@ -97,24 +100,9 @@ interface BreedingEventType {
   color: string;
   description: string;
   category: "breeding" | "pregnancy" | "birth" | "weaning";
-  duration?: number; // minutos
+  duration?: number;
   requiresVeterinarian: boolean;
-}
-
-interface Location {
-  latitude: number;
-  longitude: number;
-  address: string;
-  farm?: string;
-  section?: string;
-}
-
-interface EventReminder {
-  id: string;
-  type: "notification" | "email" | "sms";
-  timeBeforeEvent: number; // horas
-  message: string;
-  sent: boolean;
+  backendType: 'ARTIFICIAL_INSEMINATION' | 'NATURAL_BREEDING' | 'PREGNANCY_CHECK' | 'CALVING' | 'WEANING';
 }
 
 interface BreedingStatistics {
@@ -129,7 +117,6 @@ interface BreedingStatistics {
   complications: number;
 }
 
-// Formulario para crear/editar eventos
 interface EventFormData {
   bovineId: string;
   bovineName: string;
@@ -142,17 +129,181 @@ interface EventFormData {
     address: string;
     farm: string;
     section: string;
+    latitude?: number;
+    longitude?: number;
   };
   notes: string;
   cost: string;
   currency: string;
   veterinarian: string;
-  // Datos específicos según el tipo
   breedingMethod?: string;
   semenBatch?: string;
   semenProvider?: string;
   technician?: string;
   expectedDueDate?: string;
+}
+
+// Funciones de API
+class EventAPI {
+  
+  // Obtener todos los eventos
+  static async getEvents(filters?: {
+    eventType?: string;
+    status?: string;
+    bovineId?: string;
+    page?: number;
+    limit?: number;
+  }): Promise<{ events: BreedingEvent[]; pagination: any }> {
+    try {
+      const queryParams = new URLSearchParams();
+      
+      if (filters) {
+        if (filters.eventType && filters.eventType !== 'all') {
+          queryParams.append('eventType', filters.eventType);
+        }
+        if (filters.status && filters.status !== 'all') {
+          queryParams.append('status', filters.status);
+        }
+        if (filters.bovineId) {
+          queryParams.append('bovineId', filters.bovineId);
+        }
+        if (filters.page) {
+          queryParams.append('page', filters.page.toString());
+        }
+        if (filters.limit) {
+          queryParams.append('limit', filters.limit.toString());
+        }
+      }
+
+      const url = `${API_BASE_URL}/events${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
+      
+      const response = await fetch(url, {
+        method: 'GET',
+        ...apiConfig
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      
+      if (!data.success) {
+        throw new Error(data.message || 'Error al obtener eventos');
+      }
+
+      return {
+        events: data.data.events || [],
+        pagination: data.data.pagination || {}
+      };
+    } catch (error) {
+      console.error('Error al obtener eventos:', error);
+      throw error;
+    }
+  }
+
+  // Crear nuevo evento
+  static async createEvent(eventData: any): Promise<BreedingEvent> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/events`, {
+        method: 'POST',
+        ...apiConfig,
+        body: JSON.stringify(eventData)
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Error al crear evento');
+      }
+
+      const data = await response.json();
+      
+      if (!data.success) {
+        throw new Error(data.message || 'Error al crear evento');
+      }
+
+      return data.data.event;
+    } catch (error) {
+      console.error('Error al crear evento:', error);
+      throw error;
+    }
+  }
+
+  // Actualizar evento
+  static async updateEvent(eventId: string, eventData: any): Promise<BreedingEvent> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/events/${eventId}`, {
+        method: 'PUT',
+        ...apiConfig,
+        body: JSON.stringify(eventData)
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Error al actualizar evento');
+      }
+
+      const data = await response.json();
+      
+      if (!data.success) {
+        throw new Error(data.message || 'Error al actualizar evento');
+      }
+
+      return data.data.event;
+    } catch (error) {
+      console.error('Error al actualizar evento:', error);
+      throw error;
+    }
+  }
+
+  // Eliminar evento
+  static async deleteEvent(eventId: string): Promise<void> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/events/${eventId}`, {
+        method: 'DELETE',
+        ...apiConfig
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Error al eliminar evento');
+      }
+
+      const data = await response.json();
+      
+      if (!data.success) {
+        throw new Error(data.message || 'Error al eliminar evento');
+      }
+    } catch (error) {
+      console.error('Error al eliminar evento:', error);
+      throw error;
+    }
+  }
+
+  // Obtener evento por ID
+  static async getEventById(eventId: string): Promise<BreedingEvent> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/events/${eventId}`, {
+        method: 'GET',
+        ...apiConfig
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      
+      if (!data.success) {
+        throw new Error(data.message || 'Error al obtener evento');
+      }
+
+      return data.data.event;
+    } catch (error) {
+      console.error('Error al obtener evento:', error);
+      throw error;
+    }
+  }
 }
 
 const EventBreeding: React.FC = () => {
@@ -178,7 +329,7 @@ const EventBreeding: React.FC = () => {
     bovineName: "",
     bovineTag: "",
     eventTypeId: "",
-    status: "scheduled",
+    status: "SCHEDULED",
     scheduledDate: "",
     scheduledTime: "",
     location: {
@@ -202,7 +353,7 @@ const EventBreeding: React.FC = () => {
   } | null>(null);
   const [loadingLocation, setLoadingLocation] = useState(false);
 
-  // Tipos de eventos de reproducción
+  // Tipos de eventos de reproducción actualizados
   const breedingEventTypes: BreedingEventType[] = [
     {
       id: "artificial_insemination",
@@ -213,6 +364,7 @@ const EventBreeding: React.FC = () => {
       category: "breeding",
       duration: 30,
       requiresVeterinarian: true,
+      backendType: 'ARTIFICIAL_INSEMINATION',
     },
     {
       id: "natural_breeding",
@@ -223,6 +375,7 @@ const EventBreeding: React.FC = () => {
       category: "breeding",
       duration: 60,
       requiresVeterinarian: false,
+      backendType: 'NATURAL_BREEDING',
     },
     {
       id: "pregnancy_check",
@@ -233,6 +386,7 @@ const EventBreeding: React.FC = () => {
       category: "pregnancy",
       duration: 45,
       requiresVeterinarian: true,
+      backendType: 'PREGNANCY_CHECK',
     },
     {
       id: "calving",
@@ -243,6 +397,7 @@ const EventBreeding: React.FC = () => {
       category: "birth",
       duration: 180,
       requiresVeterinarian: false,
+      backendType: 'CALVING',
     },
     {
       id: "weaning",
@@ -253,6 +408,7 @@ const EventBreeding: React.FC = () => {
       category: "weaning",
       duration: 120,
       requiresVeterinarian: false,
+      backendType: 'WEANING',
     },
   ];
 
@@ -286,8 +442,11 @@ const EventBreeding: React.FC = () => {
       setFormData(prev => ({
         ...prev,
         location: {
-          ...prev.location,
-          address: address
+          address: address,
+          farm: prev.location.farm,
+          section: prev.location.section,
+          latitude: latitude,
+          longitude: longitude,
         }
       }));
 
@@ -299,113 +458,57 @@ const EventBreeding: React.FC = () => {
     }
   };
 
-  // Cargar datos iniciales
+  // Cargar datos iniciales desde el backend
   useEffect(() => {
     const loadBreedingEvents = async () => {
       setLoading(true);
       try {
-        // Simular carga de datos desde la API
-        await new Promise((resolve) => setTimeout(resolve, 1500));
+        // Cargar eventos desde el backend
+        const { events } = await EventAPI.getEvents({
+          eventType: 'REPRODUCTION',
+          page: 1,
+          limit: 100
+        });
 
-        // Datos simulados para desarrollo
-        const mockEvents: BreedingEvent[] = [
-          {
-            id: "1",
-            bovineId: "bov_001",
-            bovineName: "Esperanza",
-            bovineTag: "ESP-001",
-            eventType: breedingEventTypes[0],
-            status: "completed",
-            scheduledDate: "2024-12-15T08:00:00Z",
-            completedDate: "2024-12-15T08:30:00Z",
-            location: {
-              latitude: 17.9869,
-              longitude: -92.9303,
-              address: "Sector Norte, Rancho El Progreso",
-              farm: "El Progreso",
-              section: "Sector Norte",
-            },
-            breedingData: {
-              method: "artificial_insemination",
-              semenBatch: "BS2024-456",
-              semenProvider: "GenSemen International",
-              technician: "Dr. García",
-              attempts: 1,
-              success: true,
-              expectedDueDate: "2024-09-22",
-            },
-            cost: 250.0,
-            currency: "MXN",
-            veterinarian: "Dr. María García",
-            reminders: [],
-            attachments: [],
-            createdAt: "2024-12-01T10:00:00Z",
-            updatedAt: "2024-12-15T08:30:00Z",
-            createdBy: "user_001",
-            notes: "Procedimiento exitoso sin complicaciones",
-          },
-          {
-            id: "2",
-            bovineId: "bov_002",
-            bovineName: "Paloma",
-            bovineTag: "PAL-002",
-            eventType: breedingEventTypes[2],
-            status: "scheduled",
-            scheduledDate: "2024-12-25T09:00:00Z",
-            location: {
-              latitude: 17.9869,
-              longitude: -92.9303,
-              address: "Sector Sur, Rancho El Progreso",
-              farm: "El Progreso",
-              section: "Sector Sur",
-            },
-            pregnancyData: {
-              gestationWeek: 6,
-              method: "ultrasound",
-              result: "pregnant",
-              fetusCount: 1,
-              expectedCalvingDate: "2024-09-20",
-              veterinarian: "Dr. López",
-              nextCheckDate: "2024-01-25",
-            },
-            cost: 180.0,
-            currency: "MXN",
-            veterinarian: "Dr. Carlos López",
-            reminders: [
-              {
-                id: "rem_001",
-                type: "notification",
-                timeBeforeEvent: 24,
-                message: "Recordatorio: Diagnóstico de preñez programado para mañana",
-                sent: false,
-              },
-            ],
-            attachments: [],
-            createdAt: "2024-12-10T14:00:00Z",
-            updatedAt: "2024-12-10T14:00:00Z",
-            createdBy: "user_001",
-            notes: "Segunda verificación de gestación",
-          },
-        ];
+        // Transformar eventos del backend al formato del frontend
+        const transformedEvents: BreedingEvent[] = events.map(event => ({
+          ...event,
+          // Asegurar que todos los campos requeridos estén presentes
+          eventType: event.eventType || 'REPRODUCTION',
+          status: event.status || 'SCHEDULED',
+          priority: event.priority || 'MEDIUM',
+          location: {
+            latitude: event.location?.latitude || 17.9869,
+            longitude: event.location?.longitude || -92.9303,
+            address: event.location?.address || "Ubicación no especificada",
+            altitude: event.location?.altitude,
+            description: event.location?.description,
+          }
+        }));
 
-        setBreedingEvents(mockEvents);
+        setBreedingEvents(transformedEvents);
 
-        // Calcular estadísticas simuladas
-        const mockStatistics: BreedingStatistics = {
-          totalEvents: 48,
-          successfulBreedings: 42,
-          pregnancyRate: 87.5,
-          currentPregnant: 15,
-          expectedCalvings: 8,
-          completedBirths: 23,
-          weanedCalves: 18,
-          averageGestation: 284,
-          complications: 3,
-        };
+        // Calcular estadísticas basadas en los eventos obtenidos
+        const stats = calculateStatistics(transformedEvents);
+        setStatistics(stats);
 
-        setStatistics(mockStatistics);
       } catch (error) {
         console.error("Error cargando eventos de reproducción:", error);
+        alert("Error al cargar los eventos. Verifica que el backend esté ejecutándose en el puerto 5000.");
+        
+        // Fallback a datos simulados si el backend no responde
+        setBreedingEvents([]);
+        setStatistics({
+          totalEvents: 0,
+          successfulBreedings: 0,
+          pregnancyRate: 0,
+          currentPregnant: 0,
+          expectedCalvings: 0,
+          completedBirths: 0,
+          weanedCalves: 0,
+          averageGestation: 0,
+          complications: 0,
+        });
       } finally {
         setLoading(false);
       }
@@ -413,6 +516,28 @@ const EventBreeding: React.FC = () => {
 
     loadBreedingEvents();
   }, []);
+
+  // Función para calcular estadísticas
+  const calculateStatistics = (events: BreedingEvent[]): BreedingStatistics => {
+    const completedEvents = events.filter(e => e.status === 'COMPLETED');
+    const reproductionEvents = events.filter(e => e.eventData?.reproductionType);
+    
+    return {
+      totalEvents: events.length,
+      successfulBreedings: completedEvents.filter(e => 
+        e.eventData?.reproductionType === 'ARTIFICIAL_INSEMINATION' || 
+        e.eventData?.reproductionType === 'NATURAL_BREEDING'
+      ).length,
+      pregnancyRate: reproductionEvents.length > 0 ? 
+        (completedEvents.filter(e => e.eventData?.pregnancyStatus === 'CONFIRMED').length / reproductionEvents.length) * 100 : 0,
+      currentPregnant: events.filter(e => e.eventData?.pregnancyStatus === 'CONFIRMED').length,
+      expectedCalvings: events.filter(e => e.eventData?.expectedCalvingDate).length,
+      completedBirths: completedEvents.filter(e => e.eventData?.reproductionType === 'CALVING').length,
+      weanedCalves: completedEvents.filter(e => e.eventData?.reproductionType === 'WEANING').length,
+      averageGestation: 284, // Valor por defecto
+      complications: events.filter(e => e.status === 'FAILED').length,
+    };
+  };
 
   // Filtrar eventos basado en los criterios seleccionados
   useEffect(() => {
@@ -422,22 +547,34 @@ const EventBreeding: React.FC = () => {
     if (searchTerm) {
       filtered = filtered.filter(
         (event) =>
-          event.bovineName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          event.bovineTag.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          event.eventType.name.toLowerCase().includes(searchTerm.toLowerCase())
+          event.bovineInfo?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          event.bovineInfo?.earTag.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          event.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          event.eventData?.reproductionType?.toLowerCase().includes(searchTerm.toLowerCase())
       );
     }
 
     // Filtro por tipo de evento
     if (selectedEventType !== "all") {
-      filtered = filtered.filter(
-        (event) => event.eventType.id === selectedEventType
-      );
+      const eventType = breedingEventTypes.find(t => t.id === selectedEventType);
+      if (eventType) {
+        filtered = filtered.filter(
+          (event) => event.eventData?.reproductionType === eventType.backendType
+        );
+      }
     }
 
     // Filtro por estado
     if (selectedStatus !== "all") {
-      filtered = filtered.filter((event) => event.status === selectedStatus);
+      const statusMapping: Record<string, string> = {
+        'scheduled': 'SCHEDULED',
+        'completed': 'COMPLETED',
+        'failed': 'FAILED',
+        'cancelled': 'CANCELLED',
+        'pending': 'IN_PROGRESS'
+      };
+      const backendStatus = statusMapping[selectedStatus] || selectedStatus;
+      filtered = filtered.filter((event) => event.status === backendStatus);
     }
 
     // Filtro por fecha
@@ -486,7 +623,7 @@ const EventBreeding: React.FC = () => {
       bovineName: "",
       bovineTag: "",
       eventTypeId: "",
-      status: "scheduled",
+      status: "SCHEDULED",
       scheduledDate: "",
       scheduledTime: "",
       location: {
@@ -519,26 +656,28 @@ const EventBreeding: React.FC = () => {
     
     setFormData({
       bovineId: event.bovineId,
-      bovineName: event.bovineName,
-      bovineTag: event.bovineTag,
-      eventTypeId: event.eventType.id,
+      bovineName: event.bovineInfo?.name || "",
+      bovineTag: event.bovineInfo?.earTag || "",
+      eventTypeId: breedingEventTypes.find(t => t.backendType === event.eventData?.reproductionType)?.id || "",
       status: event.status,
       scheduledDate: eventDate.toISOString().split('T')[0],
       scheduledTime: eventDate.toTimeString().slice(0, 5),
       location: {
-        address: event.location.address,
-        farm: event.location.farm || "",
-        section: event.location.section || "",
+        address: event.location.address || "",
+        farm: event.location.description || "",
+        section: "",
+        latitude: event.location.latitude,
+        longitude: event.location.longitude,
       },
-      notes: event.notes || "",
+      notes: event.publicNotes || "",
       cost: event.cost ? event.cost.toString() : "",
       currency: event.currency || "MXN",
-      veterinarian: event.veterinarian || "",
-      breedingMethod: event.breedingData?.method,
-      semenBatch: event.breedingData?.semenBatch,
-      semenProvider: event.breedingData?.semenProvider,
-      technician: event.breedingData?.technician,
-      expectedDueDate: event.breedingData?.expectedDueDate,
+      veterinarian: event.veterinarianId || "",
+      breedingMethod: event.eventData?.reproductionType,
+      semenBatch: event.eventData?.semenBatch,
+      semenProvider: event.eventData?.semenSource,
+      technician: event.performedBy,
+      expectedDueDate: event.eventData?.expectedCalvingDate,
     });
     setSelectedEvent(event);
     setFormErrors({});
@@ -548,14 +687,13 @@ const EventBreeding: React.FC = () => {
   const handleDeleteEvent = async (eventId: string) => {
     if (window.confirm("¿Estás seguro de eliminar este evento de reproducción?")) {
       try {
-        // Eliminar del estado local inmediatamente para UI responsiva
-        const eventToDelete = breedingEvents.find(event => event.id === eventId);
+        // Eliminar del backend
+        await EventAPI.deleteEvent(eventId);
+        
+        // Eliminar del estado local
         setBreedingEvents((prev) => prev.filter((event) => event.id !== eventId));
         
-        // Simular llamada a API
-        await new Promise((resolve) => setTimeout(resolve, 500));
-        
-        // Actualizar estadísticas si existen
+        // Actualizar estadísticas
         if (statistics) {
           setStatistics({
             ...statistics,
@@ -563,14 +701,10 @@ const EventBreeding: React.FC = () => {
           });
         }
 
-        // Mostrar mensaje de éxito
-        alert(`Evento "${eventToDelete?.eventType.name}" eliminado exitosamente`);
-        console.log(`Evento ${eventId} eliminado exitosamente`);
+        alert(`Evento eliminado exitosamente`);
       } catch (error) {
         console.error("Error eliminando evento:", error);
-        alert("Error al eliminar el evento");
-        // Revertir la eliminación en caso de error
-        window.location.reload();
+        alert("Error al eliminar el evento: " + (error as Error).message);
       }
     }
   };
@@ -630,7 +764,7 @@ const EventBreeding: React.FC = () => {
     }
   };
 
-  // Guardar evento (crear o editar)
+  // Guardar evento (crear o editar) - conectado al backend
   const handleSaveEvent = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -641,70 +775,53 @@ const EventBreeding: React.FC = () => {
     setIsSaving(true);
 
     try {
-      // Simular llamada a API
-      await new Promise((resolve) => setTimeout(resolve, 2000));
-
       const eventType = breedingEventTypes.find(type => type.id === formData.eventTypeId);
       if (!eventType) {
         alert("Tipo de evento no válido");
         return;
       }
 
-      // Generar ID único para el bovino si no existe
-      const bovineId = formData.bovineId || `bovine_${Date.now()}`;
-
-      // Convertir el costo a número si se proporcionó
-      const costValue = formData.cost && formData.cost.trim() !== "" 
-        ? parseFloat(formData.cost) 
-        : undefined;
-
-      const eventData: BreedingEvent = {
-        id: selectedEvent ? selectedEvent.id : `event_${Date.now()}`,
-        bovineId: bovineId,
-        bovineName: formData.bovineName,
-        bovineTag: formData.bovineTag,
-        eventType,
-        status: formData.status as any,
+      // Preparar datos para el backend
+      const eventData = {
+        bovineId: formData.bovineId || `bovine_${Date.now()}`, // TODO: Implementar búsqueda de bovinos reales
+        eventType: 'REPRODUCTION',
+        title: `${eventType.name} - ${formData.bovineName}`,
+        description: formData.notes,
+        status: formData.status,
+        priority: 'MEDIUM' as const,
         scheduledDate: new Date(`${formData.scheduledDate}T${formData.scheduledTime}`).toISOString(),
         location: {
-          latitude: userLocation?.latitude || 17.9869,
-          longitude: userLocation?.longitude || -92.9303,
+          latitude: formData.location.latitude || userLocation?.latitude || 17.9869,
+          longitude: formData.location.longitude || userLocation?.longitude || -92.9303,
           address: formData.location.address,
-          farm: formData.location.farm,
-          section: formData.location.section,
+          description: formData.location.farm,
         },
-        notes: formData.notes,
-        cost: costValue,
+        cost: formData.cost && formData.cost.trim() !== "" ? parseFloat(formData.cost) : undefined,
         currency: formData.currency,
-        veterinarian: formData.veterinarian,
-        reminders: [],
-        attachments: [],
-        createdAt: selectedEvent ? selectedEvent.createdAt : new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        createdBy: "user_001",
+        veterinarianId: formData.veterinarian || undefined,
+        publicNotes: formData.notes,
+        eventData: {
+          reproductionType: eventType.backendType,
+          semenSource: formData.semenProvider,
+          semenBatch: formData.semenBatch,
+          expectedCalvingDate: formData.expectedDueDate ? new Date(formData.expectedDueDate).toISOString() : undefined,
+        } as ReproductionEventData,
       };
 
-      // Agregar datos específicos según el tipo
-      if (eventType.category === "breeding") {
-        eventData.breedingData = {
-          method: formData.breedingMethod as any,
-          semenBatch: formData.semenBatch,
-          semenProvider: formData.semenProvider,
-          technician: formData.technician,
-          expectedDueDate: formData.expectedDueDate,
-        };
-      }
+      let savedEvent: BreedingEvent;
 
       if (selectedEvent) {
         // Editar evento existente
+        savedEvent = await EventAPI.updateEvent(selectedEvent.id, eventData);
         setBreedingEvents(prev => 
-          prev.map(event => event.id === selectedEvent.id ? eventData : event)
+          prev.map(event => event.id === selectedEvent.id ? savedEvent : event)
         );
         setShowEditModal(false);
         alert("Evento actualizado exitosamente");
       } else {
         // Crear nuevo evento
-        setBreedingEvents(prev => [...prev, eventData]);
+        savedEvent = await EventAPI.createEvent(eventData);
+        setBreedingEvents(prev => [...prev, savedEvent]);
         
         // Actualizar estadísticas
         if (statistics) {
@@ -722,7 +839,7 @@ const EventBreeding: React.FC = () => {
       
     } catch (error) {
       console.error("Error guardando evento:", error);
-      alert("Error al guardar el evento");
+      alert("Error al guardar el evento: " + (error as Error).message);
     } finally {
       setIsSaving(false);
     }
@@ -731,6 +848,12 @@ const EventBreeding: React.FC = () => {
   // Función para obtener el color del estado
   const getStatusColor = (status: string) => {
     const colors = {
+      SCHEDULED: "text-blue-600 bg-blue-100",
+      COMPLETED: "text-green-600 bg-green-100",
+      FAILED: "text-red-600 bg-red-100",
+      CANCELLED: "text-gray-600 bg-gray-100",
+      IN_PROGRESS: "text-yellow-600 bg-yellow-100",
+      // Mantener compatibilidad con estados antiguos
       scheduled: "text-blue-600 bg-blue-100",
       completed: "text-green-600 bg-green-100",
       failed: "text-red-600 bg-red-100",
@@ -761,6 +884,24 @@ const EventBreeding: React.FC = () => {
     });
     
     return formatter.format(cost);
+  };
+
+  // Función para obtener el nombre del estado en español
+  const getStatusName = (status: string) => {
+    const statusNames = {
+      SCHEDULED: "Programado",
+      COMPLETED: "Completado",
+      FAILED: "Fallido",
+      CANCELLED: "Cancelado",
+      IN_PROGRESS: "En Progreso",
+      // Mantener compatibilidad
+      scheduled: "Programado",
+      completed: "Completado",
+      failed: "Fallido",
+      cancelled: "Cancelado",
+      pending: "Pendiente",
+    };
+    return statusNames[status as keyof typeof statusNames] || status;
   };
 
   // Componente de formulario reutilizable
@@ -841,11 +982,11 @@ const EventBreeding: React.FC = () => {
             onChange={(e) => setFormData(prev => ({ ...prev, status: e.target.value }))}
             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           >
-            <option value="scheduled">Programado</option>
-            <option value="completed">Completado</option>
-            <option value="pending">Pendiente</option>
-            <option value="cancelled">Cancelado</option>
-            <option value="failed">Fallido</option>
+            <option value="SCHEDULED">Programado</option>
+            <option value="COMPLETED">Completado</option>
+            <option value="IN_PROGRESS">En Progreso</option>
+            <option value="CANCELLED">Cancelado</option>
+            <option value="FAILED">Fallido</option>
           </select>
         </div>
       </div>
@@ -900,7 +1041,10 @@ const EventBreeding: React.FC = () => {
             value={formData.location.address}
             onChange={(e) => setFormData(prev => ({ 
               ...prev, 
-              location: { ...prev.location, address: e.target.value }
+              location: { 
+                ...prev.location, 
+                address: e.target.value 
+              }
             }))}
             className={`flex-1 px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
               formErrors.locationAddress ? "border-red-500" : "border-gray-300"
@@ -941,7 +1085,10 @@ const EventBreeding: React.FC = () => {
             value={formData.location.farm}
             onChange={(e) => setFormData(prev => ({ 
               ...prev, 
-              location: { ...prev.location, farm: e.target.value }
+              location: { 
+                ...prev.location, 
+                farm: e.target.value 
+              }
             }))}
             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           />
@@ -958,7 +1105,10 @@ const EventBreeding: React.FC = () => {
             value={formData.location.section}
             onChange={(e) => setFormData(prev => ({ 
               ...prev, 
-              location: { ...prev.location, section: e.target.value }
+              location: { 
+                ...prev.location, 
+                section: e.target.value 
+              }
             }))}
             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           />
@@ -1149,7 +1299,10 @@ const EventBreeding: React.FC = () => {
         >
           <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-600 mx-auto mb-4"></div>
           <p className="text-gray-600 text-lg">
-            Cargando eventos de reproducción...
+            Conectando con el backend...
+          </p>
+          <p className="text-gray-500 text-sm mt-2">
+            Asegúrate de que el servidor esté ejecutándose en el puerto 5000
           </p>
         </motion.div>
       </div>
@@ -1179,7 +1332,7 @@ const EventBreeding: React.FC = () => {
                   Eventos de Reproducción
                 </h1>
                 <p className="text-gray-600 mt-1">
-                  Gestiona los eventos reproductivos de tu ganado
+                  Conectado al backend (Puerto 5000) • {breedingEvents.length} eventos
                 </p>
               </div>
             </div>
@@ -1241,11 +1394,11 @@ const EventBreeding: React.FC = () => {
               className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white/80"
             >
               <option value="all">Todos los estados</option>
-              <option value="scheduled">Programado</option>
-              <option value="completed">Completado</option>
-              <option value="failed">Fallido</option>
-              <option value="cancelled">Cancelado</option>
-              <option value="pending">Pendiente</option>
+              <option value="SCHEDULED">Programado</option>
+              <option value="COMPLETED">Completado</option>
+              <option value="FAILED">Fallido</option>
+              <option value="CANCELLED">Cancelado</option>
+              <option value="IN_PROGRESS">En Progreso</option>
             </select>
 
             {/* Filtro por fecha */}
@@ -1298,155 +1451,144 @@ const EventBreeding: React.FC = () => {
           </motion.div>
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-            {filteredEvents.map((event) => (
-              <motion.div
-                key={event.id}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                whileHover={{ scale: 1.02 }}
-                className="bg-white/70 backdrop-blur-sm rounded-2xl p-6 border border-gray-200 hover:shadow-lg transition-all"
-              >
-                {/* Header del evento */}
-                <div className="flex items-start justify-between mb-4">
-                  <div className="flex items-center space-x-3">
-                    <div
-                      className={`p-2 rounded-xl bg-gradient-to-r ${
-                        event.eventType.color.includes("blue")
-                          ? "from-blue-500 to-blue-600"
-                          : event.eventType.color.includes("pink")
-                          ? "from-pink-500 to-pink-600"
-                          : event.eventType.color.includes("purple")
-                          ? "from-purple-500 to-purple-600"
-                          : event.eventType.color.includes("green")
-                          ? "from-green-500 to-green-600"
-                          : "from-orange-500 to-orange-600"
-                      } text-white`}
-                    >
-                      <event.eventType.icon className="h-5 w-5" />
+            {filteredEvents.map((event) => {
+              // Encontrar el tipo de evento para mostrar el icono correcto
+              const eventType = breedingEventTypes.find(t => 
+                t.backendType === event.eventData?.reproductionType
+              ) || breedingEventTypes[0];
+
+              return (
+                <motion.div
+                  key={event.id}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  whileHover={{ scale: 1.02 }}
+                  className="bg-white/70 backdrop-blur-sm rounded-2xl p-6 border border-gray-200 hover:shadow-lg transition-all"
+                >
+                  {/* Header del evento */}
+                  <div className="flex items-start justify-between mb-4">
+                    <div className="flex items-center space-x-3">
+                      <div
+                        className={`p-2 rounded-xl bg-gradient-to-r ${
+                          eventType.color.includes("blue")
+                            ? "from-blue-500 to-blue-600"
+                            : eventType.color.includes("pink")
+                            ? "from-pink-500 to-pink-600"
+                            : eventType.color.includes("purple")
+                            ? "from-purple-500 to-purple-600"
+                            : eventType.color.includes("green")
+                            ? "from-green-500 to-green-600"
+                            : "from-orange-500 to-orange-600"
+                        } text-white`}
+                      >
+                        <eventType.icon className="h-5 w-5" />
+                      </div>
+                      <div>
+                        <h3 className="font-semibold text-gray-900">
+                          {event.title}
+                        </h3>
+                        <p className="text-sm text-gray-600">
+                          {event.bovineInfo?.name || 'N/A'} • {event.bovineInfo?.earTag || 'N/A'}
+                        </p>
+                      </div>
                     </div>
-                    <div>
-                      <h3 className="font-semibold text-gray-900">
-                        {event.eventType.name}
-                      </h3>
-                      <p className="text-sm text-gray-600">
-                        {event.bovineName} • {event.bovineTag}
+
+                    <div className="flex items-center space-x-2">
+                      <span
+                        className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(
+                          event.status
+                        )}`}
+                      >
+                        {getStatusName(event.status)}
+                      </span>
+                      <motion.button
+                        whileHover={{ scale: 1.1 }}
+                        whileTap={{ scale: 0.9 }}
+                        className="p-1 hover:bg-gray-100 rounded-lg transition-colors"
+                      >
+                        <MoreVertical className="h-4 w-4 text-gray-400" />
+                      </motion.button>
+                    </div>
+                  </div>
+
+                  {/* Información del evento */}
+                  <div className="space-y-3">
+                    <div className="flex items-center space-x-2 text-sm text-gray-600">
+                      <Calendar className="h-4 w-4" />
+                      <span>{formatDate(event.scheduledDate)}</span>
+                    </div>
+
+                    <div className="flex items-center space-x-2 text-sm text-gray-600">
+                      <MapPin className="h-4 w-4" />
+                      <span>
+                        {event.location.address || event.location.description || 'Ubicación no especificada'}
+                      </span>
+                    </div>
+
+                    {event.veterinarianId && (
+                      <div className="flex items-center space-x-2 text-sm text-gray-600">
+                        <User className="h-4 w-4" />
+                        <span>{event.veterinarianId}</span>
+                      </div>
+                    )}
+
+                    {event.cost && (
+                      <div className="flex items-center space-x-2 text-sm text-gray-600">
+                        <DollarSign className="h-4 w-4" />
+                        <span>{formatCost(event.cost, event.currency)}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Notas si existen */}
+                  {event.publicNotes && (
+                    <div className="mt-4 p-3 bg-gray-50 rounded-lg">
+                      <p className="text-sm text-gray-700 line-clamp-2">
+                        {event.publicNotes}
                       </p>
                     </div>
-                  </div>
-
-                  <div className="flex items-center space-x-2">
-                    <span
-                      className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(
-                        event.status
-                      )}`}
-                    >
-                      {event.status === "scheduled"
-                        ? "Programado"
-                        : event.status === "completed"
-                        ? "Completado"
-                        : event.status === "failed"
-                        ? "Fallido"
-                        : event.status === "cancelled"
-                        ? "Cancelado"
-                        : "Pendiente"}
-                    </span>
-                    <motion.button
-                      whileHover={{ scale: 1.1 }}
-                      whileTap={{ scale: 0.9 }}
-                      className="p-1 hover:bg-gray-100 rounded-lg transition-colors"
-                    >
-                      <MoreVertical className="h-4 w-4 text-gray-400" />
-                    </motion.button>
-                  </div>
-                </div>
-
-                {/* Información del evento */}
-                <div className="space-y-3">
-                  <div className="flex items-center space-x-2 text-sm text-gray-600">
-                    <Calendar className="h-4 w-4" />
-                    <span>{formatDate(event.scheduledDate)}</span>
-                  </div>
-
-                  <div className="flex items-center space-x-2 text-sm text-gray-600">
-                    <MapPin className="h-4 w-4" />
-                    <span>
-                      {event.location.farm} - {event.location.section}
-                    </span>
-                  </div>
-
-                  {event.veterinarian && (
-                    <div className="flex items-center space-x-2 text-sm text-gray-600">
-                      <User className="h-4 w-4" />
-                      <span>{event.veterinarian}</span>
-                    </div>
                   )}
 
-                  {event.cost && (
-                    <div className="flex items-center space-x-2 text-sm text-gray-600">
-                      <DollarSign className="h-4 w-4" />
-                      <span>{formatCost(event.cost, event.currency)}</span>
+                  {/* Acciones rápidas */}
+                  <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-200">
+                    <div className="flex items-center space-x-2">
+                      <div className="flex items-center space-x-1 text-xs text-gray-500">
+                        <span>ID: {event.id.slice(0, 8)}...</span>
+                      </div>
                     </div>
-                  )}
-                </div>
 
-                {/* Notas si existen */}
-                {event.notes && (
-                  <div className="mt-4 p-3 bg-gray-50 rounded-lg">
-                    <p className="text-sm text-gray-700 line-clamp-2">
-                      {event.notes}
-                    </p>
+                    <div className="flex items-center space-x-1">
+                      <motion.button
+                        whileHover={{ scale: 1.1 }}
+                        whileTap={{ scale: 0.9 }}
+                        onClick={() => handleViewEvent(event)}
+                        className="p-2 hover:bg-blue-100 rounded-lg transition-colors text-blue-600"
+                      >
+                        <Eye className="h-4 w-4" />
+                      </motion.button>
+
+                      <motion.button
+                        whileHover={{ scale: 1.1 }}
+                        whileTap={{ scale: 0.9 }}
+                        onClick={() => handleEditEvent(event)}
+                        className="p-2 hover:bg-yellow-100 rounded-lg transition-colors text-yellow-600"
+                      >
+                        <Edit3 className="h-4 w-4" />
+                      </motion.button>
+
+                      <motion.button
+                        whileHover={{ scale: 1.1 }}
+                        whileTap={{ scale: 0.9 }}
+                        onClick={() => handleDeleteEvent(event.id)}
+                        className="p-2 hover:bg-red-100 rounded-lg transition-colors text-red-600"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </motion.button>
+                    </div>
                   </div>
-                )}
-
-                {/* Acciones rápidas */}
-                <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-200">
-                  <div className="flex items-center space-x-2">
-                    {event.reminders.length > 0 && (
-                      <div className="flex items-center space-x-1 text-xs text-blue-600">
-                        <Bell className="h-3 w-3" />
-                        <span>{event.reminders.length}</span>
-                      </div>
-                    )}
-
-                    {event.attachments.length > 0 && (
-                      <div className="flex items-center space-x-1 text-xs text-green-600">
-                        <FileText className="h-3 w-3" />
-                        <span>{event.attachments.length}</span>
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="flex items-center space-x-1">
-                    <motion.button
-                      whileHover={{ scale: 1.1 }}
-                      whileTap={{ scale: 0.9 }}
-                      onClick={() => handleViewEvent(event)}
-                      className="p-2 hover:bg-blue-100 rounded-lg transition-colors text-blue-600"
-                    >
-                      <Eye className="h-4 w-4" />
-                    </motion.button>
-
-                    <motion.button
-                      whileHover={{ scale: 1.1 }}
-                      whileTap={{ scale: 0.9 }}
-                      onClick={() => handleEditEvent(event)}
-                      className="p-2 hover:bg-yellow-100 rounded-lg transition-colors text-yellow-600"
-                    >
-                      <Edit3 className="h-4 w-4" />
-                    </motion.button>
-
-                    <motion.button
-                      whileHover={{ scale: 1.1 }}
-                      whileTap={{ scale: 0.9 }}
-                      onClick={() => handleDeleteEvent(event.id)}
-                      className="p-2 hover:bg-red-100 rounded-lg transition-colors text-red-600"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </motion.button>
-                  </div>
-                </div>
-              </motion.div>
-            ))}
+                </motion.div>
+              );
+            })}
           </div>
         )}
       </motion.div>
@@ -1544,27 +1686,15 @@ const EventBreeding: React.FC = () => {
             >
               <div className="flex items-center justify-between mb-6">
                 <div className="flex items-center space-x-3">
-                  <div
-                    className={`p-3 rounded-xl ${
-                      selectedEvent.eventType.color.includes("blue")
-                        ? "bg-blue-100 text-blue-600"
-                        : selectedEvent.eventType.color.includes("pink")
-                        ? "bg-pink-100 text-pink-600"
-                        : selectedEvent.eventType.color.includes("purple")
-                        ? "bg-purple-100 text-purple-600"
-                        : selectedEvent.eventType.color.includes("green")
-                        ? "bg-green-100 text-green-600"
-                        : "bg-orange-100 text-orange-600"
-                    }`}
-                  >
-                    <selectedEvent.eventType.icon className="h-6 w-6" />
+                  <div className="p-3 rounded-xl bg-blue-100 text-blue-600">
+                    <Heart className="h-6 w-6" />
                   </div>
                   <div>
                     <h2 className="text-2xl font-bold text-gray-900">
-                      {selectedEvent.eventType.name}
+                      {selectedEvent.title}
                     </h2>
                     <p className="text-gray-600">
-                      {selectedEvent.bovineName} • {selectedEvent.bovineTag}
+                      {selectedEvent.bovineInfo?.name || 'N/A'} • {selectedEvent.bovineInfo?.earTag || 'N/A'}
                     </p>
                   </div>
                 </div>
@@ -1592,15 +1722,7 @@ const EventBreeding: React.FC = () => {
                         selectedEvent.status
                       )}`}
                     >
-                      {selectedEvent.status === "scheduled"
-                        ? "Programado"
-                        : selectedEvent.status === "completed"
-                        ? "Completado"
-                        : selectedEvent.status === "failed"
-                        ? "Fallido"
-                        : selectedEvent.status === "cancelled"
-                        ? "Cancelado"
-                        : "Pendiente"}
+                      {getStatusName(selectedEvent.status)}
                     </span>
                   </div>
 
@@ -1621,21 +1743,21 @@ const EventBreeding: React.FC = () => {
                   </label>
                   <div className="flex items-center space-x-2 text-gray-900">
                     <MapPin className="h-4 w-4 text-gray-500" />
-                    <span>{selectedEvent.location.address}</span>
+                    <span>{selectedEvent.location.address || selectedEvent.location.description}</span>
                   </div>
                 </div>
 
                 {/* Veterinario y costo */}
-                {(selectedEvent.veterinarian || selectedEvent.cost) && (
+                {(selectedEvent.veterinarianId || selectedEvent.cost) && (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {selectedEvent.veterinarian && (
+                    {selectedEvent.veterinarianId && (
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">
                           Veterinario
                         </label>
                         <div className="flex items-center space-x-2 text-gray-900">
                           <User className="h-4 w-4 text-gray-500" />
-                          <span>{selectedEvent.veterinarian}</span>
+                          <span>{selectedEvent.veterinarianId}</span>
                         </div>
                       </div>
                     )}
@@ -1654,14 +1776,45 @@ const EventBreeding: React.FC = () => {
                   </div>
                 )}
 
+                {/* Datos específicos de reproducción */}
+                {selectedEvent.eventData && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Datos de Reproducción
+                    </label>
+                    <div className="bg-gray-50 rounded-lg p-4">
+                      <div className="grid grid-cols-2 gap-4 text-sm">
+                        <div>
+                          <span className="font-medium">Tipo:</span> {selectedEvent.eventData.reproductionType}
+                        </div>
+                        {selectedEvent.eventData.semenSource && (
+                          <div>
+                            <span className="font-medium">Fuente de Semen:</span> {selectedEvent.eventData.semenSource}
+                          </div>
+                        )}
+                        {selectedEvent.eventData.semenBatch && (
+                          <div>
+                            <span className="font-medium">Lote:</span> {selectedEvent.eventData.semenBatch}
+                          </div>
+                        )}
+                        {selectedEvent.eventData.expectedCalvingDate && (
+                          <div>
+                            <span className="font-medium">Fecha esperada de parto:</span> {formatDate(selectedEvent.eventData.expectedCalvingDate)}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 {/* Notas */}
-                {selectedEvent.notes && (
+                {selectedEvent.publicNotes && (
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       Notas
                     </label>
                     <div className="bg-gray-50 rounded-lg p-4">
-                      <p className="text-gray-700">{selectedEvent.notes}</p>
+                      <p className="text-gray-700">{selectedEvent.publicNotes}</p>
                     </div>
                   </div>
                 )}

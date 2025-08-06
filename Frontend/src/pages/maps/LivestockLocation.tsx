@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Navigation,
@@ -16,6 +16,8 @@ import {
   Trash2,
   Target,
   Info,
+  Wifi,
+  WifiOff,
 } from "lucide-react";
 
 // Declaración global para Leaflet
@@ -25,13 +27,12 @@ declare global {
   }
 }
 
-// Interfaces principales
-interface LivestockLocationProps {
-  className?: string;
-}
+// Configuración de la API
+const API_BASE_URL = 'http://localhost:5000/api';
 
-interface AnimalData {
-  id: string;
+// Interfaces adaptadas al backend
+interface BovineData {
+  id?: string;
   earTag: string;
   name?: string;
   breed: string;
@@ -40,11 +41,33 @@ interface AnimalData {
   sex: "male" | "female";
   color?: string;
   notes?: string;
+  healthStatus?: string;
+  birthDate?: string;
+  // Campos de ubicación del backend
+  location?: {
+    latitude: number;
+    longitude: number;
+    altitude?: number;
+    accuracy?: number;
+    timestamp: Date;
+    source: 'GPS' | 'MANUAL' | 'ESTIMATED';
+  };
+  trackingConfig?: {
+    isEnabled: boolean;
+    deviceId?: string;
+    batteryLevel?: number;
+    signalStrength?: number;
+    lastUpdate?: Date;
+    updateInterval?: number;
+    geofenceAlerts?: boolean;
+  };
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 interface AnimalLocationPin {
   id: string;
-  animal: AnimalData;
+  animal: BovineData;
   latitude: number;
   longitude: number;
   accuracy: number;
@@ -52,6 +75,7 @@ interface AnimalLocationPin {
   activity: "grazing" | "walking" | "running" | "resting" | "drinking" | "other";
   notes?: string;
   addedBy: "gps" | "manual";
+  source: 'GPS' | 'MANUAL' | 'ESTIMATED';
 }
 
 interface UserLocation {
@@ -59,6 +83,258 @@ interface UserLocation {
   longitude: number;
   accuracy: number;
   timestamp: Date;
+}
+
+interface LivestockLocationProps {
+  className?: string;
+}
+
+// Clase para manejar las llamadas a la API del backend
+class LivestockAPI {
+  // ======================================================================
+  // OPERACIONES DE BOVINOS (CRUD)
+  // ======================================================================
+  
+  static async getAllBovines(): Promise<BovineData[]> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/cattle`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      
+      if (data.success) {
+        return data.data || [];
+      } else {
+        throw new Error(data.message || 'Error al obtener bovinos');
+      }
+    } catch (error) {
+      console.error('Error fetching bovines:', error);
+      throw error;
+    }
+  }
+
+  static async createBovine(bovineData: Omit<BovineData, 'id' | 'createdAt' | 'updatedAt'>): Promise<BovineData> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/cattle`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(bovineData),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      
+      if (data.success) {
+        return data.data;
+      } else {
+        throw new Error(data.message || 'Error al crear bovino');
+      }
+    } catch (error) {
+      console.error('Error creating bovine:', error);
+      throw error;
+    }
+  }
+
+  static async updateBovine(id: string, bovineData: Partial<BovineData>): Promise<BovineData> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/cattle/${id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(bovineData),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      
+      if (data.success) {
+        return data.data;
+      } else {
+        throw new Error(data.message || 'Error al actualizar bovino');
+      }
+    } catch (error) {
+      console.error('Error updating bovine:', error);
+      throw error;
+    }
+  }
+
+  static async deleteBovine(id: string): Promise<void> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/cattle/${id}`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      
+      if (!data.success) {
+        throw new Error(data.message || 'Error al eliminar bovino');
+      }
+    } catch (error) {
+      console.error('Error deleting bovine:', error);
+      throw error;
+    }
+  }
+
+  // ======================================================================
+  // OPERACIONES DE GEOLOCALIZACIÓN
+  // ======================================================================
+
+  static async updateBovineLocation(id: string, locationData: {
+    latitude: number;
+    longitude: number;
+    altitude?: number;
+    accuracy?: number;
+    source?: 'GPS' | 'MANUAL' | 'ESTIMATED';
+    speed?: number;
+    heading?: number;
+    batteryLevel?: number;
+    signalStrength?: number;
+    notes?: string;
+  }): Promise<BovineData> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/cattle/${id}/location`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          location: {
+            ...locationData,
+            timestamp: new Date(),
+            source: locationData.source || 'GPS'
+          },
+          trackingConfig: {
+            isEnabled: true,
+            batteryLevel: locationData.batteryLevel,
+            signalStrength: locationData.signalStrength,
+            lastUpdate: new Date(),
+            geofenceAlerts: true
+          }
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      
+      if (data.success) {
+        return data.data;
+      } else {
+        throw new Error(data.message || 'Error al actualizar ubicación');
+      }
+    } catch (error) {
+      console.error('Error updating location:', error);
+      throw error;
+    }
+  }
+
+  static async getBovinesNearby(latitude: number, longitude: number, radiusKm: number = 5): Promise<BovineData[]> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/cattle/nearby?lat=${latitude}&lng=${longitude}&radius=${radiusKm}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      
+      if (data.success) {
+        return data.data || [];
+      } else {
+        throw new Error(data.message || 'Error al obtener bovinos cercanos');
+      }
+    } catch (error) {
+      console.error('Error fetching nearby bovines:', error);
+      throw error;
+    }
+  }
+
+  static async getBovinesByArea(northEast: {lat: number, lng: number}, southWest: {lat: number, lng: number}): Promise<BovineData[]> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/cattle/by-area?ne_lat=${northEast.lat}&ne_lng=${northEast.lng}&sw_lat=${southWest.lat}&sw_lng=${southWest.lng}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      
+      if (data.success) {
+        return data.data || [];
+      } else {
+        throw new Error(data.message || 'Error al obtener bovinos por área');
+      }
+    } catch (error) {
+      console.error('Error fetching bovines by area:', error);
+      throw error;
+    }
+  }
+
+  // ======================================================================
+  // OPERACIONES DE ESTADÍSTICAS
+  // ======================================================================
+
+  static async getBovineStats(): Promise<any> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/cattle/stats`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      
+      if (data.success) {
+        return data.data || {};
+      } else {
+        throw new Error(data.message || 'Error al obtener estadísticas');
+      }
+    } catch (error) {
+      console.error('Error fetching stats:', error);
+      throw error;
+    }
+  }
 }
 
 // Función utilitaria para concatenar clases CSS
@@ -103,7 +379,7 @@ const LivestockSimulatedMap: React.FC<{
           {animalPins.length > 0 && (
             <div className="flex items-center gap-1 text-xs text-green-600">
               <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-              <span>ACTIVO</span>
+              <span>CONECTADO</span>
             </div>
           )}
         </div>
@@ -187,6 +463,7 @@ const LivestockSimulatedMap: React.FC<{
                   <div className="text-green-300">Actividad: {pin.activity}</div>
                   <div className="text-blue-300">Registrado: {pin.timestamp.toLocaleTimeString()}</div>
                   <div className="text-gray-300">Precisión: ±{pin.accuracy}m</div>
+                  <div className="text-purple-300">Fuente: {pin.source}</div>
                   {pin.notes && <div className="text-purple-300">Nota: {pin.notes}</div>}
                 </div>
               </div>
@@ -195,7 +472,7 @@ const LivestockSimulatedMap: React.FC<{
         );
       })}
 
-      {/* Mensaje si no hay pins - SIEMPRE VISIBLE HASTA QUE HAYA PINS */}
+      {/* Mensaje si no hay pins */}
       {animalPins.length === 0 && (
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -203,11 +480,11 @@ const LivestockSimulatedMap: React.FC<{
           className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-center text-gray-600 bg-white/90 p-8 rounded-xl shadow-lg"
         >
           <MapPin className="w-16 h-16 mx-auto mb-4 text-blue-500" />
-          <h3 className="text-xl font-bold text-[#2d5a45] mb-2">¡Bienvenido al Mapa de Ganado!</h3>
-          <p className="text-base mb-2">No hay animales registrados aún</p>
-          <p className="text-sm text-gray-500">Haz clic en "Agregar Animal" para comenzar el registro</p>
+          <h3 className="text-xl font-bold text-[#2d5a45] mb-2">¡Bienvenido al Sistema de Geolocalización!</h3>
+          <p className="text-base mb-2">Conectado al servidor backend</p>
+          <p className="text-sm text-gray-500">Los bovinos registrados aparecerán automáticamente en el mapa</p>
           <div className="mt-4 text-xs text-blue-600">
-            📍 Los pins aparecerán aquí una vez que agregues animales
+            🌐 Sincronización con base de datos activa
           </div>
         </motion.div>
       )}
@@ -251,11 +528,11 @@ const LivestockSimulatedMap: React.FC<{
         </div>
       </div>
 
-      {/* Indicador de mapa simulado */}
-      <div className="absolute bottom-4 left-4 bg-blue-500/10 border border-blue-500 rounded-lg px-3 py-2 pointer-events-none">
-        <div className="flex items-center gap-2 text-xs text-blue-700">
-          <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
-          <span>GPS Tracking - Desarrollo</span>
+      {/* Indicador de conexión backend */}
+      <div className="absolute bottom-4 left-4 bg-green-500/10 border border-green-500 rounded-lg px-3 py-2 pointer-events-none">
+        <div className="flex items-center gap-2 text-xs text-green-700">
+          <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+          <span>Backend Conectado - Puerto 5000</span>
         </div>
       </div>
     </div>
@@ -266,6 +543,7 @@ export const LivestockLocation: React.FC<LivestockLocationProps> = ({
   className,
 }) => {
   // Estados principales
+  const [allBovines, setAllBovines] = useState<BovineData[]>([]);
   const [animalPins, setAnimalPins] = useState<AnimalLocationPin[]>([]);
   const [userLocation, setUserLocation] = useState<UserLocation | null>(null);
   const [selectedPin, setSelectedPin] = useState<AnimalLocationPin | null>(null);
@@ -273,10 +551,15 @@ export const LivestockLocation: React.FC<LivestockLocationProps> = ({
   const [searchQuery, setSearchQuery] = useState("");
   const [isLeafletLoaded, setIsLeafletLoaded] = useState(false);
   
+  // Estados para el backend
+  const [isLoading, setIsLoading] = useState(true);
+  const [isConnected, setIsConnected] = useState(false);
+  const [backendError, setBackendError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  
   // Estados para agregar animal
   const [showAddAnimalDialog, setShowAddAnimalDialog] = useState(false);
-  const [animalForm, setAnimalForm] = useState<AnimalData>({
-    id: "",
+  const [animalForm, setAnimalForm] = useState<BovineData>({
     earTag: "",
     name: undefined,
     breed: "",
@@ -289,13 +572,13 @@ export const LivestockLocation: React.FC<LivestockLocationProps> = ({
   
   // Estados para ubicación
   const [showLocationDialog, setShowLocationDialog] = useState(false);
-  const [currentAnimal, setCurrentAnimal] = useState<AnimalData | null>(null);
+  const [currentAnimal, setCurrentAnimal] = useState<BovineData | null>(null);
   const [locationForm, setLocationForm] = useState({
     activity: "grazing" as "grazing" | "walking" | "running" | "resting" | "drinking" | "other",
     notes: "",
   });
   const [isGettingLocation, setIsGettingLocation] = useState(false);
-  const [locationError, setLocationError] = useState<string | null>(null);
+  const [, setLocationError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   // Referencias
@@ -305,41 +588,123 @@ export const LivestockLocation: React.FC<LivestockLocationProps> = ({
   // Coordenadas del centro del área (Villahermosa, Tabasco)
   const LIVESTOCK_CENTER: [number, number] = [17.989, -92.9465];
 
-  // Función para agregar nuevo animal
-  const handleAddAnimal = () => {
-    if (!animalForm.earTag.trim() || !animalForm.breed.trim() || animalForm.age <= 0) {
-      alert("Por favor completa los campos obligatorios (Arete, Raza, Edad)");
+  // ======================================================================
+  // FUNCIONES PARA CONECTAR CON EL BACKEND
+  // ======================================================================
+
+  // Función para cargar bovinos desde el backend
+  const loadBovinesFromBackend = useCallback(async () => {
+    try {
+      setIsLoading(true);
+      setBackendError(null);
+      
+      console.log("🔄 Cargando bovinos desde el backend...");
+      const bovines = await LivestockAPI.getAllBovines();
+      
+      console.log("✅ Bovinos cargados:", bovines.length);
+      setAllBovines(bovines);
+      setIsConnected(true);
+      
+      // Convertir bovinos con ubicación a pins
+      const pins: AnimalLocationPin[] = bovines
+        .filter(bovine => bovine.location && bovine.location.latitude && bovine.location.longitude)
+        .map(bovine => ({
+          id: `pin-${bovine.id}`,
+          animal: bovine,
+          latitude: bovine.location!.latitude,
+          longitude: bovine.location!.longitude,
+          accuracy: bovine.location!.accuracy || 10,
+          timestamp: new Date(bovine.location!.timestamp),
+          activity: "grazing", // Valor por defecto
+          notes: bovine.notes,
+          addedBy: "gps",
+          source: bovine.location!.source || 'GPS'
+        }));
+      
+      console.log("📍 Pins generados:", pins.length);
+      setAnimalPins(pins);
+      
+    } catch (error: any) {
+      console.error("❌ Error cargando bovinos:", error);
+      setBackendError(error.message || "Error conectando con el servidor");
+      setIsConnected(false);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  // Cargar datos al montar el componente
+  useEffect(() => {
+    loadBovinesFromBackend();
+  }, [loadBovinesFromBackend]);
+
+  // Función para validar formulario
+  const validateAnimalForm = (data: BovineData): string[] => {
+    const errors: string[] = [];
+    if (!data.earTag?.trim()) errors.push("El arete es obligatorio");
+    if (!data.breed?.trim()) errors.push("La raza es obligatoria");
+    if (!data.age || data.age <= 0) errors.push("La edad debe ser mayor a 0");
+    if (!data.weight || data.weight <= 0) errors.push("El peso debe ser mayor a 0");
+    return errors;
+  };
+
+  // Función para agregar nuevo animal al backend
+  const handleAddAnimal = async () => {
+    const errors = validateAnimalForm(animalForm);
+    if (errors.length > 0) {
+      alert("Errores en el formulario:\n" + errors.join("\n"));
       return;
     }
 
-    const newAnimal: AnimalData = {
-      ...animalForm,
-      id: `animal-${Date.now()}`,
-      earTag: animalForm.earTag.trim(),
-      name: animalForm.name?.trim() || undefined,
-      breed: animalForm.breed.trim(),
-      color: animalForm.color?.trim() || undefined,
-      notes: animalForm.notes?.trim() || undefined,
-    };
+    try {
+      setIsSubmitting(true);
+      setBackendError(null);
 
-    setCurrentAnimal(newAnimal);
-    setShowAddAnimalDialog(false);
-    
-    // Limpiar formulario
-    setAnimalForm({
-      id: "",
-      earTag: "",
-      name: undefined,
-      breed: "",
-      age: 0,
-      weight: 0,
-      sex: "female",
-      color: undefined,
-      notes: undefined,
-    });
+      console.log("📤 Creando nuevo bovino en el backend...");
+      
+      const bovineData: Omit<BovineData, 'id' | 'createdAt' | 'updatedAt'> = {
+        earTag: animalForm.earTag.trim(),
+        name: animalForm.name?.trim() || undefined,
+        breed: animalForm.breed.trim(),
+        age: animalForm.age,
+        weight: animalForm.weight,
+        sex: animalForm.sex,
+        color: animalForm.color?.trim() || undefined,
+        notes: animalForm.notes?.trim() || undefined,
+        healthStatus: "healthy",
+      };
 
-    // Proceder a obtener ubicación
-    getCurrentLocation();
+      const newBovine = await LivestockAPI.createBovine(bovineData);
+      
+      console.log("✅ Bovino creado exitosamente:", newBovine.id);
+      
+      // Actualizar la lista local
+      setAllBovines(prev => [...prev, newBovine]);
+      setCurrentAnimal(newBovine);
+      setShowAddAnimalDialog(false);
+      
+      // Limpiar formulario
+      setAnimalForm({
+        earTag: "",
+        name: undefined,
+        breed: "",
+        age: 0,
+        weight: 0,
+        sex: "female",
+        color: undefined,
+        notes: undefined,
+      });
+
+      // Proceder a obtener ubicación
+      getCurrentLocation();
+      
+    } catch (error: any) {
+      console.error("❌ Error creando bovino:", error);
+      setBackendError(error.message || "Error al crear el animal");
+      alert("❌ Error al crear el animal: " + (error.message || "Error desconocido"));
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   // Función para obtener la ubicación actual del usuario
@@ -364,6 +729,7 @@ export const LivestockLocation: React.FC<LivestockLocationProps> = ({
           timestamp: new Date(),
         };
 
+        console.log("📍 Ubicación obtenida:", { latitude, longitude, accuracy });
         setUserLocation(location);
         setShowLocationDialog(true);
         setIsGettingLocation(false);
@@ -381,6 +747,7 @@ export const LivestockLocation: React.FC<LivestockLocationProps> = ({
             errorMessage = "Tiempo de espera agotado";
             break;
         }
+        console.error("❌ Error de geolocalización:", errorMessage);
         setLocationError(errorMessage);
         setIsGettingLocation(false);
       },
@@ -392,56 +759,111 @@ export const LivestockLocation: React.FC<LivestockLocationProps> = ({
     );
   };
 
-  // Función para registrar la ubicación del animal
-  const registerAnimalLocation = () => {
+  // Función para registrar la ubicación del animal en el backend
+  const registerAnimalLocation = async () => {
     if (!currentAnimal || !userLocation) return;
 
-    const newPin: AnimalLocationPin = {
-      id: `pin-${Date.now()}`,
-      animal: currentAnimal,
-      latitude: userLocation.latitude,
-      longitude: userLocation.longitude,
-      accuracy: userLocation.accuracy,
-      timestamp: new Date(),
-      activity: locationForm.activity,
-      notes: locationForm.notes.trim() || undefined,
-      addedBy: "gps",
-    };
+    try {
+      setIsSubmitting(true);
+      setBackendError(null);
 
-    console.log("🔥 REGISTRANDO ANIMAL:", newPin);
-    
-    setAnimalPins(prev => {
-      const updated = [...prev, newPin];
-      console.log("📍 TOTAL ANIMALES AHORA:", updated.length);
-      return updated;
-    });
-    
-    // Limpiar estados
-    setLocationForm({ activity: "grazing", notes: "" });
-    setCurrentAnimal(null);
-    setUserLocation(null);
-    setShowLocationDialog(false);
+      console.log("📤 Actualizando ubicación en el backend...");
+      
+      const locationData = {
+        latitude: userLocation.latitude,
+        longitude: userLocation.longitude,
+        accuracy: userLocation.accuracy,
+        source: 'GPS' as 'GPS' | 'MANUAL' | 'ESTIMATED',
+        notes: locationForm.notes.trim() || undefined
+      };
 
-    // Mostrar mensaje de éxito
-    setSuccessMessage(`¡Animal ${newPin.animal.earTag} registrado exitosamente en el mapa!`);
-    setTimeout(() => setSuccessMessage(null), 5000);
-    
-    console.log("🎉 REGISTRO COMPLETADO EXITOSAMENTE");
+      const updatedBovine = await LivestockAPI.updateBovineLocation(currentAnimal.id!, locationData);
+      
+      console.log("✅ Ubicación actualizada exitosamente");
+
+      // Actualizar bovino en la lista local
+      setAllBovines(prev => prev.map(bovine => 
+        bovine.id === currentAnimal.id ? updatedBovine : bovine
+      ));
+
+      // Crear pin para el mapa
+      const newPin: AnimalLocationPin = {
+        id: `pin-${currentAnimal.id}`,
+        animal: updatedBovine,
+        latitude: userLocation.latitude,
+        longitude: userLocation.longitude,
+        accuracy: userLocation.accuracy,
+        timestamp: new Date(),
+        activity: locationForm.activity,
+        notes: locationForm.notes.trim() || undefined,
+        addedBy: "gps",
+        source: 'GPS'
+      };
+
+      setAnimalPins(prev => {
+        // Remover pin anterior del mismo animal si existe
+        const filtered = prev.filter(p => p.animal.id !== currentAnimal.id);
+        return [...filtered, newPin];
+      });
+      
+      // Limpiar estados
+      setLocationForm({ activity: "grazing", notes: "" });
+      setCurrentAnimal(null);
+      setUserLocation(null);
+      setShowLocationDialog(false);
+
+      // Mostrar mensaje de éxito
+      setSuccessMessage(`¡Animal ${updatedBovine.earTag} registrado exitosamente en el mapa!`);
+      setTimeout(() => setSuccessMessage(null), 5000);
+      
+      console.log("🎉 REGISTRO COMPLETADO EXITOSAMENTE");
+      
+    } catch (error: any) {
+      console.error("❌ Error registrando ubicación:", error);
+      setBackendError(error.message || "Error al registrar ubicación");
+      alert("❌ Error al registrar ubicación: " + (error.message || "Error desconocido"));
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
-  // Función para eliminar un pin
-  const removePin = (pinId: string) => {
-    console.log("🗑️ Eliminando pin:", pinId);
-    
-    setAnimalPins(prev => {
-      const updated = prev.filter(p => p.id !== pinId);
-      console.log("📍 Pins restantes:", updated.length);
-      return updated;
-    });
-    
-    setSelectedPin(null);
-    
-    console.log("✅ Pin eliminado de la lista");
+  // Función para eliminar un pin y bovino del backend
+  const removePin = async (pinId: string) => {
+    const pin = animalPins.find(p => p.id === pinId);
+    if (!pin || !pin.animal.id) return;
+
+    if (!confirm(`¿Estás seguro de que deseas eliminar el bovino ${pin.animal.earTag}?`)) {
+      return;
+    }
+
+    try {
+      setIsSubmitting(true);
+      setBackendError(null);
+
+      console.log("🗑️ Eliminando bovino del backend:", pin.animal.id);
+      
+      await LivestockAPI.deleteBovine(pin.animal.id);
+      
+      console.log("✅ Bovino eliminado exitosamente");
+
+      // Actualizar listas locales
+      setAllBovines(prev => prev.filter(b => b.id !== pin.animal.id));
+      setAnimalPins(prev => prev.filter(p => p.id !== pinId));
+      
+      if (selectedPin?.id === pinId) {
+        setSelectedPin(null);
+      }
+      
+      setSuccessMessage(`Bovino ${pin.animal.earTag} eliminado exitosamente`);
+      setTimeout(() => setSuccessMessage(null), 3000);
+      
+    } catch (error: any) {
+      console.error("❌ Error eliminando bovino:", error);
+      setBackendError(error.message || "Error al eliminar bovino");
+      alert("❌ Error al eliminar bovino: " + (error.message || "Error desconocido"));
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   // Función para manejar clic en pin
@@ -449,7 +871,12 @@ export const LivestockLocation: React.FC<LivestockLocationProps> = ({
     setSelectedPin(pin);
   };
 
-  // Verificar si Leaflet está disponible - VERSIÓN SIMPLIFICADA
+  // Función para recargar datos
+  const handleRefresh = () => {
+    loadBovinesFromBackend();
+  };
+
+  // Verificar si Leaflet está disponible
   useEffect(() => {
     console.log("🗺️ Verificando Leaflet...");
     
@@ -457,7 +884,7 @@ export const LivestockLocation: React.FC<LivestockLocationProps> = ({
       if (typeof window !== "undefined" && window.L) {
         console.log("✅ Leaflet disponible, inicializando mapa...");
         setIsLeafletLoaded(true);
-        setTimeout(() => initializeMap(), 500); // Pequeño delay para asegurar que el DOM esté listo
+        setTimeout(() => initializeMap(), 500);
       } else {
         console.log("⚠️ Leaflet no disponible, usando mapa simulado");
       }
@@ -496,16 +923,12 @@ export const LivestockLocation: React.FC<LivestockLocationProps> = ({
         }
       }
     };
-  }, []); // SOLO ejecutar una vez
+  }, []);
 
-  // Inicializar mapa de Leaflet - VERSIÓN SIMPLIFICADA
+  // Inicializar mapa de Leaflet
   const initializeMap = () => {
     if (!mapRef.current || !window.L || mapInstance.current) {
-      console.log("❌ No se puede inicializar mapa:", {
-        mapRef: !!mapRef.current,
-        leaflet: !!window.L,
-        alreadyExists: !!mapInstance.current
-      });
+      console.log("❌ No se puede inicializar mapa");
       return;
     }
 
@@ -519,8 +942,6 @@ export const LivestockLocation: React.FC<LivestockLocationProps> = ({
         attributionControl: true,
       });
 
-      console.log("🗺️ Mapa creado, agregando tiles...");
-
       window.L.tileLayer(
         "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
         {
@@ -530,29 +951,24 @@ export const LivestockLocation: React.FC<LivestockLocationProps> = ({
       ).addTo(map);
 
       mapInstance.current = map;
-
       console.log("✅ Mapa de Leaflet inicializado correctamente");
-      console.log("📍 Pins existentes a agregar:", animalPins.length);
 
-      // Agregar pins existentes si los hay
+      // Agregar pins existentes
       if (animalPins.length > 0) {
-        console.log("🎯 Agregando", animalPins.length, "pins existentes...");
-        animalPins.forEach((pin, index) => {
-          console.log(`📌 Agregando pin ${index + 1}:`, pin.animal.earTag);
+        animalPins.forEach((pin) => {
           addPinToMap(map, pin);
         });
       }
-
     } catch (error) {
       console.error("❌ Error inicializando mapa de Leaflet:", error);
-      setIsLeafletLoaded(false); // Fallback al mapa simulado
+      setIsLeafletLoaded(false);
     }
   };
 
   // Actualizar Leaflet cuando cambien los pins
   useEffect(() => {
     if (mapInstance.current && isLeafletLoaded && animalPins.length > 0) {
-      console.log("🔄 Actualizando pins en Leaflet, total:", animalPins.length);
+      console.log("🔄 Actualizando pins en Leaflet");
       
       // Limpiar marcadores existentes
       mapInstance.current.eachLayer((layer: any) => {
@@ -562,23 +978,17 @@ export const LivestockLocation: React.FC<LivestockLocationProps> = ({
       });
       
       // Agregar todos los pins actuales
-      animalPins.forEach((pin, index) => {
-        console.log(`📌 Re-agregando pin ${index + 1}:`, pin.animal.earTag);
+      animalPins.forEach((pin) => {
         addPinToMap(mapInstance.current, pin);
       });
     }
-  }, [animalPins, isLeafletLoaded]); // Ejecutar cuando cambien los pins o se cargue Leaflet
+  }, [animalPins, isLeafletLoaded]);
 
-  // Agregar un pin individual al mapa de Leaflet - VERSIÓN SIMPLIFICADA
+  // Agregar un pin individual al mapa de Leaflet
   const addPinToMap = (map: any, pin: AnimalLocationPin) => {
-    if (!map || !window.L) {
-      console.log("❌ No se puede agregar pin: mapa o Leaflet no disponible");
-      return;
-    }
+    if (!map || !window.L) return;
 
     try {
-      console.log("📍 Agregando pin para", pin.animal.earTag, "en", pin.latitude, pin.longitude);
-
       const marker = window.L.marker([pin.latitude, pin.longitude]).addTo(map);
 
       marker.bindPopup(`
@@ -599,6 +1009,7 @@ export const LivestockLocation: React.FC<LivestockLocationProps> = ({
             <div><strong>Actividad:</strong> ${pin.activity}</div>
             <div><strong>Registrado:</strong> ${pin.timestamp.toLocaleString()}</div>
             <div><strong>Precisión GPS:</strong> ±${pin.accuracy}m</div>
+            <div><strong>Fuente:</strong> ${pin.source}</div>
           </div>
           ${pin.notes ? `
             <div style="margin: 10px 0; padding: 10px; background: #fef3c7; border-radius: 8px; border-left: 4px solid #f59e0b;">
@@ -606,27 +1017,19 @@ export const LivestockLocation: React.FC<LivestockLocationProps> = ({
               <div style="font-style: italic;">"${pin.notes}"</div>
             </div>
           ` : ''}
-          <div style="margin-top: 15px; text-align: center;">
-            <button onclick="alert('Función no implementada')" style="background: #2d5a45; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-weight: bold;">
-              Ver Más Detalles
-            </button>
+          <div style="margin-top: 15px; text-align: center; font-size: 11px; color: #666;">
+            <div>🌐 Sincronizado con backend • ID: ${pin.animal.id}</div>
           </div>
         </div>
       `);
 
       marker.on("click", () => {
-        console.log("🖱️ Click en marker de Leaflet:", pin.animal.earTag);
         handlePinClick(pin);
       });
 
-      // Centrar mapa en el nuevo pin solo si es el primero o es nuevo
       if (animalPins.length <= 1) {
-        console.log("🎯 Centrando mapa en el pin");
         map.setView([pin.latitude, pin.longitude], 17);
       }
-
-      console.log("✅ Pin agregado exitosamente a Leaflet");
-
     } catch (error) {
       console.error("❌ Error agregando pin a Leaflet:", error);
     }
@@ -640,6 +1043,21 @@ export const LivestockLocation: React.FC<LivestockLocationProps> = ({
         pin.animal.name.toLowerCase().includes(searchQuery.toLowerCase())) ||
       pin.animal.breed.toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  // Renderizado principal
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-[#519a7c] via-[#f2e9d8] to-[#f4ac3a] flex items-center justify-center">
+        <div className="text-center">
+          <div className="flex items-center justify-center mb-4">
+            <RefreshCw className="w-12 h-12 text-green-600 animate-spin" />
+          </div>
+          <h2 className="text-2xl font-bold text-gray-800 mb-2">Conectando con el Backend</h2>
+          <p className="text-gray-600">Puerto 5000 • Cargando datos del ganado...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     // CONTENEDOR PRINCIPAL CON DEGRADADO IMPLEMENTADO
@@ -661,28 +1079,61 @@ export const LivestockLocation: React.FC<LivestockLocationProps> = ({
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-semibold text-[#2d5a45] flex items-center gap-2">
               <Navigation className="w-5 h-5" />
-              Registro de Ganado
+              Sistema de Geolocalización
             </h2>
-            <button
-              onClick={() => setIsFullscreen(!isFullscreen)}
-              className="p-2 hover:bg-gray-100 rounded-md transition-colors"
-            >
-              {isFullscreen ? (
-                <Minimize2 className="w-4 h-4" />
-              ) : (
-                <Maximize2 className="w-4 h-4" />
-              )}
-            </button>
+            <div className="flex items-center gap-2">
+              {/* Indicador de conexión */}
+              <div className="flex items-center gap-1">
+                {isConnected ? (
+                  <Wifi className="w-4 h-4 text-green-600" />
+                ) : (
+                  <WifiOff className="w-4 h-4 text-red-600" />
+                )}
+              </div>
+              <button
+                onClick={() => setIsFullscreen(!isFullscreen)}
+                className="p-2 hover:bg-gray-100 rounded-md transition-colors"
+              >
+                {isFullscreen ? (
+                  <Minimize2 className="w-4 h-4" />
+                ) : (
+                  <Maximize2 className="w-4 h-4" />
+                )}
+              </button>
+            </div>
           </div>
 
-          {/* Botón principal para agregar animal */}
-          <div className="mb-4">
+          {/* Estado de conexión */}
+          <div className={cn(
+            "mb-4 p-3 rounded-lg text-sm",
+            isConnected ? "bg-green-50 border border-green-200" : "bg-red-50 border border-red-200"
+          )}>
+            <div className={cn(
+              "flex items-center gap-2 font-medium",
+              isConnected ? "text-green-700" : "text-red-700"
+            )}>
+              {isConnected ? <Wifi className="w-4 h-4" /> : <WifiOff className="w-4 h-4" />}
+              {isConnected ? "Conectado al Backend" : "Desconectado del Backend"}
+            </div>
+            <p className={cn(
+              "text-xs mt-1",
+              isConnected ? "text-green-600" : "text-red-600"
+            )}>
+              {isConnected 
+                ? `Puerto 5000 • ${allBovines.length} bovinos sincronizados`
+                : backendError || "Verificar que el servidor esté ejecutándose"
+              }
+            </p>
+          </div>
+
+          {/* Botones principales */}
+          <div className="space-y-2 mb-4">
             <button
               onClick={() => setShowAddAnimalDialog(true)}
-              disabled={isGettingLocation}
+              disabled={isGettingLocation || isSubmitting || !isConnected}
               className={cn(
                 "w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg font-medium transition-colors",
-                isGettingLocation
+                (isGettingLocation || isSubmitting || !isConnected)
                   ? "bg-gray-100 text-gray-400 cursor-not-allowed"
                   : "bg-[#519a7c] text-white hover:bg-[#457e68] shadow-md"
               )}
@@ -692,18 +1143,27 @@ export const LivestockLocation: React.FC<LivestockLocationProps> = ({
               ) : (
                 <Plus className="w-5 h-5" />
               )}
-              {isGettingLocation ? "Obteniendo ubicación..." : "Agregar Animal"}
+              {isSubmitting ? "Guardando..." : isGettingLocation ? "Obteniendo ubicación..." : "Agregar Bovino"}
+            </button>
+
+            <button
+              onClick={handleRefresh}
+              disabled={isLoading || isSubmitting}
+              className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              <RefreshCw className={cn("w-4 h-4", isLoading && "animate-spin")} />
+              Recargar Datos
             </button>
           </div>
 
-          {/* Error de ubicación */}
-          {locationError && (
+          {/* Error del backend */}
+          {backendError && (
             <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
               <div className="flex items-center gap-2 text-red-700">
                 <AlertTriangle className="w-4 h-4" />
-                <span className="font-medium">Error</span>
+                <span className="font-medium">Error de Conexión</span>
               </div>
-              <p className="text-sm text-red-600 mt-1">{locationError}</p>
+              <p className="text-sm text-red-600 mt-1">{backendError}</p>
             </div>
           )}
 
@@ -743,7 +1203,7 @@ export const LivestockLocation: React.FC<LivestockLocationProps> = ({
               <div className="flex items-center justify-between">
                 <h3 className="text-sm font-medium text-gray-700 flex items-center gap-2">
                   <Users className="w-4 h-4" />
-                  Animales Registrados ({filteredPins.length})
+                  Bovinos Geolocalizados ({filteredPins.length})
                 </h3>
               </div>
               
@@ -753,11 +1213,14 @@ export const LivestockLocation: React.FC<LivestockLocationProps> = ({
                   .map((pin) => (
                   <div key={pin.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                     <div className="flex-1 cursor-pointer" onClick={() => handlePinClick(pin)}>
-                      <div className="font-medium text-sm">
+                      <div className="font-medium text-sm flex items-center gap-2">
                         {pin.animal.name || pin.animal.earTag}
+                        <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">
+                          {pin.source}
+                        </span>
                       </div>
                       <div className="text-xs text-gray-500">
-                        {pin.animal.breed} • {pin.animal.age} años
+                        {pin.animal.breed} • {pin.animal.age} años • ID: {pin.animal.id}
                       </div>
                       <div className="text-xs text-blue-600 capitalize">
                         {pin.activity} • {pin.timestamp.toLocaleString()}
@@ -770,8 +1233,9 @@ export const LivestockLocation: React.FC<LivestockLocationProps> = ({
                     </div>
                     <button
                       onClick={() => removePin(pin.id)}
-                      className="text-red-500 hover:text-red-700 p-1 ml-2"
-                      title="Eliminar registro"
+                      disabled={isSubmitting}
+                      className="text-red-500 hover:text-red-700 p-1 ml-2 disabled:opacity-50"
+                      title="Eliminar bovino"
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>
@@ -782,30 +1246,38 @@ export const LivestockLocation: React.FC<LivestockLocationProps> = ({
           )}
 
           {/* Mensaje si no hay animales */}
-          {animalPins.length === 0 && (
+          {allBovines.length === 0 && isConnected && (
             <div className="text-center py-8 text-gray-500">
               <Users className="w-12 h-12 mx-auto mb-3 text-gray-300" />
-              <p className="text-sm">No hay animales registrados</p>
-              <p className="text-xs">Haz clic en "Agregar Animal" para comenzar</p>
+              <p className="text-sm">No hay bovinos registrados</p>
+              <p className="text-xs">Haz clic en "Agregar Bovino" para comenzar</p>
             </div>
           )}
 
           {/* Resumen */}
-          {animalPins.length > 0 && (
+          {isConnected && (
             <div className="border-t pt-3 mt-4">
-              <h3 className="text-sm font-medium text-gray-700 mb-2">Resumen</h3>
+              <h3 className="text-sm font-medium text-gray-700 mb-2">Estadísticas</h3>
               <div className="grid grid-cols-2 gap-2 text-xs">
+                <div className="bg-blue-50 p-2 rounded">
+                  <div className="text-blue-700 font-medium">Total Bovinos</div>
+                  <div className="text-blue-900 font-bold">{allBovines.length}</div>
+                </div>
                 <div className="bg-green-50 p-2 rounded">
-                  <div className="text-green-700 font-medium">Total</div>
+                  <div className="text-green-700 font-medium">Con GPS</div>
                   <div className="text-green-900 font-bold">{animalPins.length}</div>
                 </div>
-                <div className="bg-blue-50 p-2 rounded">
-                  <div className="text-blue-700 font-medium">Última Hora</div>
-                  <div className="text-blue-900 font-bold">
+                <div className="bg-yellow-50 p-2 rounded">
+                  <div className="text-yellow-700 font-medium">Última Hora</div>
+                  <div className="text-yellow-900 font-bold">
                     {animalPins.filter(p => 
                       (Date.now() - p.timestamp.getTime()) < 60 * 60 * 1000
                     ).length}
                   </div>
+                </div>
+                <div className="bg-purple-50 p-2 rounded">
+                  <div className="text-purple-700 font-medium">Conectado</div>
+                  <div className="text-purple-900 font-bold">{isConnected ? "Sí" : "No"}</div>
                 </div>
               </div>
             </div>
@@ -820,7 +1292,7 @@ export const LivestockLocation: React.FC<LivestockLocationProps> = ({
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               className="fixed inset-0 bg-black/50 z-[2000] flex items-center justify-center p-4"
-              onClick={() => setShowAddAnimalDialog(false)}
+              onClick={() => !isSubmitting && setShowAddAnimalDialog(false)}
             >
               <motion.div
                 initial={{ scale: 0.9, opacity: 0 }}
@@ -830,8 +1302,14 @@ export const LivestockLocation: React.FC<LivestockLocationProps> = ({
                 onClick={(e) => e.stopPropagation()}
               >
                 <h3 className="text-lg font-semibold text-[#2d5a45] mb-4">
-                  Agregar Nuevo Animal
+                  Registrar Nuevo Bovino
                 </h3>
+                
+                {backendError && (
+                  <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+                    {backendError}
+                  </div>
+                )}
                 
                 <div className="space-y-4">
                   <div className="grid grid-cols-2 gap-3">
@@ -845,6 +1323,7 @@ export const LivestockLocation: React.FC<LivestockLocationProps> = ({
                         onChange={(e) => setAnimalForm(prev => ({ ...prev, earTag: e.target.value }))}
                         placeholder="Ej: COW-001"
                         className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
+                        disabled={isSubmitting}
                       />
                     </div>
                     <div>
@@ -857,6 +1336,7 @@ export const LivestockLocation: React.FC<LivestockLocationProps> = ({
                         onChange={(e) => setAnimalForm(prev => ({ ...prev, name: e.target.value || undefined }))}
                         placeholder="Ej: Luna"
                         className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
+                        disabled={isSubmitting}
                       />
                     </div>
                   </div>
@@ -872,6 +1352,7 @@ export const LivestockLocation: React.FC<LivestockLocationProps> = ({
                         onChange={(e) => setAnimalForm(prev => ({ ...prev, breed: e.target.value }))}
                         placeholder="Ej: Holstein"
                         className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
+                        disabled={isSubmitting}
                       />
                     </div>
                     <div>
@@ -885,6 +1366,7 @@ export const LivestockLocation: React.FC<LivestockLocationProps> = ({
                           sex: e.target.value as "male" | "female" 
                         }))}
                         className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
+                        disabled={isSubmitting}
                       >
                         <option value="female">Hembra</option>
                         <option value="male">Macho</option>
@@ -908,11 +1390,12 @@ export const LivestockLocation: React.FC<LivestockLocationProps> = ({
                         }))}
                         placeholder="Ej: 3"
                         className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
+                        disabled={isSubmitting}
                       />
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Peso (kg)
+                        Peso (kg) *
                       </label>
                       <input
                         type="number"
@@ -925,6 +1408,7 @@ export const LivestockLocation: React.FC<LivestockLocationProps> = ({
                         }))}
                         placeholder="Ej: 450"
                         className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
+                        disabled={isSubmitting}
                       />
                     </div>
                   </div>
@@ -939,6 +1423,7 @@ export const LivestockLocation: React.FC<LivestockLocationProps> = ({
                       onChange={(e) => setAnimalForm(prev => ({ ...prev, color: e.target.value || undefined }))}
                       placeholder="Ej: Negro con blanco"
                       className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
+                      disabled={isSubmitting}
                     />
                   </div>
 
@@ -949,9 +1434,10 @@ export const LivestockLocation: React.FC<LivestockLocationProps> = ({
                     <textarea
                       value={animalForm.notes || ""}
                       onChange={(e) => setAnimalForm(prev => ({ ...prev, notes: e.target.value || undefined }))}
-                      placeholder="Observaciones sobre el animal..."
+                      placeholder="Observaciones sobre el bovino..."
                       rows={3}
                       className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#519a7c] focus:border-transparent resize-none"
+                      disabled={isSubmitting}
                     />
                   </div>
                 </div>
@@ -959,16 +1445,22 @@ export const LivestockLocation: React.FC<LivestockLocationProps> = ({
                 <div className="flex gap-3 mt-6">
                   <button
                     onClick={() => setShowAddAnimalDialog(false)}
-                    className="flex-1 px-4 py-2 text-gray-600 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+                    disabled={isSubmitting}
+                    className="flex-1 px-4 py-2 text-gray-600 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors disabled:opacity-50"
                   >
                     Cancelar
                   </button>
                   <button
                     onClick={handleAddAnimal}
-                    className="flex-1 px-4 py-2 bg-[#519a7c] text-white rounded-md hover:bg-[#457e68] transition-colors flex items-center justify-center gap-2"
+                    disabled={isSubmitting}
+                    className="flex-1 px-4 py-2 bg-[#519a7c] text-white rounded-md hover:bg-[#457e68] transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
                   >
-                    <Target className="w-4 h-4" />
-                    Continuar
+                    {isSubmitting ? (
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Target className="w-4 h-4" />
+                    )}
+                    {isSubmitting ? "Guardando..." : "Continuar"}
                   </button>
                 </div>
               </motion.div>
@@ -984,7 +1476,7 @@ export const LivestockLocation: React.FC<LivestockLocationProps> = ({
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               className="fixed inset-0 bg-black/50 z-[2000] flex items-center justify-center p-4"
-              onClick={() => setShowLocationDialog(false)}
+              onClick={() => !isSubmitting && setShowLocationDialog(false)}
             >
               <motion.div
                 initial={{ scale: 0.9, opacity: 0 }}
@@ -994,12 +1486,15 @@ export const LivestockLocation: React.FC<LivestockLocationProps> = ({
                 onClick={(e) => e.stopPropagation()}
               >
                 <h3 className="text-lg font-semibold text-[#2d5a45] mb-4">
-                  Registrar Ubicación
+                  Registrar Ubicación GPS
                 </h3>
 
                 <div className="mb-4 p-3 bg-green-50 rounded text-sm">
-                  <div className="font-medium">Animal: {currentAnimal.name || currentAnimal.earTag}</div>
+                  <div className="font-medium">Bovino: {currentAnimal.name || currentAnimal.earTag}</div>
                   <div className="text-gray-600">{currentAnimal.breed} • {currentAnimal.age} años</div>
+                  {currentAnimal.id && (
+                    <div className="text-xs text-blue-600">ID: {currentAnimal.id}</div>
+                  )}
                 </div>
                 
                 <div className="mb-4 p-3 bg-blue-50 rounded text-sm">
@@ -1010,10 +1505,16 @@ export const LivestockLocation: React.FC<LivestockLocationProps> = ({
                   <div>Hora: {userLocation.timestamp.toLocaleString()}</div>
                 </div>
 
+                {backendError && (
+                  <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+                    {backendError}
+                  </div>
+                )}
+
                 <div className="space-y-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      ¿Qué está haciendo el animal?
+                      ¿Qué está haciendo el bovino?
                     </label>
                     <select
                       value={locationForm.activity}
@@ -1022,6 +1523,7 @@ export const LivestockLocation: React.FC<LivestockLocationProps> = ({
                         activity: e.target.value as typeof prev.activity 
                       }))}
                       className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
+                      disabled={isSubmitting}
                     >
                       <option value="grazing">🌱 Pastoreando</option>
                       <option value="walking">🚶 Caminando</option>
@@ -1042,6 +1544,7 @@ export const LivestockLocation: React.FC<LivestockLocationProps> = ({
                       placeholder="Notas sobre el comportamiento, estado de salud, etc..."
                       rows={3}
                       className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#519a7c] focus:border-transparent resize-none"
+                      disabled={isSubmitting}
                     />
                   </div>
                 </div>
@@ -1049,16 +1552,22 @@ export const LivestockLocation: React.FC<LivestockLocationProps> = ({
                 <div className="flex gap-3 mt-6">
                   <button
                     onClick={() => setShowLocationDialog(false)}
-                    className="flex-1 px-4 py-2 text-gray-600 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+                    disabled={isSubmitting}
+                    className="flex-1 px-4 py-2 text-gray-600 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors disabled:opacity-50"
                   >
                     Cancelar
                   </button>
                   <button
                     onClick={registerAnimalLocation}
-                    className="flex-1 px-4 py-2 bg-[#519a7c] text-white rounded-md hover:bg-[#457e68] transition-colors flex items-center justify-center gap-2"
+                    disabled={isSubmitting}
+                    className="flex-1 px-4 py-2 bg-[#519a7c] text-white rounded-md hover:bg-[#457e68] transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
                   >
-                    <Save className="w-4 h-4" />
-                    Registrar en Mapa
+                    {isSubmitting ? (
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Save className="w-4 h-4" />
+                    )}
+                    {isSubmitting ? "Guardando..." : "Registrar en Mapa"}
                   </button>
                 </div>
               </motion.div>
@@ -1078,7 +1587,7 @@ export const LivestockLocation: React.FC<LivestockLocationProps> = ({
               <div className="flex items-center justify-between mb-3">
                 <h3 className="text-lg font-semibold text-[#2d5a45] flex items-center gap-2">
                   <Info className="w-5 h-5" />
-                  Información del Animal
+                  Información del Bovino
                 </h3>
                 <button
                   onClick={() => setSelectedPin(null)}
@@ -1091,8 +1600,11 @@ export const LivestockLocation: React.FC<LivestockLocationProps> = ({
               <div className="space-y-4">
                 {/* Información del animal */}
                 <div className="p-3 bg-blue-50 rounded-lg">
-                  <h4 className="font-medium text-blue-900 mb-2">
+                  <h4 className="font-medium text-blue-900 mb-2 flex items-center gap-2">
                     {selectedPin.animal.name || selectedPin.animal.earTag}
+                    <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">
+                      ID: {selectedPin.animal.id}
+                    </span>
                   </h4>
                   <div className="grid grid-cols-2 gap-2 text-sm text-blue-800">
                     <div>Arete: {selectedPin.animal.earTag}</div>
@@ -1111,13 +1623,14 @@ export const LivestockLocation: React.FC<LivestockLocationProps> = ({
 
                 {/* Información de la ubicación */}
                 <div className="p-3 bg-green-50 rounded-lg">
-                  <h4 className="font-medium text-green-900 mb-2">Registro de Ubicación</h4>
+                  <h4 className="font-medium text-green-900 mb-2">Registro de Ubicación GPS</h4>
                   <div className="space-y-2 text-sm text-green-800">
                     <div>📅 Fecha: {selectedPin.timestamp.toLocaleDateString()}</div>
                     <div>🕐 Hora: {selectedPin.timestamp.toLocaleTimeString()}</div>
                     <div>🎯 Actividad: {selectedPin.activity}</div>
                     <div>📍 Coordenadas: {selectedPin.latitude.toFixed(6)}, {selectedPin.longitude.toFixed(6)}</div>
                     <div>📊 Precisión: ±{selectedPin.accuracy}m</div>
+                    <div>🔸 Fuente: {selectedPin.source}</div>
                     {selectedPin.notes && (
                       <div className="mt-2 p-2 bg-green-100 rounded">
                         <div className="font-medium">Observaciones:</div>
@@ -1127,14 +1640,37 @@ export const LivestockLocation: React.FC<LivestockLocationProps> = ({
                   </div>
                 </div>
 
+                {/* Información de sincronización */}
+                <div className="p-3 bg-purple-50 rounded-lg">
+                  <h4 className="font-medium text-purple-900 mb-2">Estado de Sincronización</h4>
+                  <div className="space-y-1 text-sm text-purple-800">
+                    <div className="flex items-center gap-2">
+                      <Wifi className="w-4 h-4 text-green-600" />
+                      <span>Sincronizado con backend</span>
+                    </div>
+                    <div>Base de datos: Puerto 5000</div>
+                    {selectedPin.animal.createdAt && (
+                      <div>Creado: {new Date(selectedPin.animal.createdAt).toLocaleString()}</div>
+                    )}
+                    {selectedPin.animal.updatedAt && (
+                      <div>Actualizado: {new Date(selectedPin.animal.updatedAt).toLocaleString()}</div>
+                    )}
+                  </div>
+                </div>
+
                 {/* Botones de acción */}
                 <div className="flex gap-2">
                   <button 
                     onClick={() => removePin(selectedPin.id)}
-                    className="flex-1 px-3 py-2 text-red-600 border border-red-300 rounded-md hover:bg-red-50 transition-colors text-sm flex items-center justify-center gap-2"
+                    disabled={isSubmitting}
+                    className="flex-1 px-3 py-2 text-red-600 border border-red-300 rounded-md hover:bg-red-50 transition-colors text-sm flex items-center justify-center gap-2 disabled:opacity-50"
                   >
-                    <Trash2 className="w-4 h-4" />
-                    Eliminar
+                    {isSubmitting ? (
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Trash2 className="w-4 h-4" />
+                    )}
+                    {isSubmitting ? "Eliminando..." : "Eliminar"}
                   </button>
                   <button 
                     onClick={() => setSelectedPin(null)}

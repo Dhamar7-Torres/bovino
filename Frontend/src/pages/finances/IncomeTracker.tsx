@@ -1,5 +1,4 @@
-import React, { useState, useEffect } from "react";
-import { motion, Variants } from "framer-motion";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   Plus,
   Edit,
@@ -11,17 +10,19 @@ import {
   Calendar,
   MapPin,
   Navigation,
+  AlertCircle,
+  RefreshCw,
+  DollarSign,
+  FileText,
+  TrendingUp,
 } from "lucide-react";
 
+// Interfaces
 interface IncomeRecord {
   id: string;
   date: string;
   description: string;
-  category:
-    | "venta_ganado"
-    | "productos_lacteos"
-    | "servicios_veterinarios"
-    | "otros";
+  category: "venta_ganado" | "productos_lacteos" | "servicios_veterinarios" | "otros";
   amount: number;
   location: {
     lat: number;
@@ -30,213 +31,147 @@ interface IncomeRecord {
   };
   animalId?: string;
   status: "completed" | "pending" | "cancelled";
+  createdAt?: string;
+  updatedAt?: string;
 }
 
-interface ModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  title: string;
-  children: React.ReactNode;
+interface ApiResponse<T> {
+  success: boolean;
+  message: string;
+  data?: T;
+  errors?: Record<string, string>;
 }
 
-const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children }) => {
-  if (!isOpen) return null;
-
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <motion.div
-        initial={{ opacity: 0, scale: 0.95 }}
-        animate={{ opacity: 1, scale: 1 }}
-        exit={{ opacity: 0, scale: 0.95 }}
-        className="bg-white rounded-xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto"
-      >
-        <div className="flex items-center justify-between p-6 border-b border-gray-200">
-          <h2 className="text-xl font-semibold text-gray-900">{title}</h2>
-          <button
-            onClick={onClose}
-            className="p-2 hover:bg-gray-100 rounded-lg transition-colors duration-200"
-          >
-            <X className="w-5 h-5 text-gray-500" />
-          </button>
-        </div>
-        <div className="p-6">{children}</div>
-      </motion.div>
-    </div>
-  );
-};
-
-// Formulario para agregar/editar ingreso
-interface IncomeFormProps {
-  formData: {
-    description: string;
-    category: IncomeRecord["category"];
-    amount: string;
-    date: string;
-    address: string;
-    animalId: string;
-    status: IncomeRecord["status"];
+interface PaginatedResponse<T> {
+  transactions: T[];
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+    hasNext: boolean;
+    hasPrev: boolean;
   };
-  onFormChange: (field: string, value: string) => void;
-  onSubmit: () => void;
-  onCancel: () => void;
-  onGetLocation: () => void;
-  isGettingLocation: boolean;
-  submitLabel: string;
 }
 
-const IncomeForm: React.FC<IncomeFormProps> = ({ 
-  formData, 
-  onFormChange, 
-  onSubmit, 
-  onCancel, 
-  onGetLocation,
-  isGettingLocation,
-  submitLabel 
-}) => (
-  <div className="space-y-6">
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-2">
-          Descripción *
-        </label>
-        <input
-          type="text"
-          value={formData.description}
-          onChange={(e) => onFormChange("description", e.target.value)}
-          placeholder="Descripción del ingreso"
-          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
-        />
-      </div>
+// Servicio API para Ingresos
+class IncomeAPI {
+  private static readonly BASE_URL = 'http://localhost:5000/api/finances';
+  
+  private static async handleResponse<T>(response: Response): Promise<T> {
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ message: 'Error de conexión' }));
+      throw new Error(errorData.message || `Error HTTP: ${response.status}`);
+    }
+    return response.json();
+  }
 
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-2">
-          Categoría *
-        </label>
-        <select
-          value={formData.category}
-          onChange={(e) => onFormChange("category", e.target.value)}
-          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
-        >
-          <option value="venta_ganado">Venta de Ganado</option>
-          <option value="productos_lacteos">Productos Lácteos</option>
-          <option value="servicios_veterinarios">Servicios Veterinarios</option>
-          <option value="otros">Otros</option>
-        </select>
-      </div>
+  private static async makeRequest<T>(
+    endpoint: string, 
+    options: RequestInit = {}
+  ): Promise<T> {
+    const url = `${this.BASE_URL}${endpoint}`;
+    const defaultOptions: RequestInit = {
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      },
+    };
 
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-2">
-          Monto *
-        </label>
-        <input
-          type="number"
-          value={formData.amount}
-          onChange={(e) => onFormChange("amount", e.target.value)}
-          placeholder="0.00"
-          step="0.01"
-          min="0"
-          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
-        />
-      </div>
+    const finalOptions = {
+      ...defaultOptions,
+      ...options,
+      headers: {
+        ...defaultOptions.headers,
+        ...options.headers,
+      },
+    };
 
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-2">
-          Fecha *
-        </label>
-        <input
-          type="date"
-          value={formData.date}
-          onChange={(e) => onFormChange("date", e.target.value)}
-          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
-        />
-      </div>
+    try {
+      const response = await fetch(url, finalOptions);
+      return await this.handleResponse<T>(response);
+    } catch (error) {
+      console.error(`Error en petición a ${url}:`, error);
+      throw error;
+    }
+  }
 
-      <div className="md:col-span-2">
-        <label className="block text-sm font-medium text-gray-700 mb-2">
-          Ubicación
-        </label>
-        <div className="flex gap-2">
-          <input
-            type="text"
-            value={formData.address}
-            onChange={(e) => onFormChange("address", e.target.value)}
-            placeholder="Dirección o ubicación"
-            className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
-          />
-          <button
-            type="button"
-            onClick={onGetLocation}
-            disabled={isGettingLocation}
-            className="flex items-center px-3 py-2 bg-blue-500 hover:bg-blue-600 disabled:bg-blue-300 text-white rounded-lg transition-colors duration-200"
-          >
-            {isGettingLocation ? (
-              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-            ) : (
-              <Navigation className="w-4 h-4" />
-            )}
-          </button>
-        </div>
-        <p className="text-xs text-gray-500 mt-1">
-          Haga clic en el botón para obtener su ubicación actual
-        </p>
-      </div>
+  static async getIncomes(page = 1, limit = 50): Promise<ApiResponse<PaginatedResponse<IncomeRecord>>> {
+    return this.makeRequest<ApiResponse<PaginatedResponse<IncomeRecord>>>(
+      `/transactions?type=INCOME&page=${page}&limit=${limit}&sortBy=createdAt&sortOrder=DESC`
+    );
+  }
 
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-2">
-          ID Animal (opcional)
-        </label>
-        <input
-          type="text"
-          value={formData.animalId}
-          onChange={(e) => onFormChange("animalId", e.target.value)}
-          placeholder="ID del animal relacionado"
-          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
-        />
-      </div>
+  static async createIncome(income: Omit<IncomeRecord, 'id' | 'createdAt' | 'updatedAt'>): Promise<ApiResponse<IncomeRecord>> {
+    const transactionData = {
+      type: 'INCOME',
+      category: income.category.toUpperCase(),
+      amount: income.amount,
+      description: income.description,
+      transactionDate: income.date,
+      status: income.status.toUpperCase(),
+      metadata: {
+        location: income.location,
+        animalId: income.animalId
+      }
+    };
 
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-2">
-          Estado
-        </label>
-        <select
-          value={formData.status}
-          onChange={(e) => onFormChange("status", e.target.value as IncomeRecord["status"])}
-          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
-        >
-          <option value="completed">Completado</option>
-          <option value="pending">Pendiente</option>
-          <option value="cancelled">Cancelado</option>
-        </select>
-      </div>
-    </div>
+    return this.makeRequest<ApiResponse<IncomeRecord>>('/transactions', {
+      method: 'POST',
+      body: JSON.stringify(transactionData),
+    });
+  }
 
-    <div className="flex justify-end space-x-3 pt-4">
-      <button
-        onClick={onCancel}
-        className="px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors duration-200"
-      >
-        Cancelar
-      </button>
-      <button
-        onClick={onSubmit}
-        className="flex items-center px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors duration-200"
-      >
-        <Save className="w-4 h-4 mr-2" />
-        {submitLabel}
-      </button>
-    </div>
-  </div>
-);
+  static async updateIncome(id: string, income: Partial<IncomeRecord>): Promise<ApiResponse<IncomeRecord>> {
+    const transactionData = {
+      type: 'INCOME',
+      category: income.category?.toUpperCase(),
+      amount: income.amount,
+      description: income.description,
+      transactionDate: income.date,
+      status: income.status?.toUpperCase(),
+      metadata: {
+        location: income.location,
+        animalId: income.animalId
+      }
+    };
+
+    return this.makeRequest<ApiResponse<IncomeRecord>>(`/transactions/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(transactionData),
+    });
+  }
+
+  static async deleteIncome(id: string): Promise<ApiResponse<void>> {
+    return this.makeRequest<ApiResponse<void>>(`/transactions/${id}`, {
+      method: 'DELETE',
+    });
+  }
+}
 
 const IncomeTracker: React.FC = () => {
   // Estados del componente
   const [isLoading, setIsLoading] = useState(true);
+  const [isActionLoading, setIsActionLoading] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
   const [showViewModal, setShowViewModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [selectedRecord, setSelectedRecord] = useState<IncomeRecord | null>(null);
   const [incomeRecords, setIncomeRecords] = useState<IncomeRecord[]>([]);
   const [isGettingLocation, setIsGettingLocation] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [pagination, setPagination] = useState({
+    page: 1,
+    limit: 50,
+    total: 0,
+    totalPages: 0,
+    hasNext: false,
+    hasPrev: false,
+  });
+
+  // Estados para geolocalización
+  const [currentCoordinates, setCurrentCoordinates] = useState<{lat: number, lng: number} | null>(null);
 
   // Formulario para nuevo/editar ingreso
   const [formData, setFormData] = useState({
@@ -249,111 +184,110 @@ const IncomeTracker: React.FC = () => {
     status: "completed" as IncomeRecord["status"],
   });
 
-  // Datos iniciales de ejemplo para ingresos
-  const initialIncomeRecords: IncomeRecord[] = [
-    {
-      id: "inc_001",
-      date: "2024-06-15",
-      description: "Venta de 5 cabezas de ganado Holstein",
-      category: "venta_ganado",
-      amount: 125000,
-      location: {
-        lat: 17.9895,
-        lng: -92.9475,
-        address: "Rancho San José, Villahermosa",
-      },
-      animalId: "cow_015",
-      status: "completed",
-    },
-    {
-      id: "inc_002",
-      date: "2024-06-14",
-      description: "Venta de leche orgánica - 500L",
-      category: "productos_lacteos",
-      amount: 8500,
-      location: {
-        lat: 17.9995,
-        lng: -92.9375,
-        address: "Lechería La Esperanza",
-      },
-      status: "completed",
-    },
-    {
-      id: "inc_003",
-      date: "2024-06-13",
-      description: "Servicios veterinarios a rancho vecino",
-      category: "servicios_veterinarios",
-      amount: 15000,
-      location: { lat: 17.9795, lng: -92.9575, address: "Rancho El Mirador" },
-      status: "completed",
-    },
-  ];
+  // Función para mostrar errores
+  const showError = (message: string) => {
+    setError(message);
+    setTimeout(() => setError(null), 5000);
+  };
 
-  // Efecto para cargar datos iniciales
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setIncomeRecords(initialIncomeRecords);
+  // Función para cargar ingresos desde el backend
+  const loadIncomes = useCallback(async (page = 1) => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      
+      const response = await IncomeAPI.getIncomes(page, pagination.limit);
+      
+      if (response.success && response.data) {
+        // Transformar los datos del backend al formato del frontend
+        const transformedIncomes = response.data.transactions.map((transaction: any) => ({
+          id: transaction.id,
+          date: transaction.transactionDate || transaction.date,
+          description: transaction.description,
+          category: transaction.category?.toLowerCase() || 'otros',
+          amount: transaction.amount,
+          status: transaction.status?.toLowerCase() || 'pending',
+          location: transaction.metadata?.location || {
+            lat: 17.9895,
+            lng: -92.9475,
+            address: 'Ubicación no especificada'
+          },
+          animalId: transaction.metadata?.animalId,
+          createdAt: transaction.createdAt,
+          updatedAt: transaction.updatedAt,
+        }));
+
+        setIncomeRecords(transformedIncomes);
+        setPagination(response.data.pagination);
+      } else {
+        showError(response.message || 'Error al cargar los ingresos');
+      }
+    } catch (error) {
+      console.error('Error cargando ingresos:', error);
+      showError(error instanceof Error ? error.message : 'Error de conexión con el servidor');
+    } finally {
       setIsLoading(false);
-    }, 1200);
+    }
+  }, [pagination.limit]);
 
-    return () => clearTimeout(timer);
-  }, []);
-
-  // Funciones de geolocalización
-  const getCurrentLocation = async (): Promise<{ address: string; lat: number; lng: number } | null> => {
+  // Función para obtener ubicación actual
+  const getCurrentLocation = () => {
     if (!navigator.geolocation) {
-      alert("La geolocalización no está soportada en este navegador");
-      return null;
+      showError("Tu navegador no soporta geolocalización");
+      return;
     }
 
-    return new Promise((resolve) => {
-      setIsGettingLocation(true);
-      navigator.geolocation.getCurrentPosition(
-        async (position) => {
-          const { latitude, longitude } = position.coords;
+    setIsGettingLocation(true);
+
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        const { latitude, longitude } = position.coords;
+        setCurrentCoordinates({ lat: latitude, lng: longitude });
+
+        try {
+          const response = await fetch(
+            `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${latitude}&longitude=${longitude}&localityLanguage=es`
+          );
           
-          try {
-            // Usar la API de geocodificación inversa (aquí simulamos con una dirección)
-            // En un caso real, usarías Google Maps API o similar
-            const address = `Lat: ${latitude.toFixed(4)}, Lng: ${longitude.toFixed(4)}, Villahermosa, Tabasco`;
-            
-            setIsGettingLocation(false);
-            resolve({
-              address,
-              lat: latitude,
-              lng: longitude
-            });
-          } catch (error) {
-            console.error("Error obteniendo dirección:", error);
-            setIsGettingLocation(false);
-            resolve({
-              address: `Ubicación actual (${latitude.toFixed(4)}, ${longitude.toFixed(4)})`,
-              lat: latitude,
-              lng: longitude
-            });
+          if (response.ok) {
+            const data = await response.json();
+            const address = `${data.locality || ''}, ${data.principalSubdivision || ''}, ${data.countryName || ''}`.replace(/^,\s*|,\s*$/g, '');
+            handleFormChange("address", address || `Lat: ${latitude.toFixed(6)}, Lng: ${longitude.toFixed(6)}`);
+          } else {
+            handleFormChange("address", `Lat: ${latitude.toFixed(6)}, Lng: ${longitude.toFixed(6)}`);
           }
-        },
-        (error) => {
-          console.error("Error obteniendo ubicación:", error);
-          setIsGettingLocation(false);
-          alert("No se pudo obtener la ubicación. Verifique los permisos.");
-          resolve(null);
-        },
-        {
-          enableHighAccuracy: true,
-          timeout: 10000,
-          maximumAge: 300000
+        } catch (error) {
+          handleFormChange("address", `Lat: ${latitude.toFixed(6)}, Lng: ${longitude.toFixed(6)}`);
         }
-      );
-    });
+
+        setIsGettingLocation(false);
+      },
+      (error) => {
+        setIsGettingLocation(false);
+        let errorMessage = "Error obteniendo ubicación";
+        
+        switch (error.code) {
+          case error.PERMISSION_DENIED:
+            errorMessage = "Permiso de ubicación denegado. Por favor permite el acceso a tu ubicación.";
+            break;
+          case error.POSITION_UNAVAILABLE:
+            errorMessage = "Información de ubicación no disponible.";
+            break;
+          case error.TIMEOUT:
+            errorMessage = "Tiempo de espera agotado obteniendo ubicación.";
+            break;
+        }
+        
+        showError(errorMessage);
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 60000
+      }
+    );
   };
 
-  const handleGetCurrentLocation = async () => {
-    const location = await getCurrentLocation();
-    if (location) {
-      handleFormChange("address", location.address);
-    }
-  };
   const resetForm = () => {
     setFormData({
       description: "",
@@ -364,76 +298,117 @@ const IncomeTracker: React.FC = () => {
       animalId: "",
       status: "completed",
     });
+    setCurrentCoordinates(null);
   };
 
   const handleFormChange = (field: string, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
-  // Funciones de CRUD
-  const handleAddIncome = () => {
+  // Función para agregar ingreso
+  const handleAddIncome = async () => {
     if (!formData.description || !formData.amount) {
-      alert("Por favor complete todos los campos obligatorios");
+      showError("Por favor complete todos los campos obligatorios");
       return;
     }
 
-    const newRecord: IncomeRecord = {
-      id: `inc_${Date.now()}`,
-      date: formData.date,
-      description: formData.description,
-      category: formData.category,
-      amount: parseFloat(formData.amount),
-      location: {
-        lat: 17.9895,
-        lng: -92.9475,
-        address: formData.address || "Ubicación no especificada",
-      },
-      animalId: formData.animalId || undefined,
-      status: formData.status,
-    };
+    try {
+      setIsActionLoading(true);
+      
+      const newIncome = {
+        date: formData.date,
+        description: formData.description,
+        category: formData.category,
+        amount: parseFloat(formData.amount),
+        location: {
+          lat: currentCoordinates?.lat || 17.9895,
+          lng: currentCoordinates?.lng || -92.9475,
+          address: formData.address || 'Ubicación no especificada',
+        },
+        animalId: formData.animalId || undefined,
+        status: formData.status,
+      };
 
-    setIncomeRecords(prev => [newRecord, ...prev]);
-    setShowAddModal(false);
-    resetForm();
-    alert("Ingreso agregado exitosamente");
+      const response = await IncomeAPI.createIncome(newIncome);
+      
+      if (response.success) {
+        setShowAddModal(false);
+        resetForm();
+        await loadIncomes(); // Recargar la lista
+      } else {
+        showError(response.message || 'Error al crear el ingreso');
+      }
+    } catch (error) {
+      console.error('Error creando ingreso:', error);
+      showError(error instanceof Error ? error.message : 'Error al crear el ingreso');
+    } finally {
+      setIsActionLoading(false);
+    }
   };
 
-  const handleEditIncome = () => {
+  // Función para editar ingreso
+  const handleEditIncome = async () => {
     if (!selectedRecord || !formData.description || !formData.amount) {
-      alert("Por favor complete todos los campos obligatorios");
+      showError("Por favor complete todos los campos obligatorios");
       return;
     }
 
-    const updatedRecord: IncomeRecord = {
-      ...selectedRecord,
-      date: formData.date,
-      description: formData.description,
-      category: formData.category,
-      amount: parseFloat(formData.amount),
-      location: {
-        ...selectedRecord.location,
-        address: formData.address,
-      },
-      animalId: formData.animalId || undefined,
-      status: formData.status,
-    };
+    try {
+      setIsActionLoading(true);
+      
+      const updatedIncome = {
+        date: formData.date,
+        description: formData.description,
+        category: formData.category,
+        amount: parseFloat(formData.amount),
+        status: formData.status,
+        location: {
+          lat: currentCoordinates?.lat || selectedRecord.location.lat,
+          lng: currentCoordinates?.lng || selectedRecord.location.lng,
+          address: formData.address,
+        },
+        animalId: formData.animalId || undefined,
+      };
 
-    setIncomeRecords(prev => 
-      prev.map(record => 
-        record.id === selectedRecord.id ? updatedRecord : record
-      )
-    );
-    
-    setShowEditModal(false);
-    setSelectedRecord(null);
-    resetForm();
-    alert("Ingreso actualizado exitosamente");
+      const response = await IncomeAPI.updateIncome(selectedRecord.id, updatedIncome);
+      
+      if (response.success) {
+        setShowEditModal(false);
+        setSelectedRecord(null);
+        resetForm();
+        await loadIncomes(); // Recargar la lista
+      } else {
+        showError(response.message || 'Error al actualizar el ingreso');
+      }
+    } catch (error) {
+      console.error('Error actualizando ingreso:', error);
+      showError(error instanceof Error ? error.message : 'Error al actualizar el ingreso');
+    } finally {
+      setIsActionLoading(false);
+    }
   };
 
-  const handleDeleteIncome = (recordId: string) => {
-    if (window.confirm("¿Está seguro de que desea eliminar este registro?")) {
-      setIncomeRecords(prev => prev.filter(record => record.id !== recordId));
-      alert("Registro eliminado exitosamente");
+  // Función para eliminar ingreso
+  const handleDeleteIncome = async () => {
+    if (!selectedRecord) return;
+
+    try {
+      setIsActionLoading(true);
+      
+      const response = await IncomeAPI.deleteIncome(selectedRecord.id);
+      
+      if (response.success) {
+        setShowDeleteModal(false);
+        setSelectedRecord(null);
+        await loadIncomes(); // Recargar la lista
+      } else {
+        showError(response.message || 'Error al eliminar el ingreso');
+      }
+    } catch (error) {
+      console.error('Error eliminando ingreso:', error);
+      showError(error instanceof Error ? error.message : 'Error al eliminar el ingreso');
+    } finally {
+      setIsActionLoading(false);
     }
   };
 
@@ -453,6 +428,7 @@ const IncomeTracker: React.FC = () => {
       animalId: record.animalId || "",
       status: record.status,
     });
+    setCurrentCoordinates({ lat: record.location.lat, lng: record.location.lng });
     setShowEditModal(true);
   };
 
@@ -461,7 +437,7 @@ const IncomeTracker: React.FC = () => {
       const csvContent = [
         "Fecha,Descripción,Categoría,Monto,Ubicación,Estado",
         ...incomeRecords.map(record => 
-          `${record.date},"${record.description}","${getCategoryName(record.category)}",${record.amount},"${record.location.address}","${record.status}"`
+          `${record.date},"${record.description}","${getCategoryName(record.category)}",${record.amount},"${record.location.address}","${getStatusText(record.status)}"`
         )
       ].join('\n');
 
@@ -476,36 +452,20 @@ const IncomeTracker: React.FC = () => {
         link.click();
         document.body.removeChild(link);
       }
-      alert("Datos exportados exitosamente");
     } catch (error) {
       console.error("Error al exportar:", error);
-      alert("Error al exportar los datos");
+      showError("Error al exportar los datos");
     }
   };
 
-  // Animaciones de Framer Motion
-  const containerVariants: Variants = {
-    hidden: { opacity: 0 },
-    visible: {
-      opacity: 1,
-      transition: {
-        delayChildren: 0.2,
-        staggerChildren: 0.1,
-      },
-    },
+  const handleRefresh = () => {
+    loadIncomes(pagination.page);
   };
 
-  const itemVariants: Variants = {
-    hidden: { y: 20, opacity: 0 },
-    visible: {
-      y: 0,
-      opacity: 1,
-      transition: {
-        duration: 0.5,
-        ease: "easeOut",
-      },
-    },
-  };
+  // Effect para cargar datos iniciales
+  useEffect(() => {
+    loadIncomes();
+  }, [loadIncomes]);
 
   // Función para formatear números a moneda
   const formatCurrency = (value: number): string => {
@@ -534,7 +494,7 @@ const IncomeTracker: React.FC = () => {
       servicios_veterinarios: "Servicios Veterinarios",
       otros: "Otros",
     };
-    return categoryMap[category] || category;
+    return categoryMap[category.toLowerCase()] || category;
   };
 
   // Obtener el color del estado
@@ -544,7 +504,7 @@ const IncomeTracker: React.FC = () => {
       pending: "bg-yellow-500",
       cancelled: "bg-red-500",
     };
-    return statusColors[status] || "bg-gray-500";
+    return statusColors[status.toLowerCase()] || "bg-gray-500";
   };
 
   const getStatusText = (status: string): string => {
@@ -553,302 +513,779 @@ const IncomeTracker: React.FC = () => {
       pending: "Pendiente",
       cancelled: "Cancelado",
     };
-    return statusText[status] || status;
+    return statusText[status.toLowerCase()] || status;
   };
 
-  // Componente de Loading
-  const LoadingSpinner: React.FC = () => (
-    <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-[#519a7c] via-[#f2e9d8] to-[#f4ac3a] p-6">
-      <motion.div
-        animate={{ rotate: 360 }}
-        transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-        className="w-16 h-16 border-4 border-white border-t-transparent rounded-full"
-      />
-    </div>
-  );
+  // Calcular total de ingresos
+  const totalIncome = incomeRecords.reduce((sum, record) => sum + record.amount, 0);
 
-
-
+  // Loading component
   if (isLoading) {
-    return <LoadingSpinner />;
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-br from-green-800 via-green-600 to-emerald-500 p-6">
+        <div className="w-16 h-16 border-4 border-white border-t-transparent rounded-full animate-spin mb-4"></div>
+        <p className="text-white text-lg font-medium">Conectando con el servidor...</p>
+        <p className="text-green-100 text-sm mt-2">Cargando ingresos...</p>
+      </div>
+    );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#519a7c] via-[#f2e9d8] to-[#f4ac3a] p-6">
-      <motion.div
-        variants={containerVariants}
-        initial="hidden"
-        animate="visible"
-        className="max-w-7xl mx-auto space-y-6"
-      >
+    <div className="min-h-screen bg-gradient-to-br from-green-800 via-green-600 to-emerald-500 p-6">
+      <div className="max-w-7xl mx-auto space-y-6">
+        {/* Error Alert */}
+        {error && (
+          <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg flex items-center space-x-2">
+            <AlertCircle className="w-5 h-5" />
+            <span>{error}</span>
+            <button
+              onClick={() => setError(null)}
+              className="ml-auto text-red-600 hover:text-red-800"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        )}
+
         {/* Header del Seguimiento de Ingresos */}
-        <motion.div
-          variants={itemVariants}
-          className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8"
-        >
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8">
           <div>
-            <h1 className="text-4xl font-bold text-white mb-2">
+            <h1 className="text-4xl font-bold text-white mb-2 flex items-center">
+              <TrendingUp className="w-10 h-10 mr-3" />
               Seguimiento de Ingresos
             </h1>
             <p className="text-white/80 text-lg">
               Control detallado de todos los ingresos del rancho
             </p>
+            <div className="flex items-center space-x-4 mt-3">
+              <div className="bg-white/20 backdrop-blur-md rounded-lg px-4 py-2 text-white text-sm border border-white/30">
+                🔗 Conectado al Backend | {pagination.total} registros totales
+              </div>
+              <div className="bg-green-700/50 backdrop-blur-md rounded-lg px-4 py-2 text-white text-sm border border-green-400/30">
+                💰 Total: {formatCurrency(totalIncome)}
+              </div>
+            </div>
           </div>
 
           {/* Botones de acción */}
           <div className="flex space-x-3 mt-4 md:mt-0">
             <button
+              onClick={handleRefresh}
+              disabled={isLoading}
+              className="flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white rounded-lg font-medium transition-all duration-300 shadow-lg hover:shadow-xl disabled:cursor-not-allowed"
+            >
+              <RefreshCw className={`w-4 h-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
+              Actualizar
+            </button>
+            <button
               onClick={() => setShowAddModal(true)}
-              className="flex items-center px-4 py-2 bg-white/20 hover:bg-white/30 text-white rounded-lg font-medium transition-all duration-300 shadow-lg backdrop-blur-sm"
+              className="flex items-center px-4 py-2 bg-white/20 hover:bg-white/30 text-white rounded-lg font-medium transition-all duration-300 shadow-lg backdrop-blur-sm hover:scale-105"
             >
               <Plus className="w-5 h-5 mr-2" />
               Nuevo Ingreso
             </button>
             <button 
               onClick={handleExport}
-              className="flex items-center px-4 py-2 bg-white/20 hover:bg-white/30 text-white rounded-lg font-medium transition-all duration-300 shadow-lg backdrop-blur-sm"
+              className="flex items-center px-4 py-2 bg-white/20 hover:bg-white/30 text-white rounded-lg font-medium transition-all duration-300 shadow-lg backdrop-blur-sm hover:scale-105"
             >
               <Download className="w-5 h-5 mr-2" />
               Exportar
             </button>
           </div>
-        </motion.div>
+        </div>
 
         {/* Tabla de registros de ingresos */}
-        <motion.div
-          variants={itemVariants}
-          className="bg-white/90 backdrop-blur-md rounded-xl p-6 border border-white/20 shadow-xl"
-        >
+        <div className="bg-white/95 backdrop-blur-md rounded-xl p-6 border border-white/20 shadow-2xl">
           <div className="flex items-center justify-between mb-6">
             <h3 className="text-xl font-semibold text-gray-800">
-              Registros Recientes
+              Registros de Ingresos 
             </h3>
-            <div className="text-sm text-gray-600">
-              {incomeRecords.length} registros
+            <div className="text-sm text-gray-600 bg-gray-100 px-3 py-1 rounded-full">
+              Página {pagination.page} de {pagination.totalPages}
             </div>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-gray-200">
-                  <th className="text-left py-3 px-4 text-gray-700 font-medium">
-                    Fecha
-                  </th>
-                  <th className="text-left py-3 px-4 text-gray-700 font-medium">
-                    Descripción
-                  </th>
-                  <th className="text-left py-3 px-4 text-gray-700 font-medium">
-                    Categoría
-                  </th>
-                  <th className="text-right py-3 px-4 text-gray-700 font-medium">
-                    Monto
-                  </th>
-                  <th className="text-center py-3 px-4 text-gray-700 font-medium">
-                    Estado
-                  </th>
-                  <th className="text-center py-3 px-4 text-gray-700 font-medium">
-                    Acciones
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {incomeRecords.map((record) => (
-                  <motion.tr
-                    key={record.id}
-                    whileHover={{
-                      backgroundColor: "#F9FAFB",
-                    }}
-                    className="border-b border-gray-100 transition-colors duration-200"
-                  >
-                    <td className="py-4 px-4 text-gray-600">
-                      {formatDate(record.date)}
-                    </td>
-                    <td className="py-4 px-4 text-gray-900 font-medium">
-                      {record.description}
-                    </td>
-                    <td className="py-4 px-4 text-gray-600">
-                      {getCategoryName(record.category)}
-                    </td>
-                    <td className="py-4 px-4 text-right text-gray-900 font-semibold">
-                      {formatCurrency(record.amount)}
-                    </td>
-                    <td className="py-4 px-4 text-center">
-                      <span
-                        className={`inline-block w-3 h-3 rounded-full ${getStatusColor(
-                          record.status
-                        )}`}
-                        title={getStatusText(record.status)}
-                      ></span>
-                    </td>
-                    <td className="py-4 px-4 text-center">
-                      <div className="flex justify-center space-x-2">
-                        <button 
-                          onClick={() => handleViewRecord(record)}
-                          className="p-2 text-blue-500 hover:bg-blue-50 rounded-lg transition-colors duration-200"
-                          title="Ver detalles"
-                        >
-                          <Eye className="w-4 h-4" />
-                        </button>
-                        <button 
-                          onClick={() => handleEditRecord(record)}
-                          className="p-2 text-yellow-500 hover:bg-yellow-50 rounded-lg transition-colors duration-200"
-                          title="Editar"
-                        >
-                          <Edit className="w-4 h-4" />
-                        </button>
-                        <button 
-                          onClick={() => handleDeleteIncome(record.id)}
-                          className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors duration-200"
-                          title="Eliminar"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </td>
-                  </motion.tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </motion.div>
-      </motion.div>
+          {incomeRecords.length === 0 ? (
+            <div className="text-center py-12">
+              <TrendingUp className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+              <p className="text-gray-500 text-lg">No hay ingresos registrados</p>
+              <p className="text-gray-400 text-sm">Agrega tu primer ingreso para comenzar</p>
+              <div className="mt-4 text-xs text-gray-400 bg-gray-50 p-3 rounded-lg">
+                <p>🔧 Verificando conexión con: http://localhost:5000/api/finances/transactions</p>
+              </div>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-gray-200 bg-gray-50">
+                    <th className="text-left py-3 px-4 text-gray-700 font-medium">
+                      Fecha
+                    </th>
+                    <th className="text-left py-3 px-4 text-gray-700 font-medium">
+                      Descripción
+                    </th>
+                    <th className="text-left py-3 px-4 text-gray-700 font-medium">
+                      Categoría
+                    </th>
+                    <th className="text-right py-3 px-4 text-gray-700 font-medium">
+                      Monto
+                    </th>
+                    <th className="text-center py-3 px-4 text-gray-700 font-medium">
+                      Estado
+                    </th>
+                    <th className="text-center py-3 px-4 text-gray-700 font-medium">
+                      Acciones
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {incomeRecords.map((record) => (
+                    <tr
+                      key={record.id}
+                      className="border-b border-gray-100 hover:bg-gray-50 transition-colors duration-200"
+                    >
+                      <td className="py-4 px-4 text-gray-600">
+                        {formatDate(record.date)}
+                      </td>
+                      <td className="py-4 px-4 text-gray-900 font-medium">
+                        {record.description}
+                      </td>
+                      <td className="py-4 px-4 text-gray-600">
+                        {getCategoryName(record.category)}
+                      </td>
+                      <td className="py-4 px-4 text-right text-green-700 font-bold text-lg">
+                        {formatCurrency(record.amount)}
+                      </td>
+                      <td className="py-4 px-4 text-center">
+                        <div className="flex items-center justify-center space-x-2">
+                          <span
+                            className={`inline-block w-3 h-3 rounded-full ${getStatusColor(
+                              record.status
+                            )}`}
+                          ></span>
+                          <span className="text-gray-600 text-sm">{getStatusText(record.status)}</span>
+                        </div>
+                      </td>
+                      <td className="py-4 px-4 text-center">
+                        <div className="flex justify-center space-x-2">
+                          <button 
+                            onClick={() => handleViewRecord(record)}
+                            className="p-2 text-blue-500 hover:bg-blue-50 rounded-lg transition-colors duration-200 hover:scale-110"
+                            title="Ver detalles"
+                          >
+                            <Eye className="w-4 h-4" />
+                          </button>
+                          <button 
+                            onClick={() => handleEditRecord(record)}
+                            className="p-2 text-yellow-500 hover:bg-yellow-50 rounded-lg transition-colors duration-200 hover:scale-110"
+                            title="Editar"
+                          >
+                            <Edit className="w-4 h-4" />
+                          </button>
+                          <button 
+                            onClick={() => {
+                              setSelectedRecord(record);
+                              setShowDeleteModal(true);
+                            }}
+                            className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors duration-200 hover:scale-110"
+                            title="Eliminar"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {/* Paginación */}
+          {pagination.totalPages > 1 && (
+            <div className="flex justify-between items-center mt-6 pt-4 border-t border-gray-200">
+              <button
+                onClick={() => loadIncomes(pagination.page - 1)}
+                disabled={!pagination.hasPrev || isLoading}
+                className="px-4 py-2 bg-gray-500 text-white rounded-lg disabled:bg-gray-300 disabled:cursor-not-allowed hover:bg-gray-600 transition-colors hover:scale-105"
+              >
+                ← Anterior
+              </button>
+              
+              <span className="text-gray-600 bg-gray-100 px-3 py-1 rounded-full">
+                Página {pagination.page} de {pagination.totalPages} ({pagination.total} total)
+              </span>
+              
+              <button
+                onClick={() => loadIncomes(pagination.page + 1)}
+                disabled={!pagination.hasNext || isLoading}
+                className="px-4 py-2 bg-gray-500 text-white rounded-lg disabled:bg-gray-300 disabled:cursor-not-allowed hover:bg-gray-600 transition-colors hover:scale-105"
+              >
+                Siguiente →
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
 
       {/* Modal para agregar ingreso */}
-      <Modal
-        isOpen={showAddModal}
-        onClose={() => {
-          setShowAddModal(false);
-          resetForm();
-        }}
-        title="Agregar Nuevo Ingreso"
-      >
-        <IncomeForm 
-          formData={formData}
-          onFormChange={handleFormChange}
-          onSubmit={handleAddIncome} 
-          onCancel={() => {
-            setShowAddModal(false);
-            resetForm();
-          }}
-          onGetLocation={handleGetCurrentLocation}
-          isGettingLocation={isGettingLocation}
-          submitLabel="Guardar Ingreso" 
-        />
-      </Modal>
+      {showAddModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between p-6 border-b border-gray-200 bg-green-50">
+              <h2 className="text-xl font-semibold text-gray-900 flex items-center">
+                <Plus className="w-6 h-6 mr-2 text-green-600" />
+                Agregar Nuevo Ingreso al Backend
+              </h2>
+              <button
+                onClick={() => {
+                  setShowAddModal(false);
+                  resetForm();
+                }}
+                className="p-2 hover:bg-gray-100 rounded-lg transition-colors duration-200"
+              >
+                <X className="w-5 h-5 text-gray-500" />
+              </button>
+            </div>
+            <div className="p-6">
+              <div className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      <FileText className="w-4 h-4 inline mr-2" />
+                      Descripción *
+                    </label>
+                    <textarea
+                      value={formData.description}
+                      onChange={(e) => handleFormChange("description", e.target.value)}
+                      placeholder="Descripción del ingreso"
+                      rows={3}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Categoría *
+                    </label>
+                    <select
+                      value={formData.category}
+                      onChange={(e) => handleFormChange("category", e.target.value)}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all"
+                    >
+                      <option value="venta_ganado">Venta de Ganado</option>
+                      <option value="productos_lacteos">Productos Lácteos</option>
+                      <option value="servicios_veterinarios">Servicios Veterinarios</option>
+                      <option value="otros">Otros</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      <DollarSign className="w-4 h-4 inline mr-2" />
+                      Monto *
+                    </label>
+                    <input
+                      type="number"
+                      value={formData.amount}
+                      onChange={(e) => handleFormChange("amount", e.target.value)}
+                      placeholder="0.00"
+                      step="0.01"
+                      min="0"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      <Calendar className="w-4 h-4 inline mr-2" />
+                      Fecha *
+                    </label>
+                    <input
+                      type="date"
+                      value={formData.date}
+                      onChange={(e) => handleFormChange("date", e.target.value)}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all"
+                    />
+                  </div>
+
+                  <div className="md:col-span-2">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      <MapPin className="w-4 h-4 inline mr-2" />
+                      Ubicación
+                    </label>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={formData.address}
+                        onChange={(e) => handleFormChange("address", e.target.value)}
+                        placeholder="Dirección o ubicación"
+                        className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all"
+                      />
+                      <button
+                        type="button"
+                        onClick={getCurrentLocation}
+                        disabled={isGettingLocation}
+                        className="flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white rounded-lg transition-colors duration-200 hover:scale-105"
+                        title="Obtener ubicación actual"
+                      >
+                        {isGettingLocation ? (
+                          <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        ) : (
+                          <Navigation className="w-4 h-4" />
+                        )}
+                      </button>
+                    </div>
+                    {currentCoordinates && (
+                      <p className="text-xs text-gray-500 mt-1">
+                        📍 Coordenadas: {currentCoordinates.lat.toFixed(6)}, {currentCoordinates.lng.toFixed(6)}
+                      </p>
+                    )}
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      ID Animal (opcional)
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.animalId}
+                      onChange={(e) => handleFormChange("animalId", e.target.value)}
+                      placeholder="ID del animal relacionado"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Estado
+                    </label>
+                    <select
+                      value={formData.status}
+                      onChange={(e) => handleFormChange("status", e.target.value as IncomeRecord["status"])}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all"
+                    >
+                      <option value="completed">Completado</option>
+                      <option value="pending">Pendiente</option>
+                      <option value="cancelled">Cancelado</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="flex justify-end space-x-4 pt-6 border-t border-gray-200">
+                  <button
+                    onClick={() => {
+                      setShowAddModal(false);
+                      resetForm();
+                    }}
+                    disabled={isActionLoading}
+                    className="px-6 py-2 text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:bg-gray-100 transition-colors"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={handleAddIncome}
+                    disabled={isActionLoading}
+                    className="flex items-center px-6 py-2 bg-green-600 hover:bg-green-700 disabled:bg-green-400 text-white rounded-lg transition-colors hover:scale-105"
+                  >
+                    {isActionLoading ? (
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
+                    ) : (
+                      <Save className="w-4 h-4 mr-2" />
+                    )}
+                    {isActionLoading ? 'Guardando en Backend...' : 'Guardar en Backend'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modal para editar ingreso */}
-      <Modal
-        isOpen={showEditModal}
-        onClose={() => {
-          setShowEditModal(false);
-          setSelectedRecord(null);
-          resetForm();
-        }}
-        title="Editar Ingreso"
-      >
-        <IncomeForm 
-          formData={formData}
-          onFormChange={handleFormChange}
-          onSubmit={handleEditIncome} 
-          onCancel={() => {
-            setShowEditModal(false);
-            setSelectedRecord(null);
-            resetForm();
-          }}
-          onGetLocation={handleGetCurrentLocation}
-          isGettingLocation={isGettingLocation}
-          submitLabel="Actualizar Ingreso" 
-        />
-      </Modal>
+      {showEditModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between p-6 border-b border-gray-200 bg-yellow-50">
+              <h2 className="text-xl font-semibold text-gray-900 flex items-center">
+                <Edit className="w-6 h-6 mr-2 text-yellow-600" />
+                Editar Ingreso en Backend
+              </h2>
+              <button
+                onClick={() => {
+                  setShowEditModal(false);
+                  setSelectedRecord(null);
+                  resetForm();
+                }}
+                className="p-2 hover:bg-gray-100 rounded-lg transition-colors duration-200"
+              >
+                <X className="w-5 h-5 text-gray-500" />
+              </button>
+            </div>
+            <div className="p-6">
+              <div className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      <FileText className="w-4 h-4 inline mr-2" />
+                      Descripción *
+                    </label>
+                    <textarea
+                      value={formData.description}
+                      onChange={(e) => handleFormChange("description", e.target.value)}
+                      placeholder="Descripción del ingreso"
+                      rows={3}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 transition-all"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Categoría *
+                    </label>
+                    <select
+                      value={formData.category}
+                      onChange={(e) => handleFormChange("category", e.target.value)}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 transition-all"
+                    >
+                      <option value="venta_ganado">Venta de Ganado</option>
+                      <option value="productos_lacteos">Productos Lácteos</option>
+                      <option value="servicios_veterinarios">Servicios Veterinarios</option>
+                      <option value="otros">Otros</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      <DollarSign className="w-4 h-4 inline mr-2" />
+                      Monto *
+                    </label>
+                    <input
+                      type="number"
+                      value={formData.amount}
+                      onChange={(e) => handleFormChange("amount", e.target.value)}
+                      placeholder="0.00"
+                      step="0.01"
+                      min="0"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 transition-all"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      <Calendar className="w-4 h-4 inline mr-2" />
+                      Fecha *
+                    </label>
+                    <input
+                      type="date"
+                      value={formData.date}
+                      onChange={(e) => handleFormChange("date", e.target.value)}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 transition-all"
+                    />
+                  </div>
+
+                  <div className="md:col-span-2">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      <MapPin className="w-4 h-4 inline mr-2" />
+                      Ubicación
+                    </label>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={formData.address}
+                        onChange={(e) => handleFormChange("address", e.target.value)}
+                        placeholder="Dirección o ubicación"
+                        className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 transition-all"
+                      />
+                      <button
+                        type="button"
+                        onClick={getCurrentLocation}
+                        disabled={isGettingLocation}
+                        className="flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white rounded-lg transition-colors duration-200 hover:scale-105"
+                        title="Obtener ubicación actual"
+                      >
+                        {isGettingLocation ? (
+                          <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        ) : (
+                          <Navigation className="w-4 h-4" />
+                        )}
+                      </button>
+                    </div>
+                    {currentCoordinates && (
+                      <p className="text-xs text-gray-500 mt-1">
+                        📍 Coordenadas: {currentCoordinates.lat.toFixed(6)}, {currentCoordinates.lng.toFixed(6)}
+                      </p>
+                    )}
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      ID Animal (opcional)
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.animalId}
+                      onChange={(e) => handleFormChange("animalId", e.target.value)}
+                      placeholder="ID del animal relacionado"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 transition-all"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Estado
+                    </label>
+                    <select
+                      value={formData.status}
+                      onChange={(e) => handleFormChange("status", e.target.value as IncomeRecord["status"])}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 transition-all"
+                    >
+                      <option value="completed">Completado</option>
+                      <option value="pending">Pendiente</option>
+                      <option value="cancelled">Cancelado</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="flex justify-end space-x-4 pt-6 border-t border-gray-200">
+                  <button
+                    onClick={() => {
+                      setShowEditModal(false);
+                      setSelectedRecord(null);
+                      resetForm();
+                    }}
+                    disabled={isActionLoading}
+                    className="px-6 py-2 text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:bg-gray-100 transition-colors"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={handleEditIncome}
+                    disabled={isActionLoading}
+                    className="flex items-center px-6 py-2 bg-yellow-600 hover:bg-yellow-700 disabled:bg-yellow-400 text-white rounded-lg transition-colors hover:scale-105"
+                  >
+                    {isActionLoading ? (
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
+                    ) : (
+                      <Save className="w-4 h-4 mr-2" />
+                    )}
+                    {isActionLoading ? 'Actualizando en Backend...' : 'Actualizar en Backend'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modal para ver detalles */}
-      <Modal
-        isOpen={showViewModal}
-        onClose={() => {
-          setShowViewModal(false);
-          setSelectedRecord(null);
-        }}
-        title="Detalles del Ingreso"
-      >
-        {selectedRecord && (
-          <div className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Fecha
-                </label>
-                <div className="flex items-center text-gray-900">
-                  <Calendar className="w-4 h-4 mr-2 text-gray-500" />
-                  {formatDate(selectedRecord.date)}
-                </div>
-              </div>
+      {showViewModal && selectedRecord && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between p-6 border-b border-gray-200 bg-blue-50">
+              <h2 className="text-xl font-semibold text-gray-900 flex items-center">
+                <Eye className="w-6 h-6 mr-2 text-blue-600" />
+                Detalles del Ingreso (Backend)
+              </h2>
+              <button
+                onClick={() => {
+                  setShowViewModal(false);
+                  setSelectedRecord(null);
+                }}
+                className="p-2 hover:bg-gray-100 rounded-lg transition-colors duration-200"
+              >
+                <X className="w-5 h-5 text-gray-500" />
+              </button>
+            </div>
+            <div className="p-6">
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Fecha
+                    </label>
+                    <div className="flex items-center text-gray-900">
+                      <Calendar className="w-4 h-4 mr-2 text-gray-500" />
+                      {formatDate(selectedRecord.date)}
+                    </div>
+                  </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Categoría
-                </label>
-                <div className="text-gray-900">
-                  {getCategoryName(selectedRecord.category)}
-                </div>
-              </div>
+                  <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Categoría
+                    </label>
+                    <div className="text-gray-900">
+                      {getCategoryName(selectedRecord.category)}
+                    </div>
+                  </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Monto
-                </label>
-                <div className="text-gray-900 font-semibold text-lg">
-                  {formatCurrency(selectedRecord.amount)}
-                </div>
-              </div>
+                  <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Monto
+                    </label>
+                    <div className="text-green-700 font-bold text-xl">
+                      {formatCurrency(selectedRecord.amount)}
+                    </div>
+                  </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Estado
-                </label>
-                <div className="flex items-center">
-                  <span
-                    className={`inline-block w-3 h-3 rounded-full mr-2 ${getStatusColor(
-                      selectedRecord.status
-                    )}`}
-                  ></span>
-                  {getStatusText(selectedRecord.status)}
+                  <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Estado
+                    </label>
+                    <div className="flex items-center">
+                      <span
+                        className={`inline-block w-3 h-3 rounded-full mr-2 ${getStatusColor(
+                          selectedRecord.status
+                        )}`}
+                      ></span>
+                      {getStatusText(selectedRecord.status)}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Descripción
+                  </label>
+                  <div className="text-gray-900">
+                    {selectedRecord.description}
+                  </div>
+                </div>
+
+                <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Ubicación
+                  </label>
+                  <div className="flex items-center text-gray-900">
+                    <MapPin className="w-4 h-4 mr-2 text-gray-500" />
+                    {selectedRecord.location.address}
+                  </div>
+                  <p className="text-xs text-gray-500 mt-1">
+                    📍 Coordenadas: {selectedRecord.location.lat.toFixed(6)}, {selectedRecord.location.lng.toFixed(6)}
+                  </p>
+                </div>
+
+                {selectedRecord.animalId && (
+                  <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Animal Relacionado
+                    </label>
+                    <div className="text-gray-900">
+                      {selectedRecord.animalId}
+                    </div>
+                  </div>
+                )}
+
+                {/* Información del backend */}
+                <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+                  <h4 className="font-medium text-blue-700 mb-2">🔗 Información del Backend</h4>
+                  <div className="text-sm text-blue-600 space-y-1">
+                    <p><strong>ID:</strong> {selectedRecord.id}</p>
+                    {selectedRecord.createdAt && <p><strong>Creado:</strong> {new Date(selectedRecord.createdAt).toLocaleString('es-MX')}</p>}
+                    {selectedRecord.updatedAt && <p><strong>Actualizado:</strong> {new Date(selectedRecord.updatedAt).toLocaleString('es-MX')}</p>}
+                  </div>
+                </div>
+
+                <div className="flex justify-end space-x-4 pt-4 border-t border-gray-200">
+                  <button
+                    onClick={() => {
+                      setShowViewModal(false);
+                      handleEditRecord(selectedRecord);
+                    }}
+                    className="flex items-center px-6 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 transition-colors hover:scale-105"
+                  >
+                    <Edit className="w-4 h-4 mr-2" />
+                    Editar en Backend
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowViewModal(false);
+                      setSelectedRecord(null);
+                    }}
+                    className="px-6 py-2 text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                  >
+                    Cerrar
+                  </button>
                 </div>
               </div>
             </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Descripción
-              </label>
-              <div className="text-gray-900 bg-gray-50 p-3 rounded-lg">
-                {selectedRecord.description}
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Ubicación
-              </label>
-              <div className="flex items-center text-gray-900">
-                <MapPin className="w-4 h-4 mr-2 text-gray-500" />
-                {selectedRecord.location.address}
-              </div>
-            </div>
-
-            {selectedRecord.animalId && (
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Animal Relacionado
-                </label>
-                <div className="text-gray-900">
-                  {selectedRecord.animalId}
-                </div>
-              </div>
-            )}
           </div>
-        )}
-      </Modal>
+        </div>
+      )}
+
+      {/* Modal Eliminar */}
+      {showDeleteModal && selectedRecord && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full">
+            <div className="flex items-center justify-between p-6 border-b border-gray-200 bg-red-50">
+              <h2 className="text-xl font-semibold text-gray-800 flex items-center">
+                <Trash2 className="w-6 h-6 mr-2 text-red-600" />
+                Confirmar Eliminación
+              </h2>
+              <button
+                onClick={() => {
+                  setShowDeleteModal(false);
+                  setSelectedRecord(null);
+                }}
+                className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-6">
+              <div className="text-center">
+                <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100 mb-4">
+                  <Trash2 className="h-6 w-6 text-red-600" />
+                </div>
+                <h3 className="text-lg font-medium text-gray-900 mb-2">¿Estás seguro?</h3>
+                <p className="text-sm text-gray-500 mb-4">
+                  Esta acción no se puede deshacer. El ingreso será eliminado permanentemente.
+                </p>
+                <div className="bg-gray-50 p-4 rounded-lg text-left border border-gray-200">
+                  <p className="text-sm text-gray-700">
+                    <strong>Descripción:</strong> {selectedRecord.description}
+                  </p>
+                  <p className="text-sm text-gray-700">
+                    <strong>Monto:</strong> {formatCurrency(selectedRecord.amount)}
+                  </p>
+                  <p className="text-sm text-gray-700">
+                    <strong>Fecha:</strong> {formatDate(selectedRecord.date)}
+                  </p>
+                  <p className="text-sm text-blue-600 mt-2">
+                    <strong>🔗 ID Backend:</strong> {selectedRecord.id}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex justify-end space-x-4 pt-6 border-t border-gray-200 mt-6">
+                <button
+                  onClick={() => {
+                    setShowDeleteModal(false);
+                    setSelectedRecord(null);
+                  }}
+                  disabled={isActionLoading}
+                  className="px-6 py-2 text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:bg-gray-100 transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleDeleteIncome}
+                  disabled={isActionLoading}
+                  className="flex items-center px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:bg-red-400 transition-colors hover:scale-105"
+                >
+                  {isActionLoading ? (
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
+                  ) : (
+                    <Trash2 className="w-4 h-4 mr-2" />
+                  )}
+                  {isActionLoading ? 'Eliminando del Backend...' : 'Eliminar del Backend'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

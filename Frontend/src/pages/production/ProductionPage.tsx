@@ -14,13 +14,40 @@ import {
   Target,
   Calendar,
   AlertTriangle,
-  CheckCircle
+  CheckCircle,
+  Wifi,
+  WifiOff
 } from 'lucide-react';
 
 // Importar los componentes del módulo production
 import MilkProduction from './MilkProduction';
 import MeatProduction from './MeatProduction';
 import BreedingProduction from './BreedingProduction';
+
+// ============================================================================
+// FUNCIONES DE API BACKEND
+// ============================================================================
+const API_BASE_URL = 'http://localhost:5000/api';
+
+const fetchFromBackend = async (endpoint: string) => {
+  try {
+    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      signal: AbortSignal.timeout(5000) // 5 segundos timeout
+    });
+    
+    if (response.ok) {
+      return await response.json();
+    }
+    return null;
+  } catch (error) {
+    console.log(`No se pudo conectar a ${endpoint}:`, error);
+    return null;
+  }
+};
 
 // Componentes UI básicos
 interface CardProps {
@@ -151,9 +178,13 @@ const ProductionPage: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
   
-  // Estados
+  // Estados originales
   const [currentSection, setCurrentSection] = useState<ProductionSection>('overview');
   const [isLoading, setIsLoading] = useState<boolean>(true);
+
+  // Nuevos estados para backend
+  const [backendData, setBackendData] = useState<any>(null);
+  const [isConnected, setIsConnected] = useState<boolean>(false);
 
   // Efecto para leer parámetros de URL y establecer la sección actual
   useEffect(() => {
@@ -167,6 +198,43 @@ const ProductionPage: React.FC = () => {
     }
   }, [location.search]);
 
+  // Nuevo efecto para cargar datos del backend
+  useEffect(() => {
+    const loadBackendData = async () => {
+      try {
+        // Probar conexión con ping
+        const pingResponse = await fetchFromBackend('/ping');
+        
+        if (pingResponse) {
+          setIsConnected(true);
+          console.log('✅ Conectado al backend:', pingResponse);
+          
+          // Cargar datos de diferentes endpoints
+          const [healthData, productionData, bovineData] = await Promise.all([
+            fetchFromBackend('/health'),
+            fetchFromBackend('/production/stats'),
+            fetchFromBackend('/bovines/stats')
+          ]);
+          
+          setBackendData({
+            health: healthData,
+            production: productionData,
+            bovines: bovineData
+          });
+          
+        } else {
+          console.log('⚠️ Backend no disponible, usando datos estáticos');
+          setIsConnected(false);
+        }
+      } catch (error) {
+        console.log('❌ Error conectando al backend:', error);
+        setIsConnected(false);
+      }
+    };
+
+    loadBackendData();
+  }, []);
+
   // Función para navegar entre secciones
   const navigateToSection = (section: ProductionSection) => {
     if (section === 'overview') {
@@ -177,7 +245,7 @@ const ProductionPage: React.FC = () => {
     setCurrentSection(section);
   };
 
-  // Datos de navegación para las diferentes secciones
+  // Datos de navegación para las diferentes secciones (actualizado con backend)
   const navigationItems: NavigationItem[] = [
     {
       id: 'dashboard',
@@ -186,7 +254,7 @@ const ProductionPage: React.FC = () => {
       icon: <BarChart3 className="h-8 w-8" />,
       color: 'text-[#519a7c]',
       stats: {
-        value: '1,247',
+        value: backendData?.bovines?.data?.totalBovines?.toString() || '1,247',
         label: 'Total Ganado',
         trend: 'up'
       }
@@ -198,7 +266,7 @@ const ProductionPage: React.FC = () => {
       icon: <Droplets className="h-8 w-8" />,
       color: 'text-[#06b6d4]',
       stats: {
-        value: '4,250 L',
+        value: backendData?.production?.data?.dailyProduction ? `${backendData.production.data.dailyProduction} L` : '4,250 L',
         label: 'Producción Diaria',
         trend: 'up'
       }
@@ -210,7 +278,7 @@ const ProductionPage: React.FC = () => {
       icon: <Beef className="h-8 w-8" />,
       color: 'text-[#dc2626]',
       stats: {
-        value: '2,850 kg',
+        value: backendData?.production?.data?.monthlyProduction ? `${backendData.production.data.monthlyProduction} kg` : '2,850 kg',
         label: 'Producción Mensual',
         trend: 'up'
       }
@@ -222,26 +290,26 @@ const ProductionPage: React.FC = () => {
       icon: <Heart className="h-8 w-8" />,
       color: 'text-[#e91e63]',
       stats: {
-        value: '89',
+        value: backendData?.bovines?.data?.newCalves?.toString() || '89',
         label: 'Crías este Año',
         trend: 'stable'
       }
     }
   ];
 
-  // Estadísticas rápidas para la vista general
+  // Estadísticas rápidas para la vista general (actualizado con backend)
   const quickStats: QuickStat[] = [
     {
       label: 'Producción Total Hoy',
-      value: '4,250 L',
+      value: backendData?.production?.data?.dailyProduction ? `${backendData.production.data.dailyProduction.toLocaleString()} L` : '4,250 L',
       icon: <Droplets className="h-6 w-6" />,
       color: 'text-blue-600',
-      change: '+5.8%',
+      change: backendData?.production?.data?.weeklyTrend ? `+${backendData.production.data.weeklyTrend}%` : '+5.8%',
       trend: 'up'
     },
     {
       label: 'Animales Listos',
-      value: '32',
+      value: backendData?.bovines?.data?.readyAnimals?.toString() || '32',
       icon: <CheckCircle className="h-6 w-6" />,
       color: 'text-green-600',
       change: '+12.3%',
@@ -249,7 +317,7 @@ const ProductionPage: React.FC = () => {
     },
     {
       label: 'Vacas Preñadas',
-      value: '89',
+      value: backendData?.bovines?.data?.pregnantCows?.toString() || '89',
       icon: <Heart className="h-6 w-6" />,
       color: 'text-pink-600',
       change: '+2.1%',
@@ -257,7 +325,7 @@ const ProductionPage: React.FC = () => {
     },
     {
       label: 'Eficiencia Global',
-      value: '94.5%',
+      value: backendData?.production?.data?.efficiency ? `${backendData.production.data.efficiency}%` : '94.5%',
       icon: <Target className="h-6 w-6" />,
       color: 'text-purple-600',
       change: '+1.2%',
@@ -362,6 +430,15 @@ const ProductionPage: React.FC = () => {
         <p className="text-white/90 text-lg">
           Gestión integral de todos los aspectos productivos del rancho
         </p>
+        {/* Indicador de conexión al backend */}
+        <div className="mt-4 flex justify-center">
+          <div className={`flex items-center gap-2 px-3 py-1 rounded-full ${isConnected ? 'bg-green-500/20 text-green-100' : 'bg-orange-500/20 text-orange-100'}`}>
+            {isConnected ? <Wifi className="h-4 w-4" /> : <WifiOff className="h-4 w-4" />}
+            <span className="text-sm">
+              {isConnected ? 'Conectado al Backend' : 'Datos Estáticos'}
+            </span>
+          </div>
+        </div>
       </motion.div>
 
       {/* Estadísticas rápidas */}
@@ -373,7 +450,7 @@ const ProductionPage: React.FC = () => {
               Resumen del Día
             </CardTitle>
             <CardDescription>
-              Métricas clave de producción actualizadas en tiempo real
+              Métricas clave de producción {isConnected ? 'actualizadas desde el backend' : 'datos de ejemplo'}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -476,6 +553,31 @@ const ProductionPage: React.FC = () => {
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
+              {/* Alerta de estado de conexión */}
+              {isConnected ? (
+                <div className="flex items-center justify-between p-3 bg-green-50 rounded-lg border-l-4 border-green-400">
+                  <div className="flex items-center gap-3">
+                    <CheckCircle className="h-5 w-5 text-green-600" />
+                    <div>
+                      <p className="font-medium text-green-900">Conectado al backend</p>
+                      <p className="text-sm text-green-700">Datos actualizándose desde localhost:5000</p>
+                    </div>
+                  </div>
+                  <Badge variant="success">En línea</Badge>
+                </div>
+              ) : (
+                <div className="flex items-center justify-between p-3 bg-orange-50 rounded-lg border-l-4 border-orange-400">
+                  <div className="flex items-center gap-3">
+                    <WifiOff className="h-5 w-5 text-orange-600" />
+                    <div>
+                      <p className="font-medium text-orange-900">Backend no disponible</p>
+                      <p className="text-sm text-orange-700">Mostrando datos estáticos de ejemplo</p>
+                    </div>
+                  </div>
+                  <Badge variant="warning">Sin conexión</Badge>
+                </div>
+              )}
+              
               <div className="flex items-center justify-between p-3 bg-green-50 rounded-lg border-l-4 border-green-400">
                 <div className="flex items-center gap-3">
                   <CheckCircle className="h-5 w-5 text-green-600" />
@@ -540,6 +642,7 @@ const ProductionPage: React.FC = () => {
           className="w-16 h-16 border-4 border-white border-t-transparent rounded-full mx-auto mb-4"
         />
         <p className="text-white text-lg font-semibold">Cargando Centro de Producción...</p>
+        <p className="text-white/80 text-sm mt-2">Conectando al backend...</p>
       </div>
     </div>
   );

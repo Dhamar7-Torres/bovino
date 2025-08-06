@@ -15,7 +15,11 @@ import {
   AlertTriangle,
   CheckCircle,
   Activity,
-  Navigation
+  Navigation,
+  Wifi,
+  WifiOff,
+  Loader2,
+  RefreshCw
 } from "lucide-react";
 
 // Interfaces para tipos de datos
@@ -127,111 +131,362 @@ interface MortalityStats {
   preventableCases: number;
 }
 
-// ✅ API Service - Conectado al backend real
-const API_BASE_URL = 'http://localhost:5000/api';
+interface ConnectionStatus {
+  isConnected: boolean;
+  lastCheck: Date;
+  latency: number;
+  retrying: boolean;
+}
 
-const apiService = {
-  // Obtener todos los reportes
+// ✅ CONFIGURACIÓN MEJORADA DE API
+const API_CONFIG = {
+  BASE_URL: 'http://localhost:5000/api',
+  TIMEOUT: 10000,
+  RETRY_ATTEMPTS: 3,
+  RETRY_DELAY: 1000,
+};
+
+// ✅ SERVICIO DE API MEJORADO con mejor manejo de conexión
+class ApiService {
+  private baseURL: string;
+  private timeout: number;
+  
+  constructor() {
+    this.baseURL = API_CONFIG.BASE_URL;
+    this.timeout = API_CONFIG.TIMEOUT;
+  }
+
+  // 🚀 NUEVA FUNCIÓN: Obtener token de autenticación
+  private getAuthToken(): string | null {
+    return localStorage.getItem('auth_token') || localStorage.getItem('token') || null;
+  }
+
+  // 🚀 NUEVA FUNCIÓN: Headers por defecto
+  private getDefaultHeaders(): Record<string, string> {
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+    };
+
+    const token = this.getAuthToken();
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+
+    return headers;
+  }
+
+  // 🚀 NUEVA FUNCIÓN: Realizar petición con timeout y retry
+  private async fetchWithRetry(
+    url: string, 
+    options: RequestInit = {}, 
+    retries = API_CONFIG.RETRY_ATTEMPTS
+  ): Promise<Response> {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), this.timeout);
+
+    try {
+      const response = await fetch(url, {
+        ...options,
+        headers: {
+          ...this.getDefaultHeaders(),
+          ...options.headers,
+        },
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+      return response;
+    } catch (error) {
+      clearTimeout(timeoutId);
+      
+      if (retries > 0 && (error as Error).name !== 'AbortError') {
+        console.log(`🔄 Reintentando petición... ${retries} intentos restantes`);
+        await new Promise(resolve => setTimeout(resolve, API_CONFIG.RETRY_DELAY));
+        return this.fetchWithRetry(url, options, retries - 1);
+      }
+      
+      throw error;
+    }
+  }
+
+  // 🚀 NUEVA FUNCIÓN: Verificar conexión con el backend
+  async checkConnection(): Promise<{ connected: boolean; latency: number; message: string }> {
+    const startTime = Date.now();
+    
+    try {
+      const response = await this.fetchWithRetry(`${this.baseURL}/ping`, {
+        method: 'GET',
+      });
+
+      const latency = Date.now() - startTime;
+
+      if (response.ok) {
+        const data = await response.json();
+        return {
+          connected: true,
+          latency,
+          message: data.message || 'Conexión exitosa'
+        };
+      } else {
+        return {
+          connected: false,
+          latency,
+          message: `Error HTTP ${response.status}: ${response.statusText}`
+        };
+      }
+    } catch (error) {
+      const latency = Date.now() - startTime;
+      
+      if ((error as Error).name === 'AbortError') {
+        return {
+          connected: false,
+          latency,
+          message: 'Timeout: El servidor no responde'
+        };
+      }
+
+      return {
+        connected: false,
+        latency,
+        message: `Error de conexión: ${(error as Error).message}`
+      };
+    }
+  }
+
+  // 🚀 MEJORADO: Obtener reportes con mejor manejo de errores
   async getReports(): Promise<PostMortemReport[]> {
     try {
-      const response = await fetch(`${API_BASE_URL}/health/necropsy`, {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
-          'Content-Type': 'application/json',
-        },
-      });
-      if (!response.ok) throw new Error('Error al obtener reportes');
+      console.log('🔄 Obteniendo reportes desde el backend...');
+      
+      const response = await this.fetchWithRetry(`${this.baseURL}/health/necropsy`);
+      
+      if (!response.ok) {
+        throw new Error(`Error HTTP ${response.status}: ${response.statusText}`);
+      }
+
       const data = await response.json();
-      return data.data || [];
+      console.log('✅ Reportes obtenidos exitosamente:', data);
+      
+      // Procesar datos para asegurar formato correcto
+      const reports = (data.data || data.reports || []).map((report: any) => ({
+        ...report,
+        deathDate: new Date(report.deathDate),
+        discoveryDate: new Date(report.discoveryDate),
+        createdAt: new Date(report.createdAt),
+        lastUpdated: new Date(report.lastUpdated),
+      }));
+
+      return reports;
     } catch (error) {
-      console.warn('API no disponible, usando datos mock:', error);
+      console.warn('❌ API no disponible, usando datos mock:', error);
       return getMockReports();
     }
-  },
+  }
 
-  // ✅ Crear nuevo reporte - CORREGIDO
+  // 🚀 MEJORADO: Crear reporte
   async createReport(reportData: Partial<PostMortemReport>): Promise<PostMortemReport> {
     try {
-      const response = await fetch(`${API_BASE_URL}/health/necropsy`, {
+      console.log('🔄 Creando nuevo reporte...', reportData);
+
+      const response = await this.fetchWithRetry(`${this.baseURL}/health/necropsy`, {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
-          'Content-Type': 'application/json',
-        },
         body: JSON.stringify(reportData),
       });
-      if (!response.ok) throw new Error('Error al crear reporte');
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => null);
+        throw new Error(errorData?.message || `Error HTTP ${response.status}`);
+      }
+
       const data = await response.json();
-      return data.data;
+      console.log('✅ Reporte creado exitosamente:', data);
+      
+      return {
+        ...data.data,
+        createdAt: new Date(data.data.createdAt),
+        lastUpdated: new Date(data.data.lastUpdated),
+        deathDate: new Date(data.data.deathDate),
+        discoveryDate: new Date(data.data.discoveryDate),
+      };
     } catch (error) {
-      console.warn('API no disponible, simulando creación');
-      // ✅ MEJORADO: Crear reporte con datos más realistas
+      console.warn('❌ API no disponible, simulando creación:', error);
+      
+      // Fallback: crear reporte mock
       const newReport: PostMortemReport = {
-        id: `report_${Date.now()}`,
+        id: `mock_${Date.now()}`,
         animalId: reportData.animalTag || `ID_${Date.now()}`,
-        ...reportData,
+        animalName: reportData.animalName || "Sin nombre",
+        animalTag: reportData.animalTag || "Sin tag",
+        breed: reportData.breed || "Sin especificar",
+        age: reportData.age || 0,
+        gender: reportData.gender || "female",
+        weight: reportData.weight || 0,
+        deathDate: reportData.deathDate || new Date(),
+        discoveryDate: reportData.discoveryDate || new Date(),
+        location: reportData.location || {
+          lat: 18.0736,
+          lng: -93.1000,
+          address: "Ubicación por defecto",
+          sector: "",
+          environment: "",
+        },
+        deathCircumstances: reportData.deathCircumstances || {
+          witnessed: false,
+          positionFound: "",
+          weatherConditions: "",
+          circumstances: "",
+        },
+        preliminaryCause: reportData.preliminaryCause || "",
+        finalCause: reportData.finalCause || "",
+        causeCategory: reportData.causeCategory || "unknown",
+        necropsyPerformed: reportData.necropsyPerformed || false,
+        pathologist: reportData.pathologist || "",
+        veterinarian: reportData.veterinarian || "",
+        grossFindings: reportData.grossFindings || {
+          externalExamination: "",
+          cardiovascularSystem: "",
+          respiratorySystem: "",
+          digestiveSystem: "",
+          nervousSystem: "",
+          reproductiveSystem: "",
+          musculoskeletalSystem: "",
+          lymphaticSystem: "",
+          other: "",
+        },
+        photos: [],
+        samples: [],
+        preventiveRecommendations: reportData.preventiveRecommendations || [],
+        economicImpact: reportData.economicImpact || 0,
+        reportStatus: reportData.reportStatus || "preliminary",
+        createdBy: reportData.createdBy || "Usuario Mock",
         createdAt: new Date(),
         lastUpdated: new Date(),
-        createdBy: "Usuario Actual",
-      } as PostMortemReport;
+        isContagious: reportData.isContagious || false,
+        requiresQuarantine: reportData.requiresQuarantine || false,
+        notifiableDisease: reportData.notifiableDisease || false,
+        reportedToAuthorities: reportData.reportedToAuthorities || false,
+      };
+      
       return newReport;
     }
-  },
+  }
 
-  // Actualizar reporte
+  // 🚀 MEJORADO: Actualizar reporte
   async updateReport(id: string, reportData: Partial<PostMortemReport>): Promise<PostMortemReport> {
     try {
-      const response = await fetch(`${API_BASE_URL}/health/necropsy/${id}`, {
+      console.log(`🔄 Actualizando reporte ${id}...`);
+
+      const response = await this.fetchWithRetry(`${this.baseURL}/health/necropsy/${id}`, {
         method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
-          'Content-Type': 'application/json',
-        },
         body: JSON.stringify(reportData),
       });
-      if (!response.ok) throw new Error('Error al actualizar reporte');
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => null);
+        throw new Error(errorData?.message || `Error HTTP ${response.status}`);
+      }
+
       const data = await response.json();
-      return data.data;
+      console.log('✅ Reporte actualizado exitosamente');
+      
+      return {
+        ...data.data,
+        lastUpdated: new Date(),
+      };
     } catch (error) {
-      console.warn('API no disponible, simulando actualización');
+      console.warn('❌ API no disponible, simulando actualización:', error);
       return { ...reportData, id, lastUpdated: new Date() } as PostMortemReport;
     }
-  },
+  }
 
-  // Eliminar reporte
+  // 🚀 MEJORADO: Eliminar reporte
   async deleteReport(id: string): Promise<boolean> {
     try {
-      const response = await fetch(`${API_BASE_URL}/health/necropsy/${id}`, {
+      console.log(`🔄 Eliminando reporte ${id}...`);
+
+      const response = await this.fetchWithRetry(`${this.baseURL}/health/necropsy/${id}`, {
         method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
-        },
       });
-      if (!response.ok) throw new Error('Error al eliminar reporte');
+
+      if (!response.ok) {
+        throw new Error(`Error HTTP ${response.status}`);
+      }
+
+      console.log('✅ Reporte eliminado exitosamente');
       return true;
     } catch (error) {
-      console.warn('API no disponible, simulando eliminación');
+      console.warn('❌ API no disponible, simulando eliminación:', error);
       return true;
     }
-  },
+  }
 
-  // Obtener estadísticas
+  // 🚀 MEJORADO: Obtener estadísticas
   async getStats(): Promise<MortalityStats> {
     try {
-      const response = await fetch(`${API_BASE_URL}/dashboard/mortality-rates`, {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
-        },
-      });
-      if (!response.ok) throw new Error('Error al obtener estadísticas');
+      console.log('🔄 Obteniendo estadísticas...');
+
+      const response = await this.fetchWithRetry(`${this.baseURL}/dashboard/mortality-rates`);
+      
+      if (!response.ok) {
+        throw new Error(`Error HTTP ${response.status}`);
+      }
+
       const data = await response.json();
+      console.log('✅ Estadísticas obtenidas exitosamente');
       return data.data;
     } catch (error) {
-      console.warn('API no disponible, usando estadísticas mock');
+      console.warn('❌ API no disponible, usando estadísticas mock:', error);
       return getMockStats();
     }
   }
+}
+
+// 🚀 NUEVA FUNCIÓN: Hook para monitorear conexión
+const useConnectionStatus = () => {
+  const [status, setStatus] = useState<ConnectionStatus>({
+    isConnected: false,
+    lastCheck: new Date(),
+    latency: 0,
+    retrying: false,
+  });
+
+  const checkConnection = async () => {
+    setStatus(prev => ({ ...prev, retrying: true }));
+    
+    try {
+      const result = await apiService.checkConnection();
+      setStatus({
+        isConnected: result.connected,
+        lastCheck: new Date(),
+        latency: result.latency,
+        retrying: false,
+      });
+    } catch (error) {
+      setStatus({
+        isConnected: false,
+        lastCheck: new Date(),
+        latency: 0,
+        retrying: false,
+      });
+    }
+  };
+
+  useEffect(() => {
+    // Verificar conexión al montar
+    checkConnection();
+    
+    // Verificar conexión cada 30 segundos
+    const interval = setInterval(checkConnection, 30000);
+    
+    return () => clearInterval(interval);
+  }, []);
+
+  return { status, checkConnection };
 };
+
+// Instancia del servicio de API
+const apiService = new ApiService();
 
 // ✅ NUEVA FUNCIÓN: Obtener ubicación actual
 const getCurrentLocation = (): Promise<{ lat: number; lng: number; address: string }> => {
@@ -274,11 +529,11 @@ const getCurrentLocation = (): Promise<{ lat: number; lng: number; address: stri
   });
 };
 
-// Datos mock para desarrollo
+// Datos mock para desarrollo y fallback
 function getMockReports(): PostMortemReport[] {
   return [
     {
-      id: "1",
+      id: "mock_1",
       animalId: "COW004",
       animalName: "Margarita",
       animalTag: "TAG-004",
@@ -366,6 +621,44 @@ function getMockStats(): MortalityStats {
     preventableCases: 12,
   };
 }
+
+// 🚀 NUEVO COMPONENTE: Indicador de conexión
+const ConnectionIndicator = () => {
+  const { status, checkConnection } = useConnectionStatus();
+
+  return (
+    <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2">
+        {status.isConnected ? (
+          <>
+            <Wifi className="w-4 h-4 text-green-600" />
+            <span className="text-xs text-green-600 font-medium">
+              Conectado ({status.latency}ms)
+            </span>
+          </>
+        ) : (
+          <>
+            <WifiOff className="w-4 h-4 text-red-600" />
+            <span className="text-xs text-red-600 font-medium">Desconectado</span>
+          </>
+        )}
+      </div>
+      
+      <button
+        onClick={checkConnection}
+        disabled={status.retrying}
+        className="p-1 rounded hover:bg-gray-100 disabled:opacity-50"
+        title="Verificar conexión"
+      >
+        {status.retrying ? (
+          <Loader2 className="w-3 h-3 animate-spin text-gray-600" />
+        ) : (
+          <RefreshCw className="w-3 h-3 text-gray-600 hover:text-gray-800" />
+        )}
+      </button>
+    </div>
+  );
+};
 
 // Componentes reutilizables
 const Card = ({ children, className = "" }: { children: React.ReactNode; className?: string }) => (
@@ -641,7 +934,7 @@ const MortalityMap = ({ reports }: { reports: PostMortemReport[] }) => {
   );
 };
 
-// ✅ FORMULARIO MEJORADO - Con geolocalización automática
+// ✅ FORMULARIO MEJORADO - Con geolocalización automática y mejor validación
 const ReportFormModal = ({ 
   isOpen, 
   onClose, 
@@ -705,6 +998,7 @@ const ReportFormModal = ({
 
   const [recommendations, setRecommendations] = useState<string>("");
   const [isGettingLocation, setIsGettingLocation] = useState(false);
+  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
 
   // ✅ NUEVA FUNCIÓN: Obtener ubicación actual
   const handleGetCurrentLocation = async () => {
@@ -728,12 +1022,48 @@ const ReportFormModal = ({
     }
   };
 
+  // 🚀 NUEVA FUNCIÓN: Validar formulario
+  const validateForm = (): boolean => {
+    const errors: Record<string, string> = {};
+
+    if (!formData.animalName?.trim()) {
+      errors.animalName = "El nombre del animal es obligatorio";
+    }
+
+    if (!formData.animalTag?.trim()) {
+      errors.animalTag = "La etiqueta/tag es obligatoria";
+    }
+
+    if (!formData.veterinarian?.trim()) {
+      errors.veterinarian = "El veterinario es obligatorio";
+    }
+
+    if (!formData.breed?.trim()) {
+      errors.breed = "La raza es obligatoria";
+    }
+
+    if (!formData.age || formData.age <= 0) {
+      errors.age = "La edad debe ser mayor a 0";
+    }
+
+    if (!formData.weight || formData.weight <= 0) {
+      errors.weight = "El peso debe ser mayor a 0";
+    }
+
+    if (!formData.location?.address?.trim()) {
+      errors.address = "La ubicación es obligatoria";
+    }
+
+    setFormErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
   useEffect(() => {
     if (report && isEditing) {
       setFormData(report);
       setRecommendations(report.preventiveRecommendations.join("\n"));
     } else if (isOpen) {
-      // ✅ MEJORADO: Auto-obtener ubicación al abrir formulario nuevo
+      // Auto-obtener ubicación al abrir formulario nuevo
       handleGetCurrentLocation();
       
       // Reset form for new report
@@ -785,14 +1115,14 @@ const ReportFormModal = ({
         reportedToAuthorities: false,
       });
       setRecommendations("");
+      setFormErrors({});
     }
   }, [report, isEditing, isOpen]);
 
-  // ✅ FUNCIÓN CORREGIDA: Guardar reporte
+  // ✅ FUNCIÓN MEJORADA: Guardar reporte con validación
   const handleSubmit = () => {
-    // Validación básica
-    if (!formData.animalName || !formData.animalTag || !formData.veterinarian) {
-      alert('Por favor complete los campos obligatorios (Nombre, Tag y Veterinario)');
+    if (!validateForm()) {
+      alert('Por favor corrija los errores en el formulario antes de continuar.');
       return;
     }
 
@@ -811,6 +1141,15 @@ const ReportFormModal = ({
       ...prev,
       [field]: value
     }));
+    
+    // Limpiar error si el campo se corrige
+    if (formErrors[field]) {
+      setFormErrors(prev => {
+        const newErrors = { ...prev };
+        delete newErrors[field];
+        return newErrors;
+      });
+    }
   };
 
   const updateNestedFormData = (parentField: string, field: string, value: any) => {
@@ -821,6 +1160,16 @@ const ReportFormModal = ({
         [field]: value
       }
     }));
+
+    // Limpiar error si el campo se corrige
+    const errorKey = `${parentField}.${field}`;
+    if (formErrors[errorKey]) {
+      setFormErrors(prev => {
+        const newErrors = { ...prev };
+        delete newErrors[errorKey];
+        return newErrors;
+      });
+    }
   };
 
   if (!isOpen) return null;
@@ -853,10 +1202,15 @@ const ReportFormModal = ({
                 <input
                   type="text"
                   required
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#519a7c]/50 focus:border-[#519a7c]"
+                  className={`w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-[#519a7c]/50 focus:border-[#519a7c] ${
+                    formErrors.animalName ? 'border-red-500' : 'border-gray-300'
+                  }`}
                   value={formData.animalName}
                   onChange={(e) => updateFormData("animalName", e.target.value)}
                 />
+                {formErrors.animalName && (
+                  <p className="text-sm text-red-600 mt-1">{formErrors.animalName}</p>
+                )}
               </div>
 
               <div>
@@ -864,10 +1218,15 @@ const ReportFormModal = ({
                 <input
                   type="text"
                   required
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#519a7c]/50 focus:border-[#519a7c]"
+                  className={`w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-[#519a7c]/50 focus:border-[#519a7c] ${
+                    formErrors.animalTag ? 'border-red-500' : 'border-gray-300'
+                  }`}
                   value={formData.animalTag}
                   onChange={(e) => updateFormData("animalTag", e.target.value)}
                 />
+                {formErrors.animalTag && (
+                  <p className="text-sm text-red-600 mt-1">{formErrors.animalTag}</p>
+                )}
               </div>
 
               <div className="grid grid-cols-2 gap-3">
@@ -876,10 +1235,15 @@ const ReportFormModal = ({
                   <input
                     type="text"
                     required
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#519a7c]/50 focus:border-[#519a7c]"
+                    className={`w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-[#519a7c]/50 focus:border-[#519a7c] ${
+                      formErrors.breed ? 'border-red-500' : 'border-gray-300'
+                    }`}
                     value={formData.breed}
                     onChange={(e) => updateFormData("breed", e.target.value)}
                   />
+                  {formErrors.breed && (
+                    <p className="text-xs text-red-600 mt-1">{formErrors.breed}</p>
+                  )}
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Género *</label>
@@ -903,10 +1267,15 @@ const ReportFormModal = ({
                     required
                     min="0"
                     step="0.1"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#519a7c]/50 focus:border-[#519a7c]"
+                    className={`w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-[#519a7c]/50 focus:border-[#519a7c] ${
+                      formErrors.age ? 'border-red-500' : 'border-gray-300'
+                    }`}
                     value={formData.age}
-                    onChange={(e) => updateFormData("age", parseFloat(e.target.value))}
+                    onChange={(e) => updateFormData("age", parseFloat(e.target.value) || 0)}
                   />
+                  {formErrors.age && (
+                    <p className="text-xs text-red-600 mt-1">{formErrors.age}</p>
+                  )}
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Peso (kg) *</label>
@@ -914,10 +1283,15 @@ const ReportFormModal = ({
                     type="number"
                     required
                     min="0"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#519a7c]/50 focus:border-[#519a7c]"
+                    className={`w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-[#519a7c]/50 focus:border-[#519a7c] ${
+                      formErrors.weight ? 'border-red-500' : 'border-gray-300'
+                    }`}
                     value={formData.weight}
-                    onChange={(e) => updateFormData("weight", parseFloat(e.target.value))}
+                    onChange={(e) => updateFormData("weight", parseFloat(e.target.value) || 0)}
                   />
+                  {formErrors.weight && (
+                    <p className="text-xs text-red-600 mt-1">{formErrors.weight}</p>
+                  )}
                 </div>
               </div>
 
@@ -965,7 +1339,7 @@ const ReportFormModal = ({
                   >
                     {isGettingLocation ? (
                       <>
-                        <div className="animate-spin rounded-full h-3 w-3 border border-current border-t-transparent mr-1"></div>
+                        <Loader2 className="w-3 h-3 animate-spin mr-1" />
                         Obteniendo...
                       </>
                     ) : (
@@ -979,10 +1353,15 @@ const ReportFormModal = ({
                 <input
                   type="text"
                   required
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#519a7c]/50 focus:border-[#519a7c]"
+                  className={`w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-[#519a7c]/50 focus:border-[#519a7c] ${
+                    formErrors.address ? 'border-red-500' : 'border-gray-300'
+                  }`}
                   value={formData.location?.address}
                   onChange={(e) => updateNestedFormData("location", "address", e.target.value)}
                 />
+                {formErrors.address && (
+                  <p className="text-sm text-red-600 mt-1">{formErrors.address}</p>
+                )}
                 {formData.location?.lat && formData.location?.lng && (
                   <p className="text-xs text-gray-500 mt-1">
                     Coordenadas: {formData.location.lat.toFixed(4)}, {formData.location.lng.toFixed(4)}
@@ -1111,10 +1490,15 @@ const ReportFormModal = ({
                 <input
                   type="text"
                   required
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#519a7c]/50 focus:border-[#519a7c]"
+                  className={`w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-[#519a7c]/50 focus:border-[#519a7c] ${
+                    formErrors.veterinarian ? 'border-red-500' : 'border-gray-300'
+                  }`}
                   value={formData.veterinarian}
                   onChange={(e) => updateFormData("veterinarian", e.target.value)}
                 />
+                {formErrors.veterinarian && (
+                  <p className="text-sm text-red-600 mt-1">{formErrors.veterinarian}</p>
+                )}
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Patólogo</label>
@@ -1295,6 +1679,9 @@ const PostMortemReports = () => {
   const [editingReport, setEditingReport] = useState<PostMortemReport | undefined>();
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [reportToDelete, setReportToDelete] = useState<string>("");
+  
+  // 🚀 NUEVO: Estado de conexión
+  const { status: connectionStatus, checkConnection } = useConnectionStatus();
 
   // Cargar datos iniciales
   useEffect(() => {
@@ -1303,9 +1690,14 @@ const PostMortemReports = () => {
 
   const loadData = async () => {
     setIsLoading(true);
-    setLoadingMessage("Cargando datos...");
+    setLoadingMessage("Conectando al servidor...");
     
     try {
+      // Primero verificar conexión
+      const connectionResult = await apiService.checkConnection();
+      console.log('🔗 Estado de conexión:', connectionResult);
+      
+      setLoadingMessage("Cargando datos...");
       const [reportsData, statsData] = await Promise.all([
         apiService.getReports(),
         apiService.getStats()
@@ -1313,8 +1705,10 @@ const PostMortemReports = () => {
       
       setReports(reportsData);
       setStats(statsData);
+      
+      console.log('✅ Datos cargados exitosamente');
     } catch (error) {
-      console.error("Error cargando datos:", error);
+      console.error("❌ Error cargando datos:", error);
     } finally {
       setIsLoading(false);
     }
@@ -1388,12 +1782,9 @@ const PostMortemReports = () => {
       const newStats = await apiService.getStats();
       setStats(newStats);
       
-      // Mostrar mensaje de éxito
-      alert(editingReport ? '✅ Reporte actualizado exitosamente' : '✅ Reporte guardado exitosamente');
-      
     } catch (error) {
       console.error("Error guardando reporte:", error);
-      alert('❌ Error al guardar el reporte. Por favor intente nuevamente.');
+      alert('❌ Error al guardar el reporte. Verifique su conexión e intente nuevamente.');
     } finally {
       setIsLoading(false);
     }
@@ -1414,7 +1805,7 @@ const PostMortemReports = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#519a7c] via-[#f2e9d8] to-[#f4ac3a] p-2 sm:p-6 overflow-x-hidden">
-      {/* Header */}
+      {/* 🚀 NUEVO: Header con indicador de conexión */}
       <div className="bg-white/90 backdrop-blur-lg border-b border-[#519a7c]/30 sticky top-0 z-40 shadow-lg">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex items-center justify-between">
@@ -1427,7 +1818,10 @@ const PostMortemReports = () => {
               </p>
             </div>
             <div className="flex items-center gap-3">
-              {/* ✅ Búsqueda mejorada */}
+              {/* 🚀 NUEVO: Indicador de conexión */}
+              <ConnectionIndicator />
+              
+              {/* Búsqueda mejorada */}
               <div className="relative">
                 <Search className="w-4 h-4 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
                 <input
@@ -1449,6 +1843,34 @@ const PostMortemReports = () => {
 
       <div className="max-w-7xl mx-auto py-8">
         <div className="grid grid-cols-1 gap-6">
+          {/* 🚀 NUEVO: Indicador de estado de backend */}
+          {!connectionStatus.isConnected && (
+            <Card className="bg-orange-100/90 border-orange-300/60">
+              <CardContent className="p-4">
+                <div className="flex items-center gap-3">
+                  <WifiOff className="w-5 h-5 text-orange-600" />
+                  <div>
+                    <p className="text-sm font-medium text-orange-800">
+                      Sin conexión al servidor
+                    </p>
+                    <p className="text-xs text-orange-600">
+                      Trabajando en modo offline. Los datos se mostrarán pero no se sincronizarán.
+                    </p>
+                  </div>
+                  <Button 
+                    size="sm" 
+                    variant="outline" 
+                    onClick={checkConnection}
+                    className="ml-auto"
+                  >
+                    <RefreshCw className="w-4 h-4 mr-1" />
+                    Reintentar
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           {/* Estadísticas */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
             <Card className="bg-gradient-to-br from-gray-100/90 to-gray-50/90 border-gray-300/60">
@@ -1522,7 +1944,7 @@ const PostMortemReports = () => {
             </Card>
           </div>
 
-          {/* ✅ MAPA MEJORADO - Ancho completo */}
+          {/* Mapa Mejorado - Ancho completo */}
           <Card className="bg-white/95 border-[#519a7c]/40">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">

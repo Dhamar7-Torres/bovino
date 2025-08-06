@@ -1,5 +1,5 @@
 // ============================================================================
-// INDEX.TS - SERVIDOR PRINCIPAL DEL BACKEND
+// INDEX.TS - SERVIDOR PRINCIPAL DEL BACKEND - VERSIÓN CORREGIDA COMPLETA
 // ============================================================================
 // Servidor Express principal con todas las configuraciones y middleware
 
@@ -26,31 +26,176 @@ const app: Application = express();
 // Crear servidor HTTP
 const server = createServer(app);
 
-// Puerto del servidor
-const PORT = parseInt(process.env.PORT || '8000', 10);
+// 🔧 ARREGLO 1: Puerto correcto desde .env (5000, no 8000)
+const PORT = parseInt(process.env.PORT || '5000', 10);
 const HOST = process.env.HOST || '0.0.0.0';
 
 // ============================================================================
-// MIDDLEWARE DE SEGURIDAD Y UTILIDADES
+// 🔧 ARREGLO 2: CORS SUPER PERMISIVO PRIMERO (ANTES DE HELMET)
 // ============================================================================
 
-// Seguridad con Helmet
-app.use(helmet({
-  contentSecurityPolicy: {
-    directives: {
-      defaultSrc: ["'self'"],
-      styleSrc: ["'self'", "'unsafe-inline'"],
-      scriptSrc: ["'self'"],
-      imgSrc: ["'self'", "data:", "https:"],
-      connectSrc: ["'self'"],
-      fontSrc: ["'self'"],
-      objectSrc: ["'none'"],
-      mediaSrc: ["'self'"],
-      frameSrc: ["'none'"],
-    },
+const cors = require('cors');
+
+// CORS completamente permisivo para desarrollo
+const corsOptions = {
+  origin: function (origin: any, callback: any) {
+    // En desarrollo, permitir CUALQUIER origen
+    if (process.env.NODE_ENV === 'development' || !process.env.NODE_ENV) {
+      callback(null, true);
+      return;
+    }
+    
+    // Orígenes permitidos expandidos
+    const allowedOrigins = [
+      'http://localhost:3000',
+      'http://localhost:5173', 
+      'http://localhost:4173', 
+      'http://127.0.0.1:3000',
+      'http://127.0.0.1:5173',
+      'http://127.0.0.1:4173',
+      process.env.FRONTEND_URL
+    ].filter(Boolean);
+
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      console.log(`🚫 Origen rechazado: ${origin} - PERO PERMITIDO EN DESARROLLO`);
+      // EN DESARROLLO, PERMITIR DE TODAS FORMAS
+      callback(null, true);
+    }
   },
-  crossOriginEmbedderPolicy: false,
-}));
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS', 'HEAD'],
+  allowedHeaders: [
+    'Content-Type', 
+    'Authorization', 
+    'X-Requested-With',
+    'Accept',
+    'Origin',
+    'Cache-Control',
+    'X-Access-Token'
+  ],
+  exposedHeaders: [
+    'X-Total-Count',
+    'X-Page-Count',
+    'X-Current-Page'
+  ],
+  maxAge: 86400,
+  preflightContinue: false,
+  optionsSuccessStatus: 200
+};
+
+app.use(cors(corsOptions));
+
+// 🔧 ARREGLO 3: Middleware CORS manual adicional para asegurar funcionamiento
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  
+  // Forzar headers CORS en desarrollo
+  if (process.env.NODE_ENV === 'development' || !process.env.NODE_ENV) {
+    res.header('Access-Control-Allow-Origin', origin || '*');
+    res.header('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS,PATCH,HEAD');
+    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, Cache-Control, X-Access-Token');
+    res.header('Access-Control-Allow-Credentials', 'true');
+  }
+  
+  // Responder inmediatamente a OPTIONS requests
+  if (req.method === 'OPTIONS') {
+    res.status(200).end();
+    return;
+  }
+  
+  next();
+});
+
+// ============================================================================
+// 🔧 ARREGLO 4: HELMET CON CSP MUY PERMISIVO PARA DESARROLLO
+// ============================================================================
+
+if (process.env.NODE_ENV === 'development' || !process.env.NODE_ENV) {
+  // En desarrollo, helmet MUY permisivo para evitar errores CSP
+  app.use(helmet({
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
+        styleSrc: ["'self'", "'unsafe-inline'", "https:", "http:"],
+        scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https:", "http:"],
+        imgSrc: ["'self'", "data:", "https:", "http:", "blob:"],
+        // 🚨 CLAVE: Esto arregla los errores de connect-src
+        connectSrc: [
+          "'self'", 
+          "http://localhost:*", 
+          "https://localhost:*", 
+          "http://127.0.0.1:*",
+          "https://127.0.0.1:*",
+          "ws://localhost:*",
+          "wss://localhost:*"
+        ],
+        fontSrc: ["'self'", "https:", "http:", "data:"],
+        objectSrc: ["'none'"],
+        mediaSrc: ["'self'", "https:", "http:", "data:"],
+        frameSrc: ["'self'", "https:", "http:"],
+        workerSrc: ["'self'", "blob:"],
+        childSrc: ["'self'", "blob:"],
+        manifestSrc: ["'self'"],
+        baseUri: ["'self'"]
+      },
+    },
+    crossOriginEmbedderPolicy: false,
+    crossOriginResourcePolicy: { policy: "cross-origin" },
+    crossOriginOpenerPolicy: { policy: "unsafe-none" }
+  }));
+  
+  console.log('🛡️  Helmet configurado para desarrollo (CSP muy permisivo)');
+} else {
+  // Configuración más segura para producción
+  app.use(helmet({
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        styleSrc: ["'self'", "'unsafe-inline'"],
+        scriptSrc: ["'self'"],
+        imgSrc: ["'self'", "data:", "https:"],
+        connectSrc: ["'self'"],
+        fontSrc: ["'self'"],
+        objectSrc: ["'none'"],
+        mediaSrc: ["'self'"],
+        frameSrc: ["'none'"],
+      },
+    },
+    crossOriginEmbedderPolicy: false,
+  }));
+}
+
+// ============================================================================
+// 🔧 ARREGLO 5: FAVICON Y MIDDLEWARE ADICIONAL
+// ============================================================================
+
+// Manejar favicon para evitar errores 404
+app.get('/favicon.ico', (req: Request, res: Response) => {
+  res.status(204).end(); // No Content - evita el error 404
+});
+
+// Middleware adicional para limpiar headers problemáticos
+app.use((req, res, next) => {
+  // Remover headers que pueden causar conflictos
+  res.removeHeader('X-Powered-By');
+  
+  // Asegurar CORS headers están presentes en desarrollo
+  if (process.env.NODE_ENV === 'development' || !process.env.NODE_ENV) {
+    const origin = req.headers.origin;
+    if (origin) {
+      res.header('Access-Control-Allow-Origin', origin);
+    }
+    res.header('Access-Control-Allow-Credentials', 'true');
+  }
+  
+  next();
+});
+
+// ============================================================================
+// MIDDLEWARE DE UTILIDADES
+// ============================================================================
 
 // Compresión de respuestas
 app.use(compression({
@@ -70,21 +215,6 @@ if (process.env.NODE_ENV !== 'test') {
     skip: (req, res) => res.statusCode < 400
   }));
 }
-
-// CORS configurado
-const cors = require('cors');
-const corsOptions = {
-  origin: [
-    'http://localhost:3000',
-    'http://localhost:5173', 
-    'http://127.0.0.1:3000',
-    'http://127.0.0.1:5173'
-  ],
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
-};
-app.use(cors(corsOptions));
 
 // Parsing de JSON y URL-encoded
 app.use(express.json({ 
@@ -120,7 +250,9 @@ app.get('/', (req: Request, res: Response) => {
     version: '1.0.0',
     environment: process.env.NODE_ENV || 'development',
     timestamp: new Date().toISOString(),
-    status: 'active'
+    status: 'active',
+    cors: 'enabled',
+    port: PORT
   });
 });
 
@@ -132,7 +264,26 @@ app.get('/api/health', (req: Request, res: Response) => {
     timestamp: new Date().toISOString(),
     uptime: process.uptime(),
     memory: process.memoryUsage(),
-    version: '1.0.0'
+    version: '1.0.0',
+    cors: 'working',
+    environment: process.env.NODE_ENV || 'development'
+  });
+});
+
+// 🔧 ARREGLO 6: Endpoint específico para pruebas de CORS
+app.get('/api/test-cors', (req: Request, res: Response) => {
+  res.json({
+    success: true,
+    message: 'CORS funcionando correctamente',
+    origin: req.headers.origin || 'no-origin',
+    userAgent: req.headers['user-agent'],
+    method: req.method,
+    timestamp: new Date().toISOString(),
+    headers: {
+      'access-control-allow-origin': res.getHeader('Access-Control-Allow-Origin'),
+      'access-control-allow-methods': res.getHeader('Access-Control-Allow-Methods'),
+      'access-control-allow-headers': res.getHeader('Access-Control-Allow-Headers'),
+    }
   });
 });
 
@@ -145,7 +296,10 @@ app.get('/system-info', async (req: Request, res: Response) => {
       environment: process.env.NODE_ENV || 'development',
       uptime: process.uptime(),
       memory: process.memoryUsage(),
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
+      cors: 'enabled',
+      port: PORT,
+      host: HOST
     };
     res.json({
       success: true,
@@ -168,7 +322,13 @@ const notFoundHandler = (req: Request, res: Response): void => {
   res.status(404).json({
     success: false,
     message: `Ruta ${req.originalUrl} no encontrada`,
-    timestamp: new Date().toISOString()
+    timestamp: new Date().toISOString(),
+    availableEndpoints: [
+      'GET /',
+      'GET /api/health',
+      'GET /api/test-cors',
+      'GET /system-info'
+    ]
   });
 };
 
@@ -201,6 +361,14 @@ async function initializeServices(): Promise<boolean> {
       console.warn('⚠️ JWT_ACCESS_SECRET no configurado');
     }
 
+    // 🔧 Mostrar configuración CORS y CSP
+    console.log('🌐 Configuración de desarrollo:');
+    console.log(`   - Entorno: ${process.env.NODE_ENV || 'development'}`);
+    console.log(`   - Puerto: ${PORT}`);
+    console.log(`   - CORS: Habilitado (muy permisivo)`);
+    console.log(`   - CSP: Configurado para desarrollo`);
+    console.log(`   - Helmet: Modo desarrollo`);
+
     console.log('='.repeat(50));
     console.log('✅ Servicios básicos inicializados');
     return true;
@@ -223,9 +391,17 @@ async function startServer(): Promise<void> {
       console.log(`🌐 Servidor corriendo en: http://${HOST}:${PORT}`);
       console.log(`📚 Documentación API: http://${HOST}:${PORT}/api/docs`);
       console.log(`🏥 Health Check: http://${HOST}:${PORT}/api/health`);
+      console.log(`🧪 Test CORS: http://${HOST}:${PORT}/api/test-cors`);
       console.log(`📊 Estado del sistema: http://${HOST}:${PORT}/system-info`);
       console.log(`🌍 Entorno: ${process.env.NODE_ENV || 'development'}`);
       console.log(`📅 Iniciado: ${new Date().toLocaleString()}`);
+      console.log('');
+      console.log('🔧 PRUEBAS RÁPIDAS:');
+      console.log(`curl http://localhost:${PORT}/api/health`);
+      console.log(`curl http://localhost:${PORT}/api/test-cors`);
+      console.log('');
+      console.log('🌐 Frontend fetch test:');
+      console.log(`fetch('http://localhost:${PORT}/api/health').then(r=>r.json()).then(console.log)`);
       console.log('='.repeat(50));
       console.log('');
     });
@@ -245,6 +421,10 @@ async function startServer(): Promise<void> {
           break;
         case 'EADDRINUSE':
           console.error(`❌ ${bind} ya está en uso`);
+          console.log('💡 Soluciones:');
+          console.log(`   lsof -i :${PORT}  # Ver qué proceso usa el puerto`);
+          console.log(`   kill -9 <PID>     # Matar el proceso`);
+          console.log(`   PORT=5001 npm run dev  # Usar otro puerto`);
           process.exit(1);
           break;
         default:
@@ -311,7 +491,7 @@ async function main(): Promise<void> {
     console.clear();
     console.log('🐄 SISTEMA DE GESTIÓN GANADERA - UJAT');
     console.log('   Universidad Juárez Autónoma de Tabasco');
-    console.log('   Backend API v1.0.0');
+    console.log('   Backend API v1.0.0 - CORS Y CSP ARREGLADOS');
     console.log('');
 
     // Inicializar servicios

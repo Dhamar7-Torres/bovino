@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import React, { useState, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Card,
@@ -10,13 +10,8 @@ import {
 import { Button } from "../../components/ui/Button";
 import { Input } from "../../components/ui/Input";
 import {
-  MapPin,
   ShoppingBag,
   DollarSign,
-  UserCheck,
-  Calendar as CalendarIcon,
-  FileText,
-  Truck,
   ArrowLeft,
   Save,
   Plus,
@@ -30,331 +25,213 @@ import {
   AlertCircle,
   X,
   Loader2,
+  Download,
+  RefreshCw,
+  AlertTriangle,
 } from "lucide-react";
 
-// Tipos y enums mejorados
-type PaymentStatus = "pending" | "paid" | "overdue";
-type DeliveryMethod = "pickup" | "delivery" | "transport";
-type PaymentMethod = "cash" | "transfer" | "check" | "credit";
-type ContractType = "direct" | "auction" | "contract";
+// Importar servicios y hooks adaptados a tu estructura
+import { 
+  useSalesEvents, 
+  useSalesStatistics, 
+  useSalesOperations,
+  useSalesForm,
+  useSalesFilters 
+} from "../../hooks/useSales";
+
+// Importar tipos del servicio
+import type {
+  SalesEvent,
+  PaymentStatus,
+} from "../../services/salesService";
+
+// Tipos de vista
 type ViewMode = "list" | "create" | "edit" | "detail";
 
-// Interfaz optimizada para el evento de venta
-interface SalesEvent {
-  id: string;
-  bovineId: string;
-  bovineName: string;
-  buyerId: string;
-  buyerName: string;
-  buyerContact: string;
-  saleDate: string;
-  salePrice: number;
-  weight: number;
-  pricePerKg: number;
-  location: {
-    lat: number;
-    lng: number;
-    address: string;
-  };
-  deliveryMethod: DeliveryMethod;
-  healthCertificate: boolean;
-  qualityGrade: string;
-  documents: string[];
-  notes: string;
-  paymentMethod: PaymentMethod;
-  paymentStatus: PaymentStatus;
-  commission: number;
-  deliveryDate: string;
-  contractType: ContractType;
-  createdAt: string;
-  updatedAt: string;
-}
-
-// Datos iniciales
-const initialSalesEvents: SalesEvent[] = [
-  {
-    id: "1",
-    bovineId: "BOV001",
-    bovineName: "Toro Premium 001",
-    buyerId: "BUY001",
-    buyerName: "Juan Pérez",
-    buyerContact: "+52 993 123 4567",
-    saleDate: "2025-01-15",
-    salePrice: 45000,
-    weight: 500,
-    pricePerKg: 90,
-    location: {
-      lat: 17.9995,
-      lng: -92.9476,
-      address: "Villahermosa, Tabasco, México",
-    },
-    deliveryMethod: "pickup",
-    healthCertificate: true,
-    qualityGrade: "Premium",
-    documents: ["certificado_salud.pdf", "contrato_venta.pdf"],
-    notes: "Toro de alta calidad, excelente para reproducción",
-    paymentMethod: "transfer",
-    paymentStatus: "paid",
-    commission: 2250,
-    deliveryDate: "2025-01-20",
-    contractType: "direct",
-    createdAt: "2025-01-10T10:00:00Z",
-    updatedAt: "2025-01-15T14:30:00Z",
-  },
-];
-
-// Constantes para mejorar rendimiento
-const COMMISSION_RATE = 0.05;
-const DEFAULT_LOCATION = {
-  lat: 17.9995,
-  lng: -92.9476,
-  address: "Villahermosa, Tabasco, México",
-};
-
+// Constantes utilizadas
 const PAYMENT_STATUS_LABELS: Record<PaymentStatus, string> = {
   paid: "Pagado",
   pending: "Pendiente",
   overdue: "Vencido",
 };
 
-const DELIVERY_METHOD_LABELS: Record<DeliveryMethod, string> = {
-  pickup: "Recolección en granja",
-  delivery: "Entrega a domicilio",
-  transport: "Transporte especializado",
-};
-
-const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
-  cash: "Efectivo",
-  transfer: "Transferencia",
-  check: "Cheque",
-  credit: "Crédito",
-};
-
-const CONTRACT_TYPE_LABELS: Record<ContractType, string> = {
-  direct: "Venta Directa",
-  auction: "Subasta",
-  contract: "Contrato a Futuro",
-};
-
 const EventSales: React.FC = () => {
   // Estados principales
-  const [salesEvents, setSalesEvents] = useState<SalesEvent[]>(initialSalesEvents);
   const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [selectedEvent, setSelectedEvent] = useState<SalesEvent | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [searchTerm, setSearchTerm] = useState("");
-  const [filterStatus, setFilterStatus] = useState<string>("all");
+  const [error, setError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
-  // Estado del formulario con valores iniciales
-  const initialFormData: Partial<SalesEvent> = {
-    bovineId: "",
-    bovineName: "",
-    buyerId: "",
-    buyerName: "",
-    buyerContact: "",
-    saleDate: new Date().toISOString().split("T")[0],
-    salePrice: 0,
-    weight: 0,
-    pricePerKg: 0,
-    location: DEFAULT_LOCATION,
-    deliveryMethod: "pickup",
-    healthCertificate: false,
-    qualityGrade: "",
-    documents: [],
-    notes: "",
-    paymentMethod: "cash",
-    paymentStatus: "pending",
-    commission: 0,
-    deliveryDate: "",
-    contractType: "direct",
+  // Hooks para filtros
+  const { 
+    filters, 
+    updateFilter, 
+    resetFilters,
+    activeFiltersCount 
+  } = useSalesFilters();
+
+  // Hooks para datos del backend
+  const { 
+    data: salesResponse, 
+    loading: salesLoading, 
+    error: salesError, 
+    refetch: refetchSales 
+  } = useSalesEvents(filters);
+
+  const { 
+    data: statisticsResponse, 
+    refetch: refetchStatistics 
+  } = useSalesStatistics();
+
+  // Hook para operaciones CRUD
+  const {
+    loading: operationsLoading,
+    createSalesEvent,
+    updateSalesEvent,
+    deleteSalesEvent,
+    markPaymentAsCompleted,
+    downloadReport
+  } = useSalesOperations();
+
+  // Hook para formulario
+  const {
+    formData,
+    errors: formErrors,
+    updateField,
+    validateForm,
+    resetForm,
+    setFormData
+  } = useSalesForm();
+
+  // Datos procesados
+  const salesEvents = salesResponse?.data || [];
+  const statistics = statisticsResponse?.data || {
+    totalSales: 0,
+    totalRevenue: 0,
+    pendingCount: 0,
+    averagePricePerKg: 0,
   };
 
-  const [formData, setFormData] = useState<Partial<SalesEvent>>(initialFormData);
-  const [errors, setErrors] = useState<Record<string, string>>({});
-
-  // Memoizar cálculos costosos
-  const filteredEvents = useMemo(() => {
-    return salesEvents.filter(event => {
-      const matchesSearch = 
-        event.bovineName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        event.buyerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        event.bovineId.toLowerCase().includes(searchTerm.toLowerCase());
-      
-      const matchesFilter = filterStatus === "all" || event.paymentStatus === filterStatus;
-      
-      return matchesSearch && matchesFilter;
-    });
-  }, [salesEvents, searchTerm, filterStatus]);
-
-  // Estadísticas memoizadas
-  const statistics = useMemo(() => {
-    const totalSales = salesEvents.length;
-    const totalRevenue = salesEvents.reduce((sum, event) => sum + event.salePrice, 0);
-    const pendingCount = salesEvents.filter(e => e.paymentStatus === "pending").length;
-    const averagePricePerKg = totalSales > 0 
-      ? salesEvents.reduce((sum, event) => sum + event.pricePerKg, 0) / totalSales 
-      : 0;
-
-    return {
-      totalSales,
-      totalRevenue,
-      pendingCount,
-      averagePricePerKg,
-    };
-  }, [salesEvents]);
-
-  // Calcular precio por kg automáticamente
-  useEffect(() => {
-    if (formData.salePrice && formData.weight && formData.weight > 0) {
-      const pricePerKg = formData.salePrice / formData.weight;
-      setFormData(prev => ({
-        ...prev,
-        pricePerKg: Math.round(pricePerKg * 100) / 100
-      }));
-    }
-  }, [formData.salePrice, formData.weight]);
-
-  // Calcular comisión automáticamente
-  useEffect(() => {
-    if (formData.salePrice) {
-      const commission = formData.salePrice * COMMISSION_RATE;
-      setFormData(prev => ({
-        ...prev,
-        commission: Math.round(commission * 100) / 100
-      }));
-    }
-  }, [formData.salePrice]);
-
-  // Validación del formulario optimizada
-  const validateForm = useCallback((): boolean => {
-    const newErrors: Record<string, string> = {};
-
-    if (!formData.bovineName?.trim()) {
-      newErrors.bovineName = "El nombre del bovino es requerido";
-    }
-    if (!formData.buyerName?.trim()) {
-      newErrors.buyerName = "El nombre del comprador es requerido";
-    }
-    if (!formData.buyerContact?.trim()) {
-      newErrors.buyerContact = "El contacto del comprador es requerido";
-    }
-    if (!formData.saleDate) {
-      newErrors.saleDate = "La fecha de venta es requerida";
-    }
-    if (!formData.salePrice || formData.salePrice <= 0) {
-      newErrors.salePrice = "El precio de venta debe ser mayor a 0";
-    }
-    if (!formData.weight || formData.weight <= 0) {
-      newErrors.weight = "El peso debe ser mayor a 0";
+  // Mostrar notificaciones
+  const showNotification = useCallback((message: string, type: 'success' | 'error') => {
+    if (type === 'success') {
+      setSuccessMessage(message);
+      setError(null);
+    } else {
+      setError(message);
+      setSuccessMessage(null);
     }
 
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  }, [formData]);
-
-  // Resetear formulario
-  const resetForm = useCallback(() => {
-    setFormData(initialFormData);
-    setErrors({});
+    // Auto-hide después de 5 segundos
+    setTimeout(() => {
+      setSuccessMessage(null);
+      setError(null);
+    }, 5000);
   }, []);
 
-  // CRUD Operations optimizadas
+  // CRUD Operations
   const handleCreate = useCallback(async () => {
     if (!validateForm()) return;
 
-    setLoading(true);
     try {
-      const newEvent: SalesEvent = {
-        ...formData as SalesEvent,
-        id: Date.now().toString(),
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
-
-      setSalesEvents(prev => [...prev, newEvent]);
-      resetForm();
-      setViewMode("list");
+      const response = await createSalesEvent(formData as Omit<SalesEvent, 'id' | 'createdAt' | 'updatedAt'>);
       
-      // Aquí harías la llamada a tu API
-      // await api.createSalesEvent(newEvent);
-      
-    } catch (error) {
-      console.error("Error creating sales event:", error);
-    } finally {
-      setLoading(false);
+      if (response.success) {
+        showNotification('Evento de venta creado exitosamente', 'success');
+        resetForm();
+        setViewMode("list");
+        refetchSales();
+        refetchStatistics();
+      } else {
+        showNotification(response.message || 'Error al crear el evento de venta', 'error');
+      }
+    } catch (err: any) {
+      showNotification(err.message || 'Error al crear el evento de venta', 'error');
     }
-  }, [formData, validateForm, resetForm]);
+  }, [formData, validateForm, createSalesEvent, resetForm, showNotification, refetchSales, refetchStatistics]);
 
   const handleUpdate = useCallback(async () => {
     if (!selectedEvent || !validateForm()) return;
 
-    setLoading(true);
     try {
-      const updatedEvent: SalesEvent = {
-        ...formData as SalesEvent,
-        id: selectedEvent.id,
-        createdAt: selectedEvent.createdAt,
-        updatedAt: new Date().toISOString(),
-      };
-
-      setSalesEvents(prev => prev.map(event => 
-        event.id === selectedEvent.id ? updatedEvent : event
-      ));
+      const response = await updateSalesEvent(selectedEvent.id, formData);
       
-      setViewMode("list");
-      setSelectedEvent(null);
-      
-      // Aquí harías la llamada a tu API
-      // await api.updateSalesEvent(updatedEvent);
-      
-    } catch (error) {
-      console.error("Error updating sales event:", error);
-    } finally {
-      setLoading(false);
+      if (response.success) {
+        showNotification('Evento de venta actualizado exitosamente', 'success');
+        setViewMode("list");
+        setSelectedEvent(null);
+        refetchSales();
+        refetchStatistics();
+      } else {
+        showNotification(response.message || 'Error al actualizar el evento de venta', 'error');
+      }
+    } catch (err: any) {
+      showNotification(err.message || 'Error al actualizar el evento de venta', 'error');
     }
-  }, [selectedEvent, formData, validateForm]);
+  }, [selectedEvent, formData, validateForm, updateSalesEvent, showNotification, refetchSales, refetchStatistics]);
 
   const handleDelete = useCallback(async (eventId: string) => {
     if (!window.confirm("¿Estás seguro de que quieres eliminar este evento de venta?")) {
       return;
     }
 
-    setLoading(true);
     try {
-      setSalesEvents(prev => prev.filter(event => event.id !== eventId));
+      const response = await deleteSalesEvent(eventId);
       
-      // Aquí harías la llamada a tu API
-      // await api.deleteSalesEvent(eventId);
+      if (response.success) {
+        showNotification('Evento de venta eliminado exitosamente', 'success');
+        refetchSales();
+        refetchStatistics();
+      } else {
+        showNotification(response.message || 'Error al eliminar el evento de venta', 'error');
+      }
+    } catch (err: any) {
+      showNotification(err.message || 'Error al eliminar el evento de venta', 'error');
+    }
+  }, [deleteSalesEvent, showNotification, refetchSales, refetchStatistics]);
+
+  const handleMarkAsPaid = useCallback(async (eventId: string) => {
+    try {
+      const response = await markPaymentAsCompleted(eventId);
       
-    } catch (error) {
-      console.error("Error deleting sales event:", error);
-    } finally {
-      setLoading(false);
+      if (response.success) {
+        showNotification('Pago marcado como completado', 'success');
+        refetchSales();
+        refetchStatistics();
+      } else {
+        showNotification(response.message || 'Error al marcar el pago', 'error');
+      }
+    } catch (err: any) {
+      showNotification(err.message || 'Error al marcar el pago', 'error');
     }
-  }, []);
+  }, [markPaymentAsCompleted, showNotification, refetchSales, refetchStatistics]);
 
-  // Manejar cambios en el formulario
-  const handleInputChange = useCallback((field: string, value: any) => {
-    setFormData(prev => ({
-      ...prev,
-      [field]: value,
-    }));
-
-    // Limpiar error si existe
-    if (errors[field]) {
-      setErrors(prev => ({
-        ...prev,
-        [field]: "",
-      }));
+  const handleDownloadReport = useCallback(async () => {
+    try {
+      const blob = await downloadReport(filters);
+      
+      // Crear enlace de descarga
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `reporte-ventas-${new Date().toISOString().split('T')[0]}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+      
+      showNotification('Reporte descargado exitosamente', 'success');
+    } catch (err: any) {
+      showNotification(err.message || 'Error al descargar el reporte', 'error');
     }
-  }, [errors]);
+  }, [filters, downloadReport, showNotification]);
 
-  // Funciones de navegación optimizadas
+  // Funciones de navegación
   const openEditForm = useCallback((event: SalesEvent) => {
     setSelectedEvent(event);
     setFormData(event);
     setViewMode("edit");
-  }, []);
+  }, [setFormData]);
 
   const viewEventDetail = useCallback((event: SalesEvent) => {
     setSelectedEvent(event);
@@ -385,6 +262,42 @@ const EventSales: React.FC = () => {
     visible: { opacity: 1, y: 0 },
   };
 
+  // Componente de notificaciones
+  const NotificationBanner = () => {
+    if (!error && !successMessage) return null;
+
+    return (
+      <motion.div
+        initial={{ opacity: 0, y: -50 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: -50 }}
+        className={`fixed top-4 right-4 z-50 max-w-md p-4 rounded-lg shadow-lg ${
+          error 
+            ? 'bg-red-100 border border-red-400 text-red-700' 
+            : 'bg-green-100 border border-green-400 text-green-700'
+        }`}
+      >
+        <div className="flex items-center gap-2">
+          {error ? (
+            <AlertTriangle size={20} />
+          ) : (
+            <CheckCircle size={20} />
+          )}
+          <span>{error || successMessage}</span>
+          <button
+            onClick={() => {
+              setError(null);
+              setSuccessMessage(null);
+            }}
+            className="ml-auto"
+          >
+            <X size={16} />
+          </button>
+        </div>
+      </motion.div>
+    );
+  };
+
   // Renderizar lista de eventos
   const renderEventsList = () => (
     <motion.div
@@ -401,16 +314,38 @@ const EventSales: React.FC = () => {
             <p className="text-gray-600">Gestiona los eventos de venta de tu ganado</p>
           </div>
           
-          <Button
-            onClick={() => {
-              resetForm();
-              setViewMode("create");
-            }}
-            className="bg-green-600 hover:bg-green-700 text-white transition-colors duration-200"
-          >
-            <Plus size={20} className="mr-2" />
-            Nueva Venta
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              onClick={refetchSales}
+              variant="outline"
+              disabled={salesLoading}
+              className="flex items-center gap-2"
+            >
+              <RefreshCw size={16} className={salesLoading ? "animate-spin" : ""} />
+              Actualizar
+            </Button>
+            
+            <Button
+              onClick={handleDownloadReport}
+              variant="outline"
+              disabled={operationsLoading || salesEvents.length === 0}
+              className="flex items-center gap-2"
+            >
+              <Download size={16} />
+              Reporte
+            </Button>
+            
+            <Button
+              onClick={() => {
+                resetForm();
+                setViewMode("create");
+              }}
+              className="bg-green-600 hover:bg-green-700 text-white transition-colors duration-200"
+            >
+              <Plus size={20} className="mr-2" />
+              Nueva Venta
+            </Button>
+          </div>
         </div>
 
         {/* Búsqueda y filtros */}
@@ -419,16 +354,16 @@ const EventSales: React.FC = () => {
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
             <Input
               placeholder="Buscar por bovino, comprador o ID..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              value={filters.search || ''}
+              onChange={(e) => updateFilter('search', e.target.value)}
               className="pl-10"
               aria-label="Buscar eventos"
             />
           </div>
           
           <select
-            value={filterStatus}
-            onChange={(e) => setFilterStatus(e.target.value)}
+            value={filters.paymentStatus || 'all'}
+            onChange={(e) => updateFilter('paymentStatus', e.target.value)}
             className="px-4 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-transparent bg-white transition-all duration-200"
             aria-label="Filtrar por estado"
           >
@@ -437,6 +372,17 @@ const EventSales: React.FC = () => {
             <option value="paid">Pagado</option>
             <option value="overdue">Vencido</option>
           </select>
+
+          {activeFiltersCount > 0 && (
+            <Button
+              onClick={resetFilters}
+              variant="outline"
+              className="flex items-center gap-2"
+            >
+              <X size={16} />
+              Limpiar ({activeFiltersCount})
+            </Button>
+          )}
         </div>
       </motion.div>
 
@@ -495,118 +441,164 @@ const EventSales: React.FC = () => {
         </Card>
       </motion.div>
 
-      {/* Lista de eventos */}
-      <motion.div variants={itemVariants} className="space-y-4">
-        {filteredEvents.length === 0 ? (
+      {/* Loading state */}
+      {salesLoading && (
+        <motion.div variants={itemVariants}>
           <Card className="bg-white/80 backdrop-blur-sm border border-white/20 shadow-lg">
             <CardContent className="p-8 text-center">
-              <ShoppingBag size={48} className="mx-auto text-gray-400 mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 mb-2">No hay eventos de venta</h3>
-              <p className="text-gray-600 mb-4">
-                {searchTerm || filterStatus !== "all" 
-                  ? "No se encontraron eventos que coincidan con los filtros."
-                  : "Comienza registrando tu primera venta de ganado."}
-              </p>
-              {!searchTerm && filterStatus === "all" && (
-                <Button
-                  onClick={() => {
-                    resetForm();
-                    setViewMode("create");
-                  }}
-                  className="bg-green-600 hover:bg-green-700 text-white"
-                >
-                  <Plus size={20} className="mr-2" />
-                  Registrar Primera Venta
-                </Button>
-              )}
+              <Loader2 size={48} className="mx-auto text-green-600 mb-4 animate-spin" />
+              <h3 className="text-lg font-medium text-gray-900 mb-2">Cargando eventos de ventas...</h3>
+              <p className="text-gray-600">Por favor espera mientras obtenemos los datos.</p>
             </CardContent>
           </Card>
-        ) : (
-          filteredEvents.map((event) => (
-            <motion.div key={event.id} layout>
-              <Card className="bg-white/80 backdrop-blur-sm hover:bg-white/90 transition-all duration-200 border border-white/20 shadow-lg hover:shadow-xl">
-                <CardContent className="p-6">
-                  <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-3 mb-2">
-                        <h3 className="text-lg font-semibold text-gray-900">
-                          {event.bovineName}
-                        </h3>
-                        <span className="text-sm text-gray-500">#{event.bovineId}</span>
-                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                          event.paymentStatus === "paid"
-                            ? "bg-green-100 text-green-800"
-                            : event.paymentStatus === "pending"
-                            ? "bg-yellow-100 text-yellow-800"
-                            : "bg-red-100 text-red-800"
-                        }`}>
-                          {PAYMENT_STATUS_LABELS[event.paymentStatus]}
-                        </span>
-                      </div>
-                      
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                        <div>
-                          <span className="text-gray-500">Comprador:</span>
-                          <p className="font-medium">{event.buyerName}</p>
-                        </div>
-                        <div>
-                          <span className="text-gray-500">Precio:</span>
-                          <p className="font-medium">${event.salePrice.toLocaleString()}</p>
-                        </div>
-                        <div>
-                          <span className="text-gray-500">Peso:</span>
-                          <p className="font-medium">{event.weight} kg</p>
-                        </div>
-                        <div>
-                          <span className="text-gray-500">Fecha:</span>
-                          <p className="font-medium">{new Date(event.saleDate).toLocaleDateString()}</p>
-                        </div>
-                      </div>
-                    </div>
+        </motion.div>
+      )}
 
-                    <div className="flex items-center gap-2">
-                      <Button
-                        onClick={() => viewEventDetail(event)}
-                        variant="outline"
-                        size="sm"
-                        className="border-gray-300 text-gray-700 hover:bg-gray-50 hover:border-gray-400"
-                        aria-label={`Ver detalles de ${event.bovineName}`}
-                      >
-                        <Eye size={16} />
-                        Ver
-                      </Button>
-                      <Button
-                        onClick={() => openEditForm(event)}
-                        variant="outline"
-                        size="sm"
-                        className="border-blue-300 text-blue-700 hover:bg-blue-50 hover:border-blue-400"
-                        aria-label={`Editar ${event.bovineName}`}
-                      >
-                        <Edit size={16} />
-                        Editar
-                      </Button>
-                      <Button
-                        onClick={() => handleDelete(event.id)}
-                        variant="outline"
-                        size="sm"
-                        className="border-red-300 text-red-700 hover:bg-red-50 hover:border-red-400"
-                        aria-label={`Eliminar ${event.bovineName}`}
-                      >
-                        <Trash2 size={16} />
-                        Eliminar
-                      </Button>
+      {/* Error state */}
+      {salesError && !salesLoading && (
+        <motion.div variants={itemVariants}>
+          <Card className="bg-white/80 backdrop-blur-sm border border-red-200 shadow-lg">
+            <CardContent className="p-8 text-center">
+              <AlertTriangle size={48} className="mx-auto text-red-500 mb-4" />
+              <h3 className="text-lg font-medium text-gray-900 mb-2">Error al cargar los datos</h3>
+              <p className="text-gray-600 mb-4">{salesError}</p>
+              <Button onClick={refetchSales} className="bg-red-600 hover:bg-red-700 text-white">
+                <RefreshCw size={16} className="mr-2" />
+                Reintentar
+              </Button>
+            </CardContent>
+          </Card>
+        </motion.div>
+      )}
+
+      {/* Lista de eventos */}
+      {!salesLoading && !salesError && (
+        <motion.div variants={itemVariants} className="space-y-4">
+          {salesEvents.length === 0 ? (
+            <Card className="bg-white/80 backdrop-blur-sm border border-white/20 shadow-lg">
+              <CardContent className="p-8 text-center">
+                <ShoppingBag size={48} className="mx-auto text-gray-400 mb-4" />
+                <h3 className="text-lg font-medium text-gray-900 mb-2">No hay eventos de venta</h3>
+                <p className="text-gray-600 mb-4">
+                  {filters.search || filters.paymentStatus !== 'all'
+                    ? "No se encontraron eventos que coincidan con los filtros."
+                    : "Comienza registrando tu primera venta de ganado."}
+                </p>
+                {!filters.search && filters.paymentStatus === 'all' && (
+                  <Button
+                    onClick={() => {
+                      resetForm();
+                      setViewMode("create");
+                    }}
+                    className="bg-green-600 hover:bg-green-700 text-white"
+                  >
+                    <Plus size={20} className="mr-2" />
+                    Registrar Primera Venta
+                  </Button>
+                )}
+              </CardContent>
+            </Card>
+          ) : (
+            salesEvents.map((event) => (
+              <motion.div key={event.id} layout>
+                <Card className="bg-white/80 backdrop-blur-sm hover:bg-white/90 transition-all duration-200 border border-white/20 shadow-lg hover:shadow-xl">
+                  <CardContent className="p-6">
+                    <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-3 mb-2">
+                          <h3 className="text-lg font-semibold text-gray-900">
+                            {event.bovineName}
+                          </h3>
+                          <span className="text-sm text-gray-500">#{event.bovineId}</span>
+                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                            event.paymentStatus === "paid"
+                              ? "bg-green-100 text-green-800"
+                              : event.paymentStatus === "pending"
+                              ? "bg-yellow-100 text-yellow-800"
+                              : "bg-red-100 text-red-800"
+                          }`}>
+                            {PAYMENT_STATUS_LABELS[event.paymentStatus]}
+                          </span>
+                        </div>
+                        
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                          <div>
+                            <span className="text-gray-500">Comprador:</span>
+                            <p className="font-medium">{event.buyerName}</p>
+                          </div>
+                          <div>
+                            <span className="text-gray-500">Precio:</span>
+                            <p className="font-medium">${event.salePrice.toLocaleString()}</p>
+                          </div>
+                          <div>
+                            <span className="text-gray-500">Peso:</span>
+                            <p className="font-medium">{event.weight} kg</p>
+                          </div>
+                          <div>
+                            <span className="text-gray-500">Fecha:</span>
+                            <p className="font-medium">{new Date(event.saleDate).toLocaleDateString()}</p>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        {event.paymentStatus === "pending" && (
+                          <Button
+                            onClick={() => handleMarkAsPaid(event.id)}
+                            variant="outline"
+                            size="sm"
+                            className="border-green-300 text-green-700 hover:bg-green-50 hover:border-green-400"
+                            disabled={operationsLoading}
+                          >
+                            <CheckCircle size={16} />
+                            Marcar Pagado
+                          </Button>
+                        )}
+                        
+                        <Button
+                          onClick={() => viewEventDetail(event)}
+                          variant="outline"
+                          size="sm"
+                          className="border-gray-300 text-gray-700 hover:bg-gray-50 hover:border-gray-400"
+                          aria-label={`Ver detalles de ${event.bovineName}`}
+                        >
+                          <Eye size={16} />
+                          Ver
+                        </Button>
+                        <Button
+                          onClick={() => openEditForm(event)}
+                          variant="outline"
+                          size="sm"
+                          className="border-blue-300 text-blue-700 hover:bg-blue-50 hover:border-blue-400"
+                          aria-label={`Editar ${event.bovineName}`}
+                        >
+                          <Edit size={16} />
+                          Editar
+                        </Button>
+                        <Button
+                          onClick={() => handleDelete(event.id)}
+                          variant="outline"
+                          size="sm"
+                          className="border-red-300 text-red-700 hover:bg-red-50 hover:border-red-400"
+                          aria-label={`Eliminar ${event.bovineName}`}
+                          disabled={operationsLoading}
+                        >
+                          <Trash2 size={16} />
+                          Eliminar
+                        </Button>
+                      </div>
                     </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </motion.div>
-          ))
-        )}
-      </motion.div>
+                  </CardContent>
+                </Card>
+              </motion.div>
+            ))
+          )}
+        </motion.div>
+      )}
     </motion.div>
   );
 
-  // Renderizar formulario (crear/editar)
+  // Renderizar formulario
   const renderForm = () => (
     <motion.div
       variants={containerVariants}
@@ -640,6 +632,18 @@ const EventSales: React.FC = () => {
           </CardHeader>
           
           <CardContent className="space-y-8">
+            {/* Mostrar errores de validación */}
+            {Object.keys(formErrors).length > 0 && (
+              <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                <h4 className="text-red-800 font-medium mb-2">Por favor corrige los siguientes errores:</h4>
+                <ul className="list-disc list-inside text-red-700 text-sm space-y-1">
+                  {Object.values(formErrors).map((errorMsg, index) => (
+                    <li key={index}>{errorMsg}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
             {/* Información del Bovino */}
             <div className="space-y-6">
               <h3 className="text-lg font-medium text-gray-900 border-b border-gray-200 pb-2">
@@ -653,14 +657,10 @@ const EventSales: React.FC = () => {
                   <Input
                     id="bovineId"
                     value={formData.bovineId || ""}
-                    onChange={(e) => handleInputChange("bovineId", e.target.value)}
+                    onChange={(e) => updateField("bovineId", e.target.value)}
                     placeholder="Ej: BOV001"
-                    className={errors.bovineId ? "border-red-500" : ""}
-                    aria-describedby={errors.bovineId ? "bovineId-error" : undefined}
+                    className="bg-white/60 backdrop-blur-sm border-white/30 focus:bg-white"
                   />
-                  {errors.bovineId && (
-                    <p id="bovineId-error" className="text-red-500 text-sm">{errors.bovineId}</p>
-                  )}
                 </div>
 
                 <div className="space-y-2">
@@ -670,14 +670,10 @@ const EventSales: React.FC = () => {
                   <Input
                     id="bovineName"
                     value={formData.bovineName || ""}
-                    onChange={(e) => handleInputChange("bovineName", e.target.value)}
+                    onChange={(e) => updateField("bovineName", e.target.value)}
                     placeholder="Ej: Toro Premium 001"
-                    className={`bg-white/60 backdrop-blur-sm border-white/30 focus:bg-white ${errors.bovineName ? "border-red-500" : ""}`}
-                    aria-describedby={errors.bovineName ? "bovineName-error" : undefined}
+                    className="bg-white/60 backdrop-blur-sm border-white/30 focus:bg-white"
                   />
-                  {errors.bovineName && (
-                    <p id="bovineName-error" className="text-red-500 text-sm">{errors.bovineName}</p>
-                  )}
                 </div>
 
                 <div className="space-y-2">
@@ -688,120 +684,9 @@ const EventSales: React.FC = () => {
                     id="weight"
                     type="number"
                     value={formData.weight || ""}
-                    onChange={(e) => handleInputChange("weight", Number(e.target.value))}
+                    onChange={(e) => updateField("weight", Number(e.target.value))}
                     placeholder="Ej: 500"
                     min="0"
-                    className={`bg-white/60 backdrop-blur-sm border-white/30 focus:bg-white ${errors.weight ? "border-red-500" : ""}`}
-                    aria-describedby={errors.weight ? "weight-error" : undefined}
-                  />
-                  {errors.weight && (
-                    <p id="weight-error" className="text-red-500 text-sm">{errors.weight}</p>
-                  )}
-                </div>
-
-                <div className="space-y-2">
-                  <label className="block text-sm font-medium text-gray-700" htmlFor="qualityGrade">
-                    Grado de Calidad
-                  </label>
-                  <Input
-                    id="qualityGrade"
-                    value={formData.qualityGrade || ""}
-                    onChange={(e) => handleInputChange("qualityGrade", e.target.value)}
-                    placeholder="Ej: Premium, Standard, Select, Choice, Prime..."
-                    className="bg-white/60 backdrop-blur-sm border-white/30 focus:bg-white"
-                  />
-                  <p className="text-xs text-gray-500">Puedes escribir cualquier grado de calidad personalizado</p>
-                </div>
-              </div>
-            </div>
-
-            {/* Información del Comprador */}
-            <div className="space-y-6">
-              <h3 className="text-lg font-medium text-gray-900 border-b border-gray-200 pb-2">
-                Información del Comprador
-              </h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-2">
-                  <label className="block text-sm font-medium text-gray-700" htmlFor="buyerId">
-                    ID del Comprador
-                  </label>
-                  <Input
-                    id="buyerId"
-                    value={formData.buyerId || ""}
-                    onChange={(e) => handleInputChange("buyerId", e.target.value)}
-                    placeholder="Ej: BUY001"
-                    className="bg-white/60 backdrop-blur-sm border-white/30 focus:bg-white"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <label className="block text-sm font-medium text-gray-700" htmlFor="buyerName">
-                    Nombre del Comprador <span className="text-red-500">*</span>
-                  </label>
-                  <Input
-                    id="buyerName"
-                    value={formData.buyerName || ""}
-                    onChange={(e) => handleInputChange("buyerName", e.target.value)}
-                    placeholder="Ej: Juan Pérez"
-                    className={`bg-white/60 backdrop-blur-sm border-white/30 focus:bg-white ${errors.buyerName ? "border-red-500" : ""}`}
-                    aria-describedby={errors.buyerName ? "buyerName-error" : undefined}
-                  />
-                  {errors.buyerName && (
-                    <p id="buyerName-error" className="text-red-500 text-sm">{errors.buyerName}</p>
-                  )}
-                </div>
-
-                <div className="space-y-2 md:col-span-2">
-                  <label className="block text-sm font-medium text-gray-700" htmlFor="buyerContact">
-                    Contacto del Comprador <span className="text-red-500">*</span>
-                  </label>
-                  <Input
-                    id="buyerContact"
-                    value={formData.buyerContact || ""}
-                    onChange={(e) => handleInputChange("buyerContact", e.target.value)}
-                    placeholder="Ej: +52 993 123 4567"
-                    className={`bg-white/60 backdrop-blur-sm border-white/30 focus:bg-white ${errors.buyerContact ? "border-red-500" : ""}`}
-                    aria-describedby={errors.buyerContact ? "buyerContact-error" : undefined}
-                  />
-                  {errors.buyerContact && (
-                    <p id="buyerContact-error" className="text-red-500 text-sm">{errors.buyerContact}</p>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* Información de la Venta */}
-            <div className="space-y-6">
-              <h3 className="text-lg font-medium text-gray-900 border-b border-gray-200 pb-2">
-                Detalles de la Venta
-              </h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-2">
-                  <label className="block text-sm font-medium text-gray-700" htmlFor="saleDate">
-                    Fecha de Venta <span className="text-red-500">*</span>
-                  </label>
-                  <Input
-                    id="saleDate"
-                    type="date"
-                    value={formData.saleDate || ""}
-                    onChange={(e) => handleInputChange("saleDate", e.target.value)}
-                    className={`bg-white/60 backdrop-blur-sm border-white/30 focus:bg-white ${errors.saleDate ? "border-red-500" : ""}`}
-                    aria-describedby={errors.saleDate ? "saleDate-error" : undefined}
-                  />
-                  {errors.saleDate && (
-                    <p id="saleDate-error" className="text-red-500 text-sm">{errors.saleDate}</p>
-                  )}
-                </div>
-
-                <div className="space-y-2">
-                  <label className="block text-sm font-medium text-gray-700" htmlFor="deliveryDate">
-                    Fecha de Entrega
-                  </label>
-                  <Input
-                    id="deliveryDate"
-                    type="date"
-                    value={formData.deliveryDate || ""}
-                    onChange={(e) => handleInputChange("deliveryDate", e.target.value)}
                     className="bg-white/60 backdrop-blur-sm border-white/30 focus:bg-white"
                   />
                 </div>
@@ -814,142 +699,75 @@ const EventSales: React.FC = () => {
                     id="salePrice"
                     type="number"
                     value={formData.salePrice || ""}
-                    onChange={(e) => handleInputChange("salePrice", Number(e.target.value))}
+                    onChange={(e) => updateField("salePrice", Number(e.target.value))}
                     placeholder="Ej: 45000"
                     min="0"
                     step="0.01"
-                    className={`bg-white/60 backdrop-blur-sm border-white/30 focus:bg-white ${errors.salePrice ? "border-red-500" : ""}`}
-                    aria-describedby={errors.salePrice ? "salePrice-error" : undefined}
+                    className="bg-white/60 backdrop-blur-sm border-white/30 focus:bg-white"
                   />
-                  {errors.salePrice && (
-                    <p id="salePrice-error" className="text-red-500 text-sm">{errors.salePrice}</p>
-                  )}
-                </div>
-
-                <div className="space-y-2">
-                  <label className="block text-sm font-medium text-gray-700" htmlFor="pricePerKg">
-                    Precio por Kg ($)
-                  </label>
-                  <Input
-                    id="pricePerKg"
-                    type="number"
-                    value={formData.pricePerKg || ""}
-                    readOnly
-                    className="bg-gray-100/60 backdrop-blur-sm border-gray-200/30 text-gray-600"
-                    placeholder="Se calcula automáticamente"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <label className="block text-sm font-medium text-gray-700" htmlFor="commission">
-                    Comisión ($)
-                  </label>
-                  <Input
-                    id="commission"
-                    type="number"
-                    value={formData.commission || ""}
-                    readOnly
-                    className="bg-gray-100/60 backdrop-blur-sm border-gray-200/30 text-gray-600"
-                    placeholder="Se calcula automáticamente (5%)"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <label className="block text-sm font-medium text-gray-700" htmlFor="paymentMethod">
-                    Método de Pago
-                  </label>
-                  <select
-                    id="paymentMethod"
-                    value={formData.paymentMethod || ""}
-                    onChange={(e) => handleInputChange("paymentMethod", e.target.value as PaymentMethod)}
-                    className="w-full px-4 py-2 border border-white/30 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-transparent bg-white/60 backdrop-blur-sm hover:bg-white transition-all duration-200"
-                  >
-                    {Object.entries(PAYMENT_METHOD_LABELS).map(([value, label]) => (
-                      <option key={value} value={value}>{label}</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="space-y-2">
-                  <label className="block text-sm font-medium text-gray-700" htmlFor="paymentStatus">
-                    Estado del Pago
-                  </label>
-                  <select
-                    id="paymentStatus"
-                    value={formData.paymentStatus || ""}
-                    onChange={(e) => handleInputChange("paymentStatus", e.target.value as PaymentStatus)}
-                    className="w-full px-4 py-2 border border-white/30 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-transparent bg-white/60 backdrop-blur-sm hover:bg-white transition-all duration-200"
-                  >
-                    {Object.entries(PAYMENT_STATUS_LABELS).map(([value, label]) => (
-                      <option key={value} value={value}>{label}</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="space-y-2">
-                  <label className="block text-sm font-medium text-gray-700" htmlFor="deliveryMethod">
-                    Método de Entrega
-                  </label>
-                  <select
-                    id="deliveryMethod"
-                    value={formData.deliveryMethod || ""}
-                    onChange={(e) => handleInputChange("deliveryMethod", e.target.value as DeliveryMethod)}
-                    className="w-full px-4 py-2 border border-white/30 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-transparent bg-white/60 backdrop-blur-sm hover:bg-white transition-all duration-200"
-                  >
-                    {Object.entries(DELIVERY_METHOD_LABELS).map(([value, label]) => (
-                      <option key={value} value={value}>{label}</option>
-                    ))}
-                  </select>
                 </div>
               </div>
             </div>
 
-            {/* Información Adicional */}
+            {/* Información del Comprador */}
             <div className="space-y-6">
               <h3 className="text-lg font-medium text-gray-900 border-b border-gray-200 pb-2">
-                Información Adicional
+                Información del Comprador
               </h3>
-              
-              <div className="flex items-center gap-3">
-                <input
-                  type="checkbox"
-                  id="healthCertificate"
-                  checked={formData.healthCertificate || false}
-                  onChange={(e) => handleInputChange("healthCertificate", e.target.checked)}
-                  className="w-4 h-4 text-green-600 bg-gray-100 border-gray-300 rounded focus:ring-green-500"
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-2">
+                  <label className="block text-sm font-medium text-gray-700" htmlFor="buyerName">
+                    Nombre del Comprador <span className="text-red-500">*</span>
+                  </label>
+                  <Input
+                    id="buyerName"
+                    value={formData.buyerName || ""}
+                    onChange={(e) => updateField("buyerName", e.target.value)}
+                    placeholder="Ej: Juan Pérez"
+                    className="bg-white/60 backdrop-blur-sm border-white/30 focus:bg-white"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="block text-sm font-medium text-gray-700" htmlFor="buyerContact">
+                    Contacto del Comprador <span className="text-red-500">*</span>
+                  </label>
+                  <Input
+                    id="buyerContact"
+                    value={formData.buyerContact || ""}
+                    onChange={(e) => updateField("buyerContact", e.target.value)}
+                    placeholder="Ej: +52 993 123 4567"
+                    className="bg-white/60 backdrop-blur-sm border-white/30 focus:bg-white"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Campos calculados automáticamente */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-2">
+                <label className="block text-sm font-medium text-gray-700">
+                  Precio por Kg ($)
+                </label>
+                <Input
+                  type="number"
+                  value={formData.pricePerKg || ""}
+                  readOnly
+                  className="bg-gray-100/60 backdrop-blur-sm border-gray-200/30 text-gray-600"
+                  placeholder="Se calcula automáticamente"
                 />
-                <label htmlFor="healthCertificate" className="text-sm font-medium text-gray-700">
-                  Certificado de salud incluido
-                </label>
               </div>
 
               <div className="space-y-2">
-                <label className="block text-sm font-medium text-gray-700" htmlFor="contractType">
-                  Tipo de Contrato
+                <label className="block text-sm font-medium text-gray-700">
+                  Comisión ($)
                 </label>
-                <select
-                  id="contractType"
-                  value={formData.contractType || ""}
-                  onChange={(e) => handleInputChange("contractType", e.target.value as ContractType)}
-                  className="w-full px-4 py-2 border border-white/30 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-transparent bg-white/60 backdrop-blur-sm hover:bg-white transition-all duration-200"
-                >
-                  {Object.entries(CONTRACT_TYPE_LABELS).map(([value, label]) => (
-                    <option key={value} value={value}>{label}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="space-y-2">
-                <label className="block text-sm font-medium text-gray-700" htmlFor="notes">
-                  Notas Adicionales
-                </label>
-                <textarea
-                  id="notes"
-                  value={formData.notes || ""}
-                  onChange={(e) => handleInputChange("notes", e.target.value)}
-                  placeholder="Información adicional sobre la venta..."
-                  rows={4}
-                  className="w-full px-4 py-3 border border-white/30 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-transparent bg-white/60 backdrop-blur-sm resize-none hover:bg-white transition-all duration-200"
+                <Input
+                  type="number"
+                  value={formData.commission || ""}
+                  readOnly
+                  className="bg-gray-100/60 backdrop-blur-sm border-gray-200/30 text-gray-600"
+                  placeholder="Se calcula automáticamente (5%)"
                 />
               </div>
             </div>
@@ -959,16 +777,16 @@ const EventSales: React.FC = () => {
               <Button
                 onClick={goBackToList}
                 variant="outline"
-                disabled={loading}
+                disabled={operationsLoading}
               >
                 Cancelar
               </Button>
               <Button
                 onClick={viewMode === "create" ? handleCreate : handleUpdate}
                 className="bg-green-600 hover:bg-green-700 text-white"
-                disabled={loading}
+                disabled={operationsLoading}
               >
-                {loading ? (
+                {operationsLoading ? (
                   <Loader2 className="w-4 h-4 animate-spin mr-2" />
                 ) : (
                   <Save size={20} className="mr-2" />
@@ -982,7 +800,7 @@ const EventSales: React.FC = () => {
     </motion.div>
   );
 
-  // Renderizar detalle del evento
+  // Renderizar detalle del evento (simplificado)
   const renderEventDetail = () => {
     if (!selectedEvent) return null;
 
@@ -1026,7 +844,6 @@ const EventSales: React.FC = () => {
             </CardHeader>
             
             <CardContent className="space-y-8">
-              {/* Información del Bovino */}
               <div className="space-y-4">
                 <h3 className="text-lg font-medium text-gray-900 border-b border-gray-200 pb-2 flex items-center gap-2">
                   <Award className="text-green-600" size={20} />
@@ -1046,176 +863,8 @@ const EventSales: React.FC = () => {
                     <p className="font-semibold text-gray-900">{selectedEvent.weight} kg</p>
                   </div>
                   <div className="bg-gray-50 p-4 rounded-xl">
-                    <p className="text-sm text-gray-500">Grado de Calidad</p>
-                    <p className="font-semibold text-gray-900">{selectedEvent.qualityGrade || "No especificado"}</p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Información del Comprador */}
-              <div className="space-y-4">
-                <h3 className="text-lg font-medium text-gray-900 border-b border-gray-200 pb-2 flex items-center gap-2">
-                  <UserCheck className="text-blue-600" size={20} />
-                  Información del Comprador
-                </h3>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                  <div className="bg-gray-50 p-4 rounded-xl">
-                    <p className="text-sm text-gray-500">Nombre</p>
-                    <p className="font-semibold text-gray-900">{selectedEvent.buyerName}</p>
-                  </div>
-                  <div className="bg-gray-50 p-4 rounded-xl">
-                    <p className="text-sm text-gray-500">Contacto</p>
-                    <p className="font-semibold text-gray-900">{selectedEvent.buyerContact}</p>
-                  </div>
-                  <div className="bg-gray-50 p-4 rounded-xl">
-                    <p className="text-sm text-gray-500">ID del Comprador</p>
-                    <p className="font-semibold text-gray-900">{selectedEvent.buyerId || "N/A"}</p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Detalles de la Venta */}
-              <div className="space-y-4">
-                <h3 className="text-lg font-medium text-gray-900 border-b border-gray-200 pb-2 flex items-center gap-2">
-                  <DollarSign className="text-green-600" size={20} />
-                  Detalles de la Venta
-                </h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                  <div className="bg-green-50 p-4 rounded-xl border border-green-200">
-                    <p className="text-sm text-green-600">Precio Total</p>
-                    <p className="text-2xl font-bold text-green-700">${selectedEvent.salePrice.toLocaleString()}</p>
-                  </div>
-                  <div className="bg-blue-50 p-4 rounded-xl border border-blue-200">
-                    <p className="text-sm text-blue-600">Precio por Kg</p>
-                    <p className="text-xl font-bold text-blue-700">${selectedEvent.pricePerKg}</p>
-                  </div>
-                  <div className="bg-purple-50 p-4 rounded-xl border border-purple-200">
-                    <p className="text-sm text-purple-600">Comisión</p>
-                    <p className="text-xl font-bold text-purple-700">${selectedEvent.commission.toLocaleString()}</p>
-                  </div>
-                  <div className="bg-gray-50 p-4 rounded-xl">
-                    <p className="text-sm text-gray-500">Estado del Pago</p>
-                    <div className="flex items-center gap-2 mt-1">
-                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                        selectedEvent.paymentStatus === "paid"
-                          ? "bg-green-100 text-green-800"
-                          : selectedEvent.paymentStatus === "pending"
-                          ? "bg-yellow-100 text-yellow-800"
-                          : "bg-red-100 text-red-800"
-                      }`}>
-                        {PAYMENT_STATUS_LABELS[selectedEvent.paymentStatus]}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Fechas y Logística */}
-              <div className="space-y-4">
-                <h3 className="text-lg font-medium text-gray-900 border-b border-gray-200 pb-2 flex items-center gap-2">
-                  <Truck className="text-orange-600" size={20} />
-                  Fechas y Logística
-                </h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                  <div className="bg-gray-50 p-4 rounded-xl">
-                    <p className="text-sm text-gray-500">Fecha de Venta</p>
-                    <p className="font-semibold text-gray-900">
-                      {new Date(selectedEvent.saleDate).toLocaleDateString()}
-                    </p>
-                  </div>
-                  <div className="bg-gray-50 p-4 rounded-xl">
-                    <p className="text-sm text-gray-500">Fecha de Entrega</p>
-                    <p className="font-semibold text-gray-900">
-                      {selectedEvent.deliveryDate 
-                        ? new Date(selectedEvent.deliveryDate).toLocaleDateString()
-                        : "No especificada"
-                      }
-                    </p>
-                  </div>
-                  <div className="bg-gray-50 p-4 rounded-xl">
-                    <p className="text-sm text-gray-500">Método de Entrega</p>
-                    <p className="font-semibold text-gray-900">
-                      {DELIVERY_METHOD_LABELS[selectedEvent.deliveryMethod]}
-                    </p>
-                  </div>
-                  <div className="bg-gray-50 p-4 rounded-xl">
-                    <p className="text-sm text-gray-500">Método de Pago</p>
-                    <p className="font-semibold text-gray-900">
-                      {PAYMENT_METHOD_LABELS[selectedEvent.paymentMethod]}
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Información Adicional */}
-              <div className="space-y-4">
-                <h3 className="text-lg font-medium text-gray-900 border-b border-gray-200 pb-2 flex items-center gap-2">
-                  <FileText className="text-indigo-600" size={20} />
-                  Información Adicional
-                </h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="bg-gradient-to-br from-gray-50 to-gray-100 p-4 rounded-xl border border-gray-200">
-                    <p className="text-sm text-gray-500">Certificado de Salud</p>
-                    <div className="flex items-center gap-2 mt-1">
-                      {selectedEvent.healthCertificate ? (
-                        <CheckCircle className="text-green-600" size={16} />
-                      ) : (
-                        <X className="text-red-600" size={16} />
-                      )}
-                      <span className="font-semibold text-gray-900">
-                        {selectedEvent.healthCertificate ? "Incluido" : "No incluido"}
-                      </span>
-                    </div>
-                  </div>
-                  <div className="bg-gradient-to-br from-gray-50 to-gray-100 p-4 rounded-xl border border-gray-200">
-                    <p className="text-sm text-gray-500">Tipo de Contrato</p>
-                    <p className="font-semibold text-gray-900">
-                      {CONTRACT_TYPE_LABELS[selectedEvent.contractType]}
-                    </p>
-                  </div>
-                </div>
-
-                {selectedEvent.notes && (
-                  <div className="bg-gradient-to-br from-gray-50 to-gray-100 p-4 rounded-xl border border-gray-200">
-                    <p className="text-sm text-gray-500 mb-2">Notas</p>
-                    <p className="text-gray-900">{selectedEvent.notes}</p>
-                  </div>
-                )}
-              </div>
-
-              {/* Ubicación */}
-              <div className="space-y-4">
-                <h3 className="text-lg font-medium text-gray-900 border-b border-gray-200 pb-2 flex items-center gap-2">
-                  <MapPin className="text-red-600" size={20} />
-                  Ubicación
-                </h3>
-                <div className="bg-gradient-to-br from-gray-50 to-gray-100 p-4 rounded-xl border border-gray-200">
-                  <p className="text-sm text-gray-500">Dirección</p>
-                  <p className="font-semibold text-gray-900">{selectedEvent.location.address}</p>
-                  <p className="text-sm text-gray-500 mt-1">
-                    Coordenadas: {selectedEvent.location.lat}, {selectedEvent.location.lng}
-                  </p>
-                </div>
-              </div>
-
-              {/* Fechas del Sistema */}
-              <div className="space-y-4">
-                <h3 className="text-lg font-medium text-gray-900 border-b border-gray-200 pb-2 flex items-center gap-2">
-                  <CalendarIcon className="text-gray-600" size={20} />
-                  Información del Sistema
-                </h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="bg-gradient-to-br from-gray-50 to-gray-100 p-4 rounded-xl border border-gray-200">
-                    <p className="text-sm text-gray-500">Fecha de Creación</p>
-                    <p className="font-semibold text-gray-900">
-                      {new Date(selectedEvent.createdAt).toLocaleString()}
-                    </p>
-                  </div>
-                  <div className="bg-gradient-to-br from-gray-50 to-gray-100 p-4 rounded-xl border border-gray-200">
-                    <p className="text-sm text-gray-500">Última Actualización</p>
-                    <p className="font-semibold text-gray-900">
-                      {new Date(selectedEvent.updatedAt).toLocaleString()}
-                    </p>
+                    <p className="text-sm text-gray-500">Precio Total</p>
+                    <p className="font-semibold text-gray-900">${selectedEvent.salePrice.toLocaleString()}</p>
                   </div>
                 </div>
               </div>
@@ -1226,9 +875,10 @@ const EventSales: React.FC = () => {
     );
   };
 
-  // Renderizar vista principal con el color de fondo actualizado
+  // Renderizar vista principal
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#519a7c] via-[#f2e9d8] to-[#f4ac3a] p-6">
+      <NotificationBanner />
       <AnimatePresence mode="wait">
         {viewMode === "list" && renderEventsList()}
         {(viewMode === "create" || viewMode === "edit") && renderForm()}
