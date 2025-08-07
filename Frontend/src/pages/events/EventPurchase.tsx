@@ -10,169 +10,8 @@ import {
   MapPin,
   X,
   Save,
-  Navigation,
-  Wifi,
-  WifiOff,
-  RefreshCw,
-  AlertTriangle,
-  CheckCircle,
-  Info
+  Navigation
 } from 'lucide-react';
-
-// ============================================================================
-// API SERVICE - Comunicación con el backend
-// ============================================================================
-
-const API_BASE_URL = "http://localhost:5000/api";
-
-interface ApiResponse<T = any> {
-  success: boolean;
-  message: string;
-  data?: T;
-  errors?: Record<string, string>;
-  error?: string;
-}
-
-class PurchaseApiService {
-  private static async makeRequest<T>(
-    endpoint: string,
-    options: RequestInit = {}
-  ): Promise<ApiResponse<T>> {
-    try {
-      const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-        headers: {
-          "Content-Type": "application/json",
-          ...options.headers,
-        },
-        ...options,
-      });
-
-      const data = await response.json();
-      
-      if (!response.ok) {
-        throw new Error(data.message || data.error || `HTTP error! status: ${response.status}`);
-      }
-
-      return data;
-    } catch (error) {
-      console.error(`Error in API request to ${endpoint}:`, error);
-      throw error;
-    }
-  }
-
-  // Test de conectividad
-  static async ping(): Promise<ApiResponse> {
-    return this.makeRequest("/ping");
-  }
-
-  // Estado del sistema
-  static async health(): Promise<ApiResponse> {
-    return this.makeRequest("/health");
-  }
-
-  // Registrar compra usando el endpoint de finanzas
-  static async recordPurchase(purchaseData: any): Promise<ApiResponse> {
-    return this.makeRequest("/finances/purchases/record", {
-      method: "POST",
-      body: JSON.stringify(purchaseData),
-    });
-  }
-
-  // Obtener resumen de gastos/compras
-  static async getExpenseOverview(params?: {
-    period?: string;
-    category?: string;
-    includeRecurring?: boolean;
-    includeBudgetComparison?: boolean;
-    sortBy?: string;
-  }): Promise<ApiResponse> {
-    const searchParams = new URLSearchParams();
-    if (params?.period) searchParams.append("period", params.period);
-    if (params?.category) searchParams.append("category", params.category);
-    if (params?.includeRecurring) searchParams.append("includeRecurring", params.includeRecurring.toString());
-    if (params?.includeBudgetComparison) searchParams.append("includeBudgetComparison", params.includeBudgetComparison.toString());
-    if (params?.sortBy) searchParams.append("sortBy", params.sortBy);
-
-    const queryString = searchParams.toString();
-    return this.makeRequest(`/finances/expenses/overview${queryString ? `?${queryString}` : ""}`);
-  }
-
-  // Obtener gastos recurrentes
-  static async getRecurringExpenses(params?: {
-    status?: string;
-    category?: string;
-    includeUpcoming?: boolean;
-    daysAhead?: string;
-  }): Promise<ApiResponse> {
-    const searchParams = new URLSearchParams();
-    if (params?.status) searchParams.append("status", params.status);
-    if (params?.category) searchParams.append("category", params.category);
-    if (params?.includeUpcoming) searchParams.append("includeUpcoming", params.includeUpcoming.toString());
-    if (params?.daysAhead) searchParams.append("daysAhead", params.daysAhead);
-
-    const queryString = searchParams.toString();
-    return this.makeRequest(`/finances/expenses/recurring${queryString ? `?${queryString}` : ""}`);
-  }
-
-  // Crear transacción financiera (compra)
-  static async createTransaction(transactionData: any): Promise<ApiResponse> {
-    return this.makeRequest("/finances/transactions", {
-      method: "POST",
-      body: JSON.stringify(transactionData),
-    });
-  }
-
-  // Obtener transacciones financieras
-  static async getTransactions(params?: {
-    type?: string;
-    category?: string;
-    startDate?: string;
-    endDate?: string;
-    status?: string;
-    page?: number;
-    limit?: number;
-  }): Promise<ApiResponse> {
-    const searchParams = new URLSearchParams();
-    if (params?.type) searchParams.append("type", params.type);
-    if (params?.category) searchParams.append("category", params.category);
-    if (params?.startDate) searchParams.append("startDate", params.startDate);
-    if (params?.endDate) searchParams.append("endDate", params.endDate);
-    if (params?.status) searchParams.append("status", params.status);
-    if (params?.page) searchParams.append("page", params.page.toString());
-    if (params?.limit) searchParams.append("limit", params.limit.toString());
-
-    const queryString = searchParams.toString();
-    return this.makeRequest(`/finances/transactions${queryString ? `?${queryString}` : ""}`);
-  }
-
-  // Actualizar transacción
-  static async updateTransaction(id: string, updates: any): Promise<ApiResponse> {
-    return this.makeRequest(`/finances/transactions/${id}`, {
-      method: "PUT",
-      body: JSON.stringify(updates),
-    });
-  }
-
-  // Eliminar transacción
-  static async deleteTransaction(id: string): Promise<ApiResponse> {
-    return this.makeRequest(`/finances/transactions/${id}`, {
-      method: "DELETE",
-    });
-  }
-
-  // Obtener estadísticas financieras
-  static async getFinancialStats(params?: {
-    period?: string;
-    type?: string;
-  }): Promise<ApiResponse> {
-    const searchParams = new URLSearchParams();
-    if (params?.period) searchParams.append("period", params.period);
-    if (params?.type) searchParams.append("type", params.type);
-
-    const queryString = searchParams.toString();
-    return this.makeRequest(`/finances/stats${queryString ? `?${queryString}` : ""}`);
-  }
-}
 
 // ============================================================================
 // INTERFACES Y TIPOS
@@ -223,7 +62,7 @@ enum PurchaseCategory {
 
 enum PaymentMethod {
   CASH = 'cash',
-  TRANSFER = 'bank_transfer',
+  TRANSFER = 'transfer',
   CHECK = 'check',
   CREDIT_CARD = 'credit_card',
   DEBIT_CARD = 'debit_card'
@@ -231,17 +70,13 @@ enum PaymentMethod {
 
 enum PurchaseStatus {
   PENDING = 'pending',
-  COMPLETED = 'approved',
+  COMPLETED = 'completed',
   CANCELLED = 'cancelled',
-  REFUNDED = 'overdue'
+  REFUNDED = 'refunded'
 }
 
 interface PurchaseFilters {
   search?: string;
-  category?: string;
-  status?: string;
-  startDate?: string;
-  endDate?: string;
 }
 
 interface PaginationInfo {
@@ -251,125 +86,6 @@ interface PaginationInfo {
   totalPages: number;
 }
 
-interface ConnectionState {
-  isConnected: boolean;
-  connectionStatus: "connected" | "disconnected" | "connecting";
-  lastChecked: Date;
-}
-
-interface NotificationState {
-  id: string;
-  type: "success" | "warning" | "error" | "info";
-  title: string;
-  message: string;
-  timestamp: Date;
-  autoHide?: boolean;
-}
-
-// ============================================================================
-// COMPONENTES DE NOTIFICACIÓN
-// ============================================================================
-
-const NotificationToast: React.FC<{
-  notification: NotificationState;
-  onClose: (id: string) => void;
-}> = ({ notification, onClose }) => {
-  const getIcon = () => {
-    switch (notification.type) {
-      case "success":
-        return <CheckCircle className="w-5 h-5 text-green-500" />;
-      case "warning":
-        return <AlertTriangle className="w-5 h-5 text-yellow-500" />;
-      case "error":
-        return <AlertTriangle className="w-5 h-5 text-red-500" />;
-      default:
-        return <Info className="w-5 h-5 text-blue-500" />;
-    }
-  };
-
-  const getBgColor = () => {
-    switch (notification.type) {
-      case "success":
-        return "bg-green-50 border-green-200";
-      case "warning":
-        return "bg-yellow-50 border-yellow-200";
-      case "error":
-        return "bg-red-50 border-red-200";
-      default:
-        return "bg-blue-50 border-blue-200";
-    }
-  };
-
-  useEffect(() => {
-    if (notification.autoHide) {
-      const timer = setTimeout(() => {
-        onClose(notification.id);
-      }, 5000);
-      return () => clearTimeout(timer);
-    }
-  }, [notification.id, notification.autoHide, onClose]);
-
-  return (
-    <div className={`p-4 rounded-lg border shadow-lg ${getBgColor()} max-w-sm mb-2`}>
-      <div className="flex items-start gap-3">
-        {getIcon()}
-        <div className="flex-1">
-          <h4 className="font-medium text-gray-900 text-sm">
-            {notification.title}
-          </h4>
-          <p className="text-gray-700 text-sm mt-1">{notification.message}</p>
-          <p className="text-gray-500 text-xs mt-2">
-            {notification.timestamp.toLocaleTimeString("es-MX")}
-          </p>
-        </div>
-        <button
-          onClick={() => onClose(notification.id)}
-          className="text-gray-400 hover:text-gray-600 transition-colors"
-        >
-          <X className="w-4 h-4" />
-        </button>
-      </div>
-    </div>
-  );
-};
-
-// Indicador de conexión
-const ConnectionIndicator: React.FC<{
-  connection: ConnectionState;
-  onTestConnection: () => void;
-}> = ({ connection, onTestConnection }) => {
-  return (
-    <div className="fixed bottom-4 left-4 z-30">
-      <div className="bg-white/90 backdrop-blur-sm rounded-lg px-3 py-2 shadow-lg border border-white/20 flex items-center gap-2">
-        {connection.connectionStatus === "connecting" ? (
-          <RefreshCw className="w-3 h-3 text-yellow-500 animate-spin" />
-        ) : connection.isConnected ? (
-          <Wifi className="w-3 h-3 text-green-500" />
-        ) : (
-          <WifiOff className="w-3 h-3 text-red-500" />
-        )}
-        
-        <span className="text-xs font-medium text-gray-700">
-          {connection.connectionStatus === "connecting" 
-            ? "Conectando..." 
-            : connection.isConnected 
-              ? "Backend conectado" 
-              : "Sin conexión"
-          }
-        </span>
-        
-        <button
-          onClick={onTestConnection}
-          className="text-xs text-blue-600 hover:text-blue-800 underline"
-          disabled={connection.connectionStatus === "connecting"}
-        >
-          Test
-        </button>
-      </div>
-    </div>
-  );
-};
-
 // ============================================================================
 // COMPONENTE PRINCIPAL
 // ============================================================================
@@ -377,7 +93,7 @@ const ConnectionIndicator: React.FC<{
 const EventPurchase: React.FC = () => {
   // Estados principales
   const [purchases, setPurchases] = useState<Purchase[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
+  const [loading, setLoading] = useState<boolean>(true); // Empezar en true para la carga inicial
   const [error, setError] = useState<string>('');
   const [selectedPurchase, setSelectedPurchase] = useState<Purchase | null>(null);
   
@@ -387,9 +103,7 @@ const EventPurchase: React.FC = () => {
   
   // Estados de filtros y búsqueda
   const [filters, setFilters] = useState<PurchaseFilters>({
-    search: '',
-    category: '',
-    status: ''
+    search: ''
   });
   
   // Estados para el formulario
@@ -405,556 +119,226 @@ const EventPurchase: React.FC = () => {
     totalPages: 0
   });
 
-  // Estados de conexión y notificaciones
-  const [connection, setConnection] = useState<ConnectionState>({
-    isConnected: false,
-    connectionStatus: "disconnected",
-    lastChecked: new Date()
-  });
-
-  const [notifications, setNotifications] = useState<NotificationState[]>([]);
-
-  // ============================================================================
-  // FUNCIONES DE NOTIFICACIÓN Y CONEXIÓN
-  // ============================================================================
-
-  const addNotification = (
-    notification: Omit<NotificationState, "id" | "timestamp">
-  ) => {
-    const newNotification: NotificationState = {
-      ...notification,
-      id: Date.now().toString(),
-      timestamp: new Date(),
-    };
-
-    setNotifications((prev) => [newNotification, ...prev]);
-  };
-
-  const removeNotification = (id: string) => {
-    setNotifications((prev) => prev.filter((n) => n.id !== id));
-  };
-
-  const testConnection = async (): Promise<boolean> => {
-    try {
-      setConnection(prev => ({ ...prev, connectionStatus: "connecting" }));
-      
-      const response = await PurchaseApiService.ping();
-      
-      if (response.success) {
-        setConnection({
-          isConnected: true,
-          connectionStatus: "connected",
-          lastChecked: new Date()
-        });
-        
-        addNotification({
-          type: "success",
-          title: "Conexión establecida",
-          message: "Backend conectado correctamente",
-          autoHide: true,
-        });
-        
-        return true;
-      } else {
-        throw new Error("Ping fallido");
-      }
-    } catch (error) {
-      console.error("Error de conexión:", error);
-      
-      setConnection({
-        isConnected: false,
-        connectionStatus: "disconnected",
-        lastChecked: new Date()
-      });
-      
-      addNotification({
-        type: "error",
-        title: "Error de conexión",
-        message: `No se pudo conectar al backend: ${error instanceof Error ? error.message : 'Error desconocido'}`,
-        autoHide: false,
-      });
-      
-      return false;
-    }
-  };
-
   // ============================================================================
   // EFECTOS Y HOOKS
   // ============================================================================
 
   useEffect(() => {
-    initializeApp();
-  }, []);
-
-  useEffect(() => {
-    if (connection.isConnected) {
-      loadPurchases();
-    }
-  }, [pagination.page, filters, connection.isConnected]);
-
-  const initializeApp = async () => {
-    setLoading(true);
-    const connected = await testConnection();
-    
-    if (connected) {
-      await loadPurchases();
-    } else {
-      // Cargar datos de fallback si no hay conexión
-      loadFallbackData();
-    }
-    
-    setLoading(false);
-  };
+    loadPurchases();
+  }, [pagination.page, filters]);
 
   // ============================================================================
   // FUNCIONES DE API
   // ============================================================================
 
   const loadPurchases = useCallback(async () => {
-    if (!connection.isConnected) {
-      loadFallbackData();
-      return;
-    }
-
     setLoading(true);
     setError('');
     
     try {
-      // Usar el endpoint de transacciones financieras del backend
-      const params = {
-        type: 'expense', // Las compras son gastos
-        category: filters.category || undefined,
-        status: filters.status || undefined,
-        page: pagination.page,
-        limit: pagination.limit
-      };
+      // Datos de prueba - simula una base de datos local
+      const mockPurchases: Purchase[] = [
+        {
+          id: '1',
+          purchaseCode: 'COMP-2025-001',
+          date: new Date('2025-01-15'),
+          vendorName: 'Forrajes del Norte S.A.',
+          vendorContact: 'juan.perez@forrajes.com',
+          description: 'Compra de alimento balanceado',
+          category: PurchaseCategory.FEED,
+          items: [
+            {
+              id: '1-1',
+              name: 'Alimento balanceado 18% proteína',
+              description: 'Saco de 40kg',
+              quantity: 50,
+              unit: 'saco',
+              unitPrice: 280,
+              totalPrice: 14000
+            }
+          ],
+          totalAmount: 14000,
+          currency: 'MXN',
+          paymentMethod: PaymentMethod.TRANSFER,
+          status: PurchaseStatus.COMPLETED,
+          location: '17.989242, -92.947472 (Villahermosa, Tabasco)',
+          notes: 'Entrega completa sin problemas',
+          invoiceNumber: 'F-2025-0215',
+          createdBy: 'admin',
+          createdAt: new Date('2025-01-15'),
+          updatedAt: new Date('2025-01-15')
+        },
+        {
+          id: '2',
+          purchaseCode: 'COMP-2025-002',
+          date: new Date('2025-01-20'),
+          vendorName: 'Veterinaria San Marcos',
+          vendorContact: 'contacto@vetsanmarcos.com',
+          description: 'Medicamentos y vacunas',
+          category: PurchaseCategory.MEDICATION,
+          items: [
+            {
+              id: '2-1',
+              name: 'Vacuna Triple Bovina',
+              description: 'Frasco 50 dosis',
+              quantity: 5,
+              unit: 'frasco',
+              unitPrice: 450,
+              totalPrice: 2250
+            },
+            {
+              id: '2-2',
+              name: 'Ivermectina 1%',
+              description: 'Frasco 500ml',
+              quantity: 2,
+              unit: 'frasco',
+              unitPrice: 320,
+              totalPrice: 640
+            }
+          ],
+          totalAmount: 2890,
+          currency: 'MXN',
+          paymentMethod: PaymentMethod.CASH,
+          status: PurchaseStatus.PENDING,
+          location: 'Clínica Veterinaria',
+          notes: 'Pendiente de aplicación',
+          invoiceNumber: 'VM-2025-0045',
+          createdBy: 'veterinario',
+          createdAt: new Date('2025-01-20'),
+          updatedAt: new Date('2025-01-20')
+        },
+        {
+          id: '3',
+          purchaseCode: 'COMP-2025-003',
+          date: new Date('2025-01-25'),
+          vendorName: 'Equipos Ganaderos MX',
+          vendorContact: 'ventas@equiposganaderos.mx',
+          description: 'Comederos automáticos',
+          category: PurchaseCategory.EQUIPMENT,
+          items: [
+            {
+              id: '3-1',
+              name: 'Comedero automático 200L',
+              description: 'Acero inoxidable con temporizador',
+              quantity: 3,
+              unit: 'pieza',
+              unitPrice: 1850,
+              totalPrice: 5550
+            }
+          ],
+          totalAmount: 5550,
+          currency: 'MXN',
+          paymentMethod: PaymentMethod.CREDIT_CARD,
+          status: PurchaseStatus.COMPLETED,
+          location: '17.995123, -92.943567 (Corral 3, Rancho San José)',
+          notes: 'Instalación incluida',
+          invoiceNumber: 'EQ-2025-0123',
+          createdBy: 'admin',
+          createdAt: new Date('2025-01-25'),
+          updatedAt: new Date('2025-01-25')
+        }
+      ];
 
-      const response = await PurchaseApiService.getTransactions(params);
+      // Simular filtrado por búsqueda
+      let filteredPurchases = mockPurchases;
       
-      if (response.success && response.data) {
-        // Transformar los datos del backend al formato de Purchase
-        const transactions = response.data.transactions || response.data || [];
-        const transformedPurchases = transformBackendTransactions(transactions);
-        
-        // Aplicar filtro de búsqueda local si existe
-        let filteredPurchases = transformedPurchases;
-        if (filters.search) {
-          const searchLower = filters.search.toLowerCase();
-          filteredPurchases = transformedPurchases.filter(purchase =>
-            purchase.purchaseCode.toLowerCase().includes(searchLower) ||
-            purchase.vendorName.toLowerCase().includes(searchLower) ||
-            purchase.description.toLowerCase().includes(searchLower)
-          );
-        }
-
-        setPurchases(filteredPurchases);
-        
-        // Actualizar paginación si está disponible en la respuesta
-        if (response.data.pagination) {
-          setPagination(prev => ({
-            ...prev,
-            total: response.data.pagination.total,
-            totalPages: response.data.pagination.totalPages
-          }));
-        }
-
-        addNotification({
-          type: "success",
-          title: "Datos cargados",
-          message: `Se cargaron ${filteredPurchases.length} compras desde el backend`,
-          autoHide: true,
-        });
-        
-      } else {
-        throw new Error(response.message || 'Error al cargar compras');
+      if (filters.search) {
+        const searchLower = filters.search.toLowerCase();
+        filteredPurchases = filteredPurchases.filter(purchase =>
+          purchase.purchaseCode.toLowerCase().includes(searchLower) ||
+          purchase.vendorName.toLowerCase().includes(searchLower) ||
+          purchase.description.toLowerCase().includes(searchLower)
+        );
       }
+
+      // Simular paginación
+      const total = filteredPurchases.length;
+      const totalPages = Math.ceil(total / pagination.limit);
+      const startIndex = (pagination.page - 1) * pagination.limit;
+      const endIndex = startIndex + pagination.limit;
+      const paginatedPurchases = filteredPurchases.slice(startIndex, endIndex);
+
+      setPurchases(paginatedPurchases);
+      setPagination(prev => ({
+        ...prev,
+        total,
+        totalPages
+      }));
       
     } catch (err) {
-      console.error('Error loading purchases from backend:', err);
-      
-      addNotification({
-        type: "warning",
-        title: "Error de conexión",
-        message: "Usando datos locales. Verifique la conexión al backend.",
-        autoHide: false,
-      });
-      
-      // Cargar datos de fallback
-      loadFallbackData();
+      console.error('Error loading purchases:', err);
+      setError(err instanceof Error ? err.message : 'Error al cargar compras');
+      setPurchases([]);
+      setPagination(prev => ({
+        ...prev,
+        total: 0,
+        totalPages: 0
+      }));
     } finally {
       setLoading(false);
     }
-  }, [pagination.page, pagination.limit, filters, connection.isConnected]);
-
-  const transformBackendTransactions = (transactions: any[]): Purchase[] => {
-    return transactions.map((transaction, index) => ({
-      id: transaction.id || `fallback-${index}`,
-      purchaseCode: transaction.reference || `COMP-${new Date().getFullYear()}-${String(index + 1).padStart(3, '0')}`,
-      date: new Date(transaction.date || transaction.createdAt),
-      vendorName: transaction.vendor?.name || transaction.description || 'Proveedor desconocido',
-      vendorContact: transaction.vendor?.contactInfo?.email || '',
-      description: transaction.description || '',
-      category: mapBackendCategoryToPurchaseCategory(transaction.category),
-      items: transaction.items || [],
-      totalAmount: transaction.amount || 0,
-      currency: transaction.currency || 'MXN',
-      paymentMethod: mapBackendPaymentMethod(transaction.paymentMethod),
-      status: mapBackendStatus(transaction.status),
-      location: transaction.location ? 
-        `${transaction.location.latitude}, ${transaction.location.longitude}` : '',
-      notes: transaction.notes || '',
-      invoiceNumber: transaction.invoiceNumber || '',
-      receiptUrl: transaction.attachments?.[0] || '',
-      createdBy: transaction.createdBy || 'system',
-      createdAt: new Date(transaction.createdAt || Date.now()),
-      updatedAt: new Date(transaction.updatedAt || Date.now())
-    }));
-  };
-
-  const mapBackendCategoryToPurchaseCategory = (backendCategory: string): PurchaseCategory => {
-    const mapping: Record<string, PurchaseCategory> = {
-      'feed': PurchaseCategory.FEED,
-      'feed_purchase': PurchaseCategory.FEED,
-      'veterinary': PurchaseCategory.MEDICATION,
-      'veterinary_services': PurchaseCategory.SERVICES,
-      'medication': PurchaseCategory.MEDICATION,
-      'equipment': PurchaseCategory.EQUIPMENT,
-      'equipment_purchase': PurchaseCategory.EQUIPMENT,
-      'utilities': PurchaseCategory.UTILITIES,
-      'maintenance': PurchaseCategory.MAINTENANCE,
-      'services': PurchaseCategory.SERVICES,
-      'professional_services': PurchaseCategory.SERVICES
-    };
-    
-    return mapping[backendCategory] || PurchaseCategory.OTHER;
-  };
-
-  const mapBackendPaymentMethod = (backendMethod: string): PaymentMethod => {
-    const mapping: Record<string, PaymentMethod> = {
-      'cash': PaymentMethod.CASH,
-      'bank_transfer': PaymentMethod.TRANSFER,
-      'check': PaymentMethod.CHECK,
-      'credit_card': PaymentMethod.CREDIT_CARD,
-      'debit_card': PaymentMethod.DEBIT_CARD
-    };
-    
-    return mapping[backendMethod] || PaymentMethod.CASH;
-  };
-
-  const mapBackendStatus = (backendStatus: string): PurchaseStatus => {
-    const mapping: Record<string, PurchaseStatus> = {
-      'pending': PurchaseStatus.PENDING,
-      'approved': PurchaseStatus.COMPLETED,
-      'paid': PurchaseStatus.COMPLETED,
-      'cancelled': PurchaseStatus.CANCELLED,
-      'overdue': PurchaseStatus.REFUNDED
-    };
-    
-    return mapping[backendStatus] || PurchaseStatus.PENDING;
-  };
-
-  const loadFallbackData = () => {
-    // Datos de prueba para cuando no hay conexión al backend
-    const mockPurchases: Purchase[] = [
-      {
-        id: '1',
-        purchaseCode: 'COMP-2025-001',
-        date: new Date('2025-01-15'),
-        vendorName: 'Forrajes del Norte S.A.',
-        vendorContact: 'juan.perez@forrajes.com',
-        description: 'Compra de alimento balanceado',
-        category: PurchaseCategory.FEED,
-        items: [
-          {
-            id: '1-1',
-            name: 'Alimento balanceado 18% proteína',
-            description: 'Saco de 40kg',
-            quantity: 50,
-            unit: 'saco',
-            unitPrice: 280,
-            totalPrice: 14000
-          }
-        ],
-        totalAmount: 14000,
-        currency: 'MXN',
-        paymentMethod: PaymentMethod.TRANSFER,
-        status: PurchaseStatus.COMPLETED,
-        location: '17.989242, -92.947472 (Villahermosa, Tabasco)',
-        notes: 'Entrega completa sin problemas',
-        invoiceNumber: 'F-2025-0215',
-        createdBy: 'admin',
-        createdAt: new Date('2025-01-15'),
-        updatedAt: new Date('2025-01-15')
-      },
-      {
-        id: '2',
-        purchaseCode: 'COMP-2025-002',
-        date: new Date('2025-01-20'),
-        vendorName: 'Veterinaria San Marcos',
-        vendorContact: 'contacto@vetsanmarcos.com',
-        description: 'Medicamentos y vacunas',
-        category: PurchaseCategory.MEDICATION,
-        items: [
-          {
-            id: '2-1',
-            name: 'Vacuna Triple Bovina',
-            description: 'Frasco 50 dosis',
-            quantity: 5,
-            unit: 'frasco',
-            unitPrice: 450,
-            totalPrice: 2250
-          },
-          {
-            id: '2-2',
-            name: 'Ivermectina 1%',
-            description: 'Frasco 500ml',
-            quantity: 2,
-            unit: 'frasco',
-            unitPrice: 320,
-            totalPrice: 640
-          }
-        ],
-        totalAmount: 2890,
-        currency: 'MXN',
-        paymentMethod: PaymentMethod.CASH,
-        status: PurchaseStatus.PENDING,
-        location: 'Clínica Veterinaria',
-        notes: 'Pendiente de aplicación',
-        invoiceNumber: 'VM-2025-0045',
-        createdBy: 'veterinario',
-        createdAt: new Date('2025-01-20'),
-        updatedAt: new Date('2025-01-20')
-      }
-    ];
-
-    // Aplicar filtros
-    let filteredPurchases = mockPurchases;
-    
-    if (filters.search) {
-      const searchLower = filters.search.toLowerCase();
-      filteredPurchases = filteredPurchases.filter(purchase =>
-        purchase.purchaseCode.toLowerCase().includes(searchLower) ||
-        purchase.vendorName.toLowerCase().includes(searchLower) ||
-        purchase.description.toLowerCase().includes(searchLower)
-      );
-    }
-
-    if (filters.category) {
-      filteredPurchases = filteredPurchases.filter(purchase =>
-        purchase.category === filters.category
-      );
-    }
-
-    if (filters.status) {
-      filteredPurchases = filteredPurchases.filter(purchase =>
-        purchase.status === filters.status
-      );
-    }
-
-    setPurchases(filteredPurchases);
-    setPagination(prev => ({
-      ...prev,
-      total: filteredPurchases.length,
-      totalPages: Math.ceil(filteredPurchases.length / prev.limit)
-    }));
-  };
+  }, [pagination.page, pagination.limit, filters]);
 
   const savePurchase = async (purchaseData: Partial<Purchase>) => {
-    if (!connection.isConnected) {
-      // Modo offline - guardar localmente
-      savePurchaseOffline(purchaseData);
-      return;
-    }
-
     setLoading(true);
     setError('');
     
     try {
-      // Transformar datos de Purchase a formato del backend
-      const transactionData = {
-        type: 'expense',
-        category: mapPurchaseCategoryToBackend(purchaseData.category!),
-        amount: purchaseData.totalAmount || 0,
-        currency: purchaseData.currency || 'MXN',
-        description: purchaseData.description || '',
-        date: purchaseData.date || new Date(),
-        paymentMethod: mapPaymentMethodToBackend(purchaseData.paymentMethod!),
-        vendor: {
-          name: purchaseData.vendorName || '',
-          contactInfo: {
-            email: purchaseData.vendorContact || ''
-          }
-        },
-        location: purchaseData.location ? {
-          latitude: parseFloat(purchaseData.location.split(',')[0]) || 0,
-          longitude: parseFloat(purchaseData.location.split(',')[1]) || 0,
-          description: purchaseData.location
-        } : undefined,
-        reference: purchaseData.purchaseCode,
-        invoiceNumber: purchaseData.invoiceNumber,
-        notes: purchaseData.notes,
-        tags: [purchaseData.category || 'purchase']
-      };
-
-      let response;
+      await new Promise(resolve => setTimeout(resolve, 500));
       
       if (modalMode === 'edit' && selectedPurchase) {
         // Actualizar compra existente
-        response = await PurchaseApiService.updateTransaction(selectedPurchase.id, transactionData);
+        setPurchases(prev => prev.map(purchase => 
+          purchase.id === selectedPurchase.id 
+            ? { ...purchase, ...purchaseData, updatedAt: new Date() }
+            : purchase
+        ));
       } else {
         // Crear nueva compra
-        response = await PurchaseApiService.createTransaction(transactionData);
-      }
-
-      if (response.success) {
-        addNotification({
-          type: "success",
-          title: modalMode === 'edit' ? "Compra actualizada" : "Compra registrada",
-          message: modalMode === 'edit' 
-            ? "La compra se ha actualizado correctamente" 
-            : "La nueva compra se ha registrado en el sistema",
-          autoHide: true,
-        });
-
-        // Recargar la lista
-        await loadPurchases();
+        const newPurchase: Purchase = {
+          id: Date.now().toString(),
+          purchaseCode: `COMP-2025-${String(Date.now()).slice(-3)}`,
+          date: new Date(),
+          createdBy: 'admin',
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          currency: 'MXN',
+          items: [],
+          totalAmount: 0,
+          ...purchaseData
+        } as Purchase;
         
-        // Cerrar modal
-        setShowModal(false);
-        setSelectedPurchase(null);
-        setFormData({});
-        setFormErrors({});
-        setGettingLocation(false);
-      } else {
-        throw new Error(response.message || 'Error al guardar compra');
+        setPurchases(prev => [newPurchase, ...prev]);
       }
+      
+      setShowModal(false);
+      setSelectedPurchase(null);
+      setFormData({});
+      setFormErrors({});
+      setGettingLocation(false);
       
     } catch (err) {
       console.error('Error saving purchase:', err);
-      
-      addNotification({
-        type: "error",
-        title: "Error al guardar",
-        message: `No se pudo guardar la compra: ${err instanceof Error ? err.message : 'Error desconocido'}`,
-        autoHide: false,
-      });
+      setError(err instanceof Error ? err.message : 'Error al guardar compra');
     } finally {
       setLoading(false);
     }
-  };
-
-  const savePurchaseOffline = async (purchaseData: Partial<Purchase>) => {
-    // Simular guardado offline
-    await new Promise(resolve => setTimeout(resolve, 500));
-    
-    if (modalMode === 'edit' && selectedPurchase) {
-      // Actualizar compra existente
-      setPurchases(prev => prev.map(purchase => 
-        purchase.id === selectedPurchase.id 
-          ? { ...purchase, ...purchaseData, updatedAt: new Date() }
-          : purchase
-      ));
-    } else {
-      // Crear nueva compra
-      const newPurchase: Purchase = {
-        id: Date.now().toString(),
-        purchaseCode: `COMP-2025-${String(Date.now()).slice(-3)}`,
-        date: new Date(),
-        createdBy: 'admin',
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        currency: 'MXN',
-        items: [],
-        totalAmount: 0,
-        ...purchaseData
-      } as Purchase;
-      
-      setPurchases(prev => [newPurchase, ...prev]);
-    }
-    
-    addNotification({
-      type: "warning",
-      title: "Guardado offline",
-      message: "La compra se guardó localmente. Se sincronizará cuando se restaure la conexión.",
-      autoHide: false,
-    });
-    
-    setShowModal(false);
-    setSelectedPurchase(null);
-    setFormData({});
-    setFormErrors({});
-    setGettingLocation(false);
-  };
-
-  const mapPurchaseCategoryToBackend = (category: PurchaseCategory): string => {
-    const mapping: Record<PurchaseCategory, string> = {
-      [PurchaseCategory.FEED]: 'feed_purchase',
-      [PurchaseCategory.MEDICATION]: 'medication',
-      [PurchaseCategory.EQUIPMENT]: 'equipment_purchase',
-      [PurchaseCategory.SERVICES]: 'professional_services',
-      [PurchaseCategory.MAINTENANCE]: 'maintenance',
-      [PurchaseCategory.UTILITIES]: 'utilities',
-      [PurchaseCategory.OTHER]: 'other_expenses'
-    };
-    
-    return mapping[category] || 'other_expenses';
-  };
-
-  const mapPaymentMethodToBackend = (method: PaymentMethod): string => {
-    const mapping: Record<PaymentMethod, string> = {
-      [PaymentMethod.CASH]: 'cash',
-      [PaymentMethod.TRANSFER]: 'bank_transfer',
-      [PaymentMethod.CHECK]: 'check',
-      [PaymentMethod.CREDIT_CARD]: 'credit_card',
-      [PaymentMethod.DEBIT_CARD]: 'debit_card'
-    };
-    
-    return mapping[method] || 'cash';
   };
 
   const deletePurchase = async (id: string) => {
     if (!confirm('¿Está seguro de eliminar esta compra? Esta acción no se puede deshacer.')) return;
     
-    if (!connection.isConnected) {
-      // Modo offline
-      setPurchases(prev => prev.filter(purchase => purchase.id !== id));
-      addNotification({
-        type: "warning",
-        title: "Eliminado offline",
-        message: "La compra se eliminó localmente. El cambio se sincronizará cuando se restaure la conexión.",
-        autoHide: false,
-      });
-      return;
-    }
-    
     setLoading(true);
     setError('');
     
     try {
-      const response = await PurchaseApiService.deleteTransaction(id);
+      await new Promise(resolve => setTimeout(resolve, 300));
       
-      if (response.success) {
-        setPurchases(prev => prev.filter(purchase => purchase.id !== id));
-        
-        addNotification({
-          type: "success",
-          title: "Compra eliminada",
-          message: "La compra se ha eliminado correctamente del sistema",
-          autoHide: true,
-        });
-      } else {
-        throw new Error(response.message || 'Error al eliminar compra');
-      }
+      setPurchases(prev => prev.filter(purchase => purchase.id !== id));
       
     } catch (err) {
       console.error('Error deleting purchase:', err);
-      
-      addNotification({
-        type: "error",
-        title: "Error al eliminar",
-        message: `No se pudo eliminar la compra: ${err instanceof Error ? err.message : 'Error desconocido'}`,
-        autoHide: false,
-      });
+      setError(err instanceof Error ? err.message : 'Error al eliminar compra');
     } finally {
       setLoading(false);
     }
@@ -1143,6 +527,7 @@ const EventPurchase: React.FC = () => {
   const reverseGeocode = async (lat: number, lng: number) => {
     try {
       // Usar un servicio gratuito de geocodificación inversa
+      // Nota: En producción, considera usar un servicio más robusto como Google Maps API
       const response = await fetch(
         `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lng}&localityLanguage=es`
       );
@@ -1679,7 +1064,7 @@ const EventPurchase: React.FC = () => {
             Gestión de Compras
           </h1>
           <p className="text-gray-600">
-            Registra, edita y gestiona todas las compras de tu rancho - Conectado al Backend
+            Registra, edita y gestiona todas las compras de tu rancho
           </p>
         </div>
 
@@ -1692,43 +1077,15 @@ const EventPurchase: React.FC = () => {
 
         {/* Barra de herramientas */}
         <div className="mb-6 flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center">
-          <div className="flex flex-col sm:flex-row gap-4 flex-1">
-            <div className="relative flex-1 max-w-md">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
-              <input
-                type="text"
-                placeholder="Buscar compras..."
-                value={filters.search || ''}
-                onChange={(e) => handleFilterChange('search', e.target.value)}
-                className="pl-10 w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white/90 backdrop-blur-sm"
-              />
-            </div>
-            
-            <select
-              value={filters.category || ''}
-              onChange={(e) => handleFilterChange('category', e.target.value)}
-              className="border border-gray-300 rounded-md px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white/90 backdrop-blur-sm"
-            >
-              <option value="">Todas las categorías</option>
-              {Object.values(PurchaseCategory).map(category => (
-                <option key={category} value={category}>
-                  {getCategoryLabel(category)}
-                </option>
-              ))}
-            </select>
-
-            <select
-              value={filters.status || ''}
-              onChange={(e) => handleFilterChange('status', e.target.value)}
-              className="border border-gray-300 rounded-md px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white/90 backdrop-blur-sm"
-            >
-              <option value="">Todos los estados</option>
-              {Object.values(PurchaseStatus).map(status => (
-                <option key={status} value={status}>
-                  {getStatusLabel(status)}
-                </option>
-              ))}
-            </select>
+          <div className="relative flex-1 max-w-md">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
+            <input
+              type="text"
+              placeholder="Buscar compras..."
+              value={filters.search || ''}
+              onChange={(e) => handleFilterChange('search', e.target.value)}
+              className="pl-10 w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white/90 backdrop-blur-sm"
+            />
           </div>
           
           <div className="flex gap-2">
@@ -1745,14 +1102,6 @@ const EventPurchase: React.FC = () => {
             >
               <Download size={20} />
               Exportar
-            </button>
-            <button
-              onClick={() => loadPurchases()}
-              disabled={loading}
-              className="flex items-center gap-2 bg-gray-600 text-white px-4 py-2 rounded-md hover:bg-gray-700 transition-colors shadow-lg disabled:opacity-50"
-            >
-              <RefreshCw size={20} className={loading ? 'animate-spin' : ''} />
-              Actualizar
             </button>
           </div>
         </div>
@@ -1775,10 +1124,7 @@ const EventPurchase: React.FC = () => {
               No hay compras registradas
             </h3>
             <p className="text-gray-500 mb-4">
-              {connection.isConnected 
-                ? "Comienza registrando tu primera compra" 
-                : "Sin conexión al backend. Verifica la conectividad."
-              }
+              Comienza registrando tu primera compra
             </p>
             <button
               onClick={handleCreate}
@@ -1856,23 +1202,6 @@ const EventPurchase: React.FC = () => {
             </div>
           </div>
         )}
-
-        {/* Panel de notificaciones */}
-        <div className="fixed top-4 right-4 z-50 space-y-2 max-w-sm">
-          {notifications.slice(0, 3).map((notification) => (
-            <NotificationToast
-              key={notification.id}
-              notification={notification}
-              onClose={removeNotification}
-            />
-          ))}
-        </div>
-
-        {/* Indicador de conexión */}
-        <ConnectionIndicator 
-          connection={connection} 
-          onTestConnection={testConnection}
-        />
       </div>
     </div>
   );

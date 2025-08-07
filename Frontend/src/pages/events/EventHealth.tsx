@@ -21,9 +21,6 @@ import {
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
-// ==================== CONFIGURACIÓN API ====================
-const API_BASE_URL = 'http://localhost:5000/api';
-
 // ==================== TIPOS ====================
 interface HealthEvent {
   id: string;
@@ -46,96 +43,6 @@ interface HealthEvent {
   veterinarian?: string;
   createdAt: string;
 }
-
-// ==================== SERVICIOS API ====================
-const healthEventService = {
-  // Obtener todos los eventos
-  getAll: async (): Promise<HealthEvent[]> => {
-    try {
-      const response = await fetch(`${API_BASE_URL}/health-events`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error(`Error ${response.status}: ${response.statusText}`);
-      }
-
-      const data = await response.json();
-      return data;
-    } catch (error) {
-      console.error('Error al obtener eventos:', error);
-      throw error;
-    }
-  },
-
-  // Crear un evento
-  create: async (eventData: Omit<HealthEvent, 'id' | 'createdAt'>): Promise<HealthEvent> => {
-    try {
-      const response = await fetch(`${API_BASE_URL}/health-events`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(eventData),
-      });
-
-      if (!response.ok) {
-        throw new Error(`Error ${response.status}: ${response.statusText}`);
-      }
-
-      const data = await response.json();
-      return data;
-    } catch (error) {
-      console.error('Error al crear evento:', error);
-      throw error;
-    }
-  },
-
-  // Actualizar un evento
-  update: async (id: string, eventData: Partial<HealthEvent>): Promise<HealthEvent> => {
-    try {
-      const response = await fetch(`${API_BASE_URL}/health-events/${id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(eventData),
-      });
-
-      if (!response.ok) {
-        throw new Error(`Error ${response.status}: ${response.statusText}`);
-      }
-
-      const data = await response.json();
-      return data;
-    } catch (error) {
-      console.error('Error al actualizar evento:', error);
-      throw error;
-    }
-  },
-
-  // Eliminar un evento
-  delete: async (id: string): Promise<void> => {
-    try {
-      const response = await fetch(`${API_BASE_URL}/health-events/${id}`, {
-        method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error(`Error ${response.status}: ${response.statusText}`);
-      }
-    } catch (error) {
-      console.error('Error al eliminar evento:', error);
-      throw error;
-    }
-  },
-};
 
 // ==================== DATOS ====================
 const EVENT_TYPES = [
@@ -161,7 +68,6 @@ const EventHealth: React.FC = () => {
   const [events, setEvents] = useState<HealthEvent[]>([]);
   const [filteredEvents, setFilteredEvents] = useState<HealthEvent[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
 
   // Estados de filtros
   const [searchTerm, setSearchTerm] = useState("");
@@ -196,23 +102,61 @@ const EventHealth: React.FC = () => {
   const [saving, setSaving] = useState(false);
 
   // ==================== FUNCIONES DE CARGA ====================
-  const loadEvents = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      const eventsData = await healthEventService.getAll();
-      setEvents(eventsData);
-    } catch (error) {
-      console.error('Error cargando eventos:', error);
-      setError('Error al cargar los eventos. Verifique que el servidor esté funcionando.');
-      setEvents([]);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   useEffect(() => {
-    loadEvents();
+    const loadData = async () => {
+      setLoading(true);
+      await new Promise(resolve => setTimeout(resolve, 1000));
+
+      const mockEvents: HealthEvent[] = [
+        {
+          id: "1",
+          bovineName: "Luna",
+          bovineTag: "L-001",
+          eventType: "routine_checkup",
+          status: "completed",
+          priority: "medium",
+          scheduledDate: "2024-12-20T09:00:00",
+          checkType: "general_exam",
+          temperature: 38.5,
+          weight: 450,
+          diagnosis: "Estado general bueno",
+          treatment: "Ninguno",
+          prognosis: "excellent",
+          cost: 150,
+          latitude: 17.9869,
+          longitude: -92.9303,
+          notes: "Revisión rutinaria sin novedades",
+          veterinarian: "Dr. Carlos Herrera",
+          createdAt: "2024-12-20T08:00:00",
+        },
+        {
+          id: "2",
+          bovineName: "Esperanza",
+          bovineTag: "E-002",
+          eventType: "disease_treatment",
+          status: "in_progress",
+          priority: "high",
+          scheduledDate: "2024-12-18T10:00:00",
+          checkType: "emergency_exam",
+          temperature: 39.8,
+          weight: 420,
+          diagnosis: "Neumonía bacteriana leve",
+          treatment: "Antibioterapia con penicilina",
+          prognosis: "good",
+          cost: 280,
+          latitude: 17.9869,
+          longitude: -92.9303,
+          notes: "Respondiendo bien al tratamiento",
+          veterinarian: "Dr. Carlos Herrera",
+          createdAt: "2024-12-18T09:00:00",
+        },
+      ];
+
+      setEvents(mockEvents);
+      setLoading(false);
+    };
+
+    loadData();
   }, []);
 
   useEffect(() => {
@@ -314,7 +258,8 @@ const EventHealth: React.FC = () => {
     setSaving(true);
 
     try {
-      const eventData = {
+      const newEvent: HealthEvent = {
+        id: selectedEvent?.id || Date.now().toString(),
         bovineName: formName,
         bovineTag: formTag || formName.substring(0, 3).toUpperCase() + "-" + Math.floor(Math.random() * 1000),
         eventType: formType,
@@ -332,36 +277,27 @@ const EventHealth: React.FC = () => {
         longitude: parseFloat(formLng),
         notes: formNotes || undefined,
         veterinarian: formVet || undefined,
+        createdAt: selectedEvent?.createdAt || new Date().toISOString(),
       };
 
       if (isEditing && selectedEvent) {
-        // Actualizar evento existente
-        const updatedEvent = await healthEventService.update(selectedEvent.id, eventData);
-        setEvents(prev => prev.map(event => event.id === selectedEvent.id ? updatedEvent : event));
+        setEvents(prev => prev.map(event => event.id === selectedEvent.id ? newEvent : event));
       } else {
-        // Crear nuevo evento
-        const newEvent = await healthEventService.create(eventData);
         setEvents(prev => [newEvent, ...prev]);
       }
 
       closeModal();
     } catch (error) {
-      console.error("Error al guardar:", error);
-      alert("Error al guardar el evento. Por favor, intente nuevamente.");
+      console.error("Error:", error);
+      alert("Error al guardar");
     } finally {
       setSaving(false);
     }
   };
 
-  const deleteEvent = async (id: string) => {
-    if (window.confirm("¿Está seguro de que desea eliminar este evento?")) {
-      try {
-        await healthEventService.delete(id);
-        setEvents(prev => prev.filter(event => event.id !== id));
-      } catch (error) {
-        console.error("Error al eliminar:", error);
-        alert("Error al eliminar el evento. Por favor, intente nuevamente.");
-      }
+  const deleteEvent = (id: string) => {
+    if (window.confirm("¿Eliminar evento?")) {
+      setEvents(prev => prev.filter(event => event.id !== id));
     }
   };
 
@@ -435,25 +371,7 @@ const EventHealth: React.FC = () => {
       <div className="min-h-screen bg-gradient-to-br from-[#519a7c] via-[#f2e9d8] to-[#f4ac3a] p-6 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-[#519a7c] mx-auto mb-4"></div>
-          <p className="text-gray-800 text-lg font-medium">Cargando eventos...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-[#519a7c] via-[#f2e9d8] to-[#f4ac3a] p-6 flex items-center justify-center">
-        <div className="text-center bg-white/80 backdrop-blur-sm rounded-2xl p-8 border border-red-200">
-          <AlertTriangle className="h-16 w-16 text-red-500 mx-auto mb-4" />
-          <h2 className="text-xl font-bold text-gray-900 mb-2">Error de Conexión</h2>
-          <p className="text-gray-600 mb-6">{error}</p>
-          <button
-            onClick={loadEvents}
-            className="bg-gradient-to-r from-[#519a7c] to-[#f4ac3a] text-white px-6 py-3 rounded-xl font-medium hover:from-[#4e9c75] hover:to-[#e8a234]"
-          >
-            Reintentar
-          </button>
+          <p className="text-gray-800 text-lg font-medium">Cargando...</p>
         </div>
       </div>
     );

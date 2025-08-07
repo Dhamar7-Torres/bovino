@@ -190,8 +190,6 @@ interface Cow {
   updatedAt: string;
 }
 
-
-
 interface CowFilters {
   searchTerm: string;
   breed: string[];
@@ -203,8 +201,6 @@ interface CowFilters {
   location: string[];
   activeOnly: boolean;
 }
-
-
 
 // ===================================================================
 // COMPONENTES AUXILIARES
@@ -294,36 +290,6 @@ const Modal: React.FC<{
               <X className="w-5 h-5 text-white" />
             </button>
           </div>
-
-        {/* Notas */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Notas
-          </label>
-          <textarea
-            value={formData.notes || ''}
-            onChange={(e) => handleInputChange('notes', e.target.value)}
-            rows={3}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
-            placeholder="Observaciones, comentarios especiales..."
-            disabled={isSubmitting}
-          />
-        </div>
-
-        {/* Estado activo */}
-        <div className="flex items-center">
-          <input
-            type="checkbox"
-            id="active"
-            checked={formData.active ?? true}
-            onChange={(e) => handleInputChange('active', e.target.checked)}
-            className="h-4 w-4 text-[#519a7c] focus:ring-[#519a7c] border-gray-300 rounded"
-            disabled={isSubmitting}
-          />
-          <label htmlFor="active" className="ml-2 block text-sm text-gray-900">
-            Vaca activa
-          </label>
-        </div>
           
           <div className="p-6 max-h-[calc(90vh-140px)] overflow-y-auto">
             {children}
@@ -374,7 +340,7 @@ const ConnectionStatus: React.FC<{
 );
 
 // ===================================================================
-// COMPONENTES DE DETALLES Y FORMULARIOS (mantienen la estructura original pero con API)
+// COMPONENTE DE DETALLES DE VACA
 // ===================================================================
 
 const CowDetailsModal: React.FC<{
@@ -444,15 +410,20 @@ const CowDetailsModal: React.FC<{
           </div>
         </div>
         
-        {/* Resto del contenido del modal (mantener estructura original) */}
-        {/* ... */}
+        {/* Más información si es necesaria */}
+        {cow.notes && (
+          <div className="bg-gray-50 rounded-lg p-4">
+            <h3 className="text-lg font-semibold text-gray-900 mb-3">Notas</h3>
+            <p className="text-gray-700">{cow.notes}</p>
+          </div>
+        )}
       </div>
     </Modal>
   );
 };
 
 // ===================================================================
-// FORMULARIO DE VACAS CON API
+// FORMULARIO DE VACAS CON API - CORREGIDO
 // ===================================================================
 
 const CowFormModal: React.FC<{
@@ -487,7 +458,33 @@ const CowFormModal: React.FC<{
     }
   };
 
+  // Función de validación que faltaba
+  const validateForm = (): boolean => {
+    const newErrors: Record<string, string> = {};
 
+    if (!formData.name?.trim()) {
+      newErrors.name = 'El nombre es requerido';
+    }
+
+    if (!formData.earTag?.trim()) {
+      newErrors.earTag = 'El número de arete es requerido';
+    }
+
+    if (!formData.breed) {
+      newErrors.breed = 'La raza es requerida';
+    }
+
+    if (!formData.birthDate) {
+      newErrors.birthDate = 'La fecha de nacimiento es requerida';
+    }
+
+    if (!formData.weight || formData.weight <= 0) {
+      newErrors.weight = 'El peso debe ser mayor a 0';
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -511,7 +508,7 @@ const CowFormModal: React.FC<{
       size="xl"
     >
       <form onSubmit={handleSubmit} className="space-y-6">
-        {/* Campos del formulario (mantener estructura original) */}
+        {/* Campos del formulario */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -673,6 +670,36 @@ const CowFormModal: React.FC<{
               <option value="retired">Retirada</option>
             </select>
           </div>
+        </div>
+
+        {/* Notas */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Notas
+          </label>
+          <textarea
+            value={formData.notes || ''}
+            onChange={(e) => handleInputChange('notes', e.target.value)}
+            rows={3}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#519a7c] focus:border-transparent"
+            placeholder="Observaciones, comentarios especiales..."
+            disabled={isSubmitting}
+          />
+        </div>
+
+        {/* Estado activo */}
+        <div className="flex items-center">
+          <input
+            type="checkbox"
+            id="active"
+            checked={formData.active ?? true}
+            onChange={(e) => handleInputChange('active', e.target.checked)}
+            className="h-4 w-4 text-[#519a7c] focus:ring-[#519a7c] border-gray-300 rounded"
+            disabled={isSubmitting}
+          />
+          <label htmlFor="active" className="ml-2 block text-sm text-gray-900">
+            Vaca activa
+          </label>
         </div>
 
         {/* Botones */}

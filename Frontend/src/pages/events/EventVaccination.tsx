@@ -1,11 +1,14 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   MapPin,
   Syringe,
   DollarSign,
+  Heart,
   ArrowLeft,
   Save,
   Plus,
+  Activity,
   Edit,
   Trash2,
   X,
@@ -18,65 +21,235 @@ import {
   Clock,
   CheckCircle,
   AlertTriangle,
-  Wifi,
-  WifiOff,
 } from "lucide-react";
 
-// Configuración del backend
-const API_BASE_URL = 'http://localhost:5000';
-
-// Tipos simplificados
+// Interfaces
 interface VaccinationEvent {
   id: string;
   bovineIds: string[];
-  bovineName: string;
+  bovineName?: string;
   vaccineName: string;
   vaccineType: string;
   manufacturer: string;
   batchNumber: string;
+  expirationDate: string;
   veterinarianName: string;
   applicationDate: string;
   applicationTime: string;
   doseAmount: number;
   doseUnit: string;
+  applicationMethod: string;
+  applicationSite: string;
   location: {
     lat: number;
     lng: number;
     address: string;
   };
+  nextDueDate: string;
   cost: number;
+  diseasesPrevented: string[];
   notes: string;
-  status: string;
+  status: "completed" | "pending" | "cancelled" | "scheduled";
   createdAt: string;
 }
 
-interface ConnectionStatusProps {
-  isOnline: boolean;
-  isConnecting: boolean;
+interface TimelineEvent {
+  id: string;
+  type: "vaccination";
+  title: string;
+  description: string;
+  date: string;
+  time: string;
+  location: string;
+  bovineId: string;
+  bovineName?: string;
+  details: { [key: string]: any };
+  status: "completed" | "pending" | "cancelled" | "in_progress";
+  priority: "low" | "medium" | "high" | "critical";
+  createdBy: string;
+  cost?: number;
+  notes?: string;
 }
 
-// Componente de estado de conexión
-const ConnectionStatus: React.FC<ConnectionStatusProps> = ({ isOnline, isConnecting }) => (
-  <div className={`flex items-center space-x-2 px-3 py-1 rounded-full text-xs ${
-    isConnecting ? 'bg-yellow-100 text-yellow-800' :
-    isOnline ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-  }`}>
-    {isConnecting ? (
-      <RefreshCw className="h-3 w-3 animate-spin" />
-    ) : isOnline ? (
-      <Wifi className="h-3 w-3" />
-    ) : (
-      <WifiOff className="h-3 w-3" />
-    )}
-    <span>
-      {isConnecting ? 'Conectando...' : isOnline ? 'En línea' : 'Sin conexión'}
-    </span>
+// Constantes
+const VACCINATION_STORAGE_KEY = 'vaccination_events';
+const TIMELINE_STORAGE_KEY = 'cattle_events';
+
+// Funciones auxiliares
+const addEventToTimeline = (event: TimelineEvent): void => {
+  try {
+    const existing = JSON.parse(localStorage.getItem(TIMELINE_STORAGE_KEY) || '[]');
+    const filtered = existing.filter((e: TimelineEvent) => e.id !== event.id);
+    const updated = [event, ...filtered];
+    localStorage.setItem(TIMELINE_STORAGE_KEY, JSON.stringify(updated));
+    window.dispatchEvent(new CustomEvent('eventsUpdated', { detail: { events: updated } }));
+  } catch (error) {
+    console.error('Error agregando a timeline:', error);
+  }
+};
+
+const removeEventFromTimeline = (eventId: string): void => {
+  try {
+    const existing = JSON.parse(localStorage.getItem(TIMELINE_STORAGE_KEY) || '[]');
+    const filtered = existing.filter((e: TimelineEvent) => e.id !== eventId);
+    localStorage.setItem(TIMELINE_STORAGE_KEY, JSON.stringify(filtered));
+    window.dispatchEvent(new CustomEvent('eventsUpdated', { detail: { events: filtered } }));
+  } catch (error) {
+    console.error('Error eliminando de timeline:', error);
+  }
+};
+
+const convertToTimelineEvent = (vacEvent: VaccinationEvent): TimelineEvent => ({
+  id: vacEvent.id,
+  type: "vaccination",
+  title: `Vacunación: ${vacEvent.vaccineName}`,
+  description: `Aplicación de ${vacEvent.vaccineName} (${vacEvent.vaccineType})`,
+  date: vacEvent.applicationDate,
+  time: vacEvent.applicationTime,
+  location: vacEvent.location.address,
+  bovineId: vacEvent.bovineIds.filter(id => id.trim()).join(", "),
+  bovineName: vacEvent.bovineName,
+  details: {
+    vaccine: vacEvent.vaccineName,
+    veterinarian: vacEvent.veterinarianName,
+    dose: `${vacEvent.doseAmount} ${vacEvent.doseUnit}`,
+    method: vacEvent.applicationMethod,
+    site: vacEvent.applicationSite,
+    manufacturer: vacEvent.manufacturer,
+    batchNumber: vacEvent.batchNumber,
+  },
+  status: "completed",
+  priority: "medium",
+  createdBy: vacEvent.veterinarianName || "Usuario",
+  cost: vacEvent.cost,
+  notes: vacEvent.notes
+});
+
+// Componente de Card personalizado
+const Card: React.FC<{ children: React.ReactNode; className?: string }> = ({ 
+  children, 
+  className = "" 
+}) => (
+  <div className={`bg-white/80 backdrop-blur-sm rounded-xl shadow-md border border-white/20 ${className}`}>
+    {children}
   </div>
 );
 
-// Componente principal
+const CardContent: React.FC<{ children: React.ReactNode; className?: string }> = ({ 
+  children, 
+  className = "" 
+}) => (
+  <div className={className}>
+    {children}
+  </div>
+);
+
+// Tipos para el componente Button
+type ButtonVariant = "outline" | "success" | "primary" | "destructive" | "default";
+type ButtonSize = "icon" | "default";
+
+// Componente de Button personalizado
+const Button: React.FC<{
+  children: React.ReactNode;
+  onClick?: () => void;
+  variant?: ButtonVariant;
+  size?: ButtonSize;
+  disabled?: boolean;
+  leftIcon?: React.ReactNode;
+  className?: string;
+  type?: "button" | "submit" | "reset";
+}> = ({ 
+  children, 
+  onClick, 
+  variant = "default", 
+  size = "default", 
+  disabled = false, 
+  leftIcon, 
+  className = "",
+  type = "button"
+}) => {
+  const baseClasses = "inline-flex items-center justify-center rounded-lg font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed";
+  
+  const variantClasses: Record<ButtonVariant, string> = {
+    outline: "border-2 border-gray-300 bg-white/80 text-gray-700 hover:bg-gray-50 focus:ring-gray-500",
+    success: "bg-green-600 text-white hover:bg-green-700 focus:ring-green-500",
+    primary: "bg-blue-600 text-white hover:bg-blue-700 focus:ring-blue-500",
+    destructive: "bg-red-600 text-white hover:bg-red-700 focus:ring-red-500",
+    default: "bg-gray-600 text-white hover:bg-gray-700 focus:ring-gray-500"
+  };
+  
+  const sizeClasses: Record<ButtonSize, string> = {
+    icon: "p-2",
+    default: "px-4 py-2"
+  };
+  
+  return (
+    <button
+      type={type}
+      onClick={onClick}
+      disabled={disabled}
+      className={`${baseClasses} ${variantClasses[variant]} ${sizeClasses[size]} ${className}`}
+    >
+      {leftIcon && <span className="mr-2">{leftIcon}</span>}
+      {children}
+    </button>
+  );
+};
+
+// Componente de Input personalizado
+const Input: React.FC<{
+  label?: string;
+  placeholder?: string;
+  value?: string;
+  onChange?: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  type?: string;
+  required?: boolean;
+  leftIcon?: React.ReactNode;
+  className?: string;
+  step?: string;
+}> = ({ 
+  label, 
+  placeholder, 
+  value, 
+  onChange, 
+  type = "text", 
+  required = false, 
+  leftIcon, 
+  className = "",
+  step
+}) => {
+  const id = useMemo(() => `input-${Math.random().toString(36).substr(2, 9)}`, []);
+  
+  return (
+    <div className="space-y-2">
+      {label && (
+        <label htmlFor={id} className="block text-sm font-medium text-gray-700">
+          {label}
+        </label>
+      )}
+      <div className="relative">
+        {leftIcon && (
+          <div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400">
+            {leftIcon}
+          </div>
+        )}
+        <input
+          id={id}
+          type={type}
+          placeholder={placeholder}
+          value={value}
+          onChange={onChange}
+          required={required}
+          step={step}
+          className={`w-full ${leftIcon ? 'pl-10' : 'pl-3'} pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent bg-white/50 backdrop-blur-sm ${className}`}
+        />
+      </div>
+    </div>
+  );
+};
+
 const EventVaccination: React.FC = () => {
-  // Estados
+  // Estados principales
   const [events, setEvents] = useState<VaccinationEvent[]>([]);
   const [filteredEvents, setFilteredEvents] = useState<VaccinationEvent[]>([]);
   const [editingEvent, setEditingEvent] = useState<VaccinationEvent | null>(null);
@@ -85,9 +258,8 @@ const EventVaccination: React.FC = () => {
   const [deleteLoading, setDeleteLoading] = useState<string | null>(null);
   const [viewingEvent, setViewingEvent] = useState<VaccinationEvent | null>(null);
   const [gettingLocation, setGettingLocation] = useState(false);
-  const [isOnline, setIsOnline] = useState(true);
-  const [isConnecting, setIsConnecting] = useState(false);
-  const [lastSyncTime, setLastSyncTime] = useState<Date | null>(null);
+
+  // Estados de filtros
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedType, setSelectedType] = useState("all");
   const [selectedStatus, setSelectedStatus] = useState("all");
@@ -101,454 +273,33 @@ const EventVaccination: React.FC = () => {
     vaccineType: "",
     manufacturer: "",
     batchNumber: "",
+    expirationDate: "",
     veterinarianName: "",
     applicationDate: new Date().toISOString().split("T")[0],
     applicationTime: new Date().toTimeString().slice(0, 5),
     doseAmount: 0,
     doseUnit: "ml",
+    applicationMethod: "",
+    applicationSite: "",
     location: {
       lat: 17.9995,
       lng: -92.9476,
       address: "Villahermosa, Tabasco, México",
     },
+    nextDueDate: "",
     cost: 0,
+    diseasesPrevented: [],
     notes: "",
     status: "scheduled",
     createdAt: new Date().toISOString(),
   });
 
-  // Verificar conexión al backend
-  const checkBackendConnection = async (): Promise<boolean> => {
-    try {
-      setIsConnecting(true);
-      const response = await fetch(`${API_BASE_URL}/api/health`, { 
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        }
-      });
-      
-      if (response.ok) {
-        setIsOnline(true);
-        setLastSyncTime(new Date());
-        return true;
-      } else {
-        setIsOnline(false);
-        return false;
-      }
-    } catch (error) {
-      console.warn('Backend no disponible:', error);
-      setIsOnline(false);
-      return false;
-    } finally {
-      setIsConnecting(false);
-    }
-  };
-
-  // Cargar eventos del backend
-  const loadEventsFromBackend = async (): Promise<VaccinationEvent[]> => {
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/vaccinations`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        }
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP Error: ${response.status}`);
-      }
-
-      const data = await response.json();
-      
-      if (data.success && data.data) {
-        return data.data;
-      } else {
-        throw new Error(data.message || 'Error cargando eventos');
-      }
-    } catch (error) {
-      console.error('Error cargando del backend:', error);
-      throw error;
-    }
-  };
-
   // Cargar eventos
-  const loadEvents = async (): Promise<void> => {
-    setLoading(true);
-    try {
-      const backendOnline = await checkBackendConnection();
-      
-      if (backendOnline) {
-        try {
-          const backendEvents = await loadEventsFromBackend();
-          setEvents(backendEvents);
-          localStorage.setItem('vaccination_events_local', JSON.stringify(backendEvents));
-          console.log('✅ Eventos cargados del backend');
-          return;
-        } catch (backendError) {
-          console.warn('Error cargando del backend:', backendError);
-        }
-      }
-
-      // Fallback a localStorage
-      const stored = localStorage.getItem('vaccination_events_local');
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        setEvents(parsed);
-        console.log('📱 Eventos cargados de localStorage');
-      } else {
-        setEvents([]);
-      }
-    } catch (error) {
-      console.error("Error cargando eventos:", error);
-      setEvents([]);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Guardar evento en backend
-  const saveEventToBackend = async (event: VaccinationEvent, isUpdate: boolean = false): Promise<VaccinationEvent> => {
-    try {
-      const method = isUpdate ? 'PUT' : 'POST';
-      const url = isUpdate ? `${API_BASE_URL}/api/vaccinations/${event.id}` : `${API_BASE_URL}/api/vaccinations`;
-      
-      const response = await fetch(url, {
-        method,
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(event),
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP Error: ${response.status}`);
-      }
-
-      const data = await response.json();
-
-      if (data.success && data.data) {
-        return data.data;
-      } else {
-        throw new Error(data.message || 'Error guardando evento');
-      }
-    } catch (error) {
-      console.error('Error guardando en backend:', error);
-      throw error;
-    }
-  };
-
-  // Eliminar evento del backend
-  const deleteEventFromBackend = async (eventId: string): Promise<void> => {
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/vaccinations/${eventId}`, {
-        method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
-        }
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP Error: ${response.status}`);
-      }
-
-      const data = await response.json();
-      if (!data.success) {
-        throw new Error(data.message || 'Error eliminando evento');
-      }
-    } catch (error) {
-      console.error('Error eliminando del backend:', error);
-      throw error;
-    }
-  };
-
-  // Obtener ubicación actual
-  const getCurrentLocation = async (): Promise<void> => {
-    if (!navigator.geolocation) {
-      alert("La geolocalización no está soportada");
-      return;
-    }
-
-    setGettingLocation(true);
-    
-    try {
-      const position = await new Promise<GeolocationPosition>((resolve, reject) => {
-        navigator.geolocation.getCurrentPosition(resolve, reject, {
-          enableHighAccuracy: true,
-          timeout: 10000,
-          maximumAge: 60000
-        });
-      });
-
-      const { latitude, longitude } = position.coords;
-      
-      setFormData(prev => ({
-        ...prev,
-        location: {
-          lat: latitude,
-          lng: longitude,
-          address: `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`
-        }
-      }));
-
-      alert("✅ Ubicación obtenida exitosamente");
-    } catch (error) {
-      alert("❌ No se pudo obtener la ubicación");
-    } finally {
-      setGettingLocation(false);
-    }
-  };
-
-  // Validar formulario
-  const validateForm = (): boolean => {
-    if (!formData.vaccineName.trim()) {
-      alert("El nombre de la vacuna es requerido");
-      return false;
-    }
-    
-    if (!formData.veterinarianName.trim()) {
-      alert("El nombre del veterinario es requerido");
-      return false;
-    }
-    
-    if (!formData.applicationDate) {
-      alert("La fecha de aplicación es requerida");
-      return false;
-    }
-    
-    if (formData.cost < 0) {
-      alert("El costo no puede ser negativo");
-      return false;
-    }
-    
-    return true;
-  };
-
-  // Guardar evento
-  const handleSaveEvent = async (): Promise<void> => {
-    if (!validateForm()) {
-      return;
-    }
-
-    setLoading(true);
-    
-    try {
-      const eventToSave: VaccinationEvent = {
-        ...formData,
-        id: editingEvent?.id || `vac-${Date.now()}`,
-        bovineIds: formData.bovineIds.filter(id => id.trim()),
-        createdAt: editingEvent?.createdAt || new Date().toISOString(),
-      };
-
-      let savedEvent: VaccinationEvent = eventToSave;
-      let newEvents: VaccinationEvent[];
-
-      if (isOnline) {
-        try {
-          savedEvent = await saveEventToBackend(eventToSave, !!editingEvent);
-          console.log('✅ Evento guardado en backend');
-        } catch (backendError) {
-          console.warn('Error guardando en backend:', backendError);
-        }
-      }
-
-      if (editingEvent) {
-        newEvents = events.map(e => e.id === editingEvent.id ? savedEvent : e);
-      } else {
-        newEvents = [savedEvent, ...events];
-      }
-
-      setEvents(newEvents);
-      localStorage.setItem('vaccination_events_local', JSON.stringify(newEvents));
-      
-      setShowForm(false);
-      setEditingEvent(null);
-      resetForm();
-      
-      const message = editingEvent ? "✅ Evento actualizado exitosamente" : "✅ Evento guardado exitosamente";
-      const offlineMessage = !isOnline ? " (guardado localmente)" : "";
-      alert(message + offlineMessage);
-      
-    } catch (error) {
-      console.error("Error al guardar:", error);
-      alert("❌ Error al guardar el evento");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Editar evento
-  const handleEdit = (event: VaccinationEvent): void => {
-    setFormData(event);
-    setEditingEvent(event);
-    setShowForm(true);
-  };
-
-  // Ver evento
-  const handleView = (event: VaccinationEvent): void => {
-    setViewingEvent(event);
-  };
-
-  // Cerrar modal de vista
-  const closeViewModal = (): void => {
-    setViewingEvent(null);
-  };
-
-  // Eliminar evento
-  const handleDelete = async (eventId: string): Promise<void> => {
-    const eventToDelete = events.find(e => e.id === eventId);
-    if (!eventToDelete) return;
-
-    const confirmed = confirm(
-      `¿Eliminar vacunación "${eventToDelete.vaccineName}"?`
-    );
-    
-    if (!confirmed) return;
-
-    setDeleteLoading(eventId);
-
-    try {
-      if (isOnline) {
-        try {
-          await deleteEventFromBackend(eventId);
-          console.log('✅ Evento eliminado del backend');
-        } catch (backendError) {
-          console.warn('Error eliminando del backend:', backendError);
-        }
-      }
-
-      const newEvents = events.filter(e => e.id !== eventId);
-      setEvents(newEvents);
-      localStorage.setItem('vaccination_events_local', JSON.stringify(newEvents));
-      
-      if (editingEvent?.id === eventId) {
-        setEditingEvent(null);
-        setShowForm(false);
-        resetForm();
-      }
-
-      if (viewingEvent?.id === eventId) {
-        setViewingEvent(null);
-      }
-      
-      const message = "✅ Evento eliminado exitosamente";
-      const offlineMessage = !isOnline ? " (localmente)" : "";
-      alert(message + offlineMessage);
-      
-    } catch (error) {
-      console.error("Error eliminando:", error);
-      alert("❌ Error al eliminar el evento");
-    } finally {
-      setDeleteLoading(null);
-    }
-  };
-
-  // Resetear formulario
-  const resetForm = (): void => {
-    setFormData({
-      id: "",
-      bovineIds: [""],
-      bovineName: "",
-      vaccineName: "",
-      vaccineType: "",
-      manufacturer: "",
-      batchNumber: "",
-      veterinarianName: "",
-      applicationDate: new Date().toISOString().split("T")[0],
-      applicationTime: new Date().toTimeString().slice(0, 5),
-      doseAmount: 0,
-      doseUnit: "ml",
-      location: {
-        lat: 17.9995,
-        lng: -92.9476,
-        address: "Villahermosa, Tabasco, México",
-      },
-      cost: 0,
-      notes: "",
-      status: "scheduled",
-      createdAt: new Date().toISOString(),
-    });
-  };
-
-  // Sincronización manual
-  const handleManualSync = async (): Promise<void> => {
-    if (!isOnline) {
-      alert('❌ No hay conexión con el backend');
-      return;
-    }
-
-    setLoading(true);
-    try {
-      await loadEvents();
-      alert('✅ Sincronización completada');
-    } catch (error) {
-      alert('❌ Error durante la sincronización');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Funciones auxiliares
-  const getStatusColor = (status: string): string => {
-    switch (status) {
-      case "completed": return "bg-green-100 text-green-800";
-      case "pending": return "bg-yellow-100 text-yellow-800";
-      case "scheduled": return "bg-blue-100 text-blue-800";
-      case "cancelled": return "bg-red-100 text-red-800";
-      default: return "bg-gray-100 text-gray-800";
-    }
-  };
-
-  const getStatusText = (status: string): string => {
-    switch (status) {
-      case "completed": return "Completado";
-      case "pending": return "Pendiente";
-      case "scheduled": return "Programado";
-      case "cancelled": return "Cancelado";
-      default: return "Desconocido";
-    }
-  };
-
-  const getVaccineTypeIcon = (type: string): string => {
-    switch (type) {
-      case "viral": return "🦠";
-      case "bacterial": return "🔬";
-      case "parasitic": return "🐛";
-      case "combination": return "💊";
-      case "toxoid": return "🧪";
-      default: return "💉";
-    }
-  };
-
-  const formatDate = (dateString: string): string => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString("es-ES", {
-      day: "numeric",
-      month: "short",
-      year: "numeric"
-    });
-  };
-
-  const handleFormChange = (field: keyof VaccinationEvent, value: any) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
-  };
-
-  const handleCancelForm = () => {
-    setShowForm(false);
-    setEditingEvent(null);
-    resetForm();
-  };
-
-  // Efectos
   useEffect(() => {
     loadEvents();
   }, []);
 
-  useEffect(() => {
-    const interval = setInterval(checkBackendConnection, 30000);
-    return () => clearInterval(interval);
-  }, []);
-
+  // Filtrar eventos
   useEffect(() => {
     let filtered = [...events];
 
@@ -577,27 +328,333 @@ const EventVaccination: React.FC = () => {
     setFilteredEvents(filtered);
   }, [events, searchTerm, selectedType, selectedStatus]);
 
-  // Estadísticas
-  const stats = {
+  // Funciones optimizadas con useCallback
+  const loadEvents = useCallback((): void => {
+    try {
+      const stored = localStorage.getItem(VACCINATION_STORAGE_KEY);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        setEvents(parsed);
+      }
+    } catch (error) {
+      console.error("Error cargando eventos:", error);
+      setEvents([]);
+    }
+  }, []);
+
+  const saveEvents = useCallback((newEvents: VaccinationEvent[]): void => {
+    try {
+      localStorage.setItem(VACCINATION_STORAGE_KEY, JSON.stringify(newEvents));
+      setEvents(newEvents);
+    } catch (error) {
+      console.error("Error guardando eventos:", error);
+    }
+  }, []);
+
+  const getCurrentLocation = useCallback(async (): Promise<void> => {
+    if (!navigator.geolocation) {
+      alert("La geolocalización no está soportada");
+      return;
+    }
+
+    setGettingLocation(true);
+    
+    try {
+      const position = await new Promise<GeolocationPosition>((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(resolve, reject, {
+          enableHighAccuracy: true,
+          timeout: 10000,
+          maximumAge: 60000
+        });
+      });
+
+      const { latitude, longitude } = position.coords;
+      
+      try {
+        const response = await fetch(
+          `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${latitude}&longitude=${longitude}&localityLanguage=es`
+        );
+        const data = await response.json();
+        const address = data.city ? 
+          `${data.city}, ${data.principalSubdivision}, ${data.countryName}` :
+          `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`;
+
+        setFormData(prev => ({
+          ...prev,
+          location: { lat: latitude, lng: longitude, address }
+        }));
+
+        alert("✅ Ubicación obtenida exitosamente");
+      } catch (geocodeError) {
+        setFormData(prev => ({
+          ...prev,
+          location: {
+            lat: latitude,
+            lng: longitude,
+            address: `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`
+          }
+        }));
+        alert("✅ Coordenadas obtenidas");
+      }
+    } catch (error) {
+      console.error("Error obteniendo ubicación:", error);
+      let errorMessage = "❌ No se pudo obtener la ubicación";
+      
+      if (error instanceof GeolocationPositionError) {
+        switch(error.code) {
+          case error.PERMISSION_DENIED:
+            errorMessage = "❌ Permiso de ubicación denegado";
+            break;
+          case error.POSITION_UNAVAILABLE:
+            errorMessage = "❌ Ubicación no disponible";
+            break;
+          case error.TIMEOUT:
+            errorMessage = "❌ Tiempo de espera agotado";
+            break;
+        }
+      }
+      
+      alert(errorMessage);
+    } finally {
+      setGettingLocation(false);
+    }
+  }, []);
+
+  const validateForm = useCallback((): boolean => {
+    if (!formData.vaccineName.trim()) {
+      alert("El nombre de la vacuna es requerido");
+      return false;
+    }
+    
+    if (!formData.veterinarianName.trim()) {
+      alert("El nombre del veterinario es requerido");
+      return false;
+    }
+    
+    if (!formData.applicationDate) {
+      alert("La fecha de aplicación es requerida");
+      return false;
+    }
+    
+    if (new Date(formData.applicationDate) > new Date()) {
+      alert("La fecha de aplicación no puede ser en el futuro");
+      return false;
+    }
+    
+    if (formData.cost < 0) {
+      alert("El costo no puede ser negativo");
+      return false;
+    }
+    
+    return true;
+  }, [formData]);
+
+  const handleSaveEvent = useCallback(async (): Promise<void> => {
+    if (!validateForm()) {
+      return;
+    }
+
+    setLoading(true);
+    
+    try {
+      const eventToSave: VaccinationEvent = {
+        ...formData,
+        id: editingEvent?.id || `vac-${Date.now()}`,
+        bovineIds: formData.bovineIds.filter(id => id.trim()),
+        diseasesPrevented: formData.diseasesPrevented.filter(d => d.trim()),
+        createdAt: editingEvent?.createdAt || new Date().toISOString(),
+      };
+
+      let newEvents: VaccinationEvent[];
+      if (editingEvent) {
+        newEvents = events.map(e => e.id === editingEvent.id ? eventToSave : e);
+      } else {
+        newEvents = [eventToSave, ...events];
+      }
+
+      saveEvents(newEvents);
+      
+      const timelineEvent = convertToTimelineEvent(eventToSave);
+      addEventToTimeline(timelineEvent);
+      
+      setShowForm(false);
+      setEditingEvent(null);
+      resetForm();
+      alert(editingEvent ? "✅ Evento actualizado exitosamente" : "✅ Evento guardado exitosamente");
+      
+    } catch (error) {
+      console.error("Error al guardar:", error);
+      alert("❌ Error al guardar el evento");
+    } finally {
+      setLoading(false);
+    }
+  }, [formData, editingEvent, events, saveEvents, validateForm]);
+
+  const handleEdit = useCallback((event: VaccinationEvent): void => {
+    setFormData(event);
+    setEditingEvent(event);
+    setShowForm(true);
+  }, []);
+
+  const handleView = useCallback((event: VaccinationEvent): void => {
+    setViewingEvent(event);
+  }, []);
+
+  const closeViewModal = useCallback((): void => {
+    setViewingEvent(null);
+  }, []);
+
+  const handleDelete = useCallback(async (eventId: string): Promise<void> => {
+    const eventToDelete = events.find(e => e.id === eventId);
+    if (!eventToDelete) return;
+
+    const confirmed = confirm(
+      `¿Eliminar vacunación "${eventToDelete.vaccineName}"?\n\n` +
+      `Animal: ${eventToDelete.bovineName || eventToDelete.bovineIds.join(", ")}\n` +
+      `Esta acción no se puede deshacer.`
+    );
+    
+    if (!confirmed) return;
+
+    setDeleteLoading(eventId);
+
+    try {
+      const newEvents = events.filter(e => e.id !== eventId);
+      setEvents(newEvents);
+      localStorage.setItem(VACCINATION_STORAGE_KEY, JSON.stringify(newEvents));
+      removeEventFromTimeline(eventId);
+      
+      if (editingEvent?.id === eventId) {
+        setEditingEvent(null);
+        setShowForm(false);
+        resetForm();
+      }
+
+      if (viewingEvent?.id === eventId) {
+        setViewingEvent(null);
+      }
+      
+      alert("✅ Evento eliminado exitosamente");
+      
+    } catch (error) {
+      console.error("Error eliminando:", error);
+      alert("❌ Error al eliminar el evento");
+    } finally {
+      setDeleteLoading(null);
+    }
+  }, [events, editingEvent, viewingEvent]);
+
+  const resetForm = useCallback((): void => {
+    setFormData({
+      id: "",
+      bovineIds: [""],
+      bovineName: "",
+      vaccineName: "",
+      vaccineType: "",
+      manufacturer: "",
+      batchNumber: "",
+      expirationDate: "",
+      veterinarianName: "",
+      applicationDate: new Date().toISOString().split("T")[0],
+      applicationTime: new Date().toTimeString().slice(0, 5),
+      doseAmount: 0,
+      doseUnit: "ml",
+      applicationMethod: "",
+      applicationSite: "",
+      location: {
+        lat: 17.9995,
+        lng: -92.9476,
+        address: "Villahermosa, Tabasco, México",
+      },
+      nextDueDate: "",
+      cost: 0,
+      diseasesPrevented: [],
+      notes: "",
+      status: "scheduled",
+      createdAt: new Date().toISOString(),
+    });
+  }, []);
+
+  // Funciones auxiliares de UI optimizadas
+  const getStatusColor = useCallback((status: string): string => {
+    switch (status) {
+      case "completed": return "bg-green-100 text-green-800";
+      case "pending": return "bg-yellow-100 text-yellow-800";
+      case "scheduled": return "bg-blue-100 text-blue-800";
+      case "cancelled": return "bg-red-100 text-red-800";
+      default: return "bg-gray-100 text-gray-800";
+    }
+  }, []);
+
+  const getStatusText = useCallback((status: string): string => {
+    switch (status) {
+      case "completed": return "Completado";
+      case "pending": return "Pendiente";
+      case "scheduled": return "Programado";
+      case "cancelled": return "Cancelado";
+      default: return "Desconocido";
+    }
+  }, []);
+
+  const getVaccineTypeIcon = useCallback((type: string): string => {
+    switch (type) {
+      case "viral": return "🦠";
+      case "bacterial": return "🔬";
+      case "parasitic": return "🐛";
+      case "combination": return "💊";
+      case "toxoid": return "🧪";
+      default: return "💉";
+    }
+  }, []);
+
+  const formatDate = useCallback((dateString: string): string => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString("es-ES", {
+      day: "numeric",
+      month: "short",
+      year: "numeric"
+    });
+  }, []);
+
+  // Calcular estadísticas con useMemo
+  const stats = useMemo(() => ({
     total: events.length,
     completed: events.filter(e => e.status === "completed").length,
     pending: events.filter(e => e.status === "pending" || e.status === "scheduled").length,
-    nextDue: events.filter(e => new Date(e.applicationDate) <= new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)).length,
-  };
+    nextDue: events.filter(e => e.nextDueDate && new Date(e.nextDueDate) <= new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)).length,
+  }), [events]);
+
+  // Manejadores de cambio del formulario
+  const handleFormChange = useCallback((field: keyof VaccinationEvent, value: any) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
+  }, []);
+
+  const handleCancelForm = useCallback(() => {
+    setShowForm(false);
+    setEditingEvent(null);
+    resetForm();
+  }, [resetForm]);
 
   // Renderizado del formulario
   if (showForm) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-green-600 via-blue-100 to-orange-400 p-6">
-        <div className="max-w-4xl mx-auto">
+      <div className="min-h-screen bg-gradient-to-br from-[#519a7c] via-[#f2e9d8] to-[#f4ac3a] p-6">
+        <motion.div
+          className="max-w-4xl mx-auto"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6 }}
+        >
           <div className="flex items-center justify-between mb-8">
             <div className="flex items-center space-x-4">
-              <button
+              <Button
+                variant="outline"
+                size="icon"
                 onClick={handleCancelForm}
-                className="p-2 bg-white/80 rounded-lg hover:bg-white transition-colors"
+                aria-label="Volver atrás"
               >
                 <ArrowLeft className="h-4 w-4" />
-              </button>
+              </Button>
               <div>
                 <h1 className="text-3xl font-bold text-gray-900">
                   {editingEvent ? "Editar Vacunación" : "Nueva Vacunación"}
@@ -607,220 +664,186 @@ const EventVaccination: React.FC = () => {
                 </p>
               </div>
             </div>
-            <ConnectionStatus isOnline={isOnline} isConnecting={isConnecting} />
           </div>
 
-          <div className="bg-white/80 backdrop-blur-sm rounded-xl shadow-md border border-white/20 p-6">
-            <form onSubmit={(e) => { e.preventDefault(); handleSaveEvent(); }} className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-2">
-                  <label className="block text-sm font-medium text-gray-700">
-                    Nombre de la Vacuna *
-                  </label>
-                  <input
-                    type="text"
+          <Card>
+            <CardContent className="p-6">
+              <form onSubmit={(e) => { e.preventDefault(); handleSaveEvent(); }} className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <Input
+                    label="Nombre de la Vacuna *"
                     placeholder="Ej: Triple Viral Bovina"
                     value={formData.vaccineName}
                     onChange={(e) => handleFormChange('vaccineName', e.target.value)}
                     required
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent bg-white/50 backdrop-blur-sm"
                   />
-                </div>
-                <div className="space-y-2">
-                  <label className="block text-sm font-medium text-gray-700">
-                    Nombre del Animal
-                  </label>
-                  <input
-                    type="text"
+                  <Input
+                    label="Nombre del Animal"
                     placeholder="Ej: Esperanza"
-                    value={formData.bovineName}
+                    value={formData.bovineName || ""}
                     onChange={(e) => handleFormChange('bovineName', e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent bg-white/50 backdrop-blur-sm"
                   />
                 </div>
-              </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div className="space-y-2">
-                  <label className="block text-sm font-medium text-gray-700">
-                    Tipo de Vacuna
-                  </label>
-                  <select
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent bg-white/50 backdrop-blur-sm"
-                    value={formData.vaccineType}
-                    onChange={(e) => handleFormChange('vaccineType', e.target.value)}
-                  >
-                    <option value="">Selecciona tipo</option>
-                    <option value="viral">Viral</option>
-                    <option value="bacterial">Bacteriana</option>
-                    <option value="parasitic">Parasitaria</option>
-                    <option value="combination">Combinada</option>
-                    <option value="toxoid">Toxoide</option>
-                  </select>
-                </div>
-                <div className="space-y-2">
-                  <label className="block text-sm font-medium text-gray-700">
-                    Fecha de Aplicación *
-                  </label>
-                  <input
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  <div className="space-y-2">
+                    <label htmlFor="vaccineType" className="block text-sm font-medium text-gray-700">
+                      Tipo de Vacuna
+                    </label>
+                    <select
+                      id="vaccineType"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent bg-white/50 backdrop-blur-sm"
+                      value={formData.vaccineType}
+                      onChange={(e) => handleFormChange('vaccineType', e.target.value)}
+                    >
+                      <option value="">Selecciona tipo</option>
+                      <option value="viral">Viral</option>
+                      <option value="bacterial">Bacteriana</option>
+                      <option value="parasitic">Parasitaria</option>
+                      <option value="combination">Combinada</option>
+                      <option value="toxoid">Toxoide</option>
+                    </select>
+                  </div>
+                  <Input
+                    label="Fecha de Aplicación *"
                     type="date"
                     value={formData.applicationDate}
                     onChange={(e) => handleFormChange('applicationDate', e.target.value)}
                     required
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent bg-white/50 backdrop-blur-sm"
                   />
-                </div>
-                <div className="space-y-2">
-                  <label className="block text-sm font-medium text-gray-700">
-                    Hora
-                  </label>
-                  <input
+                  <Input
+                    label="Hora"
                     type="time"
                     value={formData.applicationTime}
                     onChange={(e) => handleFormChange('applicationTime', e.target.value)}
                     required
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent bg-white/50 backdrop-blur-sm"
                   />
                 </div>
-              </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-2">
-                  <label className="block text-sm font-medium text-gray-700">
-                    Veterinario *
-                  </label>
-                  <input
-                    type="text"
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <Input
+                    label="Veterinario *"
                     placeholder="Dr. María González"
                     value={formData.veterinarianName}
                     onChange={(e) => handleFormChange('veterinarianName', e.target.value)}
                     required
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent bg-white/50 backdrop-blur-sm"
+                  />
+                  <div className="space-y-2">
+                    <label htmlFor="location" className="block text-sm font-medium text-gray-700">
+                      Ubicación *
+                    </label>
+                    <div className="flex space-x-2">
+                      <input
+                        id="location"
+                        type="text"
+                        placeholder="Corral A - Sector Norte"
+                        value={formData.location.address}
+                        onChange={(e) => handleFormChange('location', {
+                          ...formData.location, 
+                          address: e.target.value
+                        })}
+                        required
+                        className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent bg-white/50 backdrop-blur-sm"
+                      />
+                      <Button
+                        type="button"
+                        onClick={getCurrentLocation}
+                        disabled={gettingLocation}
+                        variant="outline"
+                        size="icon"
+                        className="shrink-0"
+                        aria-label="Obtener ubicación actual"
+                      >
+                        {gettingLocation ? (
+                          <RefreshCw className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <MapPin className="h-4 w-4" />
+                        )}
+                      </Button>
+                    </div>
+                    {gettingLocation && (
+                      <p className="text-xs text-green-600">Obteniendo ubicación actual...</p>
+                    )}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <Input
+                    label="Costo Total"
+                    type="number"
+                    step="0.01"
+                    placeholder="0.00"
+                    value={formData.cost.toString()}
+                    onChange={(e) => handleFormChange('cost', parseFloat(e.target.value) || 0)}
+                    leftIcon={<DollarSign className="h-4 w-4" />}
+                  />
+                  <div className="space-y-2">
+                    <label htmlFor="status" className="block text-sm font-medium text-gray-700">
+                      Estado
+                    </label>
+                    <select
+                      id="status"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent bg-white/50 backdrop-blur-sm"
+                      value={formData.status}
+                      onChange={(e) => handleFormChange('status', e.target.value as VaccinationEvent['status'])}
+                    >
+                      <option value="scheduled">Programado</option>
+                      <option value="completed">Completado</option>
+                      <option value="pending">Pendiente</option>
+                      <option value="cancelled">Cancelado</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label htmlFor="notes" className="block text-sm font-medium text-gray-700">
+                    Notas adicionales
+                  </label>
+                  <textarea
+                    id="notes"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent min-h-[100px] bg-white/50 backdrop-blur-sm"
+                    placeholder="Notas adicionales..."
+                    value={formData.notes}
+                    onChange={(e) => handleFormChange('notes', e.target.value)}
                   />
                 </div>
-                <div className="space-y-2">
-                  <label className="block text-sm font-medium text-gray-700">
-                    Ubicación *
-                  </label>
-                  <div className="flex space-x-2">
-                    <input
-                      type="text"
-                      placeholder="Corral A - Sector Norte"
-                      value={formData.location.address}
-                      onChange={(e) => handleFormChange('location', {
-                        ...formData.location, 
-                        address: e.target.value
-                      })}
-                      required
-                      className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent bg-white/50 backdrop-blur-sm"
-                    />
-                    <button
-                      type="button"
-                      onClick={getCurrentLocation}
-                      disabled={gettingLocation}
-                      className="p-2 border-2 border-gray-300 bg-white/80 text-gray-700 hover:bg-gray-50 rounded-lg transition-colors"
-                    >
-                      {gettingLocation ? (
-                        <RefreshCw className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <MapPin className="h-4 w-4" />
-                      )}
-                    </button>
-                  </div>
-                </div>
-              </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-2">
-                  <label className="block text-sm font-medium text-gray-700">
-                    Costo Total
-                  </label>
-                  <div className="relative">
-                    <div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400">
-                      <DollarSign className="h-4 w-4" />
-                    </div>
-                    <input
-                      type="number"
-                      step="0.01"
-                      placeholder="0.00"
-                      value={formData.cost.toString()}
-                      onChange={(e) => handleFormChange('cost', parseFloat(e.target.value) || 0)}
-                      className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent bg-white/50 backdrop-blur-sm"
-                    />
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <label className="block text-sm font-medium text-gray-700">
-                    Estado
-                  </label>
-                  <select
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent bg-white/50 backdrop-blur-sm"
-                    value={formData.status}
-                    onChange={(e) => handleFormChange('status', e.target.value)}
+                <div className="flex space-x-4">
+                  <Button
+                    type="button"
+                    onClick={handleCancelForm}
+                    variant="outline"
+                    className="flex-1"
                   >
-                    <option value="scheduled">Programado</option>
-                    <option value="completed">Completado</option>
-                    <option value="pending">Pendiente</option>
-                    <option value="cancelled">Cancelado</option>
-                  </select>
+                    Cancelar
+                  </Button>
+                  <Button
+                    type="submit"
+                    disabled={loading || !formData.vaccineName || !formData.veterinarianName}
+                    variant="success"
+                    className="flex-1 bg-green-600 hover:bg-green-700"
+                    leftIcon={loading ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                  >
+                    {loading ? "Guardando..." : editingEvent ? "Actualizar" : "Guardar"}
+                  </Button>
                 </div>
-              </div>
-
-              <div className="space-y-2">
-                <label className="block text-sm font-medium text-gray-700">
-                  Notas adicionales
-                </label>
-                <textarea
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent min-h-[100px] bg-white/50 backdrop-blur-sm"
-                  placeholder="Notas adicionales..."
-                  value={formData.notes}
-                  onChange={(e) => handleFormChange('notes', e.target.value)}
-                />
-              </div>
-
-              {!isOnline && (
-                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-                  <div className="flex items-center">
-                    <WifiOff className="h-5 w-5 text-yellow-600 mr-2" />
-                    <p className="text-sm text-yellow-800">
-                      Sin conexión al servidor. Los datos se guardarán localmente.
-                    </p>
-                  </div>
-                </div>
-              )}
-
-              <div className="flex space-x-4">
-                <button
-                  type="button"
-                  onClick={handleCancelForm}
-                  className="flex-1 px-4 py-2 border-2 border-gray-300 bg-white/80 text-gray-700 hover:bg-gray-50 rounded-lg transition-colors"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  disabled={loading || !formData.vaccineName || !formData.veterinarianName}
-                  className="flex-1 px-4 py-2 bg-green-600 text-white hover:bg-green-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
-                >
-                  {loading ? (
-                    <RefreshCw className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Save className="h-4 w-4" />
-                  )}
-                  <span>{loading ? "Guardando..." : editingEvent ? "Actualizar" : "Guardar"}</span>
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
+              </form>
+            </CardContent>
+          </Card>
+        </motion.div>
       </div>
     );
   }
 
   // Renderizado principal
   return (
-    <div className="min-h-screen bg-gradient-to-br from-green-600 via-blue-100 to-orange-400 p-6">
-      <div className="max-w-7xl mx-auto">
+    <div className="min-h-screen bg-gradient-to-br from-[#519a7c] via-[#f2e9d8] to-[#f4ac3a] p-6">
+      <motion.div
+        className="max-w-7xl mx-auto"
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.6 }}
+      >
         {/* Header */}
         <div className="flex items-center justify-between mb-8">
           <div className="flex items-center space-x-4">
@@ -830,56 +853,83 @@ const EventVaccination: React.FC = () => {
             <div>
               <h1 className="text-3xl font-bold text-gray-900">Eventos de Vacunación</h1>
               <p className="text-gray-600">Gestiona las vacunas de tu ganado</p>
-              {lastSyncTime && (
-                <p className="text-xs text-gray-500">
-                  Última sincronización: {lastSyncTime.toLocaleTimeString()}
-                </p>
-              )}
             </div>
           </div>
-          <div className="flex items-center space-x-3">
-            <ConnectionStatus isOnline={isOnline} isConnecting={isConnecting} />
-            <button
-              onClick={handleManualSync}
-              disabled={!isOnline || loading}
-              title="Sincronizar manualmente"
-              className="p-2 border-2 border-gray-300 bg-white/80 text-gray-700 hover:bg-gray-50 rounded-lg transition-colors disabled:opacity-50"
-            >
-              <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-            </button>
-            <button
-              onClick={() => setShowForm(true)}
-              className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg transition-colors flex items-center space-x-2"
-            >
-              <Plus className="h-4 w-4" />
-              <span>Nuevo Evento</span>
-            </button>
-          </div>
+          <Button
+            onClick={() => setShowForm(true)}
+            variant="success"
+            leftIcon={<Plus className="h-4 w-4" />}
+            className="bg-emerald-500 hover:bg-emerald-600"
+          >
+            Nuevo Evento
+          </Button>
         </div>
 
         {/* Estadísticas */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-          {[
-            { label: "Total Vacunas", value: stats.total, color: "green", icon: TrendingUp },
-            { label: "Completadas", value: stats.completed, color: "blue", icon: CheckCircle },
-            { label: "Pendientes", value: stats.pending, color: "yellow", icon: Clock },
-            { label: "Próximas", value: stats.nextDue, color: "orange", icon: AlertTriangle }
-          ].map((stat) => (
-            <div
-              key={stat.label}
-              className="bg-white/70 backdrop-blur-sm rounded-2xl p-6 border border-white/20"
-            >
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-600">{stat.label}</p>
-                  <p className="text-3xl font-bold text-gray-900">{stat.value}</p>
-                </div>
-                <div className="bg-gray-100 p-3 rounded-xl">
-                  <stat.icon className="h-6 w-6 text-gray-600" />
-                </div>
+          <motion.div
+            className="bg-white/70 backdrop-blur-sm rounded-2xl p-6 border border-white/20"
+            whileHover={{ scale: 1.02 }}
+            transition={{ duration: 0.2 }}
+          >
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600">Total Vacunas</p>
+                <p className="text-3xl font-bold text-green-600">{stats.total}</p>
+              </div>
+              <div className="bg-green-100 p-3 rounded-xl">
+                <TrendingUp className="h-6 w-6 text-green-600" />
               </div>
             </div>
-          ))}
+          </motion.div>
+
+          <motion.div
+            className="bg-white/70 backdrop-blur-sm rounded-2xl p-6 border border-white/20"
+            whileHover={{ scale: 1.02 }}
+            transition={{ duration: 0.2 }}
+          >
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600">Completadas</p>
+                <p className="text-3xl font-bold text-blue-600">{stats.completed}</p>
+              </div>
+              <div className="bg-blue-100 p-3 rounded-xl">
+                <CheckCircle className="h-6 w-6 text-blue-600" />
+              </div>
+            </div>
+          </motion.div>
+
+          <motion.div
+            className="bg-white/70 backdrop-blur-sm rounded-2xl p-6 border border-white/20"
+            whileHover={{ scale: 1.02 }}
+            transition={{ duration: 0.2 }}
+          >
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600">Pendientes</p>
+                <p className="text-3xl font-bold text-yellow-600">{stats.pending}</p>
+              </div>
+              <div className="bg-yellow-100 p-3 rounded-xl">
+                <Clock className="h-6 w-6 text-yellow-600" />
+              </div>
+            </div>
+          </motion.div>
+
+          <motion.div
+            className="bg-white/70 backdrop-blur-sm rounded-2xl p-6 border border-white/20"
+            whileHover={{ scale: 1.02 }}
+            transition={{ duration: 0.2 }}
+          >
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600">Próximas</p>
+                <p className="text-3xl font-bold text-orange-600">{stats.nextDue}</p>
+              </div>
+              <div className="bg-orange-100 p-3 rounded-xl">
+                <AlertTriangle className="h-6 w-6 text-orange-600" />
+              </div>
+            </div>
+          </motion.div>
         </div>
 
         {/* Filtros */}
@@ -893,6 +943,7 @@ const EventVaccination: React.FC = () => {
                 className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white/50 backdrop-blur-sm"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
+                aria-label="Buscar eventos de vacunación"
               />
             </div>
 
@@ -900,6 +951,7 @@ const EventVaccination: React.FC = () => {
               className="w-full px-4 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 bg-white/50 backdrop-blur-sm"
               value={selectedType}
               onChange={(e) => setSelectedType(e.target.value)}
+              aria-label="Filtrar por tipo de vacuna"
             >
               <option value="all">Todos los tipos</option>
               <option value="viral">Viral</option>
@@ -913,6 +965,7 @@ const EventVaccination: React.FC = () => {
               className="w-full px-4 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 bg-white/50 backdrop-blur-sm"
               value={selectedStatus}
               onChange={(e) => setSelectedStatus(e.target.value)}
+              aria-label="Filtrar por estado del evento"
             >
               <option value="all">Todos los estados</option>
               <option value="completed">Completado</option>
@@ -925,100 +978,118 @@ const EventVaccination: React.FC = () => {
 
         {/* Lista de eventos */}
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-          {filteredEvents.map((event) => (
-            <div
-              key={event.id}
-              className="bg-white/70 backdrop-blur-sm rounded-2xl border border-white/20 overflow-hidden hover:shadow-lg transition-all duration-300"
-            >
-              <div className="p-6">
-                <div className="flex items-start justify-between mb-4">
-                  <div className="flex items-center space-x-3">
-                    <div className="bg-blue-100 p-2 rounded-xl">
-                      <span className="text-2xl">
-                        {getVaccineTypeIcon(event.vaccineType)}
-                      </span>
+          <AnimatePresence>
+            {filteredEvents.map((event, index) => (
+              <motion.div
+                key={event.id}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+                transition={{ duration: 0.3, delay: index * 0.1 }}
+                className="bg-white/70 backdrop-blur-sm rounded-2xl border border-white/20 overflow-hidden hover:shadow-lg transition-all duration-300"
+              >
+                <div className="p-6">
+                  <div className="flex items-start justify-between mb-4">
+                    <div className="flex items-center space-x-3">
+                      <div className="bg-blue-100 p-2 rounded-xl">
+                        <span className="text-2xl" role="img" aria-label={`Icono de vacuna ${event.vaccineType}`}>
+                          {getVaccineTypeIcon(event.vaccineType)}
+                        </span>
+                      </div>
+                      <div>
+                        <h3 className="font-semibold text-gray-900">{event.vaccineName}</h3>
+                        <span className={`inline-flex px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(event.status)}`}>
+                          {getStatusText(event.status)}
+                        </span>
+                      </div>
                     </div>
-                    <div>
-                      <h3 className="font-semibold text-gray-900">{event.vaccineName}</h3>
-                      <span className={`inline-flex px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(event.status)}`}>
-                        {getStatusText(event.status)}
-                      </span>
-                    </div>
                   </div>
-                </div>
 
-                <div className="mb-4">
-                  <p className="text-gray-600 text-sm">
-                    {event.bovineName && (
-                      <span className="font-medium text-gray-900">{event.bovineName} • </span>
-                    )}
-                    {event.bovineIds.filter(id => id.trim()).join(", ")}
-                  </p>
-                </div>
-
-                <div className="space-y-2 mb-4">
-                  <div className="flex items-center text-sm text-gray-600">
-                    <Calendar className="h-4 w-4 mr-2" />
-                    {formatDate(event.applicationDate)}, {event.applicationTime}
-                  </div>
-                  <div className="flex items-center text-sm text-gray-600">
-                    <MapPin className="h-4 w-4 mr-2" />
-                    {event.location.address}
-                  </div>
-                  <div className="flex items-center text-sm text-gray-600">
-                    <User className="h-4 w-4 mr-2" />
-                    {event.veterinarianName}
-                  </div>
-                  <div className="flex items-center text-sm text-gray-600">
-                    <DollarSign className="h-4 w-4 mr-2" />
-                    ${event.cost.toLocaleString()}
-                  </div>
-                </div>
-
-                {event.notes && (
-                  <p className="text-sm text-gray-600 mb-4 line-clamp-2">
-                    {event.notes}
-                  </p>
-                )}
-
-                <div className="flex items-center justify-between pt-4 border-t border-gray-100">
-                  <div className="flex items-center space-x-1">
-                    <button 
-                      onClick={() => handleView(event)}
-                      className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                      title="Ver detalles"
-                    >
-                      <Eye className="h-4 w-4" />
-                    </button>
-                    <button
-                      onClick={() => handleEdit(event)}
-                      className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
-                      title="Editar evento"
-                    >
-                      <Edit className="h-4 w-4" />
-                    </button>
-                    <button
-                      onClick={() => handleDelete(event.id)}
-                      disabled={deleteLoading === event.id}
-                      className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
-                      title="Eliminar evento"
-                    >
-                      {deleteLoading === event.id ? (
-                        <RefreshCw className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <Trash2 className="h-4 w-4" />
+                  <div className="mb-4">
+                    <p className="text-gray-600 text-sm">
+                      {event.bovineName && (
+                        <span className="font-medium text-gray-900">{event.bovineName} • </span>
                       )}
-                    </button>
+                      {event.bovineIds.filter(id => id.trim()).join(", ")}
+                    </p>
+                  </div>
+
+                  <div className="space-y-2 mb-4">
+                    <div className="flex items-center text-sm text-gray-600">
+                      <Calendar className="h-4 w-4 mr-2" />
+                      {formatDate(event.applicationDate)}, {event.applicationTime}
+                    </div>
+                    <div className="flex items-center text-sm text-gray-600">
+                      <MapPin className="h-4 w-4 mr-2" />
+                      {event.location.address}
+                    </div>
+                    <div className="flex items-center text-sm text-gray-600">
+                      <User className="h-4 w-4 mr-2" />
+                      {event.veterinarianName}
+                    </div>
+                    <div className="flex items-center text-sm text-gray-600">
+                      <DollarSign className="h-4 w-4 mr-2" />
+                      ${event.cost.toLocaleString()}
+                    </div>
+                  </div>
+
+                  {event.notes && (
+                    <p className="text-sm text-gray-600 mb-4 line-clamp-2">
+                      {event.notes}
+                    </p>
+                  )}
+
+                  <div className="flex items-center justify-between pt-4 border-t border-gray-100">
+                    <div className="flex items-center space-x-1">
+                      <button 
+                        onClick={() => handleView(event)}
+                        className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                        title="Ver detalles"
+                        aria-label={`Ver detalles de ${event.vaccineName}`}
+                      >
+                        <Eye className="h-4 w-4" />
+                      </button>
+                      <button
+                        onClick={() => handleEdit(event)}
+                        className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
+                        title="Editar evento"
+                        aria-label={`Editar ${event.vaccineName}`}
+                      >
+                        <Edit className="h-4 w-4" />
+                      </button>
+                      <button
+                        onClick={() => handleDelete(event.id)}
+                        disabled={deleteLoading === event.id}
+                        className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
+                        title="Eliminar evento"
+                        aria-label={`Eliminar ${event.vaccineName}`}
+                      >
+                        {deleteLoading === event.id ? (
+                          <RefreshCw className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Trash2 className="h-4 w-4" />
+                        )}
+                      </button>
+                    </div>
+                    {event.nextDueDate && (
+                      <span className="text-xs text-gray-500">
+                        Próxima: {formatDate(event.nextDueDate)}
+                      </span>
+                    )}
                   </div>
                 </div>
-              </div>
-            </div>
-          ))}
+              </motion.div>
+            ))}
+          </AnimatePresence>
         </div>
 
         {/* Estado vacío */}
-        {filteredEvents.length === 0 && !loading && (
-          <div className="text-center py-12">
+        {filteredEvents.length === 0 && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="text-center py-12"
+          >
             <Syringe className="h-16 w-16 text-gray-300 mx-auto mb-4" />
             <h3 className="text-lg font-medium text-gray-900 mb-2">
               {events.length === 0 ? "No hay vacunaciones registradas" : "No se encontraron eventos"}
@@ -1030,170 +1101,173 @@ const EventVaccination: React.FC = () => {
               }
             </p>
             {events.length === 0 && (
-              <button
+              <Button
                 onClick={() => setShowForm(true)}
-                className="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 rounded-lg transition-colors flex items-center justify-center space-x-2 mx-auto"
+                variant="primary"
+                leftIcon={<Plus className="h-4 w-4" />}
               >
-                <Plus className="h-4 w-4" />
-                <span>Registrar Primera Vacunación</span>
-              </button>
+                Registrar Primera Vacunación
+              </Button>
             )}
-          </div>
+          </motion.div>
         )}
-
-        {/* Estado de carga */}
-        {loading && events.length === 0 && (
-          <div className="text-center py-12">
-            <RefreshCw className="h-16 w-16 text-gray-300 mx-auto mb-4 animate-spin" />
-            <h3 className="text-lg font-medium text-gray-900 mb-2">
-              Cargando eventos...
-            </h3>
-            <p className="text-gray-600">
-              {isOnline ? "Sincronizando con el servidor" : "Cargando datos locales"}
-            </p>
-          </div>
-        )}
-      </div>
+      </motion.div>
 
       {/* Modal de Vista */}
-      {viewingEvent && (
-        <div
-          className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
-          onClick={closeViewModal}
-        >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            className="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto"
+      <AnimatePresence>
+        {viewingEvent && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+            onClick={closeViewModal}
           >
-            <div className="p-6 border-b border-gray-100">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-3">
-                  <div className="bg-blue-100 p-3 rounded-xl">
-                    <span className="text-3xl">
-                      {getVaccineTypeIcon(viewingEvent.vaccineType)}
-                    </span>
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto"
+            >
+              <div className="p-6 border-b border-gray-100">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-3">
+                    <div className="bg-blue-100 p-3 rounded-xl">
+                      <span className="text-3xl" role="img" aria-label={`Icono de vacuna ${viewingEvent.vaccineType}`}>
+                        {getVaccineTypeIcon(viewingEvent.vaccineType)}
+                      </span>
+                    </div>
+                    <div>
+                      <h2 className="text-2xl font-bold text-gray-900">{viewingEvent.vaccineName}</h2>
+                      <span className={`inline-flex px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(viewingEvent.status)}`}>
+                        {getStatusText(viewingEvent.status)}
+                      </span>
+                    </div>
                   </div>
-                  <div>
-                    <h2 className="text-2xl font-bold text-gray-900">{viewingEvent.vaccineName}</h2>
-                    <span className={`inline-flex px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(viewingEvent.status)}`}>
-                      {getStatusText(viewingEvent.status)}
-                    </span>
-                  </div>
-                </div>
-                <button
-                  onClick={closeViewModal}
-                  className="p-2 border-2 border-gray-300 bg-white/80 text-gray-700 hover:bg-gray-50 rounded-lg transition-colors"
-                >
-                  <X className="h-4 w-4" />
-                </button>
-              </div>
-            </div>
-
-            <div className="p-6 space-y-6">
-              <div className="bg-gray-50 rounded-xl p-4">
-                <h3 className="font-semibold text-gray-900 mb-3">
-                  Información del Animal
-                </h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-                  <div>
-                    <span className="text-gray-500">Nombre:</span>
-                    <p className="font-medium">{viewingEvent.bovineName || "No especificado"}</p>
-                  </div>
-                  <div>
-                    <span className="text-gray-500">IDs:</span>
-                    <p className="font-medium">{viewingEvent.bovineIds.filter(id => id.trim()).join(", ")}</p>
-                  </div>
+                  <Button
+                    onClick={closeViewModal}
+                    variant="outline"
+                    size="icon"
+                    aria-label="Cerrar modal"
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
                 </div>
               </div>
 
-              <div className="bg-blue-50 rounded-xl p-4">
-                <h3 className="font-semibold text-gray-900 mb-3">
-                  Detalles de la Vacuna
-                </h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-                  <div>
-                    <span className="text-gray-500">Tipo:</span>
-                    <p className="font-medium capitalize">{viewingEvent.vaccineType}</p>
-                  </div>
-                  <div>
-                    <span className="text-gray-500">Fabricante:</span>
-                    <p className="font-medium">{viewingEvent.manufacturer || "No especificado"}</p>
-                  </div>
-                  <div>
-                    <span className="text-gray-500">Lote:</span>
-                    <p className="font-medium">{viewingEvent.batchNumber || "No especificado"}</p>
-                  </div>
-                  <div>
-                    <span className="text-gray-500">Dosis:</span>
-                    <p className="font-medium">{viewingEvent.doseAmount} {viewingEvent.doseUnit}</p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-green-50 rounded-xl p-4">
-                <h3 className="font-semibold text-gray-900 mb-3">
-                  Aplicación
-                </h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-                  <div>
-                    <span className="text-gray-500">Fecha y Hora:</span>
-                    <p className="font-medium">{formatDate(viewingEvent.applicationDate)}, {viewingEvent.applicationTime}</p>
-                  </div>
-                  <div>
-                    <span className="text-gray-500">Veterinario:</span>
-                    <p className="font-medium">{viewingEvent.veterinarianName}</p>
-                  </div>
-                  <div className="md:col-span-2">
-                    <span className="text-gray-500">Ubicación:</span>
-                    <p className="font-medium">{viewingEvent.location.address}</p>
-                    <p className="text-xs text-gray-400">
-                      {viewingEvent.location.lat.toFixed(6)}, {viewingEvent.location.lng.toFixed(6)}
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              {viewingEvent.notes && (
+              <div className="p-6 space-y-6">
                 <div className="bg-gray-50 rounded-xl p-4">
-                  <h3 className="font-semibold text-gray-900 mb-3">Notas</h3>
-                  <p className="text-sm text-gray-700">{viewingEvent.notes}</p>
+                  <h3 className="font-semibold text-gray-900 mb-3 flex items-center">
+                    <Heart className="h-5 w-5 text-red-500 mr-2" />
+                    Información del Animal
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                    <div>
+                      <span className="text-gray-500">Nombre:</span>
+                      <p className="font-medium">{viewingEvent.bovineName || "No especificado"}</p>
+                    </div>
+                    <div>
+                      <span className="text-gray-500">IDs:</span>
+                      <p className="font-medium">{viewingEvent.bovineIds.filter(id => id.trim()).join(", ")}</p>
+                    </div>
+                  </div>
                 </div>
-              )}
-            </div>
 
-            <div className="p-6 border-t border-gray-100 bg-gray-50 rounded-b-2xl">
-              <div className="flex space-x-3">
-                <button
-                  onClick={() => {
-                    closeViewModal();
-                    handleEdit(viewingEvent);
-                  }}
-                  className="flex-1 px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 rounded-lg transition-colors flex items-center justify-center space-x-2"
-                >
-                  <Edit className="h-4 w-4" />
-                  <span>Editar</span>
-                </button>
-                <button
-                  onClick={() => {
-                    closeViewModal();
-                    handleDelete(viewingEvent.id);
-                  }}
-                  className="flex-1 px-4 py-2 bg-red-600 text-white hover:bg-red-700 rounded-lg transition-colors flex items-center justify-center space-x-2"
-                >
-                  <Trash2 className="h-4 w-4" />
-                  <span>Eliminar</span>
-                </button>
-                <button
-                  onClick={closeViewModal}
-                  className="flex-1 px-4 py-2 border-2 border-gray-300 bg-white text-gray-700 hover:bg-gray-50 rounded-lg transition-colors"
-                >
-                  Cerrar
-                </button>
+                <div className="bg-blue-50 rounded-xl p-4">
+                  <h3 className="font-semibold text-gray-900 mb-3 flex items-center">
+                    <Syringe className="h-5 w-5 text-blue-500 mr-2" />
+                    Detalles de la Vacuna
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                    <div>
+                      <span className="text-gray-500">Tipo:</span>
+                      <p className="font-medium capitalize">{viewingEvent.vaccineType}</p>
+                    </div>
+                    <div>
+                      <span className="text-gray-500">Fabricante:</span>
+                      <p className="font-medium">{viewingEvent.manufacturer || "No especificado"}</p>
+                    </div>
+                    <div>
+                      <span className="text-gray-500">Lote:</span>
+                      <p className="font-medium">{viewingEvent.batchNumber || "No especificado"}</p>
+                    </div>
+                    <div>
+                      <span className="text-gray-500">Dosis:</span>
+                      <p className="font-medium">{viewingEvent.doseAmount} {viewingEvent.doseUnit}</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-green-50 rounded-xl p-4">
+                  <h3 className="font-semibold text-gray-900 mb-3 flex items-center">
+                    <Activity className="h-5 w-5 text-green-500 mr-2" />
+                    Aplicación
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                    <div>
+                      <span className="text-gray-500">Fecha y Hora:</span>
+                      <p className="font-medium">{formatDate(viewingEvent.applicationDate)}, {viewingEvent.applicationTime}</p>
+                    </div>
+                    <div>
+                      <span className="text-gray-500">Veterinario:</span>
+                      <p className="font-medium">{viewingEvent.veterinarianName}</p>
+                    </div>
+                    <div className="md:col-span-2">
+                      <span className="text-gray-500">Ubicación:</span>
+                      <p className="font-medium">{viewingEvent.location.address}</p>
+                      <p className="text-xs text-gray-400">
+                        {viewingEvent.location.lat.toFixed(6)}, {viewingEvent.location.lng.toFixed(6)}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {viewingEvent.notes && (
+                  <div className="bg-gray-50 rounded-xl p-4">
+                    <h3 className="font-semibold text-gray-900 mb-3">Notas</h3>
+                    <p className="text-sm text-gray-700">{viewingEvent.notes}</p>
+                  </div>
+                )}
               </div>
-            </div>
-          </div>
-        </div>
-      )}
+
+              <div className="p-6 border-t border-gray-100 bg-gray-50 rounded-b-2xl">
+                <div className="flex space-x-3">
+                  <Button
+                    onClick={() => {
+                      closeViewModal();
+                      handleEdit(viewingEvent);
+                    }}
+                    variant="primary"
+                    leftIcon={<Edit className="h-4 w-4" />}
+                    className="flex-1"
+                  >
+                    Editar
+                  </Button>
+                  <Button
+                    onClick={() => {
+                      closeViewModal();
+                      handleDelete(viewingEvent.id);
+                    }}
+                    variant="destructive"
+                    leftIcon={<Trash2 className="h-4 w-4" />}
+                    className="flex-1"
+                  >
+                    Eliminar
+                  </Button>
+                  <Button
+                    onClick={closeViewModal}
+                    variant="outline"
+                    className="flex-1"
+                  >
+                    Cerrar
+                  </Button>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };
