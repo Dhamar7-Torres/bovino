@@ -15,18 +15,9 @@ import {
   FileText,
   CreditCard,
   Navigation,
-  AlertTriangle,
-  Loader2,
 } from "lucide-react";
 
-// ============================================================================
-// CONFIGURACIÓN API
-// ============================================================================
-const API_BASE_URL = 'http://localhost:5000/api';
-
-// ============================================================================
-// INTERFACES
-// ============================================================================
+// Interfaces
 interface ExpenseRecord {
   id: string;
   date: string;
@@ -42,110 +33,11 @@ interface ExpenseRecord {
   supplier: string;
   status: "paid" | "pending" | "overdue";
   paymentMethod: "efectivo" | "transferencia" | "cheque" | "credito";
-  createdAt?: string;
-  updatedAt?: string;
 }
 
-// ============================================================================
-// SERVICIOS API
-// ============================================================================
-const expenseService = {
-  // Obtener todos los gastos
-  getAll: async (): Promise<ExpenseRecord[]> => {
-    try {
-      const response = await fetch(`${API_BASE_URL}/expenses`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error(`Error ${response.status}: ${response.statusText}`);
-      }
-
-      const data = await response.json();
-      return data;
-    } catch (error) {
-      console.error('Error al obtener gastos:', error);
-      throw error;
-    }
-  },
-
-  // Crear un gasto
-  create: async (expenseData: Omit<ExpenseRecord, 'id' | 'createdAt' | 'updatedAt'>): Promise<ExpenseRecord> => {
-    try {
-      const response = await fetch(`${API_BASE_URL}/expenses`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(expenseData),
-      });
-
-      if (!response.ok) {
-        throw new Error(`Error ${response.status}: ${response.statusText}`);
-      }
-
-      const data = await response.json();
-      return data;
-    } catch (error) {
-      console.error('Error al crear gasto:', error);
-      throw error;
-    }
-  },
-
-  // Actualizar un gasto
-  update: async (id: string, expenseData: Partial<ExpenseRecord>): Promise<ExpenseRecord> => {
-    try {
-      const response = await fetch(`${API_BASE_URL}/expenses/${id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(expenseData),
-      });
-
-      if (!response.ok) {
-        throw new Error(`Error ${response.status}: ${response.statusText}`);
-      }
-
-      const data = await response.json();
-      return data;
-    } catch (error) {
-      console.error('Error al actualizar gasto:', error);
-      throw error;
-    }
-  },
-
-  // Eliminar un gasto
-  delete: async (id: string): Promise<void> => {
-    try {
-      const response = await fetch(`${API_BASE_URL}/expenses/${id}`, {
-        method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error(`Error ${response.status}: ${response.statusText}`);
-      }
-    } catch (error) {
-      console.error('Error al eliminar gasto:', error);
-      throw error;
-    }
-  },
-};
-
-// ============================================================================
-// COMPONENTE PRINCIPAL
-// ============================================================================
 const ExpenseTracker: React.FC = () => {
   // Estados principales
-  const [, setIsLoading] = useState(true);
-  const [dataLoading, setDataLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
   const [expenseRecords, setExpenseRecords] = useState<ExpenseRecord[]>([]);
   
   // Estados para modales
@@ -165,41 +57,84 @@ const ExpenseTracker: React.FC = () => {
   const [formAddress, setFormAddress] = useState("");
   const [formAnimalId, setFormAnimalId] = useState("");
 
-  // Estados para operaciones
-  const [saving, setSaving] = useState(false);
-  const [deleting, setDeleting] = useState(false);
-
   // Estados para geolocalización
   const [isGettingLocation, setIsGettingLocation] = useState(false);
   const [currentCoordinates, setCurrentCoordinates] = useState<{lat: number, lng: number} | null>(null);
 
-  // ============================================================================
-  // FUNCIONES DE CARGA
-  // ============================================================================
-  const loadExpenses = async () => {
-    try {
-      setDataLoading(true);
-      setError(null);
-      const expensesData = await expenseService.getAll();
-      setExpenseRecords(expensesData);
-    } catch (error) {
-      console.error('Error cargando gastos:', error);
-      setError('Error al cargar los gastos. Verifique que el servidor esté funcionando.');
-      setExpenseRecords([]);
-    } finally {
-      setDataLoading(false);
-      setIsLoading(false);
-    }
-  };
+  // Datos iniciales
+  const initialExpenseRecords: ExpenseRecord[] = [
+    {
+      id: "exp_001",
+      date: "2024-06-15",
+      description: "Vacuna contra brucelosis - 50 dosis",
+      category: "vacunacion",
+      amount: 12500,
+      location: {
+        lat: 17.9895,
+        lng: -92.9475,
+        address: "Rancho San José, Villahermosa",
+      },
+      animalId: "cow_015",
+      supplier: "Veterinaria La Ganadería",
+      status: "paid",
+      paymentMethod: "transferencia",
+    },
+    {
+      id: "exp_002",
+      date: "2024-06-14",
+      description: "Alimento concentrado - 2 toneladas",
+      category: "alimentacion",
+      amount: 18500,
+      location: { lat: 17.9995, lng: -92.9375, address: "Bodega Central" },
+      supplier: "Alimentos Pecuarios del Sureste",
+      status: "paid",
+      paymentMethod: "cheque",
+    },
+    {
+      id: "exp_003",
+      date: "2024-06-13",
+      description: "Tratamiento antibiótico para mastitis",
+      category: "tratamientos",
+      amount: 8900,
+      location: { lat: 17.9795, lng: -92.9575, address: "Establo 3" },
+      animalId: "cow_028",
+      supplier: "Farmacia Veterinaria Central",
+      status: "pending",
+      paymentMethod: "credito",
+    },
+    {
+      id: "exp_004",
+      date: "2024-06-12",
+      description: "Reparación de cerca perimetral",
+      category: "instalaciones",
+      amount: 25000,
+      location: {
+        lat: 17.9695,
+        lng: -92.9675,
+        address: "Sector Norte del Rancho",
+      },
+      supplier: "Construcciones Rurales SA",
+      status: "overdue",
+      paymentMethod: "transferencia",
+    },
+    {
+      id: "exp_005",
+      date: "2024-06-11",
+      description: "Transporte de ganado al mercado",
+      category: "transporte",
+      amount: 5500,
+      location: {
+        lat: 17.9595,
+        lng: -92.9775,
+        address: "Mercado de Ganado Regional",
+      },
+      supplier: "Transportes Ganaderos Unidos",
+      status: "paid",
+      paymentMethod: "efectivo",
+    },
+  ];
 
-  useEffect(() => {
-    loadExpenses();
-    setFormDate(getCurrentDate());
-  }, []);
-
-  // ============================================================================
-  // FUNCIONES HELPER
-  // ============================================================================
+  // Funciones helper
   const getCurrentDate = (): string => {
     return new Date().toISOString().split('T')[0];
   };
@@ -335,9 +270,7 @@ const ExpenseTracker: React.FC = () => {
     );
   };
 
-  // ============================================================================
-  // EVENT HANDLERS
-  // ============================================================================
+  // Event handlers
   const handleOpenAddModal = () => {
     clearForm();
     setShowAddModal(true);
@@ -367,101 +300,76 @@ const ExpenseTracker: React.FC = () => {
     setShowDeleteModal(true);
   };
 
-  const handleSaveExpense = async () => {
+  const handleSaveExpense = () => {
     if (!formDescription.trim() || !formAmount.trim() || !formDate.trim() || !formSupplier.trim()) {
       alert("Por favor completa todos los campos obligatorios");
       return;
     }
 
-    setSaving(true);
-    try {
-      const expenseData = {
-        date: formDate,
-        description: formDescription,
-        category: formCategory as ExpenseRecord['category'],
-        amount: parseFloat(formAmount),
-        location: {
-          lat: currentCoordinates?.lat || 17.9895,
-          lng: currentCoordinates?.lng || -92.9475,
-          address: formAddress,
-        },
-        animalId: formAnimalId || undefined,
-        supplier: formSupplier,
-        status: "pending" as const,
-        paymentMethod: formPaymentMethod as ExpenseRecord['paymentMethod'],
-      };
+    const newExpense: ExpenseRecord = {
+      id: `exp_${Date.now()}`,
+      date: formDate,
+      description: formDescription,
+      category: formCategory as ExpenseRecord['category'],
+      amount: parseFloat(formAmount),
+      location: {
+        lat: currentCoordinates?.lat || 17.9895,
+        lng: currentCoordinates?.lng || -92.9475,
+        address: formAddress,
+      },
+      animalId: formAnimalId || undefined,
+      supplier: formSupplier,
+      status: "pending",
+      paymentMethod: formPaymentMethod as ExpenseRecord['paymentMethod'],
+    };
 
-      const newExpense = await expenseService.create(expenseData);
-      setExpenseRecords(prev => [newExpense, ...prev]);
-      setShowAddModal(false);
-      clearForm();
-    } catch (error) {
-      console.error("Error al guardar:", error);
-      alert("Error al guardar el gasto. Por favor, intente nuevamente.");
-    } finally {
-      setSaving(false);
-    }
+    setExpenseRecords(prev => [newExpense, ...prev]);
+    setShowAddModal(false);
+    clearForm();
   };
 
-  const handleUpdateExpense = async () => {
+  const handleUpdateExpense = () => {
     if (!selectedExpense || !formDescription.trim() || !formAmount.trim() || !formDate.trim() || !formSupplier.trim()) {
       alert("Por favor completa todos los campos obligatorios");
       return;
     }
 
-    setSaving(true);
-    try {
-      const updatedData = {
-        date: formDate,
-        description: formDescription,
-        category: formCategory as ExpenseRecord['category'],
-        amount: parseFloat(formAmount),
-        supplier: formSupplier,
-        paymentMethod: formPaymentMethod as ExpenseRecord['paymentMethod'],
-        location: {
-          lat: currentCoordinates?.lat || selectedExpense.location.lat,
-          lng: currentCoordinates?.lng || selectedExpense.location.lng,
-          address: formAddress,
-        },
-        animalId: formAnimalId || undefined,
-      };
+    const updatedExpense: ExpenseRecord = {
+      ...selectedExpense,
+      date: formDate,
+      description: formDescription,
+      category: formCategory as ExpenseRecord['category'],
+      amount: parseFloat(formAmount),
+      supplier: formSupplier,
+      paymentMethod: formPaymentMethod as ExpenseRecord['paymentMethod'],
+      location: {
+        lat: currentCoordinates?.lat || selectedExpense.location.lat,
+        lng: currentCoordinates?.lng || selectedExpense.location.lng,
+        address: formAddress,
+      },
+      animalId: formAnimalId || undefined,
+    };
 
-      const updatedExpense = await expenseService.update(selectedExpense.id, updatedData);
-      setExpenseRecords(prev => 
-        prev.map(expense => 
-          expense.id === selectedExpense.id ? updatedExpense : expense
-        )
-      );
-      
-      setShowEditModal(false);
-      setSelectedExpense(null);
-      clearForm();
-    } catch (error) {
-      console.error("Error al actualizar:", error);
-      alert("Error al actualizar el gasto. Por favor, intente nuevamente.");
-    } finally {
-      setSaving(false);
-    }
+    setExpenseRecords(prev => 
+      prev.map(expense => 
+        expense.id === selectedExpense.id ? updatedExpense : expense
+      )
+    );
+    
+    setShowEditModal(false);
+    setSelectedExpense(null);
+    clearForm();
   };
 
-  const handleDeleteExpense = async () => {
+  const handleDeleteExpense = () => {
     if (!selectedExpense) return;
 
-    setDeleting(true);
-    try {
-      await expenseService.delete(selectedExpense.id);
-      setExpenseRecords(prev => 
-        prev.filter(expense => expense.id !== selectedExpense.id)
-      );
-      
-      setShowDeleteModal(false);
-      setSelectedExpense(null);
-    } catch (error) {
-      console.error("Error al eliminar:", error);
-      alert("Error al eliminar el gasto. Por favor, intente nuevamente.");
-    } finally {
-      setDeleting(false);
-    }
+    setExpenseRecords(prev => 
+      prev.filter(expense => expense.id !== selectedExpense.id)
+    );
+    
+    setShowDeleteModal(false);
+    setSelectedExpense(null);
   };
 
   const handleExportCSV = () => {
@@ -502,9 +410,18 @@ const ExpenseTracker: React.FC = () => {
     document.body.removeChild(link);
   };
 
-  // ============================================================================
-  // ANIMACIONES
-  // ============================================================================
+  // Effect
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setExpenseRecords(initialExpenseRecords);
+      setFormDate(getCurrentDate());
+      setIsLoading(false);
+    }, 1000);
+
+    return () => clearTimeout(timer);
+  }, []);
+
+  // Animations
   const containerVariants: Variants = {
     hidden: { opacity: 0 },
     visible: {
@@ -528,45 +445,19 @@ const ExpenseTracker: React.FC = () => {
     },
   };
 
-  // ============================================================================
-  // PANTALLAS DE CARGA Y ERROR
-  // ============================================================================
-  if (dataLoading) {
+  // Loading component
+  if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-[#519a7c] via-[#f2e9d8] to-[#f4ac3a] p-6">
-        <div className="text-center">
-          <motion.div
-            animate={{ rotate: 360 }}
-            transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-            className="w-16 h-16 border-4 border-white border-t-transparent rounded-full mx-auto mb-4"
-          />
-          <p className="text-white text-lg font-medium">Cargando gastos...</p>
-        </div>
+        <motion.div
+          animate={{ rotate: 360 }}
+          transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+          className="w-16 h-16 border-4 border-white border-t-transparent rounded-full"
+        />
       </div>
     );
   }
 
-  if (error) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-[#519a7c] via-[#f2e9d8] to-[#f4ac3a] p-6 flex items-center justify-center">
-        <div className="text-center bg-white/90 backdrop-blur-sm rounded-2xl p-8 border border-red-200">
-          <AlertTriangle className="h-16 w-16 text-red-500 mx-auto mb-4" />
-          <h2 className="text-xl font-bold text-gray-900 mb-2">Error de Conexión</h2>
-          <p className="text-gray-600 mb-6">{error}</p>
-          <button
-            onClick={loadExpenses}
-            className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-xl font-medium"
-          >
-            Reintentar
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  // ============================================================================
-  // COMPONENTE PRINCIPAL
-  // ============================================================================
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#519a7c] via-[#f2e9d8] to-[#f4ac3a] p-6">
       <motion.div
@@ -610,83 +501,69 @@ const ExpenseTracker: React.FC = () => {
             </div>
           </div>
 
-          {expenseRecords.length === 0 ? (
-            <div className="text-center py-12">
-              <DollarSign className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 mb-2">No hay gastos registrados</h3>
-              <p className="text-gray-600 mb-6">Comienza agregando tu primer gasto.</p>
-              <button
-                onClick={handleOpenAddModal}
-                className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-medium"
-              >
-                Agregar Gasto
-              </button>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-gray-200">
-                    <th className="text-left py-3 px-4 text-gray-700 font-medium">Fecha</th>
-                    <th className="text-left py-3 px-4 text-gray-700 font-medium">Descripción</th>
-                    <th className="text-left py-3 px-4 text-gray-700 font-medium">Categoría</th>
-                    <th className="text-left py-3 px-4 text-gray-700 font-medium">Proveedor</th>
-                    <th className="text-right py-3 px-4 text-gray-700 font-medium">Monto</th>
-                    <th className="text-center py-3 px-4 text-gray-700 font-medium">Pago</th>
-                    <th className="text-center py-3 px-4 text-gray-700 font-medium">Estado</th>
-                    <th className="text-center py-3 px-4 text-gray-700 font-medium">Acciones</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {expenseRecords.map((record) => (
-                    <motion.tr
-                      key={record.id}
-                      whileHover={{ backgroundColor: "#F9FAFB" }}
-                      className="border-b border-gray-100 transition-colors duration-200"
-                    >
-                      <td className="py-4 px-4 text-gray-600">{formatDate(record.date)}</td>
-                      <td className="py-4 px-4 text-gray-900 font-medium">{record.description}</td>
-                      <td className="py-4 px-4 text-gray-600">{getCategoryName(record.category)}</td>
-                      <td className="py-4 px-4 text-gray-600">{record.supplier}</td>
-                      <td className="py-4 px-4 text-right text-gray-900 font-semibold">{formatCurrency(record.amount)}</td>
-                      <td className="py-4 px-4 text-center text-gray-600 text-sm">{getPaymentMethodText(record.paymentMethod)}</td>
-                      <td className="py-4 px-4 text-center">
-                        <div className="flex items-center justify-center space-x-2">
-                          <span className={`inline-block w-3 h-3 rounded-full ${getStatusColor(record.status)}`}></span>
-                          <span className="text-gray-600 text-sm">{getStatusText(record.status)}</span>
-                        </div>
-                      </td>
-                      <td className="py-4 px-4 text-center">
-                        <div className="flex justify-center space-x-2">
-                          <button 
-                            onClick={() => handleOpenViewModal(record)}
-                            className="p-2 text-blue-500 hover:bg-blue-50 rounded-lg transition-colors duration-200"
-                            title="Ver detalles"
-                          >
-                            <Eye className="w-4 h-4" />
-                          </button>
-                          <button 
-                            onClick={() => handleOpenEditModal(record)}
-                            className="p-2 text-yellow-500 hover:bg-yellow-50 rounded-lg transition-colors duration-200"
-                            title="Editar"
-                          >
-                            <Edit className="w-4 h-4" />
-                          </button>
-                          <button 
-                            onClick={() => handleOpenDeleteModal(record)}
-                            className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors duration-200"
-                            title="Eliminar"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </td>
-                    </motion.tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-gray-200">
+                  <th className="text-left py-3 px-4 text-gray-700 font-medium">Fecha</th>
+                  <th className="text-left py-3 px-4 text-gray-700 font-medium">Descripción</th>
+                  <th className="text-left py-3 px-4 text-gray-700 font-medium">Categoría</th>
+                  <th className="text-left py-3 px-4 text-gray-700 font-medium">Proveedor</th>
+                  <th className="text-right py-3 px-4 text-gray-700 font-medium">Monto</th>
+                  <th className="text-center py-3 px-4 text-gray-700 font-medium">Pago</th>
+                  <th className="text-center py-3 px-4 text-gray-700 font-medium">Estado</th>
+                  <th className="text-center py-3 px-4 text-gray-700 font-medium">Acciones</th>
+                </tr>
+              </thead>
+              <tbody>
+                {expenseRecords.map((record) => (
+                  <motion.tr
+                    key={record.id}
+                    whileHover={{ backgroundColor: "#F9FAFB" }}
+                    className="border-b border-gray-100 transition-colors duration-200"
+                  >
+                    <td className="py-4 px-4 text-gray-600">{formatDate(record.date)}</td>
+                    <td className="py-4 px-4 text-gray-900 font-medium">{record.description}</td>
+                    <td className="py-4 px-4 text-gray-600">{getCategoryName(record.category)}</td>
+                    <td className="py-4 px-4 text-gray-600">{record.supplier}</td>
+                    <td className="py-4 px-4 text-right text-gray-900 font-semibold">{formatCurrency(record.amount)}</td>
+                    <td className="py-4 px-4 text-center text-gray-600 text-sm">{getPaymentMethodText(record.paymentMethod)}</td>
+                    <td className="py-4 px-4 text-center">
+                      <div className="flex items-center justify-center space-x-2">
+                        <span className={`inline-block w-3 h-3 rounded-full ${getStatusColor(record.status)}`}></span>
+                        <span className="text-gray-600 text-sm">{getStatusText(record.status)}</span>
+                      </div>
+                    </td>
+                    <td className="py-4 px-4 text-center">
+                      <div className="flex justify-center space-x-2">
+                        <button 
+                          onClick={() => handleOpenViewModal(record)}
+                          className="p-2 text-blue-500 hover:bg-blue-50 rounded-lg transition-colors duration-200"
+                          title="Ver detalles"
+                        >
+                          <Eye className="w-4 h-4" />
+                        </button>
+                        <button 
+                          onClick={() => handleOpenEditModal(record)}
+                          className="p-2 text-yellow-500 hover:bg-yellow-50 rounded-lg transition-colors duration-200"
+                          title="Editar"
+                        >
+                          <Edit className="w-4 h-4" />
+                        </button>
+                        <button 
+                          onClick={() => handleOpenDeleteModal(record)}
+                          className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors duration-200"
+                          title="Eliminar"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </td>
+                  </motion.tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </motion.div>
       </motion.div>
 
@@ -855,26 +732,15 @@ const ExpenseTracker: React.FC = () => {
                     clearForm();
                   }}
                   className="px-6 py-2 text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-                  disabled={saving}
                 >
                   Cancelar
                 </button>
                 <button
                   onClick={handleSaveExpense}
-                  disabled={saving}
-                  className="flex items-center px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50"
+                  className="flex items-center px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
                 >
-                  {saving ? (
-                    <>
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      Guardando...
-                    </>
-                  ) : (
-                    <>
-                      <Save className="w-4 h-4 mr-2" />
-                      Guardar Gasto
-                    </>
-                  )}
+                  <Save className="w-4 h-4 mr-2" />
+                  Guardar Gasto
                 </button>
               </div>
             </div>
@@ -1049,26 +915,15 @@ const ExpenseTracker: React.FC = () => {
                     clearForm();
                   }}
                   className="px-6 py-2 text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-                  disabled={saving}
                 >
                   Cancelar
                 </button>
                 <button
                   onClick={handleUpdateExpense}
-                  disabled={saving}
-                  className="flex items-center px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50"
+                  className="flex items-center px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
                 >
-                  {saving ? (
-                    <>
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      Actualizando...
-                    </>
-                  ) : (
-                    <>
-                      <Save className="w-4 h-4 mr-2" />
-                      Actualizar Gasto
-                    </>
-                  )}
+                  <Save className="w-4 h-4 mr-2" />
+                  Actualizar Gasto
                 </button>
               </div>
             </div>
@@ -1239,26 +1094,15 @@ const ExpenseTracker: React.FC = () => {
                     setSelectedExpense(null);
                   }}
                   className="px-6 py-2 text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-                  disabled={deleting}
                 >
                   Cancelar
                 </button>
                 <button
                   onClick={handleDeleteExpense}
-                  disabled={deleting}
-                  className="flex items-center px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50"
+                  className="flex items-center px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
                 >
-                  {deleting ? (
-                    <>
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      Eliminando...
-                    </>
-                  ) : (
-                    <>
-                      <Trash2 className="w-4 h-4 mr-2" />
-                      Eliminar
-                    </>
-                  )}
+                  <Trash2 className="w-4 h-4 mr-2" />
+                  Eliminar
                 </button>
               </div>
             </div>

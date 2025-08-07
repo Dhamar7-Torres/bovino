@@ -15,10 +15,9 @@ import {
   Save,
   Calendar,
   AlertTriangle,
-  RefreshCw,
 } from "lucide-react";
 
-// Interface para el plan de tratamiento
+// Interface simplificada
 interface TreatmentPlan {
   id: string;
   bullName: string;
@@ -35,147 +34,10 @@ interface TreatmentPlan {
   createdAt: string;
 }
 
-// Configuración de la API
-const API_BASE_URL = 'http://localhost:5000/api';
-
-// Clase para manejar las llamadas a la API
-class TreatmentPlansAPI {
-  static async getAllTreatmentPlans(): Promise<TreatmentPlan[]> {
-    try {
-      const response = await fetch(`${API_BASE_URL}/health/treatment-plans`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const data = await response.json();
-      
-      if (data.success) {
-        return data.data || [];
-      } else {
-        throw new Error(data.message || 'Error al obtener planes de tratamiento');
-      }
-    } catch (error) {
-      console.error('Error fetching treatment plans:', error);
-      throw error;
-    }
-  }
-
-  static async createTreatmentPlan(planData: Omit<TreatmentPlan, 'id' | 'createdAt'>): Promise<TreatmentPlan> {
-    try {
-      const response = await fetch(`${API_BASE_URL}/health/treatment-plans`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(planData),
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const data = await response.json();
-      
-      if (data.success) {
-        return data.data;
-      } else {
-        throw new Error(data.message || 'Error al crear plan de tratamiento');
-      }
-    } catch (error) {
-      console.error('Error creating treatment plan:', error);
-      throw error;
-    }
-  }
-
-  static async updateTreatmentPlan(id: string, planData: Partial<TreatmentPlan>): Promise<TreatmentPlan> {
-    try {
-      const response = await fetch(`${API_BASE_URL}/health/treatment-plans/${id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(planData),
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const data = await response.json();
-      
-      if (data.success) {
-        return data.data;
-      } else {
-        throw new Error(data.message || 'Error al actualizar plan de tratamiento');
-      }
-    } catch (error) {
-      console.error('Error updating treatment plan:', error);
-      throw error;
-    }
-  }
-
-  static async deleteTreatmentPlan(id: string): Promise<void> {
-    try {
-      const response = await fetch(`${API_BASE_URL}/health/treatment-plans/${id}`, {
-        method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const data = await response.json();
-      
-      if (!data.success) {
-        throw new Error(data.message || 'Error al eliminar plan de tratamiento');
-      }
-    } catch (error) {
-      console.error('Error deleting treatment plan:', error);
-      throw error;
-    }
-  }
-
-  static async getTreatmentPlanById(id: string): Promise<TreatmentPlan> {
-    try {
-      const response = await fetch(`${API_BASE_URL}/health/treatment-plans/${id}`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const data = await response.json();
-      
-      if (data.success) {
-        return data.data;
-      } else {
-        throw new Error(data.message || 'Error al obtener plan de tratamiento');
-      }
-    } catch (error) {
-      console.error('Error fetching treatment plan:', error);
-      throw error;
-    }
-  }
-}
-
 const TreatmentPlans: React.FC = () => {
   const [records, setRecords] = useState<TreatmentPlan[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string>("");
-  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   
   // Estados para modales y formularios
   const [showForm, setShowForm] = useState<boolean>(false);
@@ -188,35 +50,75 @@ const TreatmentPlans: React.FC = () => {
   // Estados para formulario
   const [formData, setFormData] = useState<Partial<TreatmentPlan>>({});
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+  
+  // Estados para geolocalización
+  const [] = useState<boolean>(false);
 
-  // Función para cargar datos desde el backend
-  const loadTreatmentPlans = useCallback(async () => {
-    try {
-      setIsLoading(true);
-      setError("");
-      
-      const data = await TreatmentPlansAPI.getAllTreatmentPlans();
-      setRecords(data);
-      
-    } catch (err: any) {
-      const errorMessage = err.message || "Error al conectar con el servidor";
-      setError(errorMessage);
-      console.error("Error loading treatment plans:", err);
-      
-      // Si es un error de conexión, mostrar mensaje específico
-      if (errorMessage.includes('fetch')) {
-        setError("No se puede conectar con el servidor. Verifique que el backend esté ejecutándose en el puerto 5000.");
-      }
-      
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
+  // Datos de ejemplo
+  const mockRecords: TreatmentPlan[] = [
+    {
+      id: "1",
+      bullName: "Campeón",
+      bullEarTag: "T-001",
+      cowName: "Bella",
+      cowEarTag: "MX-001",
+      treatmentDate: "2025-07-15",
+      treatmentTime: "07:30",
+      location: "Potrero Norte",
+      status: "completed",
+      result: "successful",
+      cost: 800,
+      notes: "Tratamiento exitoso",
+      createdAt: "2025-07-15T07:30:00.000Z",
+    },
+    {
+      id: "2",
+      bullName: "Emperador",
+      bullEarTag: "T-002",
+      cowName: "Luna",
+      cowEarTag: "MX-002",
+      treatmentDate: "2025-07-16",
+      treatmentTime: "08:15",
+      location: "Potrero Sur",
+      status: "completed",
+      result: "pending",
+      cost: 1200,
+      notes: "Pendiente de confirmación",
+      createdAt: "2025-07-16T08:15:00.000Z",
+    },
+    {
+      id: "3",
+      bullName: "Titán",
+      bullEarTag: "T-003",
+      cowName: "Esperanza",
+      cowEarTag: "MX-003",
+      treatmentDate: "2025-07-18",
+      treatmentTime: "09:00",
+      location: "Potrero Central",
+      status: "scheduled",
+      result: "pending",
+      cost: 1000,
+      notes: "Programado para mañana",
+      createdAt: "2025-07-17T10:00:00.000Z",
+    },
+  ];
 
-  // Cargar datos al montar el componente
+  // Cargar datos
   useEffect(() => {
-    loadTreatmentPlans();
-  }, [loadTreatmentPlans]);
+    const loadData = async () => {
+      try {
+        setIsLoading(true);
+        setError("");
+        await new Promise(resolve => setTimeout(resolve, 500));
+        setRecords(mockRecords);
+      } catch (err) {
+        setError("Error al cargar los registros");
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    loadData();
+  }, []);
 
   // Validar formulario
   const validateForm = (data: Partial<TreatmentPlan>): Record<string, string> => {
@@ -255,80 +157,52 @@ const TreatmentPlans: React.FC = () => {
   };
 
   // Crear nuevo registro
-  const handleCreate = async () => {
+  const handleCreate = () => {
     const errors = validateForm(formData);
     if (Object.keys(errors).length > 0) {
       setFormErrors(errors);
       return;
     }
 
-    try {
-      setIsSubmitting(true);
-      setError("");
+    const newRecord: TreatmentPlan = {
+      id: `treatment-${Date.now()}`,
+      bullName: formData.bullName!,
+      bullEarTag: formData.bullEarTag!,
+      cowName: formData.cowName!,
+      cowEarTag: formData.cowEarTag!,
+      treatmentDate: formData.treatmentDate!,
+      treatmentTime: formData.treatmentTime!,
+      location: formData.location!,
+      status: formData.status as "scheduled" | "completed" | "failed" || "scheduled",
+      result: formData.result as "successful" | "unsuccessful" | "pending",
+      cost: formData.cost!,
+      notes: formData.notes || "",
+      createdAt: new Date().toISOString(),
+    };
 
-      const planData = {
-        bullName: formData.bullName!,
-        bullEarTag: formData.bullEarTag!,
-        cowName: formData.cowName!,
-        cowEarTag: formData.cowEarTag!,
-        treatmentDate: formData.treatmentDate!,
-        treatmentTime: formData.treatmentTime!,
-        location: formData.location!,
-        status: formData.status as "scheduled" | "completed" | "failed" || "scheduled",
-        result: formData.result as "successful" | "unsuccessful" | "pending",
-        cost: formData.cost!,
-        notes: formData.notes || "",
-      };
-
-      const newRecord = await TreatmentPlansAPI.createTreatmentPlan(planData);
-      
-      // Actualizar la lista local
-      setRecords(prev => [newRecord, ...prev]);
-      
-      setShowForm(false);
-      resetForm();
-      alert("✅ Plan de tratamiento creado exitosamente");
-      
-    } catch (error: any) {
-      setError(error.message || "Error al crear el plan de tratamiento");
-      alert("❌ Error al crear el plan de tratamiento: " + (error.message || "Error desconocido"));
-    } finally {
-      setIsSubmitting(false);
-    }
+    setRecords(prev => [newRecord, ...prev]);
+    setShowForm(false);
+    resetForm();
+    alert("✅ Plan de tratamiento creado exitosamente");
   };
 
   // Actualizar registro existente
-  const handleUpdate = async () => {
+  const handleUpdate = () => {
     if (!editingRecord) return;
-    
     const errors = validateForm(formData);
     if (Object.keys(errors).length > 0) {
       setFormErrors(errors);
       return;
     }
 
-    try {
-      setIsSubmitting(true);
-      setError("");
-
-      const updatedRecord = await TreatmentPlansAPI.updateTreatmentPlan(editingRecord.id, formData);
-      
-      // Actualizar la lista local
-      setRecords(prev => prev.map(record => 
-        record.id === editingRecord.id ? updatedRecord : record
-      ));
-      
-      setEditingRecord(null);
-      setShowForm(false);
-      resetForm();
-      alert("✅ Registro actualizado exitosamente");
-      
-    } catch (error: any) {
-      setError(error.message || "Error al actualizar el plan de tratamiento");
-      alert("❌ Error al actualizar el plan de tratamiento: " + (error.message || "Error desconocido"));
-    } finally {
-      setIsSubmitting(false);
-    }
+    setRecords(prev => prev.map(record => 
+      record.id === editingRecord.id ? { ...record, ...formData } : record
+    ));
+    
+    setEditingRecord(null);
+    setShowForm(false);
+    resetForm();
+    alert("✅ Registro actualizado exitosamente");
   };
 
   // Ver detalles
@@ -351,37 +225,22 @@ const TreatmentPlans: React.FC = () => {
   }, []);
 
   // Confirmar eliminación
-  const confirmDelete = useCallback(async () => {
+  const confirmDelete = useCallback(() => {
     if (!recordToDelete) return;
     
-    try {
-      setIsSubmitting(true);
-      setError("");
-
-      await TreatmentPlansAPI.deleteTreatmentPlan(recordToDelete.id);
-      
-      // Actualizar la lista local
-      setRecords(prev => prev.filter(r => r.id !== recordToDelete.id));
-      
-      if (selectedRecord?.id === recordToDelete.id) {
-        setSelectedRecord(null);
-        setShowDetailsModal(false);
-      }
-      if (editingRecord?.id === recordToDelete.id) {
-        setEditingRecord(null);
-        setShowForm(false);
-      }
-      
-      setShowDeleteModal(false);
-      setRecordToDelete(null);
-      alert("✅ Plan de tratamiento eliminado exitosamente");
-      
-    } catch (error: any) {
-      setError(error.message || "Error al eliminar el plan de tratamiento");
-      alert("❌ Error al eliminar el plan de tratamiento: " + (error.message || "Error desconocido"));
-    } finally {
-      setIsSubmitting(false);
+    setRecords(prev => prev.filter(r => r.id !== recordToDelete.id));
+    
+    if (selectedRecord?.id === recordToDelete.id) {
+      setSelectedRecord(null);
+      setShowDetailsModal(false);
     }
+    if (editingRecord?.id === recordToDelete.id) {
+      setEditingRecord(null);
+      setShowForm(false);
+    }
+    
+    setShowDeleteModal(false);
+    setRecordToDelete(null);
   }, [recordToDelete, selectedRecord, editingRecord]);
 
   // Nuevo registro
@@ -389,11 +248,6 @@ const TreatmentPlans: React.FC = () => {
     setEditingRecord(null);
     resetForm();
     setShowForm(true);
-  };
-
-  // Recargar datos
-  const handleRefresh = () => {
-    loadTreatmentPlans();
   };
 
   // Funciones auxiliares
@@ -444,38 +298,24 @@ const TreatmentPlans: React.FC = () => {
       <div className="flex items-center justify-center h-64">
         <div className="flex items-center space-x-3">
           <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-green-600"></div>
-          <p className="text-gray-600 text-sm">Conectando con el servidor...</p>
+          <p className="text-gray-600 text-sm">Cargando planes de tratamiento...</p>
         </div>
       </div>
     );
   }
 
   // Error
-  if (error && records.length === 0) {
+  if (error) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="text-center max-w-md">
-          <AlertTriangle className="w-12 h-12 text-red-600 mx-auto mb-4" />
-          <p className="text-red-600 text-sm mb-4">{error}</p>
-          <div className="flex justify-center space-x-3">
-            <button 
-              onClick={handleRefresh}
-              className="px-4 py-2 bg-red-600 text-white text-sm rounded hover:bg-red-700 flex items-center space-x-2"
-              disabled={isLoading}
-            >
-              <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
-              <span>Reintentar</span>
-            </button>
-            <button 
-              onClick={() => window.location.reload()}
-              className="px-4 py-2 bg-gray-600 text-white text-sm rounded hover:bg-gray-700"
-            >
-              Recargar Página
-            </button>
-          </div>
-          <p className="text-xs text-gray-500 mt-3">
-            Asegúrate de que el backend esté ejecutándose en http://localhost:5000
-          </p>
+        <div className="text-center">
+          <p className="text-red-600 text-sm mb-3">❌ {error}</p>
+          <button 
+            onClick={() => window.location.reload()}
+            className="px-3 py-1.5 bg-red-600 text-white text-sm rounded hover:bg-red-700"
+          >
+            Recargar
+          </button>
         </div>
       </div>
     );
@@ -495,33 +335,17 @@ const TreatmentPlans: React.FC = () => {
                 Planes de Tratamiento
               </h1>
               <p className="text-gray-600">
-                Sistema de gestión médica conectado al backend
+                Sistema de gestión médica
               </p>
-              {error && (
-                <p className="text-red-600 text-sm mt-1">
-                  ⚠️ {error}
-                </p>
-              )}
             </div>
           </div>
-          <div className="flex items-center space-x-3">
-            <button 
-              onClick={handleRefresh}
-              className="px-3 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 flex items-center space-x-2 transition-colors"
-              disabled={isLoading}
-              title="Recargar datos"
-            >
-              <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
-            </button>
-            <button 
-              onClick={handleNew}
-              className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center space-x-2 transition-colors"
-              disabled={isSubmitting}
-            >
-              <Plus className="w-4 h-4" />
-              <span>Nuevo</span>
-            </button>
-          </div>
+          <button 
+            onClick={handleNew}
+            className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center space-x-2 transition-colors"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Nuevo</span>
+          </button>
         </div>
 
         {/* Estadísticas */}
@@ -572,51 +396,25 @@ const TreatmentPlans: React.FC = () => {
             </div>
           </div>
         </div>
-
-        {/* Indicador de conectividad */}
-        <div className="mt-4 flex items-center justify-end">
-          <div className="flex items-center space-x-2 text-xs">
-            <div className={`w-2 h-2 rounded-full ${error ? 'bg-red-500' : 'bg-green-500'}`}></div>
-            <span className={error ? 'text-red-600' : 'text-green-600'}>
-              {error ? 'Desconectado' : 'Conectado al backend'}
-            </span>
-          </div>
-        </div>
       </div>
 
       {/* Lista de registros */}
-      {records.length === 0 && !isLoading ? (
+      {records.length === 0 ? (
         <div className="bg-white rounded-lg shadow-sm p-12 text-center">
           <Clipboard className="w-16 h-16 text-gray-300 mx-auto mb-4" />
           <h3 className="text-xl font-semibold text-gray-900 mb-2">
             No hay planes de tratamiento
           </h3>
           <p className="text-gray-600 mb-6">
-            {error 
-              ? "No se pudieron cargar los datos del servidor"
-              : "Aún no se han creado planes de tratamiento"
-            }
+            Aún no se han creado planes de tratamiento
           </p>
-          <div className="flex justify-center space-x-3">
-            <button 
-              onClick={handleNew}
-              className="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center space-x-2 mx-auto transition-colors"
-              disabled={isSubmitting}
-            >
-              <Plus className="w-5 h-5" />
-              <span>Crear Primer Plan</span>
-            </button>
-            {error && (
-              <button 
-                onClick={handleRefresh}
-                className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center space-x-2 mx-auto transition-colors"
-                disabled={isLoading}
-              >
-                <RefreshCw className={`w-5 h-5 ${isLoading ? 'animate-spin' : ''}`} />
-                <span>Reintentar Conexión</span>
-              </button>
-            )}
-          </div>
+          <button 
+            onClick={handleNew}
+            className="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center space-x-2 mx-auto transition-colors"
+          >
+            <Plus className="w-5 h-5" />
+            <span>Crear Primer Plan</span>
+          </button>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -689,7 +487,6 @@ const TreatmentPlans: React.FC = () => {
                     onClick={() => handleView(record)}
                     className="p-2 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
                     title="Ver detalles"
-                    disabled={isSubmitting}
                   >
                     <Eye className="w-4 h-4" />
                   </button>
@@ -697,7 +494,6 @@ const TreatmentPlans: React.FC = () => {
                     onClick={() => handleEdit(record)}
                     className="p-2 text-gray-600 hover:text-green-600 hover:bg-green-50 rounded transition-colors"
                     title="Editar"
-                    disabled={isSubmitting}
                   >
                     <Edit className="w-4 h-4" />
                   </button>
@@ -705,13 +501,12 @@ const TreatmentPlans: React.FC = () => {
                     onClick={() => handleDeleteClick(record)}
                     className="p-2 text-gray-600 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
                     title="Eliminar"
-                    disabled={isSubmitting}
                   >
                     <Trash2 className="w-4 h-4" />
                   </button>
                 </div>
                 <span className="text-xs text-gray-500">
-                  {record.createdAt && formatDate(record.createdAt.split('T')[0])}
+                  {formatDate(record.createdAt.split('T')[0])}
                 </span>
               </div>
             </motion.div>
@@ -742,7 +537,6 @@ const TreatmentPlans: React.FC = () => {
                 <button 
                   onClick={() => setShowForm(false)}
                   className="p-2 hover:bg-gray-100 rounded"
-                  disabled={isSubmitting}
                 >
                   <X className="w-5 h-5" />
                 </button>
@@ -750,13 +544,6 @@ const TreatmentPlans: React.FC = () => {
 
               {/* Contenido del formulario */}
               <div className="p-6 space-y-4">
-                {/* Mostrar errores globales */}
-                {error && (
-                  <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-                    <p className="text-red-700 text-sm">{error}</p>
-                  </div>
-                )}
-
                 {/* Información del Animal */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
@@ -771,7 +558,6 @@ const TreatmentPlans: React.FC = () => {
                         formErrors.bullName ? "border-red-300" : "border-gray-300"
                       }`}
                       placeholder="Ej: Bessie"
-                      disabled={isSubmitting}
                     />
                     {formErrors.bullName && (
                       <p className="text-red-500 text-xs mt-1">{formErrors.bullName}</p>
@@ -790,7 +576,6 @@ const TreatmentPlans: React.FC = () => {
                         formErrors.bullEarTag ? "border-red-300" : "border-gray-300"
                       }`}
                       placeholder="Ej: TAG-001"
-                      disabled={isSubmitting}
                     />
                     {formErrors.bullEarTag && (
                       <p className="text-red-500 text-xs mt-1">{formErrors.bullEarTag}</p>
@@ -812,7 +597,6 @@ const TreatmentPlans: React.FC = () => {
                         formErrors.cowName ? "border-red-300" : "border-gray-300"
                       }`}
                       placeholder="Ej: Mastitis"
-                      disabled={isSubmitting}
                     />
                     {formErrors.cowName && (
                       <p className="text-red-500 text-xs mt-1">{formErrors.cowName}</p>
@@ -831,7 +615,6 @@ const TreatmentPlans: React.FC = () => {
                         formErrors.cowEarTag ? "border-red-300" : "border-gray-300"
                       }`}
                       placeholder="Ej: Dr. García"
-                      disabled={isSubmitting}
                     />
                     {formErrors.cowEarTag && (
                       <p className="text-red-500 text-xs mt-1">{formErrors.cowEarTag}</p>
@@ -852,7 +635,6 @@ const TreatmentPlans: React.FC = () => {
                       className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent ${
                         formErrors.treatmentDate ? "border-red-300" : "border-gray-300"
                       }`}
-                      disabled={isSubmitting}
                     />
                     {formErrors.treatmentDate && (
                       <p className="text-red-500 text-xs mt-1">{formErrors.treatmentDate}</p>
@@ -870,7 +652,6 @@ const TreatmentPlans: React.FC = () => {
                       className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent ${
                         formErrors.treatmentTime ? "border-red-300" : "border-gray-300"
                       }`}
-                      disabled={isSubmitting}
                     />
                     {formErrors.treatmentTime && (
                       <p className="text-red-500 text-xs mt-1">{formErrors.treatmentTime}</p>
@@ -892,7 +673,6 @@ const TreatmentPlans: React.FC = () => {
                         formErrors.location ? "border-red-300" : "border-gray-300"
                       }`}
                       placeholder="Ej: Potrero Norte"
-                      disabled={isSubmitting}
                     />
                     {formErrors.location && (
                       <p className="text-red-500 text-xs mt-1">{formErrors.location}</p>
@@ -913,7 +693,6 @@ const TreatmentPlans: React.FC = () => {
                         formErrors.cost ? "border-red-300" : "border-gray-300"
                       }`}
                       placeholder="0.00"
-                      disabled={isSubmitting}
                     />
                     {formErrors.cost && (
                       <p className="text-red-500 text-xs mt-1">{formErrors.cost}</p>
@@ -931,7 +710,6 @@ const TreatmentPlans: React.FC = () => {
                       value={formData.status || "scheduled"}
                       onChange={(e) => setFormData(prev => ({ ...prev, status: e.target.value as any }))}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                      disabled={isSubmitting}
                     >
                       <option value="scheduled">Programado</option>
                       <option value="completed">Completado</option>
@@ -947,7 +725,6 @@ const TreatmentPlans: React.FC = () => {
                       value={formData.result || "pending"}
                       onChange={(e) => setFormData(prev => ({ ...prev, result: e.target.value as any }))}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                      disabled={isSubmitting}
                     >
                       <option value="pending">Pendiente</option>
                       <option value="successful">Exitoso</option>
@@ -967,7 +744,6 @@ const TreatmentPlans: React.FC = () => {
                     rows={3}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
                     placeholder="Observaciones adicionales..."
-                    disabled={isSubmitting}
                   />
                 </div>
               </div>
@@ -977,25 +753,15 @@ const TreatmentPlans: React.FC = () => {
                 <button
                   onClick={() => setShowForm(false)}
                   className="px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-                  disabled={isSubmitting}
                 >
                   Cancelar
                 </button>
                 <button
                   onClick={editingRecord ? handleUpdate : handleCreate}
-                  className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center space-x-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  disabled={isSubmitting}
+                  className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center space-x-2 transition-colors"
                 >
-                  {isSubmitting && (
-                    <RefreshCw className="w-4 h-4 animate-spin" />
-                  )}
-                  {!isSubmitting && <Save className="w-4 h-4" />}
-                  <span>
-                    {isSubmitting 
-                      ? (editingRecord ? "Actualizando..." : "Guardando...") 
-                      : (editingRecord ? "Actualizar" : "Guardar")
-                    }
-                  </span>
+                  <Save className="w-4 h-4" />
+                  <span>{editingRecord ? "Actualizar" : "Guardar"}</span>
                 </button>
               </div>
             </motion.div>
@@ -1069,14 +835,12 @@ const TreatmentPlans: React.FC = () => {
                         <span className="text-gray-600">Hora:</span>
                         <span className="ml-2 font-medium">{selectedRecord.treatmentTime}</span>
                       </div>
-                      {selectedRecord.createdAt && (
-                        <div>
-                          <span className="text-gray-600">Creado:</span>
-                          <span className="ml-2 font-medium">
-                            {formatDate(selectedRecord.createdAt.split('T')[0])}
-                          </span>
-                        </div>
-                      )}
+                      <div>
+                        <span className="text-gray-600">Creado:</span>
+                        <span className="ml-2 font-medium">
+                          {formatDate(selectedRecord.createdAt.split('T')[0])}
+                        </span>
+                      </div>
                     </div>
                   </div>
 
@@ -1094,12 +858,6 @@ const TreatmentPlans: React.FC = () => {
                         <span className="text-gray-600">Costo:</span>
                         <span className="ml-2 font-bold text-green-600 text-lg">
                           ${selectedRecord.cost.toLocaleString()}
-                        </span>
-                      </div>
-                      <div>
-                        <span className="text-gray-600">ID:</span>
-                        <span className="ml-2 font-mono text-xs text-gray-500">
-                          {selectedRecord.id}
                         </span>
                       </div>
                     </div>
@@ -1131,7 +889,6 @@ const TreatmentPlans: React.FC = () => {
                     handleEdit(selectedRecord);
                   }}
                   className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center space-x-2 transition-colors"
-                  disabled={isSubmitting}
                 >
                   <Edit className="w-4 h-4" />
                   <span>Editar</span>
@@ -1180,7 +937,7 @@ const TreatmentPlans: React.FC = () => {
                   <strong>{recordToDelete.cowName}</strong>?
                   <br />
                   <br />
-                  Toda la información del registro se eliminará permanentemente del servidor.
+                  Toda la información del registro se perderá permanentemente.
                 </p>
               </div>
 
@@ -1192,18 +949,15 @@ const TreatmentPlans: React.FC = () => {
                     setRecordToDelete(null);
                   }}
                   className="px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-                  disabled={isSubmitting}
                 >
                   Cancelar
                 </button>
                 <button
                   onClick={confirmDelete}
-                  className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 flex items-center space-x-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  disabled={isSubmitting}
+                  className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 flex items-center space-x-2 transition-colors"
                 >
-                  {isSubmitting && <RefreshCw className="w-4 h-4 animate-spin" />}
-                  {!isSubmitting && <Trash2 className="w-4 h-4" />}
-                  <span>{isSubmitting ? "Eliminando..." : "Eliminar"}</span>
+                  <Trash2 className="w-4 h-4" />
+                  <span>Eliminar</span>
                 </button>
               </div>
             </motion.div>

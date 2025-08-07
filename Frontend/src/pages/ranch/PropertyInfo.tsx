@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback, useEffect } from "react";
+import React, { useState, useRef, useCallback } from "react";
 import { motion, Variants } from "framer-motion";
 import {
   MapPin,
@@ -26,207 +26,10 @@ import {
   PlusCircle,
   Navigation,
   Loader,
-  Wifi,
-  WifiOff,
-  AlertCircle,
-  RefreshCw
 } from "lucide-react";
 
 // ============================================================================
-// CONFIGURACIÓN DE API
-// ============================================================================
-
-const API_BASE_URL = 'http://localhost:5000/api';
-
-// Servicio de API
-class ApiService {
-  private static token: string | null = null;
-
-  static setAuthToken(token: string) {
-    this.token = token;
-    localStorage.setItem('auth_token', token);
-  }
-
-  static getAuthToken(): string | null {
-    if (!this.token) {
-      this.token = localStorage.getItem('auth_token');
-    }
-    return this.token;
-  }
-
-  static clearAuthToken() {
-    this.token = null;
-    localStorage.removeItem('auth_token');
-  }
-
-  private static async request(endpoint: string, options: RequestInit = {}): Promise<any> {
-    const token = this.getAuthToken();
-    
-    const defaultHeaders: Record<string, string> = {
-      'Content-Type': 'application/json',
-    };
-
-    const headers = {
-      ...defaultHeaders,
-      ...(options.headers as Record<string, string> || {}),
-    };
-
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
-    }
-
-    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-      method: options.method || 'GET',
-      headers,
-      body: options.body,
-      ...options,
-    });
-
-    if (!response.ok) {
-      if (response.status === 401) {
-        this.clearAuthToken();
-        throw new Error('Sesión expirada. Por favor inicie sesión nuevamente.');
-      }
-      
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.message || `Error ${response.status}: ${response.statusText}`);
-    }
-
-    return response.json();
-  }
-
-  // Método para verificar conectividad
-  static async checkHealth(): Promise<boolean> {
-    try {
-      await fetch(`${API_BASE_URL}/health`, { method: 'GET' });
-      return true;
-    } catch {
-      return false;
-    }
-  }
-
-  // Métodos para propiedades
-  static async getPropertyInfo(): Promise<any> {
-    return this.request('/ranch/property-info?includeDocuments=true&includePhotos=true');
-  }
-
-  static async savePropertyInfo(data: any): Promise<any> {
-    return this.request('/ranch/property-info', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    });
-  }
-
-  static async updatePropertyInfo(id: string, data: any): Promise<any> {
-    return this.request(`/ranch/property-info/${id}`, {
-      method: 'PUT',
-      body: JSON.stringify(data),
-    });
-  }
-
-  static async deleteProperty(id: string): Promise<any> {
-    return this.request(`/ranch/property-info/${id}`, {
-      method: 'DELETE',
-    });
-  }
-
-  // Métodos para documentos
-  static async uploadDocuments(files: FileList, metadata: any): Promise<any> {
-    const formData = new FormData();
-    
-    Array.from(files).forEach((file) => {
-      formData.append('documents', file);
-    });
-    
-    Object.keys(metadata).forEach(key => {
-      formData.append(key, metadata[key]);
-    });
-
-    const token = this.getAuthToken();
-    const headers: Record<string, string> = {};
-    
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
-    }
-
-    const response = await fetch(`${API_BASE_URL}/upload/ranch/documents`, {
-      method: 'POST',
-      headers,
-      body: formData,
-    });
-
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.message || 'Error al subir documentos');
-    }
-
-    return response.json();
-  }
-
-  static async deleteDocument(documentId: string): Promise<any> {
-    return this.request(`/ranch/documents/${documentId}`, {
-      method: 'DELETE',
-    });
-  }
-
-  // Métodos para fotos
-  static async uploadPhotos(files: FileList, metadata: any): Promise<any> {
-    const formData = new FormData();
-    
-    Array.from(files).forEach((file) => {
-      formData.append('photos', file);
-    });
-    
-    Object.keys(metadata).forEach(key => {
-      formData.append(key, metadata[key]);
-    });
-
-    const token = this.getAuthToken();
-    const headers: Record<string, string> = {};
-    
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
-    }
-
-    const response = await fetch(`${API_BASE_URL}/upload/ranch/photos`, {
-      method: 'POST',
-      headers,
-      body: formData,
-    });
-
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.message || 'Error al subir fotos');
-    }
-
-    return response.json();
-  }
-
-  static async deletePhoto(photoId: string): Promise<any> {
-    return this.request(`/ranch/photos/${photoId}`, {
-      method: 'DELETE',
-    });
-  }
-
-  // Método para autenticación demo (crear un token temporal)
-  static async loginDemo(): Promise<any> {
-    return this.request('/auth/demo-login', {
-      method: 'POST',
-      body: JSON.stringify({ 
-        username: 'demo_user', 
-        password: 'demo123' 
-      }),
-    }).catch(() => {
-      // Si no existe el endpoint de demo, crear token simulado
-      const demoToken = 'demo-token-' + Date.now();
-      this.setAuthToken(demoToken);
-      return { success: true, token: demoToken };
-    });
-  }
-}
-
-// ============================================================================
-// INTERFACES Y TIPOS (mantener las existentes)
+// INTERFACES Y TIPOS
 // ============================================================================
 
 interface PropertyDocument {
@@ -238,7 +41,6 @@ interface PropertyDocument {
   fileSize: number;
   fileType: string;
   status: "valid" | "expired" | "pending" | "requires_renewal";
-  url?: string;
 }
 
 interface PropertyPhoto {
@@ -251,6 +53,7 @@ interface PropertyPhoto {
 }
 
 interface PropertyInfo {
+  // Información básica
   basicInfo: {
     id: string;
     name: string;
@@ -259,6 +62,8 @@ interface PropertyInfo {
     registrationNumber: string;
     propertyType: "ranch" | "farm" | "dairy" | "feedlot" | "mixed";
   };
+
+  // Ubicación y dimensiones
   location: {
     address: string;
     city: string;
@@ -272,14 +77,18 @@ interface PropertyInfo {
     elevation: number;
     timezone: string;
   };
+
+  // Dimensiones de la propiedad
   dimensions: {
-    totalArea: number;
-    usableArea: number;
-    pastureArea: number;
-    buildingArea: number;
-    waterBodyArea: number;
-    forestArea: number;
+    totalArea: number; // hectáreas
+    usableArea: number; // hectáreas
+    pastureArea: number; // hectáreas
+    buildingArea: number; // m²
+    waterBodyArea: number; // hectáreas
+    forestArea: number; // hectáreas
   };
+
+  // Información del propietario/administrador
   ownership: {
     ownerName: string;
     ownerType: "individual" | "corporation" | "cooperative" | "government";
@@ -292,6 +101,8 @@ interface PropertyInfo {
     administratorName?: string;
     administratorContact?: string;
   };
+
+  // Características operacionales
   operations: {
     primaryActivity: string[];
     secondaryActivity: string[];
@@ -304,8 +115,12 @@ interface PropertyInfo {
       currentStaff: number;
     };
   };
+
+  // Documentos y fotos
   documents: PropertyDocument[];
   photos: PropertyPhoto[];
+
+  // Fechas importantes
   dates: {
     lastUpdate: string;
     lastInspection?: string;
@@ -383,7 +198,7 @@ const createEmptyPropertyInfo = (): PropertyInfo => ({
 });
 
 // ============================================================================
-// VARIANTES DE ANIMACIÓN (mantener las existentes)
+// VARIANTES DE ANIMACIÓN
 // ============================================================================
 
 const containerVariants: Variants = {
@@ -431,66 +246,6 @@ const cardVariants: Variants = {
 // COMPONENTES AUXILIARES
 // ============================================================================
 
-// Componente de estado de conectividad
-const ConnectionStatus: React.FC<{
-  isConnected: boolean;
-  onRetry: () => void;
-}> = ({ isConnected, onRetry }) => {
-  if (isConnected) return null;
-
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: -50 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="bg-red-500 text-white p-4 rounded-lg mb-4 flex items-center justify-between shadow-lg"
-    >
-      <div className="flex items-center space-x-3">
-        <WifiOff className="w-5 h-5" />
-        <div>
-          <p className="font-medium">Sin conexión al servidor</p>
-          <p className="text-sm opacity-90">Verifique que el backend esté ejecutándose en el puerto 5000</p>
-        </div>
-      </div>
-      <motion.button
-        whileHover={{ scale: 1.05 }}
-        whileTap={{ scale: 0.95 }}
-        onClick={onRetry}
-        className="px-4 py-2 bg-white/20 rounded-lg hover:bg-white/30 transition-colors flex items-center space-x-2"
-      >
-        <RefreshCw className="w-4 h-4" />
-        <span>Reintentar</span>
-      </motion.button>
-    </motion.div>
-  );
-};
-
-// Componente de notificación de error
-const ErrorNotification: React.FC<{
-  error: string | null;
-  onDismiss: () => void;
-}> = ({ error, onDismiss }) => {
-  if (!error) return null;
-
-  return (
-    <motion.div
-      initial={{ opacity: 0, x: 300 }}
-      animate={{ opacity: 1, x: 0 }}
-      exit={{ opacity: 0, x: 300 }}
-      className="fixed top-4 right-4 bg-red-500 text-white p-4 rounded-lg shadow-lg flex items-center space-x-3 z-50 max-w-md"
-    >
-      <AlertCircle className="w-5 h-5 flex-shrink-0" />
-      <p className="flex-1">{error}</p>
-      <button
-        onClick={onDismiss}
-        className="text-white/80 hover:text-white"
-      >
-        <X className="w-4 h-4" />
-      </button>
-    </motion.div>
-  );
-};
-
-// Componente EditableField (mantener el existente)
 const EditableField: React.FC<{
   label: string;
   value: string | number;
@@ -526,7 +281,6 @@ const EditableField: React.FC<{
   );
 };
 
-// Componentes DocumentCard y PhotoCard actualizados
 const DocumentCard: React.FC<{
   document: PropertyDocument;
   onView: () => void;
@@ -588,17 +342,9 @@ const DocumentCard: React.FC<{
       </div>
 
       <div className="text-sm text-gray-600 mb-3">
-        <p>Subido: {new Date(document.uploadDate).toLocaleDateString('es-MX', { 
-          year: 'numeric', 
-          month: '2-digit', 
-          day: '2-digit' 
-        })}</p>
+        <p>Subido: {new Date(document.uploadDate).toLocaleDateString('es-MX')}</p>
         {document.expirationDate && (
-          <p>Expira: {new Date(document.expirationDate).toLocaleDateString('es-MX', { 
-            year: 'numeric', 
-            month: '2-digit', 
-            day: '2-digit' 
-          })}</p>
+          <p>Expira: {new Date(document.expirationDate).toLocaleDateString('es-MX')}</p>
         )}
       </div>
 
@@ -686,11 +432,7 @@ const PhotoCard: React.FC<{
         <p className="font-medium text-[#2d5a45] text-sm">{photo.caption}</p>
         <div className="flex items-center justify-between mt-2 text-xs text-gray-600">
           <span className="capitalize">{photo.category}</span>
-          <span>{new Date(photo.uploadDate).toLocaleDateString('es-MX', { 
-            year: 'numeric', 
-            month: '2-digit', 
-            day: '2-digit' 
-          })}</span>
+          <span>{new Date(photo.uploadDate).toLocaleDateString('es-MX')}</span>
         </div>
       </div>
     </motion.div>
@@ -702,169 +444,23 @@ const PhotoCard: React.FC<{
 // ============================================================================
 
 const PropertyInfo: React.FC = () => {
-  // Estados existentes
+  // Estados para manejo de datos y UI
   const [propertyData, setPropertyData] = useState<PropertyInfo | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [activeTab, setActiveTab] = useState<"basic" | "documents" | "photos">("basic");
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [isGettingLocation, setIsGettingLocation] = useState(false);
+  const [isSaved, setIsSaved] = useState(false);
 
-  // Nuevos estados para backend
-  const [isConnected, setIsConnected] = useState(true);
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [isSaving, setIsSaving] = useState(false);
-  const [lastSavedData, setLastSavedData] = useState<PropertyInfo | null>(null);
-
-  // Referencias
+  // Referencias para inputs de archivos
   const documentInputRef = useRef<HTMLInputElement>(null);
   const photoInputRef = useRef<HTMLInputElement>(null);
 
-  // ============================================================================
-  // FUNCIONES DE BACKEND
-  // ============================================================================
-
-  // Verificar conectividad
-  const checkConnection = useCallback(async () => {
-    try {
-      const connected = await ApiService.checkHealth();
-      setIsConnected(connected);
-      if (!connected) {
-        setError('No se pudo conectar con el servidor en el puerto 5000');
-      }
-      return connected;
-    } catch (error) {
-      setIsConnected(false);
-      setError('Error de conectividad con el backend');
-      return false;
-    }
-  }, []);
-
-  // Cargar datos existentes
-  const loadPropertyData = useCallback(async () => {
-    try {
-      setIsLoading(true);
-      setError(null);
-      
-      // Verificar conexión primero
-      const connected = await checkConnection();
-      if (!connected) return;
-
-      const response = await ApiService.getPropertyInfo();
-      
-      if (response.success && response.data) {
-        setPropertyData(response.data);
-        setLastSavedData(response.data);
-      }
-    } catch (error) {
-      console.error('Error cargando propiedad:', error);
-      if (error instanceof Error) {
-        if (error.message.includes('401') || error.message.includes('Sesión expirada')) {
-          // Intentar login demo
-          try {
-            await ApiService.loginDemo();
-            // Reintentar después del login
-            const response = await ApiService.getPropertyInfo();
-            if (response.success && response.data) {
-              setPropertyData(response.data);
-              setLastSavedData(response.data);
-            }
-          } catch (loginError) {
-            setError('Error de autenticación. Usando modo offline.');
-            // Continuar sin datos del backend
-          }
-        } else {
-          setError(error.message);
-        }
-      }
-    } finally {
-      setIsLoading(false);
-    }
-  }, [checkConnection]);
-
-  // Guardar propiedad
-  const savePropertyData = useCallback(async (data: PropertyInfo) => {
-    try {
-      setIsSaving(true);
-      setError(null);
-
-      let response;
-      if (data.basicInfo.id && lastSavedData) {
-        // Actualizar existente
-        response = await ApiService.updatePropertyInfo(data.basicInfo.id, data);
-      } else {
-        // Crear nueva
-        response = await ApiService.savePropertyInfo(data);
-      }
-
-      if (response.success) {
-        setLastSavedData(data);
-        setError(null);
-        return true;
-      } else {
-        throw new Error(response.message || 'Error al guardar');
-      }
-    } catch (error) {
-      console.error('Error guardando propiedad:', error);
-      if (error instanceof Error) {
-        setError(error.message);
-      }
-      return false;
-    } finally {
-      setIsSaving(false);
-    }
-  }, [lastSavedData]);
-
-  // Eliminar propiedad
-  const deletePropertyData = useCallback(async (propertyId: string) => {
-    try {
-      setIsLoading(true);
-      setError(null);
-
-      const response = await ApiService.deleteProperty(propertyId);
-      
-      if (response.success) {
-        setPropertyData(null);
-        setLastSavedData(null);
-        return true;
-      } else {
-        throw new Error(response.message || 'Error al eliminar');
-      }
-    } catch (error) {
-      console.error('Error eliminando propiedad:', error);
-      if (error instanceof Error) {
-        setError(error.message);
-      }
-      return false;
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
-
-  // ============================================================================
-  // EFECTOS
-  // ============================================================================
-
-  // Cargar datos al iniciar
-  useEffect(() => {
-    loadPropertyData();
-  }, [loadPropertyData]);
-
-  // Verificar conexión periódicamente
-  useEffect(() => {
-    const interval = setInterval(checkConnection, 30000); // cada 30 segundos
-    return () => clearInterval(interval);
-  }, [checkConnection]);
-
-  // ============================================================================
-  // HANDLERS ACTUALIZADOS
-  // ============================================================================
-
-  // Función para obtener ubicación actual (mantener la existente)
+  // Función para obtener ubicación actual
   const getCurrentLocation = useCallback(() => {
     if (!navigator.geolocation) {
-      setError("La geolocalización no está soportada en este navegador");
+      alert("La geolocalización no está soportada en este navegador");
       return;
     }
 
@@ -923,17 +519,17 @@ const PropertyInfo: React.FC = () => {
             break;
         }
         
-        setError(errorMessage);
+        alert(errorMessage);
       },
       {
         enableHighAccuracy: true,
         timeout: 10000,
-        maximumAge: 300000
+        maximumAge: 300000 // 5 minutos
       }
     );
   }, [propertyData]);
 
-  // Crear nueva propiedad
+  // Función para crear nueva propiedad
   const handleCreateNew = () => {
     const newProperty = createEmptyPropertyInfo();
     newProperty.basicInfo.id = `property-${Date.now()}`;
@@ -941,138 +537,87 @@ const PropertyInfo: React.FC = () => {
     setIsEditing(true);
   };
 
-  // Subida de documentos con backend real
-  const handleDocumentUpload = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
+  // Función para manejar la subida de documentos
+  const handleDocumentUpload = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
+    if (!propertyData) return;
+    
     const files = event.target.files;
     if (!files || files.length === 0) return;
 
-    try {
-      setIsUploading(true);
-      setUploadProgress(0);
-      setError(null);
+    setIsUploading(true);
+    setUploadProgress(0);
 
-      // Simular progreso de upload
-      const progressInterval = setInterval(() => {
-        setUploadProgress(prev => {
-          if (prev >= 90) {
-            clearInterval(progressInterval);
-            return prev;
-          }
-          return prev + 10;
-        });
-      }, 200);
-
-      const metadata = {
-        type: 'other',
-        documentType: 'ranch_document',
-        description: 'Documento subido desde la interfaz de propiedad'
-      };
-
-      const response = await ApiService.uploadDocuments(files, metadata);
-
-      if (response.success) {
-        // Convertir respuesta del backend al formato esperado
-        const newDocuments: PropertyDocument[] = response.data.map((doc: any) => ({
-          id: doc.id,
-          name: doc.originalName || files[0].name,
-          type: "other",
-          uploadDate: new Date().toISOString().split('T')[0],
-          fileSize: Math.round(doc.size / (1024 * 1024) * 100) / 100,
-          fileType: doc.mimetype?.includes('pdf') ? 'PDF' : 'DOC',
-          status: "valid" as const,
-          url: doc.url
-        }));
-
-        setPropertyData(prev => prev ? ({
-          ...prev,
-          documents: [...prev.documents, ...newDocuments]
-        }) : null);
-
-        setUploadProgress(100);
-        setTimeout(() => {
+    const interval = setInterval(() => {
+      setUploadProgress(prev => {
+        if (prev >= 100) {
+          clearInterval(interval);
           setIsUploading(false);
-          setUploadProgress(0);
-        }, 1000);
-      } else {
-        throw new Error(response.message || 'Error al subir documentos');
-      }
-    } catch (error) {
-      console.error('Error subiendo documentos:', error);
-      if (error instanceof Error) {
-        setError(error.message);
-      }
-      setIsUploading(false);
-      setUploadProgress(0);
-    }
+          
+          const newDocument: PropertyDocument = {
+            id: `doc-${Date.now()}`,
+            name: files[0].name,
+            type: "other",
+            uploadDate: new Date().toISOString().split('T')[0],
+            fileSize: Math.round(files[0].size / (1024 * 1024) * 100) / 100,
+            fileType: files[0].type.toUpperCase().includes('PDF') ? 'PDF' : 'DOC',
+            status: "valid"
+          };
+
+          setPropertyData(prev => prev ? ({
+            ...prev,
+            documents: [...prev.documents, newDocument]
+          }) : null);
+
+          return 100;
+        }
+        return prev + 10;
+      });
+    }, 200);
 
     event.target.value = '';
-  }, []);
+  }, [propertyData]);
 
-  // Subida de fotos con backend real
-  const handlePhotoUpload = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
+  // Función para manejar la subida de fotos
+  const handlePhotoUpload = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
+    if (!propertyData) return;
+    
     const files = event.target.files;
     if (!files || files.length === 0) return;
 
-    try {
-      setIsUploading(true);
-      setUploadProgress(0);
-      setError(null);
+    setIsUploading(true);
+    setUploadProgress(0);
 
-      // Simular progreso de upload
-      const progressInterval = setInterval(() => {
-        setUploadProgress(prev => {
-          if (prev >= 90) {
-            clearInterval(progressInterval);
-            return prev;
-          }
-          return prev + 10;
-        });
-      }, 200);
-
-      const metadata = {
-        category: 'general',
-        description: 'Foto subida desde la interfaz de propiedad'
-      };
-
-      const response = await ApiService.uploadPhotos(files, metadata);
-
-      if (response.success) {
-        const newPhotos: PropertyPhoto[] = response.data.map((photo: any, index: number) => ({
-          id: photo.id,
-          url: photo.url || "/api/placeholder/400/300",
-          caption: `Foto del rancho ${index + 1}`,
-          category: "general" as const,
-          uploadDate: new Date().toISOString().split('T')[0],
-          isMain: propertyData?.photos.length === 0 && index === 0
-        }));
-
-        setPropertyData(prev => prev ? ({
-          ...prev,
-          photos: [...prev.photos, ...newPhotos]
-        }) : null);
-
-        setUploadProgress(100);
-        setTimeout(() => {
+    const interval = setInterval(() => {
+      setUploadProgress(prev => {
+        if (prev >= 100) {
+          clearInterval(interval);
           setIsUploading(false);
-          setUploadProgress(0);
-        }, 1000);
-      } else {
-        throw new Error(response.message || 'Error al subir fotos');
-      }
-    } catch (error) {
-      console.error('Error subiendo fotos:', error);
-      if (error instanceof Error) {
-        setError(error.message);
-      }
-      setIsUploading(false);
-      setUploadProgress(0);
-    }
+          
+          const newPhoto: PropertyPhoto = {
+            id: `photo-${Date.now()}`,
+            url: "/api/placeholder/400/300",
+            caption: "Nueva foto del rancho",
+            category: "general",
+            uploadDate: new Date().toISOString().split('T')[0],
+            isMain: propertyData.photos.length === 0
+          };
+
+          setPropertyData(prev => prev ? ({
+            ...prev,
+            photos: [...prev.photos, newPhoto]
+          }) : null);
+
+          return 100;
+        }
+        return prev + 10;
+      });
+    }, 200);
 
     event.target.value = '';
-  }, [propertyData?.photos.length]);
+  }, [propertyData]);
 
   // Función para guardar cambios
-  const handleSave = async () => {
+  const handleSave = () => {
     if (!propertyData) return;
     
     // Validar campos requeridos
@@ -1085,71 +630,47 @@ const PropertyInfo: React.FC = () => {
     ];
 
     if (requiredFields.some(field => !field.trim())) {
-      setError("Por favor complete los campos requeridos (marcados con *)");
+      alert("Por favor complete los campos requeridos (marcados con *)");
       return;
     }
 
     // Validar capacidades
     if (propertyData.operations.capacity.currentAnimals > propertyData.operations.capacity.maxAnimals) {
-      setError("Los animales actuales no pueden ser mayores a la capacidad máxima");
+      alert("Los animales actuales no pueden ser mayores a la capacidad máxima");
       return;
     }
 
     if (propertyData.operations.capacity.currentStaff > propertyData.operations.capacity.staffCapacity) {
-      setError("El personal actual no puede ser mayor a la capacidad de personal");
+      alert("El personal actual no puede ser mayor a la capacidad de personal");
       return;
     }
 
-    const success = await savePropertyData(propertyData);
-    
-    if (success) {
-      setIsEditing(false);
-      setError(null);
-    }
+    setIsEditing(false);
+    setIsSaved(true);
+    // Aquí se enviarían los datos al backend
+    console.log("Guardando propiedad:", propertyData);
+    alert("Información guardada exitosamente");
   };
 
   // Función para cancelar edición
   const handleCancel = () => {
-    if (lastSavedData) {
-      // Restaurar datos guardados
-      setPropertyData(lastSavedData);
-    } else {
-      // Si era nueva propiedad, limpiar
+    setIsEditing(false);
+    if (propertyData && !isSaved) {
+      // Si estaba creando una nueva propiedad y cancela, volver al estado inicial
       setPropertyData(null);
     }
-    setIsEditing(false);
-    setError(null);
   };
 
   // Función para eliminar información
-  const handleDelete = async () => {
-    if (!propertyData?.basicInfo.id) return;
-    
+  const handleDelete = () => {
     if (window.confirm("¿Está seguro que desea eliminar toda la información de la propiedad? Esta acción no se puede deshacer.")) {
-      const success = await deletePropertyData(propertyData.basicInfo.id);
-      if (success) {
-        setIsEditing(false);
-        setActiveTab("basic");
-      }
+      setPropertyData(null);
+      setIsSaved(false);
+      setIsEditing(false);
+      setActiveTab("basic");
+      alert("Información eliminada exitosamente");
     }
   };
-
-  // Función para descartar error
-  const dismissError = () => {
-    setError(null);
-  };
-
-  // Función para reintentar conexión
-  const retryConnection = async () => {
-    await checkConnection();
-    if (isConnected) {
-      await loadPropertyData();
-    }
-  };
-
-  // ============================================================================
-  // RENDER
-  // ============================================================================
 
   // Tabs de navegación
   const tabs = [
@@ -1158,40 +679,11 @@ const PropertyInfo: React.FC = () => {
     { id: "photos", label: "Fotografías", icon: Camera },
   ] as const;
 
-  // Mostrar loading inicial
-  if (isLoading && !propertyData) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-[#519a7c] via-[#f2e9d8] to-[#f4ac3a] flex items-center justify-center">
-        <motion.div
-          initial={{ opacity: 0, scale: 0.9 }}
-          animate={{ opacity: 1, scale: 1 }}
-          className="bg-white/90 backdrop-blur-sm rounded-2xl p-8 shadow-xl text-center"
-        >
-          <Loader className="w-12 h-12 text-[#519a7c] animate-spin mx-auto mb-4" />
-          <h2 className="text-xl font-semibold text-[#2d5a45] mb-2">Conectando con el servidor...</h2>
-          <p className="text-gray-600">Verificando datos existentes en el puerto 5000</p>
-        </motion.div>
-      </div>
-    );
-  }
-
   // Si no hay datos, mostrar pantalla de inicio
   if (!propertyData) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-[#519a7c] via-[#f2e9d8] to-[#f4ac3a] p-6">
         <div className="max-w-4xl mx-auto">
-          {/* Estado de conectividad */}
-          <ConnectionStatus 
-            isConnected={isConnected} 
-            onRetry={retryConnection}
-          />
-          
-          {/* Notificación de error */}
-          <ErrorNotification 
-            error={error} 
-            onDismiss={dismissError}
-          />
-
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -1204,52 +696,27 @@ const PropertyInfo: React.FC = () => {
                 transition={{ delay: 0.2, type: "spring", stiffness: 200 }}
                 className="w-24 h-24 bg-[#519a7c] bg-opacity-10 rounded-full flex items-center justify-center mx-auto mb-6"
               >
-                <div className="relative">
-                  <Building className="w-12 h-12 text-[#519a7c]" />
-                  {isConnected && (
-                    <div className="absolute -top-1 -right-1 w-4 h-4 bg-green-500 rounded-full flex items-center justify-center">
-                      <Wifi className="w-2 h-2 text-white" />
-                    </div>
-                  )}
-                </div>
+                <Building className="w-12 h-12 text-[#519a7c]" />
               </motion.div>
               
               <h1 className="text-4xl font-bold text-[#2d5a45] mb-4">
                 Sistema de Gestión de Propiedades
               </h1>
               
-              <p className="text-lg text-gray-600 mb-2 max-w-2xl mx-auto">
+              <p className="text-lg text-gray-600 mb-8 max-w-2xl mx-auto">
                 Crea la información de tu propiedad para gestionar todos los datos, 
-                documentos y fotografías de tu rancho de manera organizada.
+                documentos y fotografías de tu rancho de manera organizada. 
+                <span className="font-medium text-[#2d5a45]">Solo puedes tener una propiedad registrada.</span>
               </p>
-
-              <div className="flex items-center justify-center space-x-2 text-sm mb-8">
-                {isConnected ? (
-                  <div className="flex items-center text-green-600">
-                    <Wifi className="w-4 h-4 mr-1" />
-                    Conectado al servidor (Puerto 5000)
-                  </div>
-                ) : (
-                  <div className="flex items-center text-red-600">
-                    <WifiOff className="w-4 h-4 mr-1" />
-                    Sin conexión al servidor
-                  </div>
-                )}
-              </div>
               
               <motion.button
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
                 onClick={handleCreateNew}
-                disabled={isSaving}
-                className="px-8 py-4 bg-[#519a7c] text-white rounded-xl hover:bg-[#2d5a45] transition-colors flex items-center mx-auto text-lg font-medium shadow-lg disabled:opacity-50"
+                className="px-8 py-4 bg-[#519a7c] text-white rounded-xl hover:bg-[#2d5a45] transition-colors flex items-center mx-auto text-lg font-medium shadow-lg"
               >
-                {isSaving ? (
-                  <Loader className="w-6 h-6 mr-3 animate-spin" />
-                ) : (
-                  <PlusCircle className="w-6 h-6 mr-3" />
-                )}
-                {isSaving ? 'Creando...' : 'Crear Nueva Propiedad'}
+                <PlusCircle className="w-6 h-6 mr-3" />
+                Crear Nueva Propiedad
               </motion.button>
               
               <div className="mt-12 grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -1288,46 +755,18 @@ const PropertyInfo: React.FC = () => {
         animate="visible"
         className="max-w-7xl mx-auto"
       >
-        {/* Estado de conectividad */}
-        <ConnectionStatus 
-          isConnected={isConnected} 
-          onRetry={retryConnection}
-        />
-        
-        {/* Notificación de error */}
-        <ErrorNotification 
-          error={error} 
-          onDismiss={dismissError}
-        />
-
         {/* Header */}
         <motion.div variants={itemVariants} className="mb-8">
           <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-3">
-              <div>
-                <h1 className="text-4xl font-bold text-[#2d5a45] mb-2">
-                  {propertyData.basicInfo.name || "Nueva Propiedad"}
-                </h1>
-                <p className="text-gray-600 text-lg">
-                  {isEditing ? "Editando información" : 
-                   lastSavedData ? "Información guardada - Puede editar o eliminar" :
-                   "Gestiona toda la información del rancho"}
-                </p>
-              </div>
-              {/* Indicador de estado */}
-              <div className="flex items-center space-x-2">
-                {isConnected ? (
-                  <div className="flex items-center text-green-600 text-sm">
-                    <Wifi className="w-4 h-4 mr-1" />
-                    Online
-                  </div>
-                ) : (
-                  <div className="flex items-center text-red-600 text-sm">
-                    <WifiOff className="w-4 h-4 mr-1" />
-                    Offline
-                  </div>
-                )}
-              </div>
+            <div>
+              <h1 className="text-4xl font-bold text-[#2d5a45] mb-2">
+                {propertyData.basicInfo.name || "Nueva Propiedad"}
+              </h1>
+              <p className="text-gray-600 text-lg">
+                {isEditing ? "Editando información" : 
+                 isSaved ? "Información guardada - Puede editar o eliminar la información actual" :
+                 "Gestiona toda la información, documentos y fotos del rancho"}
+              </p>
             </div>
 
             <div className="flex items-center space-x-3">
@@ -1337,22 +776,16 @@ const PropertyInfo: React.FC = () => {
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
                     onClick={handleSave}
-                    disabled={isSaving}
-                    className="px-4 py-2 bg-[#519a7c] text-white rounded-lg hover:bg-[#2d5a45] transition-colors flex items-center disabled:opacity-50"
+                    className="px-4 py-2 bg-[#519a7c] text-white rounded-lg hover:bg-[#2d5a45] transition-colors flex items-center"
                   >
-                    {isSaving ? (
-                      <Loader className="w-4 h-4 mr-2 animate-spin" />
-                    ) : (
-                      <Save className="w-4 h-4 mr-2" />
-                    )}
-                    {isSaving ? 'Guardando...' : 'Guardar'}
+                    <Save className="w-4 h-4 mr-2" />
+                    Guardar
                   </motion.button>
                   <motion.button
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
                     onClick={handleCancel}
-                    disabled={isSaving}
-                    className="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors flex items-center disabled:opacity-50"
+                    className="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors flex items-center"
                   >
                     <X className="w-4 h-4 mr-2" />
                     Cancelar
@@ -1369,20 +802,15 @@ const PropertyInfo: React.FC = () => {
                     <Edit3 className="w-4 h-4 mr-2" />
                     Editar
                   </motion.button>
-                  {lastSavedData && (
+                  {isSaved && (
                     <motion.button
                       whileHover={{ scale: 1.05 }}
                       whileTap={{ scale: 0.95 }}
                       onClick={handleDelete}
-                      disabled={isLoading}
-                      className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors flex items-center disabled:opacity-50"
+                      className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors flex items-center"
                     >
-                      {isLoading ? (
-                        <Loader className="w-4 h-4 mr-2 animate-spin" />
-                      ) : (
-                        <Trash2 className="w-4 h-4 mr-2" />
-                      )}
-                      {isLoading ? 'Eliminando...' : 'Eliminar'}
+                      <Trash2 className="w-4 h-4 mr-2" />
+                      Eliminar
                     </motion.button>
                   )}
                 </>
@@ -1428,10 +856,7 @@ const PropertyInfo: React.FC = () => {
             className="mb-6 bg-white/90 backdrop-blur-sm rounded-xl p-4 shadow-lg border border-white/20"
           >
             <div className="flex items-center justify-between mb-2">
-              <span className="text-sm font-medium text-[#2d5a45] flex items-center">
-                <Upload className="w-4 h-4 mr-2" />
-                Subiendo archivo...
-              </span>
+              <span className="text-sm font-medium text-[#2d5a45]">Subiendo archivo...</span>
               <span className="text-sm text-gray-600">{uploadProgress}%</span>
             </div>
             <div className="w-full bg-gray-200 rounded-full h-2">
@@ -1480,11 +905,11 @@ const PropertyInfo: React.FC = () => {
                   />
                   <EditableField
                     label="Año de Establecimiento"
-                    value={propertyData.basicInfo.establishedYear.toString()}
+                    value={propertyData.basicInfo.establishedYear}
                     isEditing={isEditing}
                     onChange={(value) => setPropertyData(prev => prev ? ({
                       ...prev,
-                      basicInfo: { ...prev.basicInfo, establishedYear: parseInt(value) || new Date().getFullYear() }
+                      basicInfo: { ...prev.basicInfo, establishedYear: parseInt(value) || 0 }
                     }) : null)}
                     type="number"
                     icon={Calendar}
@@ -1575,7 +1000,7 @@ const PropertyInfo: React.FC = () => {
                   <div className="grid grid-cols-2 gap-4">
                     <EditableField
                       label="Latitud"
-                      value={propertyData.location.coordinates.latitude.toString()}
+                      value={propertyData.location.coordinates.latitude}
                       isEditing={isEditing}
                       onChange={(value) => setPropertyData(prev => prev ? ({
                         ...prev,
@@ -1592,7 +1017,7 @@ const PropertyInfo: React.FC = () => {
                     />
                     <EditableField
                       label="Longitud"
-                      value={propertyData.location.coordinates.longitude.toString()}
+                      value={propertyData.location.coordinates.longitude}
                       isEditing={isEditing}
                       onChange={(value) => setPropertyData(prev => prev ? ({
                         ...prev,
@@ -1620,7 +1045,7 @@ const PropertyInfo: React.FC = () => {
                 <div className="space-y-4">
                   <EditableField
                     label="Área Total (hectáreas)"
-                    value={propertyData.dimensions.totalArea.toString()}
+                    value={propertyData.dimensions.totalArea}
                     isEditing={isEditing}
                     onChange={(value) => setPropertyData(prev => prev ? ({
                       ...prev,
@@ -1631,7 +1056,7 @@ const PropertyInfo: React.FC = () => {
                   />
                   <EditableField
                     label="Área de Pastoreo (hectáreas)"
-                    value={propertyData.dimensions.pastureArea.toString()}
+                    value={propertyData.dimensions.pastureArea}
                     isEditing={isEditing}
                     onChange={(value) => setPropertyData(prev => prev ? ({
                       ...prev,
@@ -1642,7 +1067,7 @@ const PropertyInfo: React.FC = () => {
                   />
                   <EditableField
                     label="Área de Construcciones (m²)"
-                    value={propertyData.dimensions.buildingArea.toString()}
+                    value={propertyData.dimensions.buildingArea}
                     isEditing={isEditing}
                     onChange={(value) => setPropertyData(prev => prev ? ({
                       ...prev,
@@ -1653,7 +1078,7 @@ const PropertyInfo: React.FC = () => {
                   />
                   <EditableField
                     label="Área de Cuerpos de Agua (hectáreas)"
-                    value={propertyData.dimensions.waterBodyArea.toString()}
+                    value={propertyData.dimensions.waterBodyArea}
                     isEditing={isEditing}
                     onChange={(value) => setPropertyData(prev => prev ? ({
                       ...prev,
@@ -1733,7 +1158,7 @@ const PropertyInfo: React.FC = () => {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <EditableField
                     label="Capacidad Máxima de Animales"
-                    value={propertyData.operations.capacity.maxAnimals.toString()}
+                    value={propertyData.operations.capacity.maxAnimals}
                     isEditing={isEditing}
                     onChange={(value) => setPropertyData(prev => prev ? ({
                       ...prev,
@@ -1748,7 +1173,7 @@ const PropertyInfo: React.FC = () => {
 
                   <EditableField
                     label="Animales Actuales"
-                    value={propertyData.operations.capacity.currentAnimals.toString()}
+                    value={propertyData.operations.capacity.currentAnimals}
                     isEditing={isEditing}
                     onChange={(value) => setPropertyData(prev => prev ? ({
                       ...prev,
@@ -1763,7 +1188,7 @@ const PropertyInfo: React.FC = () => {
 
                   <EditableField
                     label="Capacidad de Personal"
-                    value={propertyData.operations.capacity.staffCapacity.toString()}
+                    value={propertyData.operations.capacity.staffCapacity}
                     isEditing={isEditing}
                     onChange={(value) => setPropertyData(prev => prev ? ({
                       ...prev,
@@ -1778,7 +1203,7 @@ const PropertyInfo: React.FC = () => {
 
                   <EditableField
                     label="Personal Actual"
-                    value={propertyData.operations.capacity.currentStaff.toString()}
+                    value={propertyData.operations.capacity.currentStaff}
                     isEditing={isEditing}
                     onChange={(value) => setPropertyData(prev => prev ? ({
                       ...prev,
@@ -1815,7 +1240,6 @@ const PropertyInfo: React.FC = () => {
                   type="file"
                   onChange={handleDocumentUpload}
                   accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
-                  multiple
                   className="hidden"
                 />
               </div>
@@ -1826,38 +1250,13 @@ const PropertyInfo: React.FC = () => {
                   <DocumentCard
                     key={document.id}
                     document={document}
-                    onView={() => {
-                      if (document.url) {
-                        window.open(document.url, '_blank');
-                      } else {
-                        setError('URL del documento no disponible');
-                      }
-                    }}
-                    onDownload={() => {
-                      if (document.url) {
-                        const a = window.document.createElement('a');
-                        a.href = document.url;
-                        a.download = document.name;
-                        a.click();
-                      } else {
-                        setError('No se puede descargar el documento');
-                      }
-                    }}
-                    onDelete={async () => {
-                      if (window.confirm(`¿Está seguro que desea eliminar "${document.name}"?`)) {
-                        try {
-                          await ApiService.deleteDocument(document.id);
-                          setPropertyData(prev => prev ? ({
-                            ...prev,
-                            documents: prev.documents.filter(doc => doc.id !== document.id)
-                          }) : null);
-                        } catch (error) {
-                          console.error('Error eliminando documento:', error);
-                          if (error instanceof Error) {
-                            setError(error.message);
-                          }
-                        }
-                      }
+                    onView={() => console.log("Ver documento:", document.id)}
+                    onDownload={() => console.log("Descargar documento:", document.id)}
+                    onDelete={() => {
+                      setPropertyData(prev => prev ? ({
+                        ...prev,
+                        documents: prev.documents.filter(doc => doc.id !== document.id)
+                      }) : null);
                     }}
                   />
                 ))}
@@ -1924,21 +1323,11 @@ const PropertyInfo: React.FC = () => {
                         }))
                       }) : null);
                     }}
-                    onDelete={async () => {
-                      if (window.confirm('¿Está seguro que desea eliminar esta foto?')) {
-                        try {
-                          await ApiService.deletePhoto(photo.id);
-                          setPropertyData(prev => prev ? ({
-                            ...prev,
-                            photos: prev.photos.filter(p => p.id !== photo.id)
-                          }) : null);
-                        } catch (error) {
-                          console.error('Error eliminando foto:', error);
-                          if (error instanceof Error) {
-                            setError(error.message);
-                          }
-                        }
-                      }
+                    onDelete={() => {
+                      setPropertyData(prev => prev ? ({
+                        ...prev,
+                        photos: prev.photos.filter(p => p.id !== photo.id)
+                      }) : null);
                     }}
                   />
                 ))}

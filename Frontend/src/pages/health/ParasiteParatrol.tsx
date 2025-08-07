@@ -17,8 +17,7 @@ import {
   Save,
   Trash2,
   Navigation,
-  Menu,
-  Loader2
+  Menu
 } from 'lucide-react';
 
 // Interfaces para tipos de datos
@@ -82,6 +81,33 @@ interface ParasiteInfestation {
   notes: string;
 }
 
+interface TreatmentProtocol {
+  id: string;
+  name: string;
+  parasiteTypes: string[];
+  medications: Array<{
+    medicationId: string;
+    medicationName: string;
+    dosage: string;
+    frequency: string;
+    duration: string;
+    route: string;
+  }>;
+  schedule: Array<{
+    day: number;
+    actions: string[];
+    observations: string[];
+  }>;
+  withdrawalPeriod: number;
+  contraindications: string[];
+  precautions: string[];
+  expectedEffectiveness: number;
+  cost: number;
+  isStandard: boolean;
+  createdBy: string;
+  lastUpdated: Date;
+}
+
 interface ParasiteStats {
   totalInfestations: number;
   activeInfestations: number;
@@ -127,131 +153,6 @@ interface NewInfestationForm {
   testMethod?: string;
   testDate?: string;
 }
-
-// API Service Configuration
-const API_BASE_URL = 'http://localhost:5000/api';
-
-class APIService {
-  private async handleResponse(response: Response) {
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`API Error ${response.status}: ${errorText}`);
-    }
-    return response.json();
-  }
-
-  private async request(endpoint: string, options: RequestInit = {}) {
-    try {
-      const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-        headers: {
-          'Content-Type': 'application/json',
-          ...options.headers,
-        },
-        ...options,
-      });
-      return await this.handleResponse(response);
-    } catch (error) {
-      console.error(`API Request failed: ${endpoint}`, error);
-      throw error;
-    }
-  }
-
-  // Parasites
-  async getParasites(): Promise<Parasite[]> {
-    return this.request('/parasites');
-  }
-
-  async createParasite(parasite: Omit<Parasite, 'id'>): Promise<Parasite> {
-    return this.request('/parasites', {
-      method: 'POST',
-      body: JSON.stringify(parasite),
-    });
-  }
-
-  // Infestations
-  async getInfestations(): Promise<ParasiteInfestation[]> {
-    const data = await this.request('/infestations');
-    return data.map((infestation: any) => ({
-      ...infestation,
-      detectionDate: new Date(infestation.detectionDate),
-      followUpDate: infestation.followUpDate ? new Date(infestation.followUpDate) : undefined,
-      laboratoryResults: infestation.laboratoryResults ? {
-        ...infestation.laboratoryResults,
-        testDate: new Date(infestation.laboratoryResults.testDate)
-      } : undefined,
-      treatment: infestation.treatment ? {
-        ...infestation.treatment,
-        startDate: new Date(infestation.treatment.startDate),
-        endDate: infestation.treatment.endDate ? new Date(infestation.treatment.endDate) : undefined
-      } : undefined
-    }));
-  }
-
-  async createInfestation(infestation: Omit<ParasiteInfestation, 'id'>): Promise<ParasiteInfestation> {
-    const data = await this.request('/infestations', {
-      method: 'POST',
-      body: JSON.stringify(infestation),
-    });
-    return {
-      ...data,
-      detectionDate: new Date(data.detectionDate),
-      followUpDate: data.followUpDate ? new Date(data.followUpDate) : undefined,
-      laboratoryResults: data.laboratoryResults ? {
-        ...data.laboratoryResults,
-        testDate: new Date(data.laboratoryResults.testDate)
-      } : undefined,
-      treatment: data.treatment ? {
-        ...data.treatment,
-        startDate: new Date(data.treatment.startDate),
-        endDate: data.treatment.endDate ? new Date(data.treatment.endDate) : undefined
-      } : undefined
-    };
-  }
-
-  async updateInfestation(id: string, infestation: Partial<ParasiteInfestation>): Promise<ParasiteInfestation> {
-    const data = await this.request(`/infestations/${id}`, {
-      method: 'PUT',
-      body: JSON.stringify(infestation),
-    });
-    return {
-      ...data,
-      detectionDate: new Date(data.detectionDate),
-      followUpDate: data.followUpDate ? new Date(data.followUpDate) : undefined,
-      laboratoryResults: data.laboratoryResults ? {
-        ...data.laboratoryResults,
-        testDate: new Date(data.laboratoryResults.testDate)
-      } : undefined,
-      treatment: data.treatment ? {
-        ...data.treatment,
-        startDate: new Date(data.treatment.startDate),
-        endDate: data.treatment.endDate ? new Date(data.treatment.endDate) : undefined
-      } : undefined
-    };
-  }
-
-  async deleteInfestation(id: string): Promise<void> {
-    await this.request(`/infestations/${id}`, {
-      method: 'DELETE',
-    });
-  }
-
-  // Statistics
-  async getStats(): Promise<ParasiteStats> {
-    return this.request('/infestations/stats');
-  }
-
-  // Seasonal Alerts
-  async getSeasonalAlerts(): Promise<SeasonalAlert[]> {
-    return this.request('/seasonal-alerts');
-  }
-
-  // Test Backend Connection
-  async testConnection(): Promise<{ status: string; message: string }> {
-    return this.request('/health');
-  }
-}
-
-const apiService = new APIService();
 
 // Lista de sugerencias de parásitos
 const PARASITE_SUGGESTIONS = [
@@ -392,10 +293,9 @@ const Badge: React.FC<BadgeProps> = ({ children, variant, className = '' }) => {
 interface NewInfestationModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (infestation: NewInfestationForm) => Promise<void>;
+  onSave: (infestation: NewInfestationForm) => void;
   editingInfestation?: ParasiteInfestation | null;
   parasites: Parasite[];
-  isLoading: boolean;
 }
 
 interface InfestationDetailsModalProps {
@@ -408,9 +308,8 @@ interface InfestationDetailsModalProps {
 interface DeleteConfirmModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onConfirm: () => Promise<void>;
+  onConfirm: () => void;
   infestationName: string;
-  isLoading: boolean;
 }
 
 interface InfestationMapProps {
@@ -421,50 +320,8 @@ interface SeasonalAlertCardProps {
   alert: SeasonalAlert;
 }
 
-interface ConnectionStatusProps {
-  isConnected: boolean;
-  isLoading: boolean;
-  onRetry: () => void;
-}
-
-// Connection Status Component
-const ConnectionStatus: React.FC<ConnectionStatusProps> = ({ isConnected, isLoading, onRetry }) => {
-  if (isLoading) {
-    return (
-      <div className="fixed top-4 right-4 z-50 bg-yellow-100 border border-yellow-400 text-yellow-700 px-4 py-2 rounded-lg shadow-lg flex items-center gap-2">
-        <Loader2 className="w-4 h-4 animate-spin" />
-        <span className="text-sm">Conectando al servidor...</span>
-      </div>
-    );
-  }
-
-  if (!isConnected) {
-    return (
-      <div className="fixed top-4 right-4 z-50 bg-red-100 border border-red-400 text-red-700 px-4 py-2 rounded-lg shadow-lg">
-        <div className="flex items-center gap-2 mb-2">
-          <AlertTriangle className="w-4 h-4" />
-          <span className="text-sm font-medium">Sin conexión al servidor</span>
-        </div>
-        <button 
-          onClick={onRetry}
-          className="text-xs bg-red-600 text-white px-2 py-1 rounded hover:bg-red-700"
-        >
-          Reintentar
-        </button>
-      </div>
-    );
-  }
-
-  return (
-    <div className="fixed top-4 right-4 z-50 bg-green-100 border border-green-400 text-green-700 px-4 py-2 rounded-lg shadow-lg flex items-center gap-2">
-      <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-      <span className="text-sm">Conectado al servidor</span>
-    </div>
-  );
-};
-
 // Modal para registrar nuevo caso
-const NewInfestationModal: React.FC<NewInfestationModalProps> = ({ isOpen, onClose, onSave, editingInfestation, parasites, isLoading }) => {
+const NewInfestationModal: React.FC<NewInfestationModalProps> = ({ isOpen, onClose, onSave, editingInfestation, parasites }) => {
   const [formData, setFormData] = useState<NewInfestationForm>({
     animalId: '',
     animalName: '',
@@ -565,7 +422,7 @@ const NewInfestationModal: React.FC<NewInfestationModalProps> = ({ isOpen, onClo
     }
   };
 
-  const handleSubmit = async () => {
+  const handleSubmit = () => {
     if (!formData.animalId || !formData.animalName || !formData.animalTag || !formData.parasiteName.trim() || !formData.veterinarian) {
       alert('Por favor, complete todos los campos obligatorios marcados con *');
       return;
@@ -575,13 +432,8 @@ const NewInfestationModal: React.FC<NewInfestationModalProps> = ({ isOpen, onClo
       formData.parasiteId = `parasite-${Date.now()}`;
     }
     
-    try {
-      await onSave(formData);
-      onClose();
-    } catch (error) {
-      console.error('Error saving infestation:', error);
-      alert('Error al guardar el caso. Por favor, inténtelo de nuevo.');
-    }
+    onSave(formData);
+    onClose();
   };
 
   if (!isOpen) return null;
@@ -598,7 +450,7 @@ const NewInfestationModal: React.FC<NewInfestationModalProps> = ({ isOpen, onClo
           <h2 className="text-lg sm:text-xl font-semibold text-gray-900 truncate pr-4">
             {editingInfestation ? 'Editar Caso de Infestación' : 'Registrar Nuevo Caso'}
           </h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 flex-shrink-0" disabled={isLoading}>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 flex-shrink-0">
             <X className="w-5 h-5 sm:w-6 sm:h-6" />
           </button>
         </div>
@@ -610,8 +462,7 @@ const NewInfestationModal: React.FC<NewInfestationModalProps> = ({ isOpen, onClo
               <input
                 type="text"
                 required
-                disabled={isLoading}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm disabled:opacity-50"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
                 value={formData.animalId}
                 onChange={(e) => setFormData({ ...formData, animalId: e.target.value })}
               />
@@ -622,8 +473,7 @@ const NewInfestationModal: React.FC<NewInfestationModalProps> = ({ isOpen, onClo
               <input
                 type="text"
                 required
-                disabled={isLoading}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm disabled:opacity-50"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
                 value={formData.animalName}
                 onChange={(e) => setFormData({ ...formData, animalName: e.target.value })}
               />
@@ -634,8 +484,7 @@ const NewInfestationModal: React.FC<NewInfestationModalProps> = ({ isOpen, onClo
               <input
                 type="text"
                 required
-                disabled={isLoading}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm disabled:opacity-50"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
                 value={formData.animalTag}
                 onChange={(e) => setFormData({ ...formData, animalTag: e.target.value })}
               />
@@ -647,8 +496,7 @@ const NewInfestationModal: React.FC<NewInfestationModalProps> = ({ isOpen, onClo
                 type="text"
                 list="parasite-suggestions"
                 required
-                disabled={isLoading}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm disabled:opacity-50"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
                 value={formData.parasiteName}
                 onChange={(e) => {
                   const selectedParasite = parasites.find(p => p.name === e.target.value);
@@ -678,8 +526,7 @@ const NewInfestationModal: React.FC<NewInfestationModalProps> = ({ isOpen, onClo
               <input
                 type="date"
                 required
-                disabled={isLoading}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm disabled:opacity-50"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
                 value={formData.detectionDate}
                 onChange={(e) => setFormData({ ...formData, detectionDate: e.target.value })}
               />
@@ -689,8 +536,7 @@ const NewInfestationModal: React.FC<NewInfestationModalProps> = ({ isOpen, onClo
               <label className="block text-sm font-medium text-gray-700">Método de Detección *</label>
               <select
                 required
-                disabled={isLoading}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm disabled:opacity-50"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
                 value={formData.detectionMethod}
                 onChange={(e) => setFormData({ ...formData, detectionMethod: e.target.value })}
               >
@@ -705,8 +551,7 @@ const NewInfestationModal: React.FC<NewInfestationModalProps> = ({ isOpen, onClo
               <label className="block text-sm font-medium text-gray-700">Severidad *</label>
               <select
                 required
-                disabled={isLoading}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm disabled:opacity-50"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
                 value={formData.severity}
                 onChange={(e) => setFormData({ ...formData, severity: e.target.value })}
               >
@@ -721,8 +566,7 @@ const NewInfestationModal: React.FC<NewInfestationModalProps> = ({ isOpen, onClo
               <label className="block text-sm font-medium text-gray-700">Carga Parasitaria *</label>
               <select
                 required
-                disabled={isLoading}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm disabled:opacity-50"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
                 value={formData.parasiteLoad}
                 onChange={(e) => setFormData({ ...formData, parasiteLoad: e.target.value })}
               >
@@ -738,8 +582,7 @@ const NewInfestationModal: React.FC<NewInfestationModalProps> = ({ isOpen, onClo
               <input
                 type="text"
                 required
-                disabled={isLoading}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm disabled:opacity-50"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
                 value={formData.veterinarian}
                 onChange={(e) => setFormData({ ...formData, veterinarian: e.target.value })}
               />
@@ -749,8 +592,7 @@ const NewInfestationModal: React.FC<NewInfestationModalProps> = ({ isOpen, onClo
               <label className="block text-sm font-medium text-gray-700">Sector</label>
               <input
                 type="text"
-                disabled={isLoading}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm disabled:opacity-50"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
                 value={formData.sector}
                 onChange={(e) => setFormData({ ...formData, sector: e.target.value })}
               />
@@ -766,7 +608,7 @@ const NewInfestationModal: React.FC<NewInfestationModalProps> = ({ isOpen, onClo
                 variant="outline"
                 size="sm"
                 onClick={getCurrentLocation}
-                disabled={isGettingLocation || isLoading}
+                disabled={isGettingLocation}
                 className="w-full sm:w-auto"
               >
                 <Navigation className="w-4 h-4 mr-2" />
@@ -780,8 +622,7 @@ const NewInfestationModal: React.FC<NewInfestationModalProps> = ({ isOpen, onClo
                 <input
                   type="number"
                   step="0.000001"
-                  disabled={isLoading}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm disabled:opacity-50"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
                   value={formData.latitude}
                   onChange={(e) => setFormData({ ...formData, latitude: parseFloat(e.target.value) || 0 })}
                 />
@@ -792,8 +633,7 @@ const NewInfestationModal: React.FC<NewInfestationModalProps> = ({ isOpen, onClo
                 <input
                   type="number"
                   step="0.000001"
-                  disabled={isLoading}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm disabled:opacity-50"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
                   value={formData.longitude}
                   onChange={(e) => setFormData({ ...formData, longitude: parseFloat(e.target.value) || 0 })}
                 />
@@ -803,8 +643,7 @@ const NewInfestationModal: React.FC<NewInfestationModalProps> = ({ isOpen, onClo
                 <label className="block text-sm font-medium text-gray-700">Dirección</label>
                 <input
                   type="text"
-                  disabled={isLoading}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm disabled:opacity-50"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
                   value={formData.address}
                   onChange={(e) => setFormData({ ...formData, address: e.target.value })}
                 />
@@ -818,9 +657,8 @@ const NewInfestationModal: React.FC<NewInfestationModalProps> = ({ isOpen, onClo
               <label className="block text-sm font-medium text-gray-700">Signos Clínicos</label>
               <textarea
                 rows={3}
-                disabled={isLoading}
                 placeholder="Separar con comas: anemia, pérdida de peso, diarrea..."
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm resize-none disabled:opacity-50"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm resize-none"
                 value={formData.clinicalSigns}
                 onChange={(e) => setFormData({ ...formData, clinicalSigns: e.target.value })}
               />
@@ -832,8 +670,7 @@ const NewInfestationModal: React.FC<NewInfestationModalProps> = ({ isOpen, onClo
                 <input
                   type="number"
                   min="0"
-                  disabled={isLoading}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm disabled:opacity-50"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
                   value={formData.eggCount || ''}
                   onChange={(e) => setFormData({ ...formData, eggCount: parseInt(e.target.value) || undefined })}
                 />
@@ -843,8 +680,7 @@ const NewInfestationModal: React.FC<NewInfestationModalProps> = ({ isOpen, onClo
                 <label className="block text-sm font-medium text-gray-700">Método de Prueba</label>
                 <input
                   type="text"
-                  disabled={isLoading}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm disabled:opacity-50"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
                   value={formData.testMethod || ''}
                   onChange={(e) => setFormData({ ...formData, testMethod: e.target.value })}
                 />
@@ -854,8 +690,7 @@ const NewInfestationModal: React.FC<NewInfestationModalProps> = ({ isOpen, onClo
                 <label className="block text-sm font-medium text-gray-700">Fecha de Prueba</label>
                 <input
                   type="date"
-                  disabled={isLoading}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm disabled:opacity-50"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
                   value={formData.testDate || ''}
                   onChange={(e) => setFormData({ ...formData, testDate: e.target.value })}
                 />
@@ -866,8 +701,7 @@ const NewInfestationModal: React.FC<NewInfestationModalProps> = ({ isOpen, onClo
               <label className="block text-sm font-medium text-gray-700">Notas Adicionales</label>
               <textarea
                 rows={3}
-                disabled={isLoading}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm resize-none disabled:opacity-50"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm resize-none"
                 value={formData.notes}
                 onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
               />
@@ -880,21 +714,15 @@ const NewInfestationModal: React.FC<NewInfestationModalProps> = ({ isOpen, onClo
             <Button 
               variant="outline" 
               onClick={onClose}
-              disabled={isLoading}
               className="w-full sm:w-auto order-2 sm:order-1"
             >
               Cancelar
             </Button>
             <Button 
               onClick={handleSubmit}
-              disabled={isLoading}
               className="w-full sm:w-auto order-1 sm:order-2"
             >
-              {isLoading ? (
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-              ) : (
-                <Save className="w-4 h-4 mr-2" />
-              )}
+              <Save className="w-4 h-4 mr-2" />
               {editingInfestation ? 'Actualizar Caso' : 'Registrar Caso'}
             </Button>
           </div>
@@ -1109,7 +937,7 @@ const InfestationDetailsModal: React.FC<InfestationDetailsModalProps> = ({ infes
 };
 
 // Modal de confirmación para eliminar
-const DeleteConfirmModal: React.FC<DeleteConfirmModalProps> = ({ isOpen, onClose, onConfirm, infestationName, isLoading }) => {
+const DeleteConfirmModal: React.FC<DeleteConfirmModalProps> = ({ isOpen, onClose, onConfirm, infestationName }) => {
   if (!isOpen) return null;
 
   return (
@@ -1139,7 +967,6 @@ const DeleteConfirmModal: React.FC<DeleteConfirmModalProps> = ({ isOpen, onClose
             <Button 
               variant="outline" 
               onClick={onClose}
-              disabled={isLoading}
               className="w-full sm:w-auto order-2 sm:order-1"
             >
               Cancelar
@@ -1147,14 +974,9 @@ const DeleteConfirmModal: React.FC<DeleteConfirmModalProps> = ({ isOpen, onClose
             <Button 
               variant="danger" 
               onClick={onConfirm}
-              disabled={isLoading}
               className="w-full sm:w-auto order-1 sm:order-2"
             >
-              {isLoading ? (
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-              ) : (
-                <Trash2 className="w-4 h-4 mr-2" />
-              )}
+              <Trash2 className="w-4 h-4 mr-2" />
               Eliminar
             </Button>
           </div>
@@ -1307,6 +1129,7 @@ const ParasitePatrol: React.FC = () => {
   // Estados del componente
   const [infestations, setInfestations] = useState<ParasiteInfestation[]>([]);
   const [parasites, setParasites] = useState<Parasite[]>([]);
+  const [] = useState<TreatmentProtocol[]>([]);
   const [stats, setStats] = useState<ParasiteStats>({
     totalInfestations: 0,
     activeInfestations: 0,
@@ -1333,146 +1156,97 @@ const ParasitePatrol: React.FC = () => {
   const [infestationToDelete, setInfestationToDelete] = useState<ParasiteInfestation | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  // Estados de conexión y carga
-  const [isConnected, setIsConnected] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
-  const [isInitialLoading, setIsInitialLoading] = useState(true);
-
-  // Función para probar la conexión
-  const testConnection = async () => {
-    try {
-      setIsLoading(true);
-      await apiService.testConnection();
-      setIsConnected(true);
-      console.log('✅ Conectado al backend exitosamente');
-    } catch (error) {
-      setIsConnected(false);
-      console.error('❌ Error conectando al backend:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // Cargar datos desde el backend
-  const loadData = async () => {
-    try {
-      setIsInitialLoading(true);
-      
-      // Cargar parásitos
-      const parasitesData = await apiService.getParasites();
-      setParasites(parasitesData);
-      
-      // Cargar infestaciones
-      const infestationsData = await apiService.getInfestations();
-      setInfestations(infestationsData);
-      
-      // Cargar estadísticas
-      const statsData = await apiService.getStats();
-      setStats(statsData);
-      
-      // Cargar alertas estacionales
-      const alertsData = await apiService.getSeasonalAlerts();
-      setSeasonalAlerts(alertsData);
-      
-      console.log('✅ Datos cargados desde el backend');
-    } catch (error) {
-      console.error('❌ Error cargando datos:', error);
-      // En caso de error, mostrar datos vacíos pero no fallar
-    } finally {
-      setIsInitialLoading(false);
-    }
-  };
+  const generateId = () => Date.now().toString() + Math.random().toString(36).substr(2, 9);
 
   // Manejar nuevo caso o edición
-  const handleNewInfestation = async (infestationData: NewInfestationForm) => {
-    try {
-      setIsLoading(true);
-      
-      if (editingInfestation) {
-        // Actualizar infestación existente
-        const updatedData = {
-          animalId: infestationData.animalId,
-          animalName: infestationData.animalName,
-          animalTag: infestationData.animalTag,
-          parasiteId: infestationData.parasiteId || `parasite-${Date.now()}`,
-          parasiteName: infestationData.parasiteName,
-          detectionDate: new Date(infestationData.detectionDate),
-          detectionMethod: infestationData.detectionMethod as any,
-          severity: infestationData.severity as any,
-          parasiteLoad: infestationData.parasiteLoad as any,
-          location: {
-            lat: infestationData.latitude,
-            lng: infestationData.longitude,
-            address: infestationData.address,
-            sector: infestationData.sector
-          },
-          clinicalSigns: infestationData.clinicalSigns.split(',').map(s => s.trim()).filter(s => s),
-          veterinarian: infestationData.veterinarian,
-          notes: infestationData.notes,
-          laboratoryResults: infestationData.eggCount || infestationData.testMethod ? {
-            eggCount: infestationData.eggCount,
-            testMethod: infestationData.testMethod || '',
-            testDate: infestationData.testDate ? new Date(infestationData.testDate) : new Date()
-          } : undefined
-        };
+  const handleNewInfestation = (infestationData: NewInfestationForm) => {
+    if (editingInfestation) {
+      const updatedInfestation: ParasiteInfestation = {
+        ...editingInfestation,
+        animalId: infestationData.animalId,
+        animalName: infestationData.animalName,
+        animalTag: infestationData.animalTag,
+        parasiteId: infestationData.parasiteId || `parasite-${Date.now()}`,
+        parasiteName: infestationData.parasiteName,
+        detectionDate: new Date(infestationData.detectionDate),
+        detectionMethod: infestationData.detectionMethod as any,
+        severity: infestationData.severity as any,
+        parasiteLoad: infestationData.parasiteLoad as any,
+        location: {
+          lat: infestationData.latitude,
+          lng: infestationData.longitude,
+          address: infestationData.address,
+          sector: infestationData.sector
+        },
+        clinicalSigns: infestationData.clinicalSigns.split(',').map(s => s.trim()).filter(s => s),
+        veterinarian: infestationData.veterinarian,
+        notes: infestationData.notes,
+        laboratoryResults: infestationData.eggCount || infestationData.testMethod ? {
+          eggCount: infestationData.eggCount,
+          testMethod: infestationData.testMethod || '',
+          testDate: infestationData.testDate ? new Date(infestationData.testDate) : new Date()
+        } : undefined
+      };
 
-        const updatedInfestation = await apiService.updateInfestation(editingInfestation.id, updatedData);
-        
-        setInfestations(prev => 
-          prev.map(inf => inf.id === editingInfestation.id ? updatedInfestation : inf)
-        );
-        
-        console.log('✅ Infestación actualizada:', updatedInfestation.animalName);
-        alert(`✅ Caso actualizado: ${updatedInfestation.animalName} - ${updatedInfestation.parasiteName}`);
-        
-        setEditingInfestation(null);
-      } else {
-        // Crear nueva infestación
-        const newData = {
-          animalId: infestationData.animalId,
-          animalName: infestationData.animalName,
-          animalTag: infestationData.animalTag,
-          parasiteId: infestationData.parasiteId || `parasite-${Date.now()}`,
-          parasiteName: infestationData.parasiteName,
-          detectionDate: new Date(infestationData.detectionDate),
-          detectionMethod: infestationData.detectionMethod as any,
-          severity: infestationData.severity as any,
-          parasiteLoad: infestationData.parasiteLoad as any,
-          location: {
-            lat: infestationData.latitude,
-            lng: infestationData.longitude,
-            address: infestationData.address,
-            sector: infestationData.sector
-          },
-          clinicalSigns: infestationData.clinicalSigns.split(',').map(s => s.trim()).filter(s => s),
-          veterinarian: infestationData.veterinarian,
-          status: 'active' as const,
-          notes: infestationData.notes,
-          laboratoryResults: infestationData.eggCount || infestationData.testMethod ? {
-            eggCount: infestationData.eggCount,
-            testMethod: infestationData.testMethod || '',
-            testDate: infestationData.testDate ? new Date(infestationData.testDate) : new Date()
-          } : undefined
-        };
+      setInfestations(prev => prev.map(inf => inf.id === editingInfestation.id ? updatedInfestation : inf));
+      setEditingInfestation(null);
+    } else {
+      const newInfestation: ParasiteInfestation = {
+        id: generateId(),
+        animalId: infestationData.animalId,
+        animalName: infestationData.animalName,
+        animalTag: infestationData.animalTag,
+        parasiteId: infestationData.parasiteId || `parasite-${Date.now()}`,
+        parasiteName: infestationData.parasiteName,
+        detectionDate: new Date(infestationData.detectionDate),
+        detectionMethod: infestationData.detectionMethod as any,
+        severity: infestationData.severity as any,
+        parasiteLoad: infestationData.parasiteLoad as any,
+        location: {
+          lat: infestationData.latitude,
+          lng: infestationData.longitude,
+          address: infestationData.address,
+          sector: infestationData.sector
+        },
+        clinicalSigns: infestationData.clinicalSigns.split(',').map(s => s.trim()).filter(s => s),
+        veterinarian: infestationData.veterinarian,
+        status: 'active',
+        notes: infestationData.notes,
+        laboratoryResults: infestationData.eggCount || infestationData.testMethod ? {
+          eggCount: infestationData.eggCount,
+          testMethod: infestationData.testMethod || '',
+          testDate: infestationData.testDate ? new Date(infestationData.testDate) : new Date()
+        } : undefined
+      };
 
-        const newInfestation = await apiService.createInfestation(newData);
+      setInfestations(prev => {
+        const newList = [newInfestation, ...prev];
         
-        setInfestations(prev => [newInfestation, ...prev]);
+        const totalInfestations = newList.length;
+        const activeInfestations = newList.filter(i => i.status === 'active' || i.status === 'treating').length;
+        const criticalCases = newList.filter(i => i.severity === 'critical').length;
         
-        console.log('✅ Nueva infestación creada:', newInfestation.animalName);
-        alert(`✅ Caso registrado: ${newInfestation.animalName} - ${newInfestation.parasiteName}`);
-      }
-      
-      // Recargar estadísticas
-      const updatedStats = await apiService.getStats();
-      setStats(updatedStats);
-      
-    } catch (error) {
-      console.error('❌ Error guardando infestación:', error);
-      alert('❌ Error al guardar el caso. Verifique la conexión con el servidor.');
-      throw error;
-    } finally {
-      setIsLoading(false);
+        const parasiteCounts = newList.reduce((acc, infestation) => {
+          acc[infestation.parasiteName] = (acc[infestation.parasiteName] || 0) + 1;
+          return acc;
+        }, {} as Record<string, number>);
+        
+        const mostCommonParasite = Object.keys(parasiteCounts).length > 0 
+          ? Object.entries(parasiteCounts).sort(([,a], [,b]) => b - a)[0][0]
+          : 'Ninguno';
+        
+        setStats(prev => ({
+          ...prev,
+          totalInfestations,
+          activeInfestations,
+          criticalCases,
+          affectedAnimals: totalInfestations,
+          mostCommonParasite,
+          treatmentSuccessRate: totalInfestations > 0 ? 85.0 : 0
+        }));
+        
+        return newList;
+      });
     }
   };
 
@@ -1491,30 +1265,41 @@ const ParasitePatrol: React.FC = () => {
     setShowDeleteModal(true);
   };
 
-  const confirmDeleteInfestation = async () => {
-    if (!infestationToDelete) return;
-    
-    try {
-      setIsLoading(true);
-      
-      await apiService.deleteInfestation(infestationToDelete.id);
-      
-      setInfestations(prev => prev.filter(inf => inf.id !== infestationToDelete.id));
-      
-      // Recargar estadísticas
-      const updatedStats = await apiService.getStats();
-      setStats(updatedStats);
-      
-      console.log('✅ Caso eliminado:', infestationToDelete.animalName);
+  const confirmDeleteInfestation = () => {
+    if (infestationToDelete) {
+      setInfestations(prev => {
+        const newList = prev.filter(inf => inf.id !== infestationToDelete.id);
+        
+        const totalInfestations = newList.length;
+        const activeInfestations = newList.filter(i => i.status === 'active' || i.status === 'treating').length;
+        const criticalCases = newList.filter(i => i.severity === 'critical').length;
+        
+        const parasiteCounts = newList.reduce((acc, infestation) => {
+          acc[infestation.parasiteName] = (acc[infestation.parasiteName] || 0) + 1;
+          return acc;
+        }, {} as Record<string, number>);
+        
+        const mostCommonParasite = Object.keys(parasiteCounts).length > 0 
+          ? Object.entries(parasiteCounts).sort(([,a], [,b]) => b - a)[0][0]
+          : 'Ninguno';
+        
+        setStats(prev => ({
+          ...prev,
+          totalInfestations,
+          activeInfestations,
+          criticalCases,
+          affectedAnimals: totalInfestations,
+          mostCommonParasite,
+          treatmentSuccessRate: totalInfestations > 0 ? 85.0 : 0
+        }));
+        
+        return newList;
+      });
+
+      console.log('Caso eliminado:', infestationToDelete.animalName);
       alert(`🗑️ Caso eliminado: ${infestationToDelete.animalName} - ${infestationToDelete.parasiteName}`);
-      
       setInfestationToDelete(null);
       setShowDeleteModal(false);
-    } catch (error) {
-      console.error('❌ Error eliminando infestación:', error);
-      alert('❌ Error al eliminar el caso. Verifique la conexión con el servidor.');
-    } finally {
-      setIsLoading(false);
     }
   };
 
@@ -1523,29 +1308,118 @@ const ParasitePatrol: React.FC = () => {
     setEditingInfestation(null);
   };
 
-  // Inicializar la aplicación
+  // Simulación de datos
   useEffect(() => {
-    const initializeApp = async () => {
-      // Probar conexión
-      await testConnection();
+    const loadData = async () => {
+      await new Promise(resolve => setTimeout(resolve, 1000));
       
-      // Si está conectado, cargar datos
-      if (isConnected) {
-        await loadData();
-      } else {
-        setIsInitialLoading(false);
-      }
-    };
-    
-    initializeApp();
-  }, []);
+      const mockParasites: Parasite[] = [
+        {
+          id: '1',
+          name: 'Garrapata del Ganado',
+          scientificName: 'Rhipicephalus microplus',
+          type: 'external',
+          category: 'tick',
+          description: 'Ectoparásito hematófago que afecta principalmente al ganado bovino',
+          symptoms: ['Anemia', 'Pérdida de peso', 'Irritación de piel', 'Transmisión de enfermedades'],
+          affectedOrgans: ['Piel', 'Sistema circulatorio'],
+          transmissionMode: 'Contacto directo y ambiental',
+          lifecycle: '21-63 días dependiendo de condiciones ambientales',
+          seasonality: ['Primavera', 'Verano', 'Otoño'],
+          riskLevel: 'high',
+          prevalence: 75,
+          economicImpact: 'high',
+          zoonoticRisk: false
+        },
+        {
+          id: '2',
+          name: 'Lombriz Intestinal',
+          scientificName: 'Haemonchus contortus',
+          type: 'internal',
+          category: 'nematode',
+          description: 'Nematodo gastrointestinal hematófago que causa anemia severa',
+          symptoms: ['Anemia severa', 'Diarrea', 'Pérdida de peso', 'Edema submandibular'],
+          affectedOrgans: ['Abomaso', 'Sistema digestivo'],
+          transmissionMode: 'Ingestión de larvas infectivas',
+          lifecycle: '18-21 días',
+          seasonality: ['Verano', 'Otoño'],
+          riskLevel: 'critical',
+          prevalence: 60,
+          economicImpact: 'high',
+          zoonoticRisk: false
+        },
+        {
+          id: '3',
+          name: 'Mosca del Cuerno',
+          scientificName: 'Haematobia irritans',
+          type: 'external',
+          category: 'fly',
+          description: 'Díptero hematófago que causa estrés y pérdida de peso',
+          symptoms: ['Irritación', 'Pérdida de peso', 'Reducción en producción de leche'],
+          affectedOrgans: ['Piel'],
+          transmissionMode: 'Vuelo directo',
+          lifecycle: '10-20 días',
+          seasonality: ['Primavera', 'Verano'],
+          riskLevel: 'medium',
+          prevalence: 45,
+          economicImpact: 'medium',
+          zoonoticRisk: false
+        }
+      ];
 
-  // Recargar datos cuando se establezca la conexión
-  useEffect(() => {
-    if (isConnected && infestations.length === 0) {
-      loadData();
-    }
-  }, [isConnected]);
+      const mockInfestations: ParasiteInfestation[] = [];
+
+      const initialStats: ParasiteStats = {
+        totalInfestations: mockInfestations.length,
+        activeInfestations: mockInfestations.filter(i => i.status === 'active' || i.status === 'treating').length,
+        resolvedInfestations: mockInfestations.filter(i => i.status === 'resolved').length,
+        criticalCases: mockInfestations.filter(i => i.severity === 'critical').length,
+        treatmentSuccessRate: mockInfestations.length > 0 ? 89.5 : 0,
+        mostCommonParasite: 'Ninguno',
+        seasonalTrend: 'stable',
+        averageTreatmentDays: 0,
+        totalTreatmentCost: 0,
+        affectedAnimals: mockInfestations.length,
+        reinfectionRate: 0
+      };
+
+      const mockAlerts: SeasonalAlert[] = [
+        {
+          id: '1',
+          parasiteName: 'Garrapata del Ganado',
+          season: 'Verano',
+          riskLevel: 'high',
+          expectedIncrease: 35,
+          recommendedActions: [
+            'Intensificar inspecciones semanales',
+            'Aplicar tratamientos preventivos',
+            'Mejorar manejo de pastizales'
+          ],
+          isActive: true
+        },
+        {
+          id: '2',
+          parasiteName: 'Mosca del Cuerno',
+          season: 'Temporada de lluvias',
+          riskLevel: 'medium',
+          expectedIncrease: 25,
+          recommendedActions: [
+            'Usar orejeras repelentes',
+            'Aplicar insecticidas tópicos',
+            'Controlar charcos de agua'
+          ],
+          isActive: true
+        }
+      ];
+
+      setParasites(mockParasites);
+      setInfestations(mockInfestations);
+      setStats(initialStats);
+      setSeasonalAlerts(mockAlerts);
+    };
+
+    loadData();
+  }, []);
 
   // Filtrar infestaciones
   const filteredInfestations = infestations.filter(infestation => {
@@ -1563,27 +1437,8 @@ const ParasitePatrol: React.FC = () => {
     return matchesSearch && matchesType && matchesStatus && matchesSeverity;
   });
 
-  if (isInitialLoading) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-[#519a7c] via-[#f2e9d8] to-[#f4ac3a] flex items-center justify-center">
-        <div className="bg-white rounded-lg shadow-xl p-8 text-center">
-          <Loader2 className="w-12 h-12 text-blue-600 animate-spin mx-auto mb-4" />
-          <h2 className="text-xl font-semibold text-gray-900 mb-2">Control de Parásitos</h2>
-          <p className="text-gray-600">Conectando al servidor y cargando datos...</p>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#519a7c] via-[#f2e9d8] to-[#f4ac3a] p-2 sm:p-4 lg:p-6 overflow-x-hidden max-w-screen">
-      {/* Connection Status */}
-      <ConnectionStatus 
-        isConnected={isConnected} 
-        isLoading={isLoading}
-        onRetry={testConnection}
-      />
-
       {/* Header mejorado para móvil */}
       <motion.div 
         initial={{ opacity: 0, y: -20 }}
@@ -1600,7 +1455,6 @@ const ParasitePatrol: React.FC = () => {
               <Button 
                 size="sm" 
                 onClick={() => setShowNewInfestationModal(true)}
-                disabled={!isConnected}
                 className="whitespace-nowrap"
               >
                 <Plus className="w-4 h-4 sm:mr-2" />
@@ -1981,20 +1835,10 @@ const ParasitePatrol: React.FC = () => {
                             <Button variant="outline" size="sm" onClick={() => handleViewInfestation(infestation)}>
                               <Eye className="w-4 h-4" />
                             </Button>
-                            <Button 
-                              variant="outline" 
-                              size="sm" 
-                              onClick={() => handleEditInfestation(infestation)}
-                              disabled={!isConnected}
-                            >
+                            <Button variant="outline" size="sm" onClick={() => handleEditInfestation(infestation)}>
                               <Edit className="w-4 h-4" />
                             </Button>
-                            <Button 
-                              variant="danger" 
-                              size="sm" 
-                              onClick={() => handleDeleteInfestation(infestation)}
-                              disabled={!isConnected}
-                            >
+                            <Button variant="danger" size="sm" onClick={() => handleDeleteInfestation(infestation)}>
                               <Trash2 className="w-4 h-4" />
                             </Button>
                           </div>
@@ -2007,17 +1851,12 @@ const ParasitePatrol: React.FC = () => {
                     <Bug className="w-8 h-8 sm:w-12 sm:h-12 text-gray-400 mx-auto mb-4" />
                     <h3 className="text-base sm:text-lg font-medium text-gray-900 mb-2">No hay casos registrados</h3>
                     <p className="text-sm sm:text-base text-gray-600 mb-4 px-4 break-words">
-                      {isConnected 
-                        ? "No se encontraron casos que coincidan con los filtros seleccionados." 
-                        : "Conecte al servidor para ver los casos registrados."
-                      }
+                      No se encontraron casos que coincidan con los filtros seleccionados.
                     </p>
-                    {isConnected && (
-                      <Button onClick={() => setShowNewInfestationModal(true)}>
-                        <Plus className="w-4 h-4 mr-2" />
-                        Registrar Primer Caso
-                      </Button>
-                    )}
+                    <Button onClick={() => setShowNewInfestationModal(true)}>
+                      <Plus className="w-4 h-4 mr-2" />
+                      Registrar Primer Caso
+                    </Button>
                   </div>
                 )}
               </CardContent>
@@ -2033,7 +1872,6 @@ const ParasitePatrol: React.FC = () => {
         onSave={handleNewInfestation}
         editingInfestation={editingInfestation}
         parasites={parasites}
-        isLoading={isLoading}
       />
 
       <InfestationDetailsModal
@@ -2048,7 +1886,6 @@ const ParasitePatrol: React.FC = () => {
         onClose={() => setShowDeleteModal(false)}
         onConfirm={confirmDeleteInfestation}
         infestationName={infestationToDelete ? `${infestationToDelete.animalName} - ${infestationToDelete.parasiteName}` : ''}
-        isLoading={isLoading}
       />
     </div>
   );

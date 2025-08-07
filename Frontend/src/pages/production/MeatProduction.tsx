@@ -12,9 +12,7 @@ import {
   BarChart3,
   X,
   Save,
-  RefreshCw,
-  AlertCircle,
-  Loader
+  RefreshCw
 } from 'lucide-react';
 
 // Interfaces
@@ -55,160 +53,9 @@ interface FilterState {
   status: string;
 }
 
-interface FormData {
-  animalId: string;
-  animalName: string;
-  breed: string;
-  birthDate: string;
-  slaughterDate: string;
-  liveWeight: string;
-  carcassWeight: string;
-  yieldPercentage: string;
-  grade: string;
-  cuts: {
-    name: string;
-    weight: string;
-    pricePerKg: string;
-  }[];
-  processor: string;
-  destination: string;
-  notes: string;
-  status: string;
-}
-
-// API Configuration
-const API_BASE_URL = 'http://localhost:5000/api';
-
-// Token management
-const getAuthToken = (): string | null => {
-  return localStorage.getItem('authToken') || sessionStorage.getItem('authToken');
-};
-
-// API Service
-class MeatAPI {
-  private static async makeRequest(endpoint: string, options: RequestInit = {}): Promise<any> {
-    const token = getAuthToken();
-    const url = `${API_BASE_URL}${endpoint}`;
-    
-    const defaultHeaders: HeadersInit = {
-      'Content-Type': 'application/json',
-    };
-
-    if (token) {
-      defaultHeaders['Authorization'] = `Bearer ${token}`;
-    }
-
-    const config: RequestInit = {
-      ...options,
-      headers: {
-        ...defaultHeaders,
-        ...options.headers,
-      },
-    };
-
-    try {
-      const response = await fetch(url, config);
-      
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.message || `HTTP Error: ${response.status}`);
-      }
-
-      return await response.json();
-    } catch (error) {
-      console.error(`API Request failed: ${endpoint}`, error);
-      throw error;
-    }
-  }
-
-  // Obtener registros de producción cárnica
-  static async getMeatRecords(filters?: {
-    dateFrom?: string;
-    dateTo?: string;
-    breed?: string;
-    grade?: string;
-    status?: string;
-  }): Promise<{ data: MeatRecord[], total: number }> {
-    const params = new URLSearchParams();
-    
-    if (filters?.dateFrom) params.append('dateFrom', filters.dateFrom);
-    if (filters?.dateTo) params.append('dateTo', filters.dateTo);
-    if (filters?.breed) params.append('breed', filters.breed);
-    if (filters?.grade) params.append('grade', filters.grade);
-    if (filters?.status && filters.status !== 'all') params.append('status', filters.status);
-
-    const queryString = params.toString();
-    const endpoint = `/production/meat${queryString ? `?${queryString}` : ''}`;
-    
-    const response = await this.makeRequest(endpoint);
-    return {
-      data: response.data || [],
-      total: response.total || 0
-    };
-  }
-
-  // Crear registro de producción cárnica
-  static async createMeatRecord(record: Omit<MeatRecord, 'id'>): Promise<MeatRecord> {
-    const response = await this.makeRequest('/production/meat', {
-      method: 'POST',
-      body: JSON.stringify(record),
-    });
-    return response.data;
-  }
-
-  // Actualizar registro
-  static async updateMeatRecord(id: string, record: Partial<MeatRecord>): Promise<MeatRecord> {
-    const response = await this.makeRequest(`/production/meat/${id}`, {
-      method: 'PUT',
-      body: JSON.stringify(record),
-    });
-    return response.data;
-  }
-
-  // Eliminar registro
-  static async deleteMeatRecord(id: string): Promise<void> {
-    await this.makeRequest(`/production/meat/${id}`, {
-      method: 'DELETE',
-    });
-  }
-
-  // Obtener estadísticas
-  static async getProductionStats(): Promise<any> {
-    const response = await this.makeRequest('/production/stats/meat');
-    return response.data;
-  }
-
-  // Obtener registros de peso (para obtener datos de animales)
-  static async getWeightRecords(): Promise<any[]> {
-    const response = await this.makeRequest('/production/weight');
-    return response.data || [];
-  }
-}
-
-// Error Alert Component
-const ErrorAlert: React.FC<{ message: string; onClose?: () => void }> = ({ message, onClose }) => (
-  <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-start gap-3 mb-4">
-    <AlertCircle className="h-5 w-5 text-red-500 flex-shrink-0 mt-0.5" />
-    <div className="flex-1">
-      <h4 className="text-red-800 font-medium">Error de conexión</h4>
-      <p className="text-red-700 text-sm mt-1">{message}</p>
-    </div>
-    {onClose && (
-      <button 
-        onClick={onClose}
-        className="text-red-500 hover:text-red-700 p-1 rounded"
-      >
-        <X className="h-4 w-4" />
-      </button>
-    )}
-  </div>
-);
-
 const MeatProduction: React.FC = () => {
   // Estados principales
   const [isLoading, setIsLoading] = useState<boolean>(true);
-  const [isSaving, setIsSaving] = useState<boolean>(false);
-  const [error, setError] = useState<string | null>(null);
   const [meatRecords, setMeatRecords] = useState<MeatRecord[]>([]);
   const [filteredRecords, setFilteredRecords] = useState<MeatRecord[]>([]);
   
@@ -230,12 +77,12 @@ const MeatProduction: React.FC = () => {
   });
 
   // Estado para formulario
-  const [formData, setFormData] = useState<FormData>({
+  const [formData, setFormData] = useState({
     animalId: '',
     animalName: '',
     breed: '',
     birthDate: '',
-    slaughterDate: new Date().toISOString().split('T')[0],
+    slaughterDate: '',
     liveWeight: '',
     carcassWeight: '',
     yieldPercentage: '',
@@ -251,9 +98,60 @@ const MeatProduction: React.FC = () => {
     status: 'Programado'
   });
 
+  // Datos de ejemplo
+  const mockData: MeatRecord[] = [
+    {
+      id: '1',
+      animalId: 'BULL001',
+      animalName: 'Tornado',
+      breed: 'Angus',
+      birthDate: '2021-03-15',
+      slaughterDate: '2025-07-15',
+      liveWeight: 580,
+      carcassWeight: 348,
+      yieldPercentage: 60,
+      grade: 'AAA',
+      cuts: [
+        { name: 'Lomo', weight: 45, pricePerKg: 180 },
+        { name: 'Costilla', weight: 78, pricePerKg: 120 }
+      ],
+      location: { lat: 16.7569, lng: -92.6348, name: 'Matadero TIF 001' },
+      processor: 'Frigorífico Los Altos',
+      destination: 'Exportación',
+      notes: 'Animal de excelente calidad',
+      status: 'Procesado',
+      totalValue: 38250
+    },
+    {
+      id: '2',
+      animalId: 'COW025',
+      animalName: 'Luna',
+      breed: 'Holstein',
+      birthDate: '2019-08-22',
+      slaughterDate: '2025-07-12',
+      liveWeight: 520,
+      carcassWeight: 312,
+      yieldPercentage: 60,
+      grade: 'AA',
+      cuts: [
+        { name: 'Lomo', weight: 38, pricePerKg: 160 },
+        { name: 'Costilla', weight: 68, pricePerKg: 110 }
+      ],
+      location: { lat: 16.7580, lng: -92.6360, name: 'Rastro Municipal' },
+      processor: 'Carnes del Valle',
+      destination: 'Venta Directa',
+      status: 'Vendido',
+      totalValue: 29140
+    }
+  ];
+
   // Efectos
   useEffect(() => {
-    loadMeatRecords();
+    setTimeout(() => {
+      setMeatRecords(mockData);
+      setFilteredRecords(mockData);
+      setIsLoading(false);
+    }, 1000);
   }, []);
 
   useEffect(() => {
@@ -281,52 +179,6 @@ const MeatProduction: React.FC = () => {
     }
   }, [formData.liveWeight, formData.carcassWeight]);
 
-  // Funciones de API
-  const loadMeatRecords = async (): Promise<void> => {
-    try {
-      setIsLoading(true);
-      setError(null);
-      
-      const result = await MeatAPI.getMeatRecords();
-      setMeatRecords(result.data);
-      setFilteredRecords(result.data);
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Error desconocido al cargar los registros';
-      setError(`No se pudieron cargar los registros: ${errorMessage}`);
-      console.error('Error loading meat records:', err);
-      
-      // Fallback a datos de ejemplo en caso de error
-      const mockData: MeatRecord[] = [
-        {
-          id: '1',
-          animalId: 'BULL001',
-          animalName: 'Tornado',
-          breed: 'Angus',
-          birthDate: '2021-03-15',
-          slaughterDate: '2025-07-15',
-          liveWeight: 580,
-          carcassWeight: 348,
-          yieldPercentage: 60,
-          grade: 'AAA',
-          cuts: [
-            { name: 'Lomo', weight: 45, pricePerKg: 180 },
-            { name: 'Costilla', weight: 78, pricePerKg: 120 }
-          ],
-          location: { lat: 16.7569, lng: -92.6348, name: 'Matadero TIF 001' },
-          processor: 'Frigorífico Los Altos',
-          destination: 'Exportación',
-          notes: 'Animal de excelente calidad',
-          status: 'Procesado',
-          totalValue: 38250
-        }
-      ];
-      setMeatRecords(mockData);
-      setFilteredRecords(mockData);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   // Funciones para manejar modales
   const openCreateModal = () => {
     setFormData({
@@ -350,7 +202,6 @@ const MeatProduction: React.FC = () => {
       status: 'Programado'
     });
     setSelectedRecord(null);
-    setError(null);
     setShowCreateModal(true);
   };
 
@@ -376,125 +227,93 @@ const MeatProduction: React.FC = () => {
       status: record.status
     });
     setSelectedRecord(record);
-    setError(null);
     setShowEditModal(true);
   };
 
   const openViewModal = (record: MeatRecord) => {
     setSelectedRecord(record);
-    setError(null);
     setShowViewModal(true);
   };
 
   // Funciones CRUD
-  const handleCreate = async (): Promise<void> => {
+  const handleCreate = () => {
     if (!formData.animalId.trim() || !formData.animalName.trim()) {
-      setError('Por favor complete los campos obligatorios: ID del animal y nombre');
+      alert('Por favor complete los campos obligatorios');
       return;
     }
 
-    try {
-      setIsSaving(true);
-      setError(null);
+    const newRecord: MeatRecord = {
+      id: Date.now().toString(),
+      animalId: formData.animalId,
+      animalName: formData.animalName,
+      breed: formData.breed,
+      birthDate: formData.birthDate,
+      slaughterDate: formData.slaughterDate,
+      liveWeight: parseFloat(formData.liveWeight) || 0,
+      carcassWeight: parseFloat(formData.carcassWeight) || 0,
+      yieldPercentage: parseFloat(formData.yieldPercentage) || 0,
+      grade: formData.grade as MeatRecord['grade'],
+      cuts: formData.cuts.map(cut => ({
+        name: cut.name,
+        weight: parseFloat(cut.weight) || 0,
+        pricePerKg: parseFloat(cut.pricePerKg) || 0
+      })),
+      location: { lat: 16.7569, lng: -92.6348, name: 'Matadero Principal' },
+      processor: formData.processor,
+      destination: formData.destination as MeatRecord['destination'],
+      notes: formData.notes,
+      status: formData.status as MeatRecord['status'],
+      totalValue: formData.cuts.reduce((sum, cut) => 
+        sum + (parseFloat(cut.weight) || 0) * (parseFloat(cut.pricePerKg) || 0), 0
+      )
+    };
 
-      const newRecord: MeatRecord = {
-        id: '', // El backend generará el ID
-        animalId: formData.animalId,
-        animalName: formData.animalName,
-        breed: formData.breed,
-        birthDate: formData.birthDate,
-        slaughterDate: formData.slaughterDate,
-        liveWeight: parseFloat(formData.liveWeight) || 0,
-        carcassWeight: parseFloat(formData.carcassWeight) || 0,
-        yieldPercentage: parseFloat(formData.yieldPercentage) || 0,
-        grade: formData.grade as MeatRecord['grade'],
-        cuts: formData.cuts.map(cut => ({
-          name: cut.name,
-          weight: parseFloat(cut.weight) || 0,
-          pricePerKg: parseFloat(cut.pricePerKg) || 0
-        })),
-        location: { lat: 16.7569, lng: -92.6348, name: 'Matadero Principal' },
-        processor: formData.processor,
-        destination: formData.destination as MeatRecord['destination'],
-        notes: formData.notes,
-        status: formData.status as MeatRecord['status'],
-        totalValue: formData.cuts.reduce((sum, cut) => 
-          sum + (parseFloat(cut.weight) || 0) * (parseFloat(cut.pricePerKg) || 0), 0
-        )
-      };
-
-      await MeatAPI.createMeatRecord(newRecord);
-      await loadMeatRecords(); // Recargar datos
-      setShowCreateModal(false);
-      alert('Registro creado exitosamente');
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Error desconocido';
-      setError(`Error al crear el registro: ${errorMessage}`);
-    } finally {
-      setIsSaving(false);
-    }
+    setMeatRecords([newRecord, ...meatRecords]);
+    setShowCreateModal(false);
+    alert('Registro creado exitosamente');
   };
 
-  const handleEdit = async (): Promise<void> => {
+  const handleEdit = () => {
     if (!selectedRecord || !formData.animalId.trim() || !formData.animalName.trim()) {
-      setError('Por favor complete los campos obligatorios');
+      alert('Por favor complete los campos obligatorios');
       return;
     }
 
-    try {
-      setIsSaving(true);
-      setError(null);
+    const updatedRecord: MeatRecord = {
+      ...selectedRecord,
+      animalId: formData.animalId,
+      animalName: formData.animalName,
+      breed: formData.breed,
+      birthDate: formData.birthDate,
+      slaughterDate: formData.slaughterDate,
+      liveWeight: parseFloat(formData.liveWeight) || 0,
+      carcassWeight: parseFloat(formData.carcassWeight) || 0,
+      yieldPercentage: parseFloat(formData.yieldPercentage) || 0,
+      grade: formData.grade as MeatRecord['grade'],
+      cuts: formData.cuts.map(cut => ({
+        name: cut.name,
+        weight: parseFloat(cut.weight) || 0,
+        pricePerKg: parseFloat(cut.pricePerKg) || 0
+      })),
+      processor: formData.processor,
+      destination: formData.destination as MeatRecord['destination'],
+      notes: formData.notes,
+      status: formData.status as MeatRecord['status'],
+      totalValue: formData.cuts.reduce((sum, cut) => 
+        sum + (parseFloat(cut.weight) || 0) * (parseFloat(cut.pricePerKg) || 0), 0
+      )
+    };
 
-      const updatedRecord: MeatRecord = {
-        ...selectedRecord,
-        animalId: formData.animalId,
-        animalName: formData.animalName,
-        breed: formData.breed,
-        birthDate: formData.birthDate,
-        slaughterDate: formData.slaughterDate,
-        liveWeight: parseFloat(formData.liveWeight) || 0,
-        carcassWeight: parseFloat(formData.carcassWeight) || 0,
-        yieldPercentage: parseFloat(formData.yieldPercentage) || 0,
-        grade: formData.grade as MeatRecord['grade'],
-        cuts: formData.cuts.map(cut => ({
-          name: cut.name,
-          weight: parseFloat(cut.weight) || 0,
-          pricePerKg: parseFloat(cut.pricePerKg) || 0
-        })),
-        processor: formData.processor,
-        destination: formData.destination as MeatRecord['destination'],
-        notes: formData.notes,
-        status: formData.status as MeatRecord['status'],
-        totalValue: formData.cuts.reduce((sum, cut) => 
-          sum + (parseFloat(cut.weight) || 0) * (parseFloat(cut.pricePerKg) || 0), 0
-        )
-      };
-
-      await MeatAPI.updateMeatRecord(selectedRecord.id, updatedRecord);
-      await loadMeatRecords(); // Recargar datos
-      setShowEditModal(false);
-      alert('Registro actualizado exitosamente');
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Error desconocido';
-      setError(`Error al actualizar el registro: ${errorMessage}`);
-    } finally {
-      setIsSaving(false);
-    }
+    setMeatRecords(meatRecords.map(record => 
+      record.id === selectedRecord.id ? updatedRecord : record
+    ));
+    setShowEditModal(false);
+    alert('Registro actualizado exitosamente');
   };
 
-  const handleDelete = async (id: string): Promise<void> => {
-    if (!confirm('¿Está seguro que desea eliminar este registro?')) {
-      return;
-    }
-
-    try {
-      setError(null);
-      await MeatAPI.deleteMeatRecord(id);
-      await loadMeatRecords(); // Recargar datos
-      alert('Registro eliminado exitosamente');
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Error desconocido';
-      setError(`Error al eliminar el registro: ${errorMessage}`);
+  const handleDelete = (id: string) => {
+    if (confirm('¿Está seguro que desea eliminar este registro?')) {
+      setMeatRecords(meatRecords.filter(record => record.id !== id));
     }
   };
 
@@ -577,14 +396,6 @@ const MeatProduction: React.FC = () => {
               Filtros
             </button>
             <button 
-              onClick={() => loadMeatRecords()}
-              className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-900 rounded-md hover:bg-gray-200 transition-colors"
-              disabled={isLoading}
-            >
-              <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
-              Actualizar
-            </button>
-            <button 
               onClick={openCreateModal}
               className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-[#2d6f51] to-[#4e9c75] text-white rounded-md hover:from-[#265a44] hover:to-[#3d7a5c] transition-colors"
             >
@@ -593,14 +404,6 @@ const MeatProduction: React.FC = () => {
             </button>
           </div>
         </div>
-
-        {/* Error Alert */}
-        {error && (
-          <ErrorAlert 
-            message={error} 
-            onClose={() => setError(null)}
-          />
-        )}
 
         {/* Panel de filtros */}
         {showFilters && (
@@ -660,7 +463,6 @@ const MeatProduction: React.FC = () => {
                   <option value="Programado">Programado</option>
                   <option value="Procesado">Procesado</option>
                   <option value="Vendido">Vendido</option>
-                  <option value="Almacenado">Almacenado</option>
                 </select>
               </div>
               <div className="flex items-end">
@@ -744,21 +546,18 @@ const MeatProduction: React.FC = () => {
                         <button
                           onClick={() => openViewModal(record)}
                           className="text-blue-600 hover:text-blue-800 p-1"
-                          title="Ver detalles"
                         >
                           <Eye className="h-4 w-4" />
                         </button>
                         <button
                           onClick={() => openEditModal(record)}
                           className="text-green-600 hover:text-green-800 p-1"
-                          title="Editar"
                         >
                           <Edit className="h-4 w-4" />
                         </button>
                         <button
                           onClick={() => handleDelete(record.id)}
                           className="text-red-600 hover:text-red-800 p-1"
-                          title="Eliminar"
                         >
                           <Trash2 className="h-4 w-4" />
                         </button>
@@ -793,7 +592,6 @@ const MeatProduction: React.FC = () => {
                     onClick={() => {
                       setShowCreateModal(false);
                       setShowEditModal(false);
-                      setError(null);
                     }}
                     className="text-gray-500 hover:text-gray-700"
                   >
@@ -803,14 +601,6 @@ const MeatProduction: React.FC = () => {
               </div>
 
               <div className="p-6 space-y-6">
-                {/* Error en modal */}
-                {error && (
-                  <ErrorAlert 
-                    message={error} 
-                    onClose={() => setError(null)}
-                  />
-                )}
-
                 {/* Información del animal */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div>
@@ -985,7 +775,7 @@ const MeatProduction: React.FC = () => {
                 </div>
 
                 {/* Otros campos */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Procesador</label>
                     <input
@@ -1009,19 +799,6 @@ const MeatProduction: React.FC = () => {
                       <option value="Consumo Propio">Consumo Propio</option>
                     </select>
                   </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Estado</label>
-                    <select
-                      value={formData.status}
-                      onChange={(e) => setFormData({...formData, status: e.target.value})}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#519a7c]"
-                    >
-                      <option value="Programado">Programado</option>
-                      <option value="Procesado">Procesado</option>
-                      <option value="Vendido">Vendido</option>
-                      <option value="Almacenado">Almacenado</option>
-                    </select>
-                  </div>
                 </div>
 
                 <div>
@@ -1041,29 +818,17 @@ const MeatProduction: React.FC = () => {
                   onClick={() => {
                     setShowCreateModal(false);
                     setShowEditModal(false);
-                    setError(null);
                   }}
                   className="px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50"
-                  disabled={isSaving}
                 >
                   Cancelar
                 </button>
                 <button 
                   onClick={showCreateModal ? handleCreate : handleEdit}
-                  disabled={isSaving}
-                  className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-[#2d6f51] to-[#4e9c75] text-white rounded-md hover:from-[#265a44] hover:to-[#3d7a5c] disabled:opacity-50"
+                  className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-[#2d6f51] to-[#4e9c75] text-white rounded-md hover:from-[#265a44] hover:to-[#3d7a5c]"
                 >
-                  {isSaving ? (
-                    <>
-                      <Loader className="h-4 w-4 animate-spin" />
-                      Guardando...
-                    </>
-                  ) : (
-                    <>
-                      <Save className="h-4 w-4" />
-                      Guardar
-                    </>
-                  )}
+                  <Save className="h-4 w-4" />
+                  Guardar
                 </button>
               </div>
             </div>
@@ -1118,12 +883,6 @@ const MeatProduction: React.FC = () => {
                         <span className="text-gray-600">Rendimiento:</span>
                         <span className="font-medium">{selectedRecord.yieldPercentage}%</span>
                       </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">Grado:</span>
-                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getGradeColor(selectedRecord.grade)}`}>
-                          {selectedRecord.grade}
-                        </span>
-                      </div>
                     </div>
                   </div>
 
@@ -1131,19 +890,14 @@ const MeatProduction: React.FC = () => {
                     <h3 className="text-lg font-semibold text-gray-900">Cortes y Valoración</h3>
                     <div className="space-y-2">
                       {selectedRecord.cuts.map((cut, index) => (
-                        <div key={index} className="flex justify-between text-sm border-b pb-2">
-                          <span className="text-gray-600 font-medium">{cut.name}:</span>
-                          <div className="text-right">
-                            <div className="font-medium">
-                              {cut.weight} kg × {formatCurrency(cut.pricePerKg)}
-                            </div>
-                            <div className="text-[#519a7c] font-semibold">
-                              = {formatCurrency(cut.weight * cut.pricePerKg)}
-                            </div>
-                          </div>
+                        <div key={index} className="flex justify-between text-sm">
+                          <span className="text-gray-600">{cut.name}:</span>
+                          <span className="font-medium">
+                            {cut.weight} kg × {formatCurrency(cut.pricePerKg)} = {formatCurrency(cut.weight * cut.pricePerKg)}
+                          </span>
                         </div>
                       ))}
-                      <div className="border-t pt-3 flex justify-between font-bold text-lg">
+                      <div className="border-t pt-2 flex justify-between font-semibold">
                         <span>Total:</span>
                         <span className="text-[#519a7c]">{formatCurrency(selectedRecord.totalValue)}</span>
                       </div>
@@ -1151,48 +905,10 @@ const MeatProduction: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="space-y-2">
-                    <h3 className="text-lg font-semibold text-gray-900">Procesamiento</h3>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Fecha de Sacrificio:</span>
-                      <span className="font-medium">{selectedRecord.slaughterDate}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Procesador:</span>
-                      <span className="font-medium">{selectedRecord.processor}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Destino:</span>
-                      <span className="font-medium">{selectedRecord.destination}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Estado:</span>
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(selectedRecord.status)}`}>
-                        {selectedRecord.status}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <h3 className="text-lg font-semibold text-gray-900">Ubicación</h3>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Lugar:</span>
-                      <span className="font-medium">{selectedRecord.location.name}</span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-gray-600">Coordenadas:</span>
-                      <span className="font-mono">
-                        {selectedRecord.location.lat.toFixed(4)}, {selectedRecord.location.lng.toFixed(4)}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
                 {selectedRecord.notes && (
                   <div>
                     <h3 className="text-lg font-semibold text-gray-900 mb-3">Notas</h3>
-                    <p className="text-gray-600 bg-gray-50 p-4 rounded-lg border">{selectedRecord.notes}</p>
+                    <p className="text-gray-600 bg-gray-50 p-3 rounded-lg">{selectedRecord.notes}</p>
                   </div>
                 )}
               </div>

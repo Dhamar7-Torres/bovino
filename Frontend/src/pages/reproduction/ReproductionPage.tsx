@@ -34,225 +34,7 @@ import PregnancyTracking from './PregnancyTracking';
 import BirthRecords from './BirthRecords';
 import BullManagement from './BullManagement';
 import CowManagement from './CowManagement';
-
-// ===================================================================
-// CONFIGURACIÓN DE API Y SERVICIOS
-// ===================================================================
-
-const API_BASE_URL = 'http://localhost:5000/api';
-
-// Configuración de headers por defecto
-const getDefaultHeaders = () => ({
-  'Content-Type': 'application/json',
-  'X-Client-Version': '1.0.0',
-  'X-Client-Platform': 'Web-React',
-});
-
-// Función para obtener token de autenticación (implementar según tu sistema de auth)
-const getAuthToken = (): string | null => {
-  return localStorage.getItem('authToken');
-};
-
-// Headers con autenticación
-const getAuthHeaders = () => {
-  const token = getAuthToken();
-  return {
-    ...getDefaultHeaders(),
-    ...(token && { Authorization: `Bearer ${token}` }),
-  };
-};
-
-// ===================================================================
-// SERVICIOS DE API
-// ===================================================================
-
-interface ApiResponse<T> {
-  success: boolean;
-  data?: T;
-  message: string;
-  error?: any;
-}
-
-interface DashboardApiData {
-  timeRange: string;
-  includeProjections: boolean;
-  includeAlerts: boolean;
-  statistics: {
-    totalAnimals: number;
-    pregnantAnimals: number;
-    dueForService: number;
-    birthsThisMonth: number;
-  };
-}
-
-interface StatisticsApiData {
-  reproductiveStats: {
-    conceptionRate: number;
-    pregnancyRate: number;
-    calvingInterval: number;
-  };
-  totalAnimals: number;
-  activeBreedings: number;
-  pregnancies: number;
-  birthsThisMonth: number;
-  alerts: number;
-  successRate: number;
-  bulls: number;
-  cows: number;
-  lactatingCows: number;
-  avgMilkProduction: number;
-}
-
-interface BreederApiData {
-  bulls: Array<{
-    id: string;
-    earTag: string;
-    name?: string;
-    status: 'active' | 'inactive';
-  }>;
-  cows: Array<{
-    id: string;
-    earTag: string;
-    name?: string;
-    status: 'active' | 'pregnant' | 'lactating';
-  }>;
-}
-
-// Servicio principal de API
-class ReproductionApiService {
-  // Método genérico para hacer requests
-  private static async makeRequest<T>(
-    endpoint: string, 
-    options: RequestInit = {}
-  ): Promise<ApiResponse<T>> {
-    try {
-      const url = `${API_BASE_URL}${endpoint}`;
-      const config: RequestInit = {
-        ...options,
-        headers: {
-          ...getAuthHeaders(),
-          ...options.headers,
-        },
-      };
-
-      console.log(`🔄 Haciendo request a: ${url}`);
-      
-      const response = await fetch(url, config);
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.message || `HTTP ${response.status}`);
-      }
-
-      console.log(`✅ Response exitoso de: ${endpoint}`, data);
-      return data as ApiResponse<T>;
-
-    } catch (error) {
-      console.error(`❌ Error en request a ${endpoint}:`, error);
-      throw error;
-    }
-  }
-
-  // Dashboard principal
-  static async getDashboard(
-    timeRange: string = '30d',
-    includeProjections: boolean = true,
-    includeAlerts: boolean = true
-  ): Promise<DashboardApiData> {
-    const response = await this.makeRequest<DashboardApiData>(
-      `/reproduction/dashboard?timeRange=${timeRange}&includeProjections=${includeProjections}&includeAlerts=${includeAlerts}`
-    );
-    return response.data!;
-  }
-
-  // Estadísticas reproductivas
-  static async getStatistics(
-    period: string = 'current_season',
-    includeGenetics: boolean = false
-  ): Promise<StatisticsApiData> {
-    const response = await this.makeRequest<StatisticsApiData>(
-      `/reproduction/statistics?period=${period}&includeGenetics=${includeGenetics}`
-    );
-    return response.data!;
-  }
-
-  // Reproductores (toros y vacas)
-  static async getBreeders(
-    type: string = 'all',
-    status: string = 'active'
-  ): Promise<BreederApiData> {
-    const response = await this.makeRequest<BreederApiData>(
-      `/reproduction/breeders?type=${type}&status=${status}`
-    );
-    return response.data!;
-  }
-
-  // Test de conectividad
-  static async testConnection(): Promise<any> {
-    const response = await this.makeRequest('/ping');
-    return response.data;
-  }
-
-  // Información del sistema
-  static async getSystemInfo(): Promise<any> {
-    const response = await this.makeRequest('/info');
-    return response.data;
-  }
-
-  // Actividades recientes (placeholder - adaptar según tu API)
-  static async getRecentActivities(): Promise<RecentActivity[]> {
-    try {
-      // Por ahora usamos datos simulados, pero puedes crear un endpoint específico
-      const activities: RecentActivity[] = [
-        {
-          id: "1",
-          type: "birth",
-          title: "Nuevo nacimiento registrado",
-          description: "Vaca Luna dio a luz a un becerro macho",
-          time: "Hace 2 horas",
-          icon: <Baby className="w-5 h-5" />,
-          color: "text-green-600 bg-green-100"
-        },
-        {
-          id: "2", 
-          type: "breeding",
-          title: "Servicio completado",
-          description: "Vaca Estrella x Toro Campeón",
-          time: "Hace 4 horas",
-          icon: <Heart className="w-5 h-5" />,
-          color: "text-red-600 bg-red-100"
-        },
-        {
-          id: "3",
-          type: "pregnancy_test",
-          title: "Confirmación de preñez",
-          description: "Vaca Princesa confirmada gestante",
-          time: "Hace 1 día",
-          icon: <CheckCircle className="w-5 h-5" />,
-          color: "text-purple-600 bg-purple-100"
-        },
-        {
-          id: "4",
-          type: "vaccination",
-          title: "Vacunación reproductiva",
-          description: "5 vacas vacunadas contra brucelosis",
-          time: "Hace 2 días",
-          icon: <Syringe className="w-5 h-5" />,
-          color: "text-blue-600 bg-blue-100"
-        }
-      ];
-      return activities;
-    } catch (error) {
-      console.error('Error obteniendo actividades:', error);
-      return [];
-    }
-  }
-}
-
-// ===================================================================
-// TIPOS E INTERFACES (mantener los existentes)
-// ===================================================================
-
+// Tipos para navegación y módulos
 interface NavigationItem {
   id: string;
   title: string;
@@ -295,17 +77,6 @@ interface RecentActivity {
   icon: React.ReactNode;
   color: string;
 }
-
-interface ConnectionStatus {
-  isConnected: boolean;
-  lastChecked: Date;
-  error?: string;
-  latency?: number;
-}
-
-// ===================================================================
-// COMPONENTES AUXILIARES
-// ===================================================================
 
 // Componente AnimatedText para animaciones de texto
 const AnimatedText: React.FC<{ children: React.ReactNode; className?: string }> = ({ 
@@ -357,59 +128,12 @@ const LoadingSpinner: React.FC = () => (
   </div>
 );
 
-// Componente de estado de conexión
-const ConnectionStatus: React.FC<{ status: ConnectionStatus }> = ({ status }) => {
-  if (!status.isConnected && status.error) {
-    return (
-      <motion.div
-        initial={{ opacity: 0, y: -20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="bg-red-100 border border-red-300 rounded-lg p-3 mb-4"
-      >
-        <div className="flex items-center space-x-2">
-          <AlertTriangle className="w-5 h-5 text-red-600" />
-          <div>
-            <p className="text-sm font-medium text-red-800">Error de conexión</p>
-            <p className="text-xs text-red-600">{status.error}</p>
-            <p className="text-xs text-gray-600">
-              Último intento: {status.lastChecked.toLocaleTimeString()}
-            </p>
-          </div>
-        </div>
-      </motion.div>
-    );
-  }
-
-  if (status.isConnected && status.latency) {
-    return (
-      <motion.div
-        initial={{ opacity: 0, y: -20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="bg-green-100 border border-green-300 rounded-lg p-2 mb-4"
-      >
-        <div className="flex items-center space-x-2">
-          <CheckCircle className="w-4 h-4 text-green-600" />
-          <p className="text-xs text-green-800">
-            Conectado al backend (latencia: {status.latency}ms)
-          </p>
-        </div>
-      </motion.div>
-    );
-  }
-
-  return null;
-};
-
-// ===================================================================
-// COMPONENTE DASHBOARD INTEGRADO (actualizado con datos reales)
-// ===================================================================
-
+// Componente Dashboard integrado
 const IntegratedDashboard: React.FC<{
   moduleStats: ModuleStats | null;
   recentActivities: RecentActivity[];
   navigationItems: NavigationItem[];
-  connectionStatus: ConnectionStatus;
-}> = ({ moduleStats, recentActivities, navigationItems, connectionStatus }) => {
+}> = ({ moduleStats, recentActivities, navigationItems }) => {
   const navigate = useNavigate();
 
   // Componente de tarjeta de estadística del dashboard
@@ -492,9 +216,6 @@ const IntegratedDashboard: React.FC<{
       animate="visible"
       className="max-w-7xl mx-auto space-y-8"
     >
-      {/* Estado de Conexión */}
-      <ConnectionStatus status={connectionStatus} />
-
       {/* Header del Dashboard */}
       <motion.div variants={itemVariants} className="text-center mb-8">
         <h1 className="text-4xl font-bold text-white mb-4">
@@ -637,10 +358,7 @@ const IntegratedDashboard: React.FC<{
   );
 };
 
-// ===================================================================
-// COMPONENTE PRINCIPAL (actualizado con conexión al backend)
-// ===================================================================
-
+// Componente principal de la página de reproducción
 const ReproductionPage: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
@@ -650,10 +368,6 @@ const ReproductionPage: React.FC = () => {
   const [moduleStats, setModuleStats] = useState<ModuleStats | null>(null);
   const [activeAlerts, setActiveAlerts] = useState<number>(0);
   const [recentActivities, setRecentActivities] = useState<RecentActivity[]>([]);
-  const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>({
-    isConnected: false,
-    lastChecked: new Date(),
-  });
 
   // Verificar si estamos en la ruta raíz del módulo
   const isRootPath = location.pathname === "/reproduction" || location.pathname === "/reproduction/";
@@ -677,7 +391,7 @@ const ReproductionPage: React.FC = () => {
       icon: <Heart className="w-6 h-6" />,
       route: "/reproduction/mating-records",
       color: "text-red-600 bg-red-100",
-      badge: moduleStats?.activeBreedings || 0,
+      badge: 12,
       isActive: location.pathname.includes("/mating-records"),
     },
     {
@@ -697,7 +411,7 @@ const ReproductionPage: React.FC = () => {
       icon: <Timer className="w-6 h-6" />,
       route: "/reproduction/pregnancy-tracking",
       color: "text-purple-600 bg-purple-100",
-      badge: moduleStats?.pregnancies || 0,
+      badge: 67,
       isActive: location.pathname.includes("/pregnancy-tracking"),
     },
     {
@@ -707,7 +421,7 @@ const ReproductionPage: React.FC = () => {
       icon: <Baby className="w-6 h-6" />,
       route: "/reproduction/birth-records",
       color: "text-green-600 bg-green-100",
-      badge: moduleStats?.birthsThisMonth || 0,
+      badge: 8,
       isActive: location.pathname.includes("/birth-records"),
     },
     {
@@ -717,7 +431,7 @@ const ReproductionPage: React.FC = () => {
       icon: <Crown className="w-6 h-6" />,
       route: "/reproduction/bull-management",
       color: "text-yellow-600 bg-yellow-100",
-      badge: moduleStats?.bulls || 0,
+      badge: 8,
       isActive: location.pathname.includes("/bull-management"),
     },
     {
@@ -727,7 +441,7 @@ const ReproductionPage: React.FC = () => {
       icon: <Flower2 className="w-6 h-6" />,
       route: "/reproduction/cow-management",
       color: "text-pink-600 bg-pink-100",
-      badge: moduleStats?.cows || 0,
+      badge: 145,
       isActive: location.pathname.includes("/cow-management"),
     },
   ];
@@ -736,7 +450,7 @@ const ReproductionPage: React.FC = () => {
   const quickStats: QuickStats[] = [
     {
       label: "Tasa de Éxito",
-      value: `${moduleStats?.successRate || 0}%`,
+      value: "85.4%",
       icon: <Target className="w-5 h-5" />,
       color: "text-green-600",
       trend: "up",
@@ -744,7 +458,7 @@ const ReproductionPage: React.FC = () => {
     },
     {
       label: "Embarazos Activos",
-      value: moduleStats?.pregnancies || 0,
+      value: 67,
       icon: <Heart className="w-5 h-5" />,
       color: "text-purple-600",
       trend: "stable",
@@ -752,7 +466,7 @@ const ReproductionPage: React.FC = () => {
     },
     {
       label: "Partos Este Mes",
-      value: moduleStats?.birthsThisMonth || 0,
+      value: 8,
       icon: <Baby className="w-5 h-5" />,
       color: "text-blue-600",
       trend: "up",
@@ -760,7 +474,7 @@ const ReproductionPage: React.FC = () => {
     },
     {
       label: "Alertas Activas",
-      value: moduleStats?.alerts || 0,
+      value: 5,
       icon: <AlertTriangle className="w-5 h-5" />,
       color: "text-red-600",
       trend: "down",
@@ -768,122 +482,73 @@ const ReproductionPage: React.FC = () => {
     },
   ];
 
-  // Función para probar la conexión
-  const testBackendConnection = async (): Promise<void> => {
-    const startTime = Date.now();
-    try {
-      await ReproductionApiService.testConnection();
-      const latency = Date.now() - startTime;
-      
-      setConnectionStatus({
-        isConnected: true,
-        lastChecked: new Date(),
-        latency,
-      });
-      
-      console.log(`✅ Conexión exitosa al backend (${latency}ms)`);
-    } catch (error) {
-      setConnectionStatus({
-        isConnected: false,
-        lastChecked: new Date(),
-        error: error instanceof Error ? error.message : 'Error desconocido',
-      });
-      
-      console.error('❌ Error conectando al backend:', error);
-    }
-  };
-
-  // Función para cargar datos del módulo
-  const loadModuleData = async (): Promise<void> => {
-    try {
-      console.log('🔄 Iniciando carga de datos del módulo...');
-
-      // Cargar datos del dashboard principal
-      const dashboardData = await ReproductionApiService.getDashboard('30d', true, true);
-      console.log('📊 Dashboard data:', dashboardData);
-
-      // Cargar estadísticas reproductivas
-      const statisticsData = await ReproductionApiService.getStatistics('current_season', false);
-      console.log('📈 Statistics data:', statisticsData);
-
-      // Cargar información de reproductores
-      const breedersData = await ReproductionApiService.getBreeders('all', 'active');
-      console.log('🐄 Breeders data:', breedersData);
-
-      // Cargar actividades recientes
-      const activities = await ReproductionApiService.getRecentActivities();
-      console.log('📋 Activities data:', activities);
-
-      // Consolidar los datos en moduleStats
-      const consolidatedStats: ModuleStats = {
-        totalAnimals: statisticsData.totalAnimals || dashboardData.statistics.totalAnimals || 0,
-        activeBreedings: statisticsData.activeBreedings || dashboardData.statistics.dueForService || 0,
-        pregnancies: statisticsData.pregnancies || dashboardData.statistics.pregnantAnimals || 0,
-        birthsThisMonth: statisticsData.birthsThisMonth || dashboardData.statistics.birthsThisMonth || 0,
-        alerts: statisticsData.alerts || 0,
-        successRate: statisticsData.successRate || statisticsData.reproductiveStats?.conceptionRate || 0,
-        bulls: statisticsData.bulls || breedersData.bulls?.length || 0,
-        cows: statisticsData.cows || breedersData.cows?.length || 0,
-        lactatingCows: statisticsData.lactatingCows || 0,
-        avgMilkProduction: statisticsData.avgMilkProduction || 0,
-      };
-
-      setModuleStats(consolidatedStats);
-      setActiveAlerts(consolidatedStats.alerts);
-      setRecentActivities(activities);
-
-      console.log('✅ Datos del módulo cargados exitosamente:', consolidatedStats);
-
-    } catch (error) {
-      console.error('❌ Error cargando datos del módulo:', error);
-      
-      // En caso de error, usar datos por defecto
-      const fallbackStats: ModuleStats = {
-        totalAnimals: 0,
-        activeBreedings: 0,
-        pregnancies: 0,
-        birthsThisMonth: 0,
-        alerts: 1, // Mostrar alerta de error de conexión
-        successRate: 0,
-        bulls: 0,
-        cows: 0,
-        lactatingCows: 0,
-        avgMilkProduction: 0,
-      };
-      
-      setModuleStats(fallbackStats);
-      setActiveAlerts(1);
-      setRecentActivities([]);
-    }
-  };
-
-  // Efecto principal para cargar datos
+  // Efecto para cargar datos iniciales
   useEffect(() => {
-    const initializeModule = async () => {
+    const loadModuleData = async () => {
       setIsLoading(true);
-      
       try {
-        // 1. Probar conexión al backend
-        await testBackendConnection();
-        
-        // 2. Cargar datos del módulo
-        await loadModuleData();
-        
+        // Simular carga de datos del módulo
+        await new Promise(resolve => setTimeout(resolve, 800));
+        setModuleStats({
+          totalAnimals: 153,
+          activeBreedings: 89,
+          pregnancies: 67,
+          birthsThisMonth: 8,
+          alerts: 5,
+          successRate: 85.4,
+          bulls: 8,
+          cows: 145,
+          lactatingCows: 78,
+          avgMilkProduction: 28.5,
+        });
+        setActiveAlerts(5);
+        setRecentActivities([
+          {
+            id: "1",
+            type: "birth",
+            title: "Nuevo nacimiento registrado",
+            description: "Vaca Luna dio a luz a un becerro macho",
+            time: "Hace 2 horas",
+            icon: <Baby className="w-5 h-5" />,
+            color: "text-green-600 bg-green-100"
+          },
+          {
+            id: "2", 
+            type: "breeding",
+            title: "Servicio completado",
+            description: "Vaca Estrella x Toro Campeón",
+            time: "Hace 4 horas",
+            icon: <Heart className="w-5 h-5" />,
+            color: "text-red-600 bg-red-100"
+          },
+          {
+            id: "3",
+            type: "pregnancy_test",
+            title: "Confirmación de preñez",
+            description: "Vaca Princesa confirmada gestante",
+            time: "Hace 1 día",
+            icon: <CheckCircle className="w-5 h-5" />,
+            color: "text-purple-600 bg-purple-100"
+          },
+          {
+            id: "4",
+            type: "vaccination",
+            title: "Vacunación reproductiva",
+            description: "5 vacas vacunadas contra brucelosis",
+            time: "Hace 2 días",
+            icon: <Syringe className="w-5 h-5" />,
+            color: "text-blue-600 bg-blue-100"
+          }
+        ]);
       } catch (error) {
-        console.error('❌ Error inicializando módulo:', error);
+        console.error("Error al cargar datos del módulo:", error);
       } finally {
         setIsLoading(false);
       }
     };
 
-    initializeModule();
+    loadModuleData();
   }, []);
-
-  // Función para refrescar datos
-  const refreshData = async (): Promise<void> => {
-    await testBackendConnection();
-    await loadModuleData();
-  };
 
   // Función para obtener el breadcrumb actual
   const getCurrentBreadcrumb = () => {
@@ -943,8 +608,7 @@ const ReproductionPage: React.FC = () => {
               animate={{ rotate: 360 }}
               transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
             />
-            <p className="text-gray-600 font-medium">Conectando al backend...</p>
-            <p className="text-sm text-gray-500">Puerto 5000</p>
+            <p className="text-gray-600 font-medium">Cargando módulo de reproducción...</p>
           </div>
         </motion.div>
       </div>
@@ -1008,11 +672,7 @@ const ReproductionPage: React.FC = () => {
                       </span>
                     </button>
                   )}
-                  <button 
-                    onClick={refreshData}
-                    className="p-2 text-white/80 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
-                    title="Refrescar datos"
-                  >
+                  <button className="p-2 text-white/80 hover:text-white hover:bg-white/10 rounded-lg transition-colors">
                     <RefreshCw className="w-5 h-5" />
                   </button>
                 </div>
@@ -1047,7 +707,6 @@ const ReproductionPage: React.FC = () => {
                     moduleStats={moduleStats}
                     recentActivities={recentActivities}
                     navigationItems={navigationItems}
-                    connectionStatus={connectionStatus}
                   />
                 } 
               />
